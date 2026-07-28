@@ -1,0 +1,8 @@
+# Security-sensitive release and updater paths
+/TMessagesProj/src/main/java/org/telegram/messenger/LumaUpdaterController.java @sergeevdeonisii-dotcom
+/TMessagesProj_AppStandalone/ @sergeevdeonisii-dotcom
+/updates/ @sergeevdeonisii-dotcom
+/.github/ @sergeevdeonisii-dotcom
+
+# Default owner for the rest of the source tree
+* @sergeevdeonisii-dotcom

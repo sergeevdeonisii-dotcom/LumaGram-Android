@@ -1,0 +1,17 @@
+.idea/
+.gradle/
+build/
+obj/
+*.iml
+local.properties
+local-luma.properties
+local-signing/
+TMessagesProj/.cxx/
+TMessagesProj/jniLibs/
+TMessagesProj/jniRes/
+**/.DS_Store
+TMessagesProj/afat/
+TMessagesProj_App/afat/
+TMessagesProj_AppHockeyApp/afat/
+TMessagesProj_AppStandalone/afat/
+TMessagesProj_AppHuawei/afat/

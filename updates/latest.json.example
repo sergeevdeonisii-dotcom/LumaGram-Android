@@ -1,0 +1,7 @@
+{
+  "version": "12.9.0-luma.25",
+  "version_code": 69879,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.25/LumaGram.apk",
+  "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "changelog": "Bug fixes and visual improvements."
+}
