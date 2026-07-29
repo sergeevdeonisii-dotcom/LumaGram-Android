@@ -37,6 +37,12 @@ public class ChatActivityBlurredRoundPageDownButton extends FrameLayout {
         button.setIconPadding(dp(2));
     }
 
+    public void setIconPadding(int paddingTop) {
+        if (buttonView != null) {
+            buttonView.setIconPadding(paddingTop);
+        }
+    }
+
 
     private boolean reversedCounter;
 

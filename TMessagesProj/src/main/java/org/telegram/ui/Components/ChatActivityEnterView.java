@@ -131,6 +131,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaDelayedSend;
 import org.telegram.messenger.LumaMessageFormatting;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
@@ -366,6 +367,10 @@ public class ChatActivityEnterView extends FrameLayout implements
 
         }
 
+        default void onPendingDelayedSendChanged(boolean pending) {
+
+        }
+
         default void onTrendingStickersShowed(boolean show) {
 
         }
@@ -449,6 +454,22 @@ public class ChatActivityEnterView extends FrameLayout implements
     private Runnable moveToSendStateRunnable;
     boolean messageTransitionIsRunning;
     boolean textTransitionIsRunning;
+    private PendingTextSend pendingTextSend;
+    private boolean lastTextSendWasDeferred;
+
+    private static class PendingTextSend {
+        int account;
+        long dialogId;
+        CharSequence text;
+        int selectionStart;
+        int selectionEnd;
+        boolean notify;
+        int scheduleDate;
+        int scheduleRepeatPeriod;
+        long payStars;
+        ArrayList<SendMessagesHelper.SendMessageParams> messages;
+        Runnable sendRunnable;
+    }
 
     private BotMenuButtonType botMenuButtonType = BotMenuButtonType.NO_BUTTON;
     private String botMenuWebViewTitle;
@@ -2812,6 +2833,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 if (adjustPanLayoutHelper != null && adjustPanLayoutHelper.animationInProgress()) {
                     return;
                 }
+                flushPendingDelayedSendBeforeDirectSend();
                 delegate.didPressAttachButton();
             });
             attachButton.setContentDescription(getString(R.string.AccDescrAttachButton));
@@ -5163,6 +5185,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                             params.quick_reply_shortcut = parentFragment != null ? parentFragment.quickReplyShortcut : null;
                             params.quick_reply_shortcut_id = parentFragment != null ? parentFragment.getQuickReplyId() : 0;
                             params.effect_id = effectId;
+                            flushPendingDelayedSendBeforeDirectSend();
                             SendMessagesHelper.getInstance(currentAccount).sendMessage(params);
                             setFieldText("");
                             botCommandsMenuContainer.dismiss();
@@ -5180,6 +5203,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                             params.payStars = stars;
                             params.monoForumPeer = getSendMonoForumPeerId();
                             params.suggestionParams = getSendMessageSuggestionParams();
+                            flushPendingDelayedSendBeforeDirectSend();
                             SendMessagesHelper.getInstance(currentAccount).sendMessage(params);
                             setFieldText("");
                             botCommandsMenuContainer.dismiss();
@@ -5316,6 +5340,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 parentFragment.showQuoteMessageUpdate();
                 return;
             }
+            flushPendingDelayedSendBeforeDirectSend();
             ClipDescription description = inputContentInfo.getDescription();
             if (description.hasMimeType("image/gif")) {
                 SendMessagesHelper.prepareSendingDocument(accountInstance, null, null, inputContentInfo.getContentUri(), null, "image/gif", dialog_id, replyingMessageObject, getThreadMessage(), null, replyingQuote, null, notify, 0, inputContentInfo, parentFragment != null ? parentFragment.quickReplyShortcut : null, parentFragment != null ? parentFragment.getQuickReplyId() : 0, false);
@@ -5557,6 +5582,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                         parentFragment.showQuoteMessageUpdate();
                         return;
                     }
+                    flushPendingDelayedSendBeforeDirectSend();
                     ArrayList<SendMessagesHelper.SendingMediaInfo> photos = new ArrayList<>();
                     SendMessagesHelper.SendingMediaInfo info = new SendMessagesHelper.SendingMediaInfo();
                     if (!photoEntry.isVideo && photoEntry.imagePath != null) {
@@ -6452,13 +6478,14 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void onDestroy() {
+        destroyed = true;
+        commitPendingDelayedSend(false);
         if (audioTimelineView != null) {
             audioTimelineView.destroy();
         }
         if (audioTimelineView != null && audioToSend != null) {
             MediaDataController.getInstance(currentAccount).setDraftVoiceRegion(dialog_id, parentFragment != null && parentFragment.isTopic ? parentFragment.getTopicId() : 0, audioTimelineView == null ? 0.0f : audioTimelineView.getAudioLeft(), audioTimelineView == null ? 1.0f : audioTimelineView.getAudioRight());
         }
-        destroyed = true;
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.recordStarted);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.recordPaused);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.recordResumed);
@@ -6574,6 +6601,7 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     public void onPause() {
         isPaused = true;
+        commitPendingDelayedSend(false);
         if (senderSelectPopupWindow != null) {
             senderSelectPopupWindow.setPauseNotifications(false);
             senderSelectPopupWindow.dismiss();
@@ -6628,6 +6656,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void setDialogId(long id, int account) {
+        if (pendingTextSend != null && (dialog_id != id || currentAccount != account)) {
+            commitPendingDelayedSend(false);
+        }
         dialog_id = id;
         if (currentAccount != account) {
             notificationsLocker.unlock();
@@ -7256,6 +7287,11 @@ public class ChatActivityEnterView extends FrameLayout implements
             })) {
                 return;
             }
+            // Preserve send ordering: anything sent after a delayed text must not
+            // overtake it, including voice, video, rich drafts, forwards or replies.
+            if (pendingTextSend != null) {
+                commitPendingDelayedSend();
+            }
             dismissSendPreviewSent = true;
             if (videoToSendMessageObject != null) {
                 delegate.needStartRecordVideo(4, notify, scheduleDate, 0, voiceOnce ? 0x7FFFFFFF : 0, effectId, payStars);
@@ -7348,7 +7384,17 @@ public class ChatActivityEnterView extends FrameLayout implements
                 return;
             }
             if (processSendingText(message, notify, scheduleDate, scheduleRepeatPeriod, payStars)) {
-                if (delegate.hasForwardingMessages() || (scheduleDate != 0 && !isInScheduleMode()) || isInScheduleMode()) {
+                if (lastTextSendWasDeferred) {
+                    lastTextSendWasDeferred = false;
+                    final CharSequence sentMessage = new SpannableStringBuilder(message);
+                    hideTopView(true);
+                    if (messageEditText != null) {
+                        messageEditText.setText("");
+                    }
+                    if (delegate != null) {
+                        delegate.onMessageSend(sentMessage, notify, scheduleDate, scheduleRepeatPeriod, payStars);
+                    }
+                } else if (delegate.hasForwardingMessages() || (scheduleDate != 0 && !isInScheduleMode()) || isInScheduleMode()) {
                     if (messageEditText != null) {
                         messageEditText.setText("");
                     }
@@ -7722,6 +7768,15 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public boolean processSendingText(CharSequence text, boolean notify, int scheduleDate, int scheduleRepeatPeriod, long payStars) {
+        lastTextSendWasDeferred = false;
+        flushPendingDelayedSendBeforeDirectSend();
+        final CharSequence originalText = new SpannableStringBuilder(text);
+        final int selectionStart = messageEditText == null ? originalText.length() : messageEditText.getSelectionStart();
+        final int selectionEnd = messageEditText == null ? originalText.length() : messageEditText.getSelectionEnd();
+        final int originalSelectionStart = selectionStart < 0 ? originalText.length() : selectionStart;
+        final int originalSelectionEnd = selectionEnd < 0 ? originalText.length() : selectionEnd;
+        final boolean delaySend = canDelayTextSend(scheduleDate, payStars);
+        final ArrayList<SendMessagesHelper.SendMessageParams> delayedMessages = delaySend ? new ArrayList<>() : null;
         if (replyingQuote != null && parentFragment != null && replyingQuote.outdated) {
             parentFragment.showQuoteMessageUpdate();
             return false;
@@ -7735,7 +7790,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         boolean supportsNewEntities = supportsSendingNewEntities();
         int maxLength = accountInstance.getMessagesController().getMaxMessageLength();
         if (text.length() != 0) {
-            if (delegate != null && parentFragment != null && (scheduleDate != 0) == parentFragment.isInScheduleMode()) {
+            if (!delaySend && delegate != null && parentFragment != null && (scheduleDate != 0) == parentFragment.isInScheduleMode()) {
                 delegate.prepareMessageSending();
             }
             int end;
@@ -7840,12 +7895,155 @@ public class ChatActivityEnterView extends FrameLayout implements
                     setWebPage(null, true);
                     parentFragment.fallbackFieldPanel();
                 }
-                SendMessagesHelper.getInstance(currentAccount).sendMessage(params);
+                if (delaySend) {
+                    delayedMessages.add(params);
+                } else {
+                    SendMessagesHelper.getInstance(currentAccount).sendMessage(params);
+                }
                 start = end + 1;
             } while (end != text.length());
+            if (delaySend && !delayedMessages.isEmpty()) {
+                queueDelayedTextSend(
+                    originalText,
+                    originalSelectionStart,
+                    originalSelectionEnd,
+                    delayedMessages,
+                    notify,
+                    scheduleDate,
+                    scheduleRepeatPeriod,
+                    payStars
+                );
+                lastTextSendWasDeferred = true;
+            }
             return true;
         }
         return false;
+    }
+
+    private boolean canDelayTextSend(int scheduleDate, long payStars) {
+        if (!isChat || parentFragment == null) {
+            return false;
+        }
+        final TLRPC.Chat chat = parentFragment.getCurrentChat();
+        if (chat != null && chat.slowmode_enabled && !ChatObject.hasAdminRights(chat)) {
+            return false;
+        }
+        return LumaDelayedSend.isEnabled()
+            && scheduleDate == 0
+            && !isInScheduleMode()
+            && payStars <= 0
+            && slowModeTimer == 0
+            && effectId == 0
+            && editingMessageObject == null
+            && delegate != null
+            && !delegate.hasForwardingMessages()
+            && (replyingMessageObject == null || replyingMessageObject == getThreadMessage())
+            && replyingQuote == null
+            && messageWebPage == null
+            && delegate.getReplyToStory() == null
+            && getSendMessageSuggestionParams() == null;
+    }
+
+    private void queueDelayedTextSend(
+        CharSequence text,
+        int selectionStart,
+        int selectionEnd,
+        ArrayList<SendMessagesHelper.SendMessageParams> messages,
+        boolean notify,
+        int scheduleDate,
+        int scheduleRepeatPeriod,
+        long payStars
+    ) {
+        final PendingTextSend pending = new PendingTextSend();
+        pending.account = currentAccount;
+        pending.dialogId = dialog_id;
+        pending.text = new SpannableStringBuilder(text);
+        pending.selectionStart = selectionStart;
+        pending.selectionEnd = selectionEnd;
+        pending.messages = messages;
+        pending.notify = notify;
+        pending.scheduleDate = scheduleDate;
+        pending.scheduleRepeatPeriod = scheduleRepeatPeriod;
+        pending.payStars = payStars;
+        pending.sendRunnable = () -> {
+            if (pendingTextSend == pending) {
+                commitPendingDelayedSend();
+            }
+        };
+        pendingTextSend = pending;
+        if (delegate != null) {
+            delegate.onPendingDelayedSendChanged(true);
+        }
+        AndroidUtilities.runOnUIThread(pending.sendRunnable, LumaDelayedSend.getDelayMs());
+    }
+
+    private void commitPendingDelayedSend() {
+        commitPendingDelayedSend(true);
+    }
+
+    private void commitPendingDelayedSend(boolean prepareUi) {
+        final PendingTextSend pending = pendingTextSend;
+        if (pending == null) {
+            return;
+        }
+        pendingTextSend = null;
+        AndroidUtilities.cancelRunOnUIThread(pending.sendRunnable);
+        if (delegate != null && !destroyed) {
+            delegate.onPendingDelayedSendChanged(false);
+            if (prepareUi && pending.account == currentAccount && pending.dialogId == dialog_id && parentFragment != null) {
+                delegate.prepareMessageSending();
+            }
+        }
+        final SendMessagesHelper helper = SendMessagesHelper.getInstance(pending.account);
+        for (int i = 0; i < pending.messages.size(); i++) {
+            helper.sendMessage(pending.messages.get(i));
+        }
+    }
+
+    private void flushPendingDelayedSendBeforeDirectSend() {
+        if (pendingTextSend != null) {
+            commitPendingDelayedSend();
+        }
+    }
+
+    public boolean cancelPendingDelayedSend() {
+        final PendingTextSend pending = pendingTextSend;
+        if (pending == null) {
+            return false;
+        }
+        pendingTextSend = null;
+        AndroidUtilities.cancelRunOnUIThread(pending.sendRunnable);
+        if (delegate != null) {
+            delegate.onPendingDelayedSendChanged(false);
+        }
+
+        final CharSequence currentText = messageEditText == null
+            ? ""
+            : new SpannableStringBuilder(messageEditText.getTextToUse());
+        final SpannableStringBuilder restored = new SpannableStringBuilder(pending.text);
+        if (!TextUtils.isEmpty(currentText)) {
+            if (restored.length() > 0 && restored.charAt(restored.length() - 1) != '\n') {
+                restored.append('\n');
+            }
+            restored.append(currentText);
+        }
+        setFieldText(restored);
+        if (messageEditText != null) {
+            final int selection = TextUtils.isEmpty(currentText)
+                ? Math.max(0, Math.min(restored.length(), pending.selectionEnd))
+                : restored.length();
+            messageEditText.setSelection(selection);
+            messageEditText.requestFocus();
+        }
+        return true;
+    }
+
+    public boolean hasPendingDelayedSend() {
+        return pendingTextSend != null;
+    }
+
+    public void flushPendingDelayedSend() {
+        flushPendingDelayedSendBeforeDirectSend();
     }
 
     public long getSendMonoForumPeerId() {
@@ -9786,6 +9984,7 @@ public class ChatActivityEnterView extends FrameLayout implements
             sendMessageParams.effect_id = effectId;
             sendButton.setEffect(effectId = 0);
             applyStoryToSendMessageParams(sendMessageParams);
+            flushPendingDelayedSendBeforeDirectSend();
             SendMessagesHelper.getInstance(currentAccount).sendMessage(sendMessageParams);
         }
     }
@@ -11434,6 +11633,7 @@ public class ChatActivityEnterView extends FrameLayout implements
             params.quick_reply_shortcut_id = parentFragment != null ? parentFragment.getQuickReplyId() : 0;
             params.effect_id = effectId;
             sendButton.setEffect(effectId = 0);
+            flushPendingDelayedSendBeforeDirectSend();
             SendMessagesHelper.getInstance(currentAccount).sendMessage(params);
         } else if (button instanceof TLRPC.TL_keyboardButtonUrl) {
             if (Browser.urlMustNotHaveConfirmation(button.url)) {
@@ -11500,6 +11700,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                     pendingLocationButton = button;
                     return;
                 }
+                flushPendingDelayedSendBeforeDirectSend();
                 SendMessagesHelper.getInstance(currentAccount).sendCurrentLocation(messageObject, button);
             });
             builder.setNegativeButton(getString("Cancel", R.string.Cancel), null);
@@ -12165,6 +12366,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                     }
                     AlertsCreator.ensurePaidMessageConfirmation(currentAccount, dialog_id, 1, stars -> {
                         Runnable runnable = () -> {
+                            flushPendingDelayedSendBeforeDirectSend();
                             if (stickersExpanded) {
                                 if (searchingType != 0) {
                                     emojiView.hideSearchKeyboard();
@@ -12513,6 +12715,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                         }
                         return;
                     }
+                    flushPendingDelayedSendBeforeDirectSend();
                     if (searchingType != 0) {
                         setSearchingTypeInternal(0, true);
                         emojiView.closeSearch(true);
@@ -13513,6 +13716,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (requestCode == 2) {
             if (pendingLocationButton != null) {
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    flushPendingDelayedSendBeforeDirectSend();
                     SendMessagesHelper.getInstance(currentAccount).sendCurrentLocation(pendingMessageObject, pendingLocationButton);
                 }
                 pendingLocationButton = null;

@@ -6,6 +6,7 @@ import static org.telegram.messenger.AndroidUtilities.lerp;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.FrameLayout;
 
 import androidx.annotation.DrawableRes;
@@ -28,20 +29,22 @@ import me.vkryl.android.animator.FactorAnimator;
 @SuppressLint("ViewConstructor")
 public class ChatActivitySideControlsButtonsLayout extends FrameLayout implements FactorAnimator.Target {
     public static final int BUTTON_ATTACH = 0;
-    public static final int BUTTON_PAGE_DOWN = 1;
-    public static final int BUTTON_MENTION = 2;
-    public static final int BUTTON_REACTIONS = 3;
-    public static final int BUTTON_POLL_VOTES = 4;
-    public static final int BUTTON_SEARCH_DOWN = 5;
-    public static final int BUTTON_SEARCH_UP = 6;
+    public static final int BUTTON_CANCEL_DELAYED_SEND = 1;
+    public static final int BUTTON_PAGE_DOWN = 2;
+    public static final int BUTTON_MENTION = 3;
+    public static final int BUTTON_REACTIONS = 4;
+    public static final int BUTTON_POLL_VOTES = 5;
+    public static final int BUTTON_SEARCH_DOWN = 6;
+    public static final int BUTTON_SEARCH_UP = 7;
 
-    private static final int BUTTONS_COUNT = 7;
+    private static final int BUTTONS_COUNT = 8;
 
     private static final int ANIMATOR_ID_VISIBILITY = 1;
     private static final int ANIMATOR_ID_COUNTER_VISIBILITY = 2;
 
     private static final @DrawableRes int[] buttonIcons = new int[] {
         R.drawable.msg_input_attach2,
+        R.drawable.msg_close,
         R.drawable.pagedown,
         R.drawable.mentionbutton,
         R.drawable.reactionbutton,
@@ -52,6 +55,7 @@ public class ChatActivitySideControlsButtonsLayout extends FrameLayout implement
 
     private final String[] buttonDescriptions = new String[] {
         LocaleController.getString(R.string.AttachMenu),
+        LocaleController.getString(R.string.AccDescrCancelDelayedSend),
         LocaleController.getString(R.string.AccDescrPageDown),
         LocaleController.getString(R.string.AccDescrMentionDown),
         LocaleController.getString(R.string.AccDescrReactionMentionDown),
@@ -114,6 +118,9 @@ public class ChatActivitySideControlsButtonsLayout extends FrameLayout implement
         }
 
         final ButtonHolder holder = getOrCreateButtonHolder(buttonId);
+        if (buttonId == BUTTON_CANCEL_DELAYED_SEND) {
+            holder.button.setEnabled(show, false);
+        }
         holder.visibilityAnimator.setValue(show, animated);
     }
 
@@ -156,7 +163,21 @@ public class ChatActivitySideControlsButtonsLayout extends FrameLayout implement
     private void checkButtonsPositionsAndVisibility() {
         float totalHeight = 0;
 
+        final ButtonHolder cancelHolder = buttonHolders[BUTTON_CANCEL_DELAYED_SEND];
+        if (cancelHolder != null) {
+            final float visibility = cancelHolder.visibilityAnimator.getFloatValue();
+            cancelHolder.button.setVisibility(visibility > 0 ? VISIBLE : GONE);
+            cancelHolder.button.setAlpha(visibility);
+            cancelHolder.button.setScaleX(lerp(0.75f, 1f, visibility));
+            cancelHolder.button.setScaleY(lerp(0.75f, 1f, visibility));
+            cancelHolder.button.setTranslationY(dp(8) * (1f - visibility));
+            totalHeight += dp(32 + 10) * visibility;
+        }
+
         for (int buttonId = 0; buttonId < buttonHolders.length; buttonId++) {
+            if (buttonId == BUTTON_CANCEL_DELAYED_SEND) {
+                continue;
+            }
             ButtonHolder holder = buttonHolders[buttonId];
 
             if (holder == null) {
@@ -170,7 +191,9 @@ public class ChatActivitySideControlsButtonsLayout extends FrameLayout implement
             holder.button.setAlpha(visibility);
             holder.button.setScaleX(lerp(0.7f, 1f, visibility));
             holder.button.setScaleY(lerp(0.7f, 1f, visibility));
-            if (buttonId != BUTTON_ATTACH) {
+            if (buttonId == BUTTON_ATTACH) {
+                holder.button.setTranslationY(-totalHeight);
+            } else {
                 holder.button.setTranslationY(dp(80) * (1f - visibility) - totalHeight);
             }
 
@@ -197,18 +220,21 @@ public class ChatActivitySideControlsButtonsLayout extends FrameLayout implement
 
             final BoolAnimator visibilityAnimator = new BoolAnimator(
                 (buttonId << 16) | ANIMATOR_ID_VISIBILITY, this,
-                buttonId == BUTTON_ATTACH ? CubicBezierInterpolator.EASE_OUT_QUINT : AnimatorUtils.DECELERATE_INTERPOLATOR,
-                buttonId == BUTTON_ATTACH ? 300 : 280
+                buttonId == BUTTON_ATTACH || buttonId == BUTTON_CANCEL_DELAYED_SEND ? CubicBezierInterpolator.EASE_OUT_QUINT : AnimatorUtils.DECELERATE_INTERPOLATOR,
+                buttonId == BUTTON_ATTACH ? 300 : buttonId == BUTTON_CANCEL_DELAYED_SEND ? 120 : 280
             );
 
             final BoolAnimator counterVisibilityAnimator = new BoolAnimator(
                 (buttonId << 16) | ANIMATOR_ID_COUNTER_VISIBILITY, this,
                 buttonId == BUTTON_ATTACH ? CubicBezierInterpolator.EASE_OUT_QUINT : AnimatorUtils.DECELERATE_INTERPOLATOR,
-                buttonId == BUTTON_ATTACH ? 300 : 280);
+                buttonId == BUTTON_ATTACH ? 300 : buttonId == BUTTON_CANCEL_DELAYED_SEND ? 120 : 280);
 
             int size = 56, iconSize = 48;
             if (buttonId == BUTTON_ATTACH) {
                 size = 50;
+                iconSize = 32;
+            } else if (buttonId == BUTTON_CANCEL_DELAYED_SEND) {
+                size = 44;
                 iconSize = 32;
             }
             final ChatActivityBlurredRoundPageDownButton button = ChatActivityBlurredRoundPageDownButton.create(
@@ -222,8 +248,15 @@ public class ChatActivitySideControlsButtonsLayout extends FrameLayout implement
 
             button.setPivotX(dp(size / 2f));
             button.setPivotY(dp(size / 2f + 8));
+            if (buttonId == BUTTON_CANCEL_DELAYED_SEND) {
+                button.setIconPadding(0);
+            }
             button.setVisibility(GONE);
             button.setContentDescription(buttonDescriptions[buttonId]);
+            if (buttonId == BUTTON_CANCEL_DELAYED_SEND) {
+                button.setFocusable(true);
+                button.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            }
             button.setOnClickListener(v -> {
                 if (onClickListener != null) {
                     onClickListener.onClick(buttonId, v);
@@ -243,7 +276,11 @@ public class ChatActivitySideControlsButtonsLayout extends FrameLayout implement
                 button.reverseCounter();
             }
 
-            addView(button, LayoutHelper.createFrame(size, size + 8, gravity));
+            addView(button, LayoutHelper.createFrame(
+                size,
+                size + 8,
+                buttonId == BUTTON_CANCEL_DELAYED_SEND ? Gravity.RIGHT | Gravity.BOTTOM : gravity
+            ));
 
             buttonHolders[buttonId] = new ButtonHolder(button, visibilityAnimator, counterVisibilityAnimator);
             checkButtonsPositionsAndVisibility();

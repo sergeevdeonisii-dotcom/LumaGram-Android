@@ -11236,6 +11236,12 @@
     <string name="ExperimentalTypingSwipeInfo">Controls only words committed by the keyboard. Composing text is never restarted, so swipe input stays smooth.</string>
     <string name="ExperimentalTypingReset">Reset typing settings</string>
     <string name="ExperimentalTypingResetDone">Typing animation settings were reset.</string>
+    <string name="ExperimentalDelayedSendHeader">Undo send</string>
+    <string name="ExperimentalDelayedSendEnable">Delay text messages</string>
+    <string name="ExperimentalDelayedSendSeconds">sec</string>
+    <string name="ExperimentalDelayedSendInfo">Text messages wait for the selected time before being sent. Tap the round × above the send button to cancel and return the text to the message field.</string>
+    <string name="AccDescrCancelDelayedSend">Cancel message sending</string>
+    <string name="LumaExportChat">Export chat</string>
     <string name="LumaUpdatesTitle">Luma Updates</string>
     <string name="LumaUpdatesInfo">Secure updates and version checks</string>
     <string name="LumaUpdateCurrentVersion">Current version</string>
