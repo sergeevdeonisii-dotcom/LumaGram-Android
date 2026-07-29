@@ -11179,6 +11179,10 @@
     <string name="LiquidGlassLarge">Large</string>
     <string name="LiquidGlassAdvancedInfo">The message field keeps its width; only its height and the proportional side buttons change. Visual settings apply after returning to Telegram.</string>
     <string name="LiquidGlassReset">Reset to defaults</string>
+    <string name="LiquidGlassWallpaperRefraction">Wallpaper refraction</string>
+    <string name="LiquidGlassWallpaperRefractionEnable">Refract wallpaper through chat panels</string>
+    <string name="LiquidGlassWallpaperRefractionInfo">The top controls and message panel use the real wallpaper as their glass source. Messages and interface content stay outside the refraction layer.</string>
+    <string name="LiquidGlassFeatureConflict">To use this feature, turn off “%1$s”.</string>
     <string name="LiquidGlassAdaptiveColor">Adaptive glass color</string>
     <string name="LiquidGlassAdaptiveColorEnable">Match the chat wallpaper</string>
     <string name="LiquidGlassSeparateColors">Different colors at the top and bottom</string>

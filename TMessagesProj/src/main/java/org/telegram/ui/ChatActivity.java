@@ -408,9 +408,11 @@ public class ChatActivity extends BaseFragment implements
 
     private final @Nullable BlurredBackgroundSourceRenderNode glassBackgroundSourceRenderNode;
     private final @Nullable BlurredBackgroundSourceRenderNode glassBackgroundSourceFrostedRenderNode;
+    private final @Nullable BlurredBackgroundSourceRenderNode glassBackgroundSourceWallpaperRenderNode;
     private @NonNull BlurredBackgroundDrawableViewFactory glassBackgroundDrawableFactory;
     private final @NonNull BlurredBackgroundDrawableViewFactory glassBackgroundDrawableFactoryLiquid;
     private final @NonNull BlurredBackgroundDrawableViewFactory glassBackgroundDrawableFactoryFrosted;
+    private final @NonNull BlurredBackgroundDrawableViewFactory glassBackgroundDrawableFactoryWallpaper;
 
     private final @NonNull BlurredBackgroundSourceWrapped navbarContentSourceWallpaper;
     private final @NonNull BlurredBackgroundDrawableViewFactory navbarContentDrawableFactory;
@@ -2616,6 +2618,13 @@ public class ChatActivity extends BaseFragment implements
             glassBackgroundSourceRenderNode.setUnderSource(navbarContentSourceWallpaper);
             glassBackgroundDrawableFactoryLiquid = new BlurredBackgroundDrawableViewFactory(glassBackgroundSourceRenderNode);
             glassBackgroundDrawableFactoryLiquid.setLiquidGlassEffectAllowed(LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS));
+
+            glassBackgroundSourceWallpaperRenderNode = new BlurredBackgroundSourceRenderNode(navbarContentSourceWallpaper);
+            glassBackgroundSourceWallpaperRenderNode.setUnderSource(navbarContentSourceWallpaper);
+            glassBackgroundDrawableFactoryWallpaper = new BlurredBackgroundDrawableViewFactory(glassBackgroundSourceWallpaperRenderNode);
+            glassBackgroundDrawableFactoryWallpaper.setWallpaperRefractionEnabled(true);
+            glassBackgroundDrawableFactoryWallpaper.setLiquidGlassEffectAllowed(LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS));
+
             glassBackgroundDrawableFactory = LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS)
                 ? glassBackgroundDrawableFactoryLiquid : glassBackgroundDrawableFactoryFrosted;
         } else {
@@ -2624,9 +2633,11 @@ public class ChatActivity extends BaseFragment implements
 
             glassBackgroundSourceRenderNode = null;
             glassBackgroundSourceFrostedRenderNode = null;
+            glassBackgroundSourceWallpaperRenderNode = null;
 
             glassBackgroundDrawableFactoryFrosted = new BlurredBackgroundDrawableViewFactory(navbarContentSourceWallpaper);
             glassBackgroundDrawableFactoryLiquid = glassBackgroundDrawableFactoryFrosted;
+            glassBackgroundDrawableFactoryWallpaper = glassBackgroundDrawableFactoryFrosted;
             glassBackgroundDrawableFactory = glassBackgroundDrawableFactoryFrosted;
         }
         navbarContentDrawableFactory = new BlurredBackgroundDrawableViewFactory(navbarContentSourceWallpaper);
@@ -2634,12 +2645,14 @@ public class ChatActivity extends BaseFragment implements
         glassBackgroundDrawableFactory.setLinkedViewsRef(glassAttachedViews);
         glassBackgroundDrawableFactoryLiquid.setLinkedViewsRef(glassAttachedViews);
         glassBackgroundDrawableFactoryFrosted.setLinkedViewsRef(glassAttachedViews);
+        glassBackgroundDrawableFactoryWallpaper.setLinkedViewsRef(glassAttachedViews);
         scrimBlur3Factory.setLinkedViewsRef(new ReferenceList<>());
 
         navbarContentDrawableFactory.setLinkedDrawablesRef(glassAttachedDrawables);
         glassBackgroundDrawableFactory.setLinkedDrawablesRef(glassAttachedDrawables);
         glassBackgroundDrawableFactoryLiquid.setLinkedDrawablesRef(glassAttachedDrawables);
         glassBackgroundDrawableFactoryFrosted.setLinkedDrawablesRef(glassAttachedDrawables);
+        glassBackgroundDrawableFactoryWallpaper.setLinkedDrawablesRef(glassAttachedDrawables);
         scrimBlur3Factory.setLinkedDrawablesRef(glassAttachedDrawables);
     }
 
@@ -2709,6 +2722,15 @@ public class ChatActivity extends BaseFragment implements
             ? glassBackgroundDrawableFactoryLiquid : glassBackgroundDrawableFactoryFrosted;
         glassBackgroundDrawableFactoryLiquid.setLiquidGlassEffectAllowed(enabled);
         glassBackgroundDrawableFactoryFrosted.setLiquidGlassEffectAllowed(enabled);
+        glassBackgroundDrawableFactoryWallpaper.setLiquidGlassEffectAllowed(enabled);
+    }
+
+    private BlurredBackgroundDrawableViewFactory getChatChromeGlassFactory() {
+        if (LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS)
+            && LiteMode.getLiquidGlassWallpaperRefractionEnabled()) {
+            return glassBackgroundDrawableFactoryWallpaper;
+        }
+        return glassBackgroundDrawableFactory;
     }
 
     private static boolean isChatGlassOrBlurEnabled() {
@@ -4727,13 +4749,15 @@ public class ChatActivity extends BaseFragment implements
         glassBackgroundDrawableFactory.setSourceRootView(viewPositionWatcher, parentView);
         glassBackgroundDrawableFactoryLiquid.setSourceRootView(viewPositionWatcher, parentView);
         glassBackgroundDrawableFactoryFrosted.setSourceRootView(viewPositionWatcher, parentView);
+        glassBackgroundDrawableFactoryWallpaper.setSourceRootView(viewPositionWatcher, parentView);
         navbarContentDrawableFactory.setSourceRootView(viewPositionWatcher, parentView);
         scrimBlur3Factory.setSourceRootView(viewPositionWatcher, parentView);
 
         contentView.setOccupyStatusBar(!inBubbleMode && !isInsideContainer && !inPreviewMode);
 
+        final BlurredBackgroundDrawableViewFactory chatChromeGlassFactory = getChatChromeGlassFactory();
         actionBar.setupGlass(
-            glassBackgroundDrawableFactory,
+            chatChromeGlassFactory,
             BlurredBackgroundProviderImpl.topPanelChatActivity(themeDelegate),
             ChatObject.isForum(currentChat));
         //actionBar.setChatAvatarContainer(avatarContainer);
@@ -4743,10 +4767,10 @@ public class ChatActivity extends BaseFragment implements
         chatInputViewsContainer.setClipChildren(false);
         chatInputViewsContainer.setWindowInsetsProvider(windowInsetsStateHolder);
         chatInputViewsContainer.setInputIslandBubbleDrawable(
-            glassBackgroundDrawableFactory.create(chatInputViewsContainer, blurredBackgroundColorProvider));
+            chatChromeGlassFactory.create(chatInputViewsContainer, blurredBackgroundColorProvider));
         chatInputViewsContainer.setInputIslandButtonDrawables(
-            glassBackgroundDrawableFactory.create(chatInputViewsContainer, blurredBackgroundColorProvider),
-            glassBackgroundDrawableFactory.create(chatInputViewsContainer, blurredBackgroundColorProvider));
+            chatChromeGlassFactory.create(chatInputViewsContainer, blurredBackgroundColorProvider),
+            chatChromeGlassFactory.create(chatInputViewsContainer, blurredBackgroundColorProvider));
         chatInputViewsContainer.setUnderKeyboardBackgroundDrawable(
             glassBackgroundDrawableFactoryFrosted.create(chatInputViewsContainer, blurredBackgroundColorProvider));
 
@@ -17327,6 +17351,9 @@ public class ChatActivity extends BaseFragment implements
             shouldHaveLightNavigationBarIcons = navigationBarBrightness <= 0.9f;
 
             navbarContentSourceWallpaper.setSource(source);
+            if (glassBackgroundSourceWallpaperRenderNode != null) {
+                glassBackgroundSourceWallpaperRenderNode.invalidateDisplayListForDrawables();
+            }
             if (chatActivityFadeView != null) {
                 chatActivityFadeView.invalidate();
             }

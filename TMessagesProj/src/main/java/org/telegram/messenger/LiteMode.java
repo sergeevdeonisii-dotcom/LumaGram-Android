@@ -50,12 +50,14 @@ public class LiteMode {
     private static final String LIQUID_GLASS_INTENSITY = "liquid_glass_intensity";
     private static final String LIQUID_GLASS_INPUT_SIZE = "liquid_glass_input_size";
     private static final String LIQUID_GLASS_ADAPTIVE_COLOR = "liquid_glass_adaptive_color";
+    private static final String LIQUID_GLASS_WALLPAPER_REFRACTION = "liquid_glass_wallpaper_refraction";
     private static final String LIQUID_GLASS_COLOR_STRENGTH = "liquid_glass_color_strength";
     private static final String LIQUID_GLASS_SEPARATE_COLORS = "liquid_glass_separate_colors";
     private static final String LIQUID_GLASS_COLOR_TRANSITION = "liquid_glass_color_transition";
     private static Boolean liquidGlassEnabled;
     private static Boolean liquidGlassKeepInPowerSaver;
     private static Boolean liquidGlassAdaptiveColor;
+    private static Boolean liquidGlassWallpaperRefraction;
     private static Boolean liquidGlassSeparateColors;
     private static int liquidGlassOpacity = -1;
     private static int liquidGlassIntensity = -1;
@@ -229,6 +231,19 @@ public class LiteMode {
         return MathUtils.clamp(alpha + (getLiquidGlassOpacityLevel() - 1) * 0.10f, 0.35f, 0.95f);
     }
 
+    public static float getLiquidGlassChatPanelAlpha(boolean dark) {
+        if (!isEnabled(FLAG_LIQUID_GLASS)) {
+            return 0.76f;
+        }
+        final float alpha;
+        if (getLiquidGlassWallpaperRefractionEnabled()) {
+            alpha = dark ? 0.52f : 0.46f;
+        } else {
+            alpha = dark ? 0.68f : 0.62f;
+        }
+        return applyLiquidGlassAlpha(alpha);
+    }
+
     public static int getLiquidGlassIntensityLevel() {
         if (liquidGlassIntensity < 0) {
             liquidGlassIntensity = MathUtils.clamp(MessagesController.getGlobalMainSettings().getInt(LIQUID_GLASS_INTENSITY, 1), 0, 2);
@@ -273,8 +288,35 @@ public class LiteMode {
     }
 
     public static void setLiquidGlassAdaptiveColorEnabled(boolean value) {
+        if (value && getLiquidGlassWallpaperRefractionEnabled()) {
+            return;
+        }
         liquidGlassAdaptiveColor = value;
         MessagesController.getGlobalMainSettings().edit().putBoolean(LIQUID_GLASS_ADAPTIVE_COLOR, value).apply();
+    }
+
+    public static boolean getLiquidGlassWallpaperRefractionEnabled() {
+        if (liquidGlassWallpaperRefraction == null) {
+            liquidGlassWallpaperRefraction = MessagesController.getGlobalMainSettings()
+                .getBoolean(LIQUID_GLASS_WALLPAPER_REFRACTION, false);
+            if (liquidGlassWallpaperRefraction && getLiquidGlassAdaptiveColorEnabled()) {
+                liquidGlassWallpaperRefraction = false;
+                MessagesController.getGlobalMainSettings().edit()
+                    .putBoolean(LIQUID_GLASS_WALLPAPER_REFRACTION, false)
+                    .apply();
+            }
+        }
+        return liquidGlassWallpaperRefraction;
+    }
+
+    public static void setLiquidGlassWallpaperRefractionEnabled(boolean value) {
+        if (value && getLiquidGlassAdaptiveColorEnabled()) {
+            return;
+        }
+        liquidGlassWallpaperRefraction = value;
+        MessagesController.getGlobalMainSettings().edit()
+            .putBoolean(LIQUID_GLASS_WALLPAPER_REFRACTION, value)
+            .apply();
     }
 
     public static int getLiquidGlassColorStrengthLevel() {
@@ -336,6 +378,7 @@ public class LiteMode {
         liquidGlassEnabled = true;
         liquidGlassKeepInPowerSaver = true;
         liquidGlassAdaptiveColor = true;
+        liquidGlassWallpaperRefraction = false;
         liquidGlassSeparateColors = true;
         liquidGlassOpacity = 1;
         liquidGlassIntensity = 1;
@@ -349,6 +392,7 @@ public class LiteMode {
             .remove(LIQUID_GLASS_INTENSITY)
             .remove(LIQUID_GLASS_INPUT_SIZE)
             .remove(LIQUID_GLASS_ADAPTIVE_COLOR)
+            .remove(LIQUID_GLASS_WALLPAPER_REFRACTION)
             .remove(LIQUID_GLASS_COLOR_STRENGTH)
             .remove(LIQUID_GLASS_SEPARATE_COLORS)
             .remove(LIQUID_GLASS_COLOR_TRANSITION)

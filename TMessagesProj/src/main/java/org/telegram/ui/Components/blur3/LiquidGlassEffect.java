@@ -34,6 +34,7 @@ public class LiquidGlassEffect {
     private float thickness;
     private float intensity;
     private float index;
+    private float backdropBlur;
     private int foregroundColor;
 
     public void update(
@@ -43,7 +44,8 @@ public class LiquidGlassEffect {
         float thickness,
         float intensity,
         float index,
-        int foregroundColor
+        int foregroundColor,
+        float backdropBlur
     ) {
         float resolutionX = node.getWidth();
         float resolutionY = node.getHeight();
@@ -78,6 +80,7 @@ public class LiquidGlassEffect {
             Math.abs(this.thickness - thickness) > 0.1f ||
             Math.abs(this.intensity - intensity) > 0.1f ||
             Math.abs(this.index - index) > 0.1f ||
+            Math.abs(this.backdropBlur - backdropBlur) > 0.1f ||
             this.foregroundColor != foregroundColor
         ) {
             this.foregroundColor = foregroundColor;
@@ -94,6 +97,7 @@ public class LiquidGlassEffect {
             shader.setFloatUniform("thickness", this.thickness = thickness);
             shader.setFloatUniform("refract_intensity", this.intensity = intensity);
             shader.setFloatUniform("refract_index", this.index = index);
+            shader.setFloatUniform("backdrop_blur", this.backdropBlur = backdropBlur);
             shader.setFloatUniform("foreground_color_premultiplied", r, g, b, a);
             node.setRenderEffect(effect = RenderEffect.createRuntimeShaderEffect(shader, "img"));
         }

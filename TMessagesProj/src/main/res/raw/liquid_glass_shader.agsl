@@ -7,6 +7,7 @@ uniform float4 radius;
 uniform float thickness;
 uniform float refract_index;
 uniform float refract_intensity;
+uniform float backdrop_blur;
 uniform float4 foreground_color_premultiplied;
 
 half sdfRect(half2 p, half4 r) {
@@ -20,6 +21,23 @@ half4 srcOver(half4 src, half4 dst) {
     half3 outRGB = (src.rgb + dst.rgb * (1.0 - src.a));
     float outA = src.a + (1.0 - src.a) * dst.a;
     return half4(outRGB, outA);
+}
+
+half4 sampleBackdrop(float2 uv) {
+  if (backdrop_blur <= 0.01) {
+    return img.eval(uv);
+  }
+  float2 axis = float2(backdrop_blur, backdrop_blur);
+  half4 color = img.eval(uv) * 0.28;
+  color += img.eval(uv + float2(axis.x, 0.0)) * 0.12;
+  color += img.eval(uv - float2(axis.x, 0.0)) * 0.12;
+  color += img.eval(uv + float2(0.0, axis.y)) * 0.12;
+  color += img.eval(uv - float2(0.0, axis.y)) * 0.12;
+  color += img.eval(uv + axis) * 0.06;
+  color += img.eval(uv - axis) * 0.06;
+  color += img.eval(uv + float2(axis.x, -axis.y)) * 0.06;
+  color += img.eval(uv + float2(-axis.x, axis.y)) * 0.06;
+  return color;
 }
 
 half4 main(in float2 fragCoord) {
@@ -42,5 +60,5 @@ half4 main(in float2 fragCoord) {
     uv += refract_vec.xy * refract_length * refract_intensity;
   }
 
-  return srcOver(half4(foreground_color_premultiplied), img.eval(uv));
+  return srcOver(half4(foreground_color_premultiplied), sampleBackdrop(uv));
 }
