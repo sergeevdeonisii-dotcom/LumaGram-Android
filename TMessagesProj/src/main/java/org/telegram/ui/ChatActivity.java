@@ -1676,6 +1676,7 @@ public class ChatActivity extends BaseFragment implements
     private final static int charge_fee = 72;
 
     private final static int chat_menu_topic_create = 73;
+    private final static int export_chat = 75;
 
     private final static int id_chat_compose_panel = 1000;
 
@@ -2041,6 +2042,17 @@ public class ChatActivity extends BaseFragment implements
                         TranscribeButton.showOffTranscribe(msg);
                     }
                 }
+            }
+        }
+
+        @Override
+        public void onPendingDelayedSendChanged(boolean pending) {
+            if (sideControlsButtonsLayout != null) {
+                sideControlsButtonsLayout.showButton(
+                    ChatActivitySideControlsButtonsLayout.BUTTON_CANCEL_DELAYED_SEND,
+                    pending,
+                    true
+                );
             }
         }
 
@@ -3909,6 +3921,8 @@ public class ChatActivity extends BaseFragment implements
                     openForward(true);
                 } else if (id == share) {
                     share();
+                } else if (id == export_chat) {
+                    LumaChatExportSheet.show(ChatActivity.this);
                 } else if (id == open_direct) {
                     if (currentChat == null) return;
                     presentFragment(ChatActivity.of(-currentChat.linked_monoforum_id));
@@ -4110,8 +4124,10 @@ public class ChatActivity extends BaseFragment implements
                     });
                     headerItem.toggleSubMenu(attach, attachItem.createView());
                 } else if (id == bot_help) {
+                    flushPendingDelayedTextSend();
                     getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of("/help", dialog_id, null, null, null, false, null, null, null, true, 0, 0, null, false));
                 } else if (id == bot_settings) {
+                    flushPendingDelayedTextSend();
                     getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of("/settings", dialog_id, null, null, null, false, null, null, null, true, 0, 0, null, false));
                 } else if (id == search) {
                     openSearchWithText(isSupportedTags() ? "" : null);
@@ -4575,6 +4591,9 @@ public class ChatActivity extends BaseFragment implements
             }
             if (themeDelegate.isThemeChangeAvailable(true)) {
                 headerItem.lazilyAddSubItem(change_colors, R.drawable.msg_background, LocaleController.getString(R.string.SetWallpapers));
+            }
+            if (currentEncryptedChat == null && !isPeerNoForwards()) {
+                headerItem.lazilyAddSubItem(export_chat, R.drawable.menu_download_round, LocaleController.getString(R.string.LumaExportChat));
             }
             if (currentUser != null && currentUser.self && getDialogId() != UserObject.VERIFY) {
                 headerItem.lazilyAddSubItem(add_shortcut, R.drawable.msg_home, LocaleController.getString(R.string.AddShortcut));
@@ -7482,6 +7501,7 @@ public class ChatActivity extends BaseFragment implements
                     return;
                 }
                 AlertsCreator.ensurePaidMessageConfirmation(currentAccount, dialog_id, Math.max(1, ((QuickRepliesController.QuickReply) object).getMessagesCount()), payStars -> {
+                    flushPendingDelayedTextSend();
                     TLRPC.TL_messages_sendQuickReplyMessages req = new TLRPC.TL_messages_sendQuickReplyMessages();
                     req.peer = getMessagesController().getInputPeer(dialog_id);
                     req.shortcut_id = ((QuickRepliesController.QuickReply) object).id;
@@ -7504,6 +7524,7 @@ public class ChatActivity extends BaseFragment implements
                 Object parent = mentionContainer.getAdapter().getItemParent(position);
                 String query = MessageObject.findAnimatedEmojiEmoticon(document);
                 AlertsCreator.ensurePaidMessageConfirmation(currentAccount, getDialogId(), 1, price -> {
+                    flushPendingDelayedTextSend();
                     if (chatMode == MODE_SCHEDULED) {
                         AlertsCreator.createScheduleDatePickerDialog(getParentActivity(), dialog_id, (notify, scheduleDate, scheduleRepeatPeriod) -> SendMessagesHelper.getInstance(currentAccount).sendSticker(document, query, dialog_id, replyingMessageObject, getThreadMessage(), null, replyingQuote, null, notify, scheduleDate, 0, false, parent, quickReplyShortcut, getQuickReplyId(), 0, getSendMonoForumPeerId(), getSendMessageSuggestionParams()), themeDelegate);
                     } else {
@@ -7549,6 +7570,7 @@ public class ChatActivity extends BaseFragment implements
                         params.ephemeralReceiverBotId = ephemeralCommand.botUserId;
                         params.monoForumPeer = getSendMonoForumPeerId();
                         params.suggestionParams = messageSuggestionParams;
+                        flushPendingDelayedTextSend();
                         getSendMessagesHelper().sendMessage(params);
                         chatActivityEnterView.setFieldText("");
                         hideFieldPanel(false);
@@ -7558,6 +7580,7 @@ public class ChatActivity extends BaseFragment implements
                 if (mentionContainer.getAdapter().isBotCommands()) {
                     if (chatMode == MODE_SCHEDULED) {
                         AlertsCreator.createScheduleDatePickerDialog(getParentActivity(), dialog_id, (notify, scheduleDate, scheduleRepeatPeriod) -> {
+                            flushPendingDelayedTextSend();
                             getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of((String) object, dialog_id, replyingMessageObject, getThreadMessage(), null, false, null, null, null, notify, scheduleDate, 0, null, false));
                             chatActivityEnterView.setFieldText("");
                             hideFieldPanel(false);
@@ -7573,6 +7596,7 @@ public class ChatActivity extends BaseFragment implements
                             params.payStars = payStars;
                             params.monoForumPeer = getSendMonoForumPeerId();
                             params.suggestionParams = messageSuggestionParams;
+                            flushPendingDelayedTextSend();
                             getSendMessagesHelper().sendMessage(params);
                             chatActivityEnterView.setFieldText("");
                             hideFieldPanel(false);
@@ -12520,6 +12544,7 @@ public class ChatActivity extends BaseFragment implements
         if (mentionContainer == null) {
             return;
         }
+        flushPendingDelayedTextSend();
         long uid = mentionContainer.getAdapter().getContextBotId();
         HashMap<String, String> params = new HashMap<>();
         params.put("id", result.id);
@@ -13136,6 +13161,7 @@ public class ChatActivity extends BaseFragment implements
                 SendMessagesHelper.SendMessageParams params = SendMessagesHelper.SendMessageParams.of(getUserConfig().getCurrentUser(), dialog_id, messageObject, getThreadMessage(), null, null, true, 0, 0);
                 params.quick_reply_shortcut_id = getQuickReplyId();
                 params.quick_reply_shortcut = quickReplyShortcut;
+                flushPendingDelayedTextSend();
                 SendMessagesHelper.getInstance(currentAccount).sendMessage(params);
                 if (chatMode == 0) {
                     moveScrollToLastMessage(false);
@@ -13674,10 +13700,17 @@ public class ChatActivity extends BaseFragment implements
         return true;
     }
 
+    private void flushPendingDelayedTextSend() {
+        if (chatActivityEnterView != null) {
+            chatActivityEnterView.flushPendingDelayedSend();
+        }
+    }
+
     private void openAttachMenu() {
         if (getParentActivity() == null || chatActivityEnterView != null && !TextUtils.isEmpty(chatActivityEnterView.getSlowModeTimer())) {
             return;
         }
+        flushPendingDelayedTextSend();
 
         final boolean isEphemeralMessage = chatActivityEnterView != null && chatActivityEnterView.isEphemeralMessageVisible();
 
@@ -32557,6 +32590,7 @@ public class ChatActivity extends BaseFragment implements
             updateGreetingLock();
             greetingsViewContainer.setListener((sticker) -> {
                 animatingDocuments.put(sticker, 0);
+                flushPendingDelayedTextSend();
                 SendMessagesHelper.getInstance(currentAccount).sendSticker(sticker, null, dialog_id, null, null, null, replyingQuote, null, true, 0, 0, false, null, quickReplyShortcut, getQuickReplyId(), 0, getSendMonoForumPeerId(), getSendMessageSuggestionParams());
             });
 //            greetingsViewContainer.setBackground(Theme.createServiceDrawable(AndroidUtilities.dp(16), greetingsViewContainer, contentView, getThemedPaint(Theme.key_paint_chatActionBackground)));
@@ -32606,6 +32640,7 @@ public class ChatActivity extends BaseFragment implements
                     updateGreetingLock();
                     greetingsViewContainer.setListener((sticker) -> {
                         animatingDocuments.put(sticker, 0);
+                        flushPendingDelayedTextSend();
                         SendMessagesHelper.getInstance(currentAccount).sendSticker(sticker, null, dialog_id, null, null, null, replyingQuote, null, true, 0, 0, false, null, quickReplyShortcut, getQuickReplyId(), 0, getSendMonoForumPeerId(), getSendMessageSuggestionParams());
                     });
 //                    greetingsViewContainer.setBackground(Theme.createServiceDrawable(AndroidUtilities.dp(16), greetingsViewContainer, contentView, getThemedPaint(Theme.key_paint_chatActionBackground)));
@@ -35653,6 +35688,7 @@ public class ChatActivity extends BaseFragment implements
         SendMessagesHelper.SendMessageParams params = SendMessagesHelper.SendMessageParams.of(message, dialog_id, replyingMessageObject, getThreadMessage(), null, false, entities, null, null, notify, scheduleDate, 0, null, false);
         params.quick_reply_shortcut = quickReplyShortcut;
         params.quick_reply_shortcut_id = getQuickReplyId();
+        flushPendingDelayedTextSend();
         SendMessagesHelper.getInstance(currentAccount).sendMessage(params);
         afterMessageSend();
     }
@@ -46552,7 +46588,11 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void onSideControlButtonOnClick(int buttonId, View v) {
-        if (buttonId == ChatActivitySideControlsButtonsLayout.BUTTON_PAGE_DOWN) {
+        if (buttonId == ChatActivitySideControlsButtonsLayout.BUTTON_CANCEL_DELAYED_SEND) {
+            if (chatActivityEnterView != null) {
+                chatActivityEnterView.cancelPendingDelayedSend();
+            }
+        } else if (buttonId == ChatActivitySideControlsButtonsLayout.BUTTON_PAGE_DOWN) {
             onPageDownClicked();
         } else if (buttonId == ChatActivitySideControlsButtonsLayout.BUTTON_MENTION) {
             loadLastUnreadMention();

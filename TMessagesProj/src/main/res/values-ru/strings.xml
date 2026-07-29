@@ -340,6 +340,12 @@
     <string name="ExperimentalTypingSwipeInfo">Настройка применяется только к словам, которые клавиатура отправляет целиком. Составляемый текст не перезапускается, поэтому свайп-набор остаётся плавным.</string>
     <string name="ExperimentalTypingReset">Сбросить настройки печати</string>
     <string name="ExperimentalTypingResetDone">Настройки анимации печати сброшены.</string>
+    <string name="ExperimentalDelayedSendHeader">Отмена отправки</string>
+    <string name="ExperimentalDelayedSendEnable">Задерживать текстовые сообщения</string>
+    <string name="ExperimentalDelayedSendSeconds">с</string>
+    <string name="ExperimentalDelayedSendInfo">Текстовое сообщение будет ожидать выбранное время перед отправкой. Нажмите круглый крестик над кнопкой-самолётиком, чтобы отменить отправку и вернуть текст в поле сообщения.</string>
+    <string name="AccDescrCancelDelayedSend">Отменить отправку сообщения</string>
+    <string name="LumaExportChat">Скачать чат</string>
     <string name="LumaUpdatesTitle">Обновления Luma</string>
     <string name="LumaUpdatesInfo">Безопасная проверка и установка версий</string>
     <string name="LumaUpdateCurrentVersion">Текущая версия</string>

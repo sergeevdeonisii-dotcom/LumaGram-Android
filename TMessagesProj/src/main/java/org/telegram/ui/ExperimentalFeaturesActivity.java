@@ -7,6 +7,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
 
+import org.telegram.messenger.LumaDelayedSend;
 import org.telegram.messenger.LumaTextAnimation;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -20,11 +21,13 @@ import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalRecyclerView;
 
 import java.util.ArrayList;
+import java.util.Locale;
 
 public class ExperimentalFeaturesActivity extends BaseFragment {
 
     private static final int ROW_ENABLED = 1;
     private static final int ROW_RESET = 2;
+    private static final int ROW_DELAYED_SEND_ENABLED = 3;
 
     private UniversalRecyclerView listView;
 
@@ -100,6 +103,21 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         items.add(UItem.asShadow(getString(R.string.ExperimentalTypingSwipeInfo)));
 
         items.add(UItem.asButton(ROW_RESET, getString(R.string.ExperimentalTypingReset)));
+
+        final boolean delayedSendEnabled = LumaDelayedSend.isEnabled();
+        items.add(UItem.asHeader(getString(R.string.ExperimentalDelayedSendHeader)));
+        items.add(UItem.asCheck(ROW_DELAYED_SEND_ENABLED, getString(R.string.ExperimentalDelayedSendEnable))
+            .setChecked(delayedSendEnabled));
+        items.add(UItem.asIntSlideView(
+            1,
+            LumaDelayedSend.MIN_STEP,
+            LumaDelayedSend.getDelayStep(),
+            LumaDelayedSend.MAX_STEP,
+            step -> String.format(Locale.getDefault(), "%.1f %s", step / 5.0f, getString(R.string.ExperimentalDelayedSendSeconds)),
+            LumaDelayedSend::setDelayStep
+        ).setEnabled(delayedSendEnabled));
+        items.add(UItem.asShadow(getString(R.string.ExperimentalDelayedSendInfo)));
+
         items.add(UItem.asShadow(getString(R.string.ExperimentalFeaturesWarning)));
     }
 
@@ -122,6 +140,15 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 R.raw.info,
                 getString(R.string.ExperimentalTypingResetDone)
             ).show();
+        } else if (item.id == ROW_DELAYED_SEND_ENABLED) {
+            final boolean enabled = !LumaDelayedSend.isEnabled();
+            LumaDelayedSend.setEnabled(enabled);
+            if (view instanceof TextCheckCell) {
+                ((TextCheckCell) view).setChecked(enabled);
+            }
+            if (listView != null && listView.adapter != null) {
+                listView.adapter.update(false);
+            }
         }
     }
 
