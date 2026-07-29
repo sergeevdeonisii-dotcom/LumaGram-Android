@@ -116,6 +116,11 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
     }
 
     @Override
+    public boolean shouldShowCustomUpdatePopupAutomatically() {
+        return false;
+    }
+
+    @Override
     public BetaUpdate getUpdate() {
         return LumaUpdaterController.getInstance().getUpdate();
     }

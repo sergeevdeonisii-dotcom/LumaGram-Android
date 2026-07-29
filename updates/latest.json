@@ -1,7 +1,7 @@
 {
-    "version":  "12.9.0-luma.24",
-    "version_code":  69869,
-    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.24/Luma-Telegram-12.9-Liquid24-Signed-arm64.apk",
-    "sha256":  "337a4cd4f828deae60e980654eb3fec26ea079269710d1b581c60794b1deac2e",
-    "changelog":  "Встроенные обновления LumaGram, защищённая проверка APK, исправления Liquid Glass, тема ФУллБлек и улучшения интерфейса."
+    "version":  "12.9.0-luma.25",
+    "version_code":  69879,
+    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.25/Luma-Telegram-12.9-Liquid25-Signed-arm64.apk",
+    "sha256":  "69b0c314f3b3c349cc8c979af5d2fa11235b92c617a80f6d7a5174df3381209b",
+    "changelog":  "Тихая проверка обновлений при входе в LumaGram: без автоматического окна, только карточка над чатами. Интервал фоновой проверки сокращён до 15 минут."
 }
