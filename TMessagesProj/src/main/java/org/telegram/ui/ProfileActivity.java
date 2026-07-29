@@ -244,6 +244,7 @@ import org.telegram.ui.Components.ItemOptions;
 import org.telegram.ui.Components.JoinGroupAlert;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.LinkSpanDrawable;
+import org.telegram.ui.Components.LumaChatExportSheet;
 import org.telegram.ui.Components.MediaActivity;
 import org.telegram.ui.Components.MessagePrivateSeenView;
 import org.telegram.ui.Components.ProfileActionsView;
@@ -594,6 +595,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private final static int delete_group = 45;
     private final static int enable_no_forwards = 46;
     private final static int disable_no_forwards = 47;
+    private final static int export_chat = 48;
 
     private Rect rect = new Rect();
 
@@ -2731,6 +2733,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         getMediaDataController().installShortcut(did, MediaDataController.SHORTCUT_TYPE_USER_OR_CHAT);
                     } catch (Exception e) {
                         FileLog.e(e);
+                    }
+                } else if (id == export_chat) {
+                    final ChatActivity chatActivity = getSourceChatActivityForExport();
+                    if (chatActivity != null) {
+                        LumaChatExportSheet.show(chatActivity);
                     }
                 } else if (id == call_item || id == video_call_item) {
                     onCallClicked(id == video_call_item);
@@ -12287,6 +12294,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             }
         }
 
+        if (currentEncryptedChat == null && !isPeerNoForwards() && getSourceChatActivityForExport() != null) {
+            otherItem.addSubItem(export_chat, R.drawable.menu_download_round, LocaleController.getString(R.string.LumaExportChat));
+        }
+
         if (imageUpdater != null) {
             otherItem.addSubItem(set_as_main, R.drawable.msg_openprofile, LocaleController.getString(R.string.SetAsMain));
             otherItem.addSubItem(gallery_menu_save, R.drawable.msg_gallery, LocaleController.getString(R.string.SaveToGallery));
@@ -12462,6 +12473,40 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         if (userInfo != null || chatInfo != null) {
             undoView.showWithAction(did, action, getMessagesController().getUser(did), userInfo != null ? userInfo.ttl_period : chatInfo.ttl_period, null, null);
         }
+    }
+
+    private ChatActivity getSourceChatActivityForExport() {
+        if (parentLayout == null || parentLayout.getFragmentStack() == null) {
+            return null;
+        }
+        final List<BaseFragment> stack = parentLayout.getFragmentStack();
+        final int profileIndex = stack.lastIndexOf(this);
+        BaseFragment previous = null;
+        if (profileIndex > 0) {
+            previous = stack.get(profileIndex - 1);
+        } else if (profileIndex < 0) {
+            // createView() may build this menu just before the profile itself
+            // is pushed; at that moment the source chat is still the last item.
+            previous = parentLayout.getLastFragment();
+        }
+        if (previous != null) {
+            if (previous instanceof ChatActivity) {
+                final ChatActivity chatActivity = (ChatActivity) previous;
+                if (chatActivity.getDialogId() == getDialogId()) {
+                    return chatActivity;
+                }
+            } else if (previous instanceof DialogsActivity) {
+                final DialogsActivity dialogsActivity = (DialogsActivity) previous;
+                if (dialogsActivity.rightSlidingDialogContainer != null
+                    && dialogsActivity.rightSlidingDialogContainer.currentFragment instanceof ChatActivity) {
+                    final ChatActivity chatActivity = (ChatActivity) dialogsActivity.rightSlidingDialogContainer.currentFragment;
+                    if (chatActivity.getDialogId() == getDialogId()) {
+                        return chatActivity;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     @Override

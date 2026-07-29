@@ -115,20 +115,14 @@ final class LumaTypingAnimator implements TextWatcher {
             final long duration = glyph.durationMs;
             final float progress = Math.min(1.0f, (now - glyph.startTime) / (float) duration);
             final float eased = glyph.wordBatch ? easeOutCubic(progress) : easeOutQuint(progress);
-            final int line = layout.getLineForOffset(start);
-            final float x = paddingLeft + layout.getPrimaryHorizontal(start) - scrollX;
-            final float baseline = textTop + layout.getLineBaseline(line)
-                - AndroidUtilities.dp(glyph.slideDistanceDp) * (1.0f - eased);
-            if (baseline < -view.getTextSize() || baseline > view.getHeight() + view.getTextSize()) {
-                continue;
-            }
+            final float lift = AndroidUtilities.dp(glyph.slideDistanceDp) * (1.0f - eased);
 
             final float blur = 1.0f - eased;
             final int blurAlpha = (int) (originalAlpha * blur);
             if (blurAlpha > 4) {
                 animationPaint.setAlpha(blurAlpha);
                 animationPaint.setMaskFilter(getBlurFilter(blur, glyph.blurLevel));
-                canvas.drawText(glyph.text, x, baseline, animationPaint);
+                drawGlyphRuns(canvas, layout, view, glyph, start, end, paddingLeft, scrollX, textTop, lift);
             }
 
             final float sharp = eased > BLUR_TEXT_DELAY
@@ -138,7 +132,7 @@ final class LumaTypingAnimator implements TextWatcher {
             final int sharpAlpha = (int) (originalAlpha * sharp);
             if (sharpAlpha > 0) {
                 animationPaint.setAlpha(sharpAlpha);
-                canvas.drawText(glyph.text, x, baseline, animationPaint);
+                drawGlyphRuns(canvas, layout, view, glyph, start, end, paddingLeft, scrollX, textTop, lift);
             }
         }
         canvas.restore();
@@ -147,6 +141,25 @@ final class LumaTypingAnimator implements TextWatcher {
         animationPaint.setAlpha(originalAlpha);
         if (!glyphs.isEmpty()) {
             view.postInvalidateOnAnimation();
+        }
+    }
+
+    private void drawGlyphRuns(Canvas canvas, Layout layout, EditTextBoldCursor view, Glyph glyph,
+                               int start, int end, int paddingLeft, int scrollX,
+                               float textTop, float lift) {
+        int runStart = start;
+        while (runStart < end) {
+            final int line = layout.getLineForOffset(runStart);
+            int runEnd = Math.min(end, layout.getLineEnd(line));
+            if (runEnd <= runStart) {
+                runEnd = Math.min(end, runStart + 1);
+            }
+            final float baseline = textTop + layout.getLineBaseline(line) - lift;
+            if (baseline >= -view.getTextSize() && baseline <= view.getHeight() + view.getTextSize()) {
+                final float x = paddingLeft + layout.getPrimaryHorizontal(runStart) - scrollX;
+                canvas.drawText(glyph.text, runStart - start, runEnd - start, x, baseline, animationPaint);
+            }
+            runStart = runEnd;
         }
     }
 
@@ -273,9 +286,10 @@ final class LumaTypingAnimator implements TextWatcher {
             changedEnd -= suffix;
         }
 
-        // Only a real IME commit may become a word batch. Composing updates
-        // continue to animate just their changed letters, so repeatedly
-        // replacing the composing word never restarts its whole animation.
+        // Only a real, pure IME insertion may become a word batch. Some
+        // keyboards finish composition by replacing the whole composing range;
+        // restarting that complete word here makes it visibly jerk. In that
+        // case we keep only the genuinely changed characters animated.
         int groupedStart = inputKind == INPUT_COMMIT ? insertedStart : changedStart;
         int groupedEnd = inputKind == INPUT_COMMIT ? insertedEnd : changedEnd;
         while (groupedStart < groupedEnd && Character.isWhitespace(editable.charAt(groupedStart))) {
@@ -286,6 +300,8 @@ final class LumaTypingAnimator implements TextWatcher {
         }
         final int groupedCodePoints = Character.codePointCount(editable, groupedStart, groupedEnd);
         final boolean committedWord = inputKind == INPUT_COMMIT
+            && oldSegment != null
+            && oldSegment.isEmpty()
             && groupedCodePoints > 1
             && groupedCodePoints <= MAX_WORD_BATCH_CODE_POINTS
             && containsOnlyWordCharacters(editable, groupedStart, groupedEnd);

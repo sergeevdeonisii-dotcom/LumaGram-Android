@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.37",
-  "version_code": 70809,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.37/Luma-Telegram-12.9-Liquid37-Signed-arm64.apk",
-  "sha256": "afc70a9be7921fed63a8ce8a2514277f04fac87aa814183d04bec1e621430c39",
-  "changelog": "Добавлена экспериментальная отложенная отправка сообщений с задержкой от 0,4 до 5,0 секунды и кнопкой отмены. Отменённый текст возвращается в поле ввода, а порядок отправки сохраняется для стикеров, GIF, вложений и бот-команд. Добавлен мобильный экспорт чата в ZIP: удобный HTML, полный JSON и медиафайлы по выбору."
+  "version": "12.9.0-luma.38",
+  "version_code": 70909,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.38/Luma-Telegram-12.9-Liquid38-Signed-arm64.apk",
+  "sha256": "2009d06c38dfedb672b69bc441a483a0bdfd10c3aab98b0ce1b7fea6f96416d7",
+  "changelog": "Исправлена отложенная отправка: теперь ответы и серия быстрых сообщений ждут заданную задержку и отправляются по порядку. Кнопка «Скачать чат» перенесена в видимое меню профиля. Плавная печать и свайп-ввод исправлены для длинного и многострочного текста."
 }
