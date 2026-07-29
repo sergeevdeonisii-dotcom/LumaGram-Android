@@ -92,7 +92,10 @@ final class LumaTypingAnimator implements TextWatcher {
         final int paddingLeft = view.getPaddingLeft();
         final int scrollX = view.getScrollX();
         final float verticalOffset = getVerticalOffset(view);
-        final float textTop = view.getExtendedPaddingTop() + verticalOffset - view.getScrollY();
+        // View.draw() has already translated this canvas by -scrollY before
+        // EditTextBoldCursor.onDraw(). Subtracting it here again makes letters
+        // jump increasingly high as the multiline input starts scrolling.
+        final float textTop = view.getExtendedPaddingTop() + verticalOffset;
 
         animationPaint.set(view.getPaint());
         final int originalAlpha = animationPaint.getAlpha();
@@ -248,6 +251,15 @@ final class LumaTypingAnimator implements TextWatcher {
             changedEnd -= suffix;
         }
 
+        // Glide/swipe keyboards insert or replace several letters at once.
+        // Animate the resulting word as one coherent batch, while ordinary
+        // one-character IME updates keep their per-letter animation.
+        if (Character.codePointCount(editable, changedStart, changedEnd) > 1
+            && containsOnlyWordCharacters(editable, changedStart, changedEnd)) {
+            changedStart = findWordStart(editable, changedStart);
+            changedEnd = findWordEnd(editable, changedEnd);
+        }
+
         // Keep the previous letter animating when the IME replaces its whole
         // composing word to append the next character. Touching ranges are not
         // overlapping ranges.
@@ -379,6 +391,51 @@ final class LumaTypingAnimator implements TextWatcher {
             }
         }
         return true;
+    }
+
+    private static boolean containsOnlyWordCharacters(CharSequence text, int start, int end) {
+        int offset = start;
+        while (offset < end) {
+            final int codePoint = Character.codePointAt(text, offset);
+            if (!isWordCharacter(codePoint)) {
+                return false;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return offset > start;
+    }
+
+    private static int findWordStart(CharSequence text, int offset) {
+        while (offset > 0) {
+            final int codePoint = Character.codePointBefore(text, offset);
+            if (!isWordCharacter(codePoint)) {
+                break;
+            }
+            offset -= Character.charCount(codePoint);
+        }
+        return offset;
+    }
+
+    private static int findWordEnd(CharSequence text, int offset) {
+        while (offset < text.length()) {
+            final int codePoint = Character.codePointAt(text, offset);
+            if (!isWordCharacter(codePoint)) {
+                break;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return offset;
+    }
+
+    private static boolean isWordCharacter(int codePoint) {
+        final int type = Character.getType(codePoint);
+        return Character.isLetterOrDigit(codePoint)
+            || type == Character.NON_SPACING_MARK
+            || type == Character.COMBINING_SPACING_MARK
+            || type == Character.ENCLOSING_MARK
+            || codePoint == '_'
+            || codePoint == '\''
+            || codePoint == 0x2019;
     }
 
     private static boolean isEmojiLike(Editable editable, int start, int end, int codePoint) {

@@ -1,7 +1,7 @@
 {
-    "version":  "12.9.0-luma.30",
-    "version_code":  70109,
-    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.30/Luma-Telegram-12.9-Liquid30-Signed-arm64.apk",
-    "sha256":  "06c3a3d96d327e8e0de163224f5e1642a4c49c0119fbf9ef4e2ce39209dbae85",
-    "changelog":  "Срочно исправлена плавная анимация набора: при работе Gboard и других IME теперь анимируется только реально добавленная буква, а не всё составляемое слово. Сохранены оптимизации для длинного текста, больших вставок и многострочного поля ввода."
+    "version":  "12.9.0-luma.31",
+    "version_code":  70209,
+    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.31/Luma-Telegram-12.9-Liquid31-Signed-arm64.apk",
+    "sha256":  "ec384b3a2b117190fa4c4f4cbaa9cab8aaf068e119b7812b717ea15e797f1584",
+    "changelog":  "Исправлена высота появления букв в длинном многострочном поле: внутренняя прокрутка больше не применяется к анимации дважды. Свайп-ввод снова анимирует добавленное слово как единый плавный блок, а обычный набор остаётся побуквенным."
 }
