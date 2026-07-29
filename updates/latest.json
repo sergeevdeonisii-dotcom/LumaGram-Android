@@ -1,7 +1,7 @@
 {
-    "version":  "12.9.0-luma.32",
-    "version_code":  70309,
-    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.32/Luma-Telegram-12.9-Liquid32-Signed-arm64.apk",
-    "sha256":  "d78eda5af5e828bcc9a11e674fb72298727d31413b05c0bd7e6f768e52236ee0",
-    "changelog":  "Исправлена доставка обновлений: LumaGram автоматически проверяет новую версию при запуске и возвращении в приложение. Проверка больше не застревает на кэше GitHub."
+    "version":  "12.9.0-luma.33",
+    "version_code":  70409,
+    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.33/Luma-Telegram-12.9-Liquid33-Signed-arm64.apk",
+    "sha256":  "14a9ff88ecee75a2e5eb7fb51608b2ae1f395a3a3db3c980c79f9623a1194a0e",
+    "changelog":  "Добавлен отдельный экран «Расширенные настройки» в разделе Liquid Glass. Исправлен свайп-ввод: слово рисуется единым слоем, мягко опускается с меньшей высоты и больше не перезапускается рывками при промежуточных обновлениях клавиатуры."
 }

@@ -23,9 +23,11 @@ import java.util.Iterator;
 final class LumaTypingAnimator implements TextWatcher {
 
     private static final long DURATION_MS = 300L;
+    private static final long WORD_DURATION_MS = 340L;
     private static final float BLUR_TEXT_DELAY = 0.20f;
     private static final float BLUR_RADIUS_PX = 10.0f;
     private static final float SLIDE_DISTANCE_DP = 20.0f;
+    private static final float WORD_SLIDE_DISTANCE_DP = 10.0f;
     private static final int MAX_GLYPHS_PER_CHANGE = 48;
     private static final int MAX_ACTIVE_GLYPHS = 72;
     private static final int MAX_INSERT_SCAN_UNITS = 256;
@@ -110,12 +112,14 @@ final class LumaTypingAnimator implements TextWatcher {
                 continue;
             }
 
-            final float progress = Math.min(1.0f, (now - glyph.startTime) / (float) DURATION_MS);
-            final float eased = easeOutQuint(progress);
+            final long duration = glyph.wordBatch ? WORD_DURATION_MS : DURATION_MS;
+            final float progress = Math.min(1.0f, (now - glyph.startTime) / (float) duration);
+            final float eased = glyph.wordBatch ? easeOutCubic(progress) : easeOutQuint(progress);
             final int line = layout.getLineForOffset(start);
             final float x = paddingLeft + layout.getPrimaryHorizontal(start) - scrollX;
             final float baseline = textTop + layout.getLineBaseline(line)
-                - AndroidUtilities.dp(SLIDE_DISTANCE_DP) * (1.0f - eased);
+                - AndroidUtilities.dp(glyph.wordBatch ? WORD_SLIDE_DISTANCE_DP : SLIDE_DISTANCE_DP)
+                    * (1.0f - eased);
             if (baseline < -view.getTextSize() || baseline > view.getHeight() + view.getTextSize()) {
                 continue;
             }
@@ -251,14 +255,22 @@ final class LumaTypingAnimator implements TextWatcher {
             changedEnd -= suffix;
         }
 
-        // Glide/swipe keyboards insert or replace several letters at once.
-        // Animate the resulting word as one coherent batch, while ordinary
-        // one-character IME updates keep their per-letter animation.
-        if (Character.codePointCount(editable, changedStart, changedEnd) > 1
-            && containsOnlyWordCharacters(editable, changedStart, changedEnd)) {
-            changedStart = findWordStart(editable, changedStart);
-            changedEnd = findWordEnd(editable, changedEnd);
+        // A swipe keyboard normally commits the finished word as one pure
+        // insertion. Draw that insertion as one shaped run so the letters
+        // travel together. Do not regroup composing-word replacements: IMEs
+        // update those repeatedly while the finger is moving, and restarting
+        // the whole word on every replacement is what caused the visible jerk.
+        int groupedStart = changedStart;
+        int groupedEnd = changedEnd;
+        while (groupedStart < groupedEnd && Character.isWhitespace(editable.charAt(groupedStart))) {
+            groupedStart++;
         }
+        while (groupedEnd > groupedStart && Character.isWhitespace(editable.charAt(groupedEnd - 1))) {
+            groupedEnd--;
+        }
+        final boolean animateAsWord = oldSegment != null && oldSegment.isEmpty()
+            && Character.codePointCount(editable, groupedStart, groupedEnd) > 1
+            && containsOnlyWordCharacters(editable, groupedStart, groupedEnd);
 
         // Keep the previous letter animating when the IME replaces its whole
         // composing word to append the next character. Touching ranges are not
@@ -276,19 +288,28 @@ final class LumaTypingAnimator implements TextWatcher {
         }
 
         candidates.clear();
-        int offset = scanStart;
-        while (offset < changedEnd) {
-            final int codePoint = Character.codePointAt(editable, offset);
-            final int length = Character.charCount(codePoint);
-            final int end = Math.min(changedEnd, offset + length);
-            if (!isWhitespace(editable, offset, end)
-                && !isEmojiLike(editable, offset, end, codePoint)) {
-                if (candidates.size() == MAX_GLYPHS_PER_CHANGE) {
-                    candidates.remove(0);
+        if (animateAsWord) {
+            candidates.add(new Candidate(
+                groupedStart,
+                groupedEnd,
+                editable.subSequence(groupedStart, groupedEnd).toString(),
+                true
+            ));
+        } else {
+            int offset = scanStart;
+            while (offset < changedEnd) {
+                final int codePoint = Character.codePointAt(editable, offset);
+                final int length = Character.charCount(codePoint);
+                final int end = Math.min(changedEnd, offset + length);
+                if (!isWhitespace(editable, offset, end)
+                    && !isEmojiLike(editable, offset, end, codePoint)) {
+                    if (candidates.size() == MAX_GLYPHS_PER_CHANGE) {
+                        candidates.remove(0);
+                    }
+                    candidates.add(new Candidate(offset, end, editable.subSequence(offset, end).toString(), false));
                 }
-                candidates.add(new Candidate(offset, end, editable.subSequence(offset, end).toString()));
+                offset = end;
             }
-            offset = end;
         }
 
         while (glyphs.size() + candidates.size() > MAX_ACTIVE_GLYPHS && !glyphs.isEmpty()) {
@@ -301,7 +322,7 @@ final class LumaTypingAnimator implements TextWatcher {
             }
             final ForegroundColorSpan hiddenSpan = new ForegroundColorSpan(0x00000000);
             editable.setSpan(hiddenSpan, candidate.start, candidate.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            glyphs.add(new Glyph(candidate.text, hiddenSpan, now));
+            glyphs.add(new Glyph(candidate.text, hiddenSpan, now, candidate.wordBatch));
         }
     }
 
@@ -311,7 +332,8 @@ final class LumaTypingAnimator implements TextWatcher {
             final Glyph glyph = iterator.next();
             final int start = editable.getSpanStart(glyph.hiddenSpan);
             final int end = editable.getSpanEnd(glyph.hiddenSpan);
-            if (!isValidGlyph(editable, glyph, start, end) || now - glyph.startTime >= DURATION_MS) {
+            final long duration = glyph.wordBatch ? WORD_DURATION_MS : DURATION_MS;
+            if (!isValidGlyph(editable, glyph, start, end) || now - glyph.startTime >= duration) {
                 editable.removeSpan(glyph.hiddenSpan);
                 iterator.remove();
             }
@@ -405,28 +427,6 @@ final class LumaTypingAnimator implements TextWatcher {
         return offset > start;
     }
 
-    private static int findWordStart(CharSequence text, int offset) {
-        while (offset > 0) {
-            final int codePoint = Character.codePointBefore(text, offset);
-            if (!isWordCharacter(codePoint)) {
-                break;
-            }
-            offset -= Character.charCount(codePoint);
-        }
-        return offset;
-    }
-
-    private static int findWordEnd(CharSequence text, int offset) {
-        while (offset < text.length()) {
-            final int codePoint = Character.codePointAt(text, offset);
-            if (!isWordCharacter(codePoint)) {
-                break;
-            }
-            offset += Character.charCount(codePoint);
-        }
-        return offset;
-    }
-
     private static boolean isWordCharacter(int codePoint) {
         final int type = Character.getType(codePoint);
         return Character.isLetterOrDigit(codePoint)
@@ -465,15 +465,22 @@ final class LumaTypingAnimator implements TextWatcher {
         return 1.0f - inverse * inverse * inverse * inverse * inverse;
     }
 
+    private static float easeOutCubic(float value) {
+        final float inverse = 1.0f - value;
+        return 1.0f - inverse * inverse * inverse;
+    }
+
     private static final class Candidate {
         final int start;
         final int end;
         final String text;
+        final boolean wordBatch;
 
-        Candidate(int start, int end, String text) {
+        Candidate(int start, int end, String text, boolean wordBatch) {
             this.start = start;
             this.end = end;
             this.text = text;
+            this.wordBatch = wordBatch;
         }
     }
 
@@ -481,11 +488,13 @@ final class LumaTypingAnimator implements TextWatcher {
         final String text;
         final ForegroundColorSpan hiddenSpan;
         final long startTime;
+        final boolean wordBatch;
 
-        Glyph(String text, ForegroundColorSpan hiddenSpan, long startTime) {
+        Glyph(String text, ForegroundColorSpan hiddenSpan, long startTime, boolean wordBatch) {
             this.text = text;
             this.hiddenSpan = hiddenSpan;
             this.startTime = startTime;
+            this.wordBatch = wordBatch;
         }
     }
 }

@@ -31,15 +31,27 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
     private static final int ROW_ADAPTIVE_COLOR = 4;
     private static final int ROW_SEPARATE_COLORS = 5;
     private static final int ROW_WALLPAPER_REFRACTION = 6;
+    private static final int ROW_ADVANCED = 7;
 
     private UniversalRecyclerView listView;
     private boolean settingsChanged;
+    private final boolean advancedMode;
+
+    public LiquidGlassSettingsActivity() {
+        this(false);
+    }
+
+    private LiquidGlassSettingsActivity(boolean advancedMode) {
+        this.advancedMode = advancedMode;
+    }
 
     @Override
     public View createView(Context context) {
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
-        actionBar.setTitle(getString(R.string.LiquidGlassSettingsTitle));
+        actionBar.setTitle(getString(advancedMode
+            ? R.string.LiquidGlassAdvancedTitle
+            : R.string.LiquidGlassSettingsTitle));
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
@@ -66,12 +78,21 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
         final boolean adaptiveColor = LiteMode.getLiquidGlassAdaptiveColorEnabled();
         final boolean wallpaperRefraction = LiteMode.getLiquidGlassWallpaperRefractionEnabled();
 
-        items.add(UItem.asHeader(getString(R.string.LiquidGlassAppearance)));
-        items.add(UItem.asCheck(ROW_ENABLED, getString(R.string.LiquidGlassEnable))
-            .setChecked(enabled));
-        items.add(UItem.asCheck(ROW_POWER_SAVER, getString(R.string.LiquidGlassPowerSaver))
-            .setChecked(LiteMode.getLiquidGlassKeepInPowerSaver()));
-        items.add(UItem.asShadow(getString(R.string.LiquidGlassEnableInfo)));
+        if (!advancedMode) {
+            items.add(UItem.asHeader(getString(R.string.LiquidGlassAppearance)));
+            items.add(UItem.asCheck(ROW_ENABLED, getString(R.string.LiquidGlassEnable))
+                .setChecked(enabled));
+            items.add(UItem.asCheck(ROW_POWER_SAVER, getString(R.string.LiquidGlassPowerSaver))
+                .setChecked(LiteMode.getLiquidGlassKeepInPowerSaver()));
+            items.add(UItem.asShadow(getString(R.string.LiquidGlassEnableInfo)));
+            items.add(UItem.asButton(
+                ROW_ADVANCED,
+                getString(R.string.LiquidGlassAdvancedSettings),
+                getString(R.string.LiquidGlassAdvancedSettingsInfo)
+            ));
+            items.add(UItem.asShadow(null));
+            return;
+        }
 
         items.add(UItem.asHeader(getString(R.string.LiquidGlassPanelOpacity)));
         items.add(UItem.asSlideView(new String[] {
@@ -144,7 +165,9 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {
-        if (item.id == ROW_ENABLED) {
+        if (item.id == ROW_ADVANCED) {
+            presentFragment(new LiquidGlassSettingsActivity(true));
+        } else if (item.id == ROW_ENABLED) {
             final boolean enabled = !LiteMode.isEnabledSetting(LiteMode.FLAG_LIQUID_GLASS);
             LiteMode.toggleFlag(LiteMode.FLAG_LIQUID_GLASS, enabled);
             settingsChanged = true;
