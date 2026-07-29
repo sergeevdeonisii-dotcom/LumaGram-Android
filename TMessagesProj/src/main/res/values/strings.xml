@@ -11162,6 +11162,9 @@
     <string name="LiquidGlassSettingsTitle">Liquid Glass</string>
     <string name="LiquidGlassLivePreview">Live preview</string>
     <string name="LiquidGlassSettingsInfo">Glass interface settings</string>
+    <string name="LiquidGlassAdvancedSettings">Advanced settings</string>
+    <string name="LiquidGlassAdvancedSettingsInfo">Opacity, refraction, input size, wallpaper, and adaptive colors</string>
+    <string name="LiquidGlassAdvancedTitle">Advanced Liquid Glass</string>
     <string name="LiquidGlassAppearance">Appearance</string>
     <string name="LiquidGlassEnable">Enable Liquid Glass</string>
     <string name="LiquidGlassEnableInfo">Applies the glass effect to Telegram panels, chats, and the message field.</string>

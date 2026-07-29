@@ -266,6 +266,9 @@
     <string name="LiquidGlassSettingsTitle">Liquid Glass</string>
     <string name="LiquidGlassLivePreview">Живое превью</string>
     <string name="LiquidGlassSettingsInfo">Настройка стеклянного интерфейса</string>
+    <string name="LiquidGlassAdvancedSettings">Расширенные настройки</string>
+    <string name="LiquidGlassAdvancedSettingsInfo">Прозрачность, преломление, размер поля, обои и адаптивные цвета</string>
+    <string name="LiquidGlassAdvancedTitle">Расширенные настройки Liquid Glass</string>
     <string name="LiquidGlassAppearance">Оформление</string>
     <string name="LiquidGlassEnable">Включить Liquid Glass</string>
     <string name="LiquidGlassEnableInfo">Эффект применяется к панелям Telegram, чатам и строке сообщения.</string>
