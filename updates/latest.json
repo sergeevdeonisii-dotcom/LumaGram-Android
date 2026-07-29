@@ -1,7 +1,7 @@
 {
-    "version":  "12.9.0-luma.31",
-    "version_code":  70209,
-    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.31/Luma-Telegram-12.9-Liquid31-Signed-arm64.apk",
-    "sha256":  "ec384b3a2b117190fa4c4f4cbaa9cab8aaf068e119b7812b717ea15e797f1584",
-    "changelog":  "Исправлена высота появления букв в длинном многострочном поле: внутренняя прокрутка больше не применяется к анимации дважды. Свайп-ввод снова анимирует добавленное слово как единый плавный блок, а обычный набор остаётся побуквенным."
+    "version":  "12.9.0-luma.32",
+    "version_code":  70309,
+    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.32/Luma-Telegram-12.9-Liquid32-Signed-arm64.apk",
+    "sha256":  "d78eda5af5e828bcc9a11e674fb72298727d31413b05c0bd7e6f768e52236ee0",
+    "changelog":  "Исправлена доставка обновлений: LumaGram автоматически проверяет новую версию при запуске и возвращении в приложение. Проверка больше не застревает на кэше GitHub."
 }

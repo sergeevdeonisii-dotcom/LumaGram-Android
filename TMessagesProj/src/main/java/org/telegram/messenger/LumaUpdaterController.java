@@ -187,6 +187,7 @@ public final class LumaUpdaterController {
         checking = true;
         lastError = null;
         final int generation = ++checkGeneration;
+        String requestUrl = appendCacheBuster(manifestUrl);
         new HttpGetTask(response -> AndroidUtilities.runOnUIThread(() -> {
             if (generation != checkGeneration) {
                 return;
@@ -229,7 +230,10 @@ public final class LumaUpdaterController {
             if (whenDone != null) {
                 whenDone.run();
             }
-        })).setHeader("Accept", "application/json").setHeader("User-Agent", "Luma-Android/" + BuildVars.BUILD_VERSION_STRING).execute(manifestUrl);
+        })).setHeader("Accept", "application/json")
+                .setHeader("Cache-Control", "no-cache")
+                .setHeader("User-Agent", "Luma-Android/" + BuildVars.BUILD_VERSION_STRING)
+                .execute(requestUrl);
     }
 
     public BetaUpdate getUpdate() {
@@ -469,6 +473,10 @@ public final class LumaUpdaterController {
 
     private static boolean isHttps(String value) {
         return !TextUtils.isEmpty(value) && value.regionMatches(true, 0, "https://", 0, 8);
+    }
+
+    private static String appendCacheBuster(String value) {
+        return value + (value.contains("?") ? "&" : "?") + "luma_check=" + System.currentTimeMillis();
     }
 
     private int getCurrentVersionCode() {
