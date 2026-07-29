@@ -76,6 +76,9 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         public String title;
         public int outputFormat = OUTPUT_ARCHIVE;
         public boolean includeMedia;
+        public boolean includePhotos = true;
+        public boolean includeVideos = true;
+        public boolean includeFiles = true;
         public long maxMediaBytes = 50L * 1024L * 1024L;
         public boolean secretChat;
         public boolean protectedContent;
@@ -481,6 +484,13 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         }
         TLRPC.MessageMedia messageMedia = MessageObject.getMedia(message);
         if (!options.includeMedia || messageMedia != null && messageMedia.ttl_seconds != 0) {
+            return;
+        }
+        boolean image = attachment.mimeType.startsWith("image/");
+        boolean video = attachment.mimeType.startsWith("video/");
+        if (image && !options.includePhotos
+                || video && !options.includeVideos
+                || !image && !video && !options.includeFiles) {
             return;
         }
         if (options.outputFormat == OUTPUT_PDF && !attachment.mimeType.startsWith("image/")) {

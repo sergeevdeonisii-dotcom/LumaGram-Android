@@ -9,6 +9,7 @@ import android.widget.FrameLayout;
 
 import org.telegram.messenger.LumaDelayedSend;
 import org.telegram.messenger.LumaTextAnimation;
+import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -28,6 +29,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private static final int ROW_ENABLED = 1;
     private static final int ROW_RESET = 2;
     private static final int ROW_DELAYED_SEND_ENABLED = 3;
+    private static final int ROW_ACCOUNT_EXPORT = 4;
 
     private UniversalRecyclerView listView;
 
@@ -118,6 +120,14 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         ).setEnabled(delayedSendEnabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalDelayedSendInfo)));
 
+        items.add(UItem.asHeader(tr("Данные аккаунта", "Account data")));
+        items.add(UItem.asButton(ROW_ACCOUNT_EXPORT,
+                tr("Экспорт аккаунта", "Account export"),
+                tr("HTML · чаты и медиа", "HTML · chats and media")));
+        items.add(UItem.asShadow(tr(
+                "Создаёт переносимую HTML-копию выбранных папок и типов чатов.",
+                "Creates a portable HTML copy of selected folders and chat types.")));
+
         items.add(UItem.asShadow(getString(R.string.ExperimentalFeaturesWarning)));
     }
 
@@ -149,6 +159,8 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             if (listView != null && listView.adapter != null) {
                 listView.adapter.update(false);
             }
+        } else if (item.id == ROW_ACCOUNT_EXPORT) {
+            presentFragment(new LumaAccountExportActivity());
         }
     }
 
@@ -158,5 +170,10 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         if (listView != null && listView.adapter != null) {
             listView.adapter.update(false);
         }
+    }
+
+    private static String tr(String russian, String english) {
+        Locale locale = LocaleController.getInstance().getCurrentLocale();
+        return locale != null && "ru".equalsIgnoreCase(locale.getLanguage()) ? russian : english;
     }
 }
