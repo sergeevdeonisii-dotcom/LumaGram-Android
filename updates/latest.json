@@ -1,7 +1,7 @@
 {
-    "version":  "12.9.0-luma.29",
-    "version_code":  70009,
-    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.29/Luma-Telegram-12.9-Liquid29-Signed-arm64.apk",
-    "sha256":  "26692308796d5076d3f28cc72d993cf2c4d39ee8c88b15e1f940b5a8ee17d550",
-    "changelog":  "Добавлено преломление обоев через верхние овалы и нижнюю панель ввода: стекло теперь использует фон чата, а сообщения остаются поверх эффекта. Преломление обоев и «Адаптивный цвет стекла» взаимоисключающие и показывают понятное уведомление. Исправлена плавная печать при быстром наборе, вставке большого текста и многострочном поле ввода."
+    "version":  "12.9.0-luma.30",
+    "version_code":  70109,
+    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.30/Luma-Telegram-12.9-Liquid30-Signed-arm64.apk",
+    "sha256":  "06c3a3d96d327e8e0de163224f5e1642a4c49c0119fbf9ef4e2ce39209dbae85",
+    "changelog":  "Срочно исправлена плавная анимация набора: при работе Gboard и других IME теперь анимируется только реально добавленная буква, а не всё составляемое слово. Сохранены оптимизации для длинного текста, больших вставок и многострочного поля ввода."
 }
