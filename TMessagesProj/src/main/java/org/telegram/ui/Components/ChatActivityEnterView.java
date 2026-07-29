@@ -217,6 +217,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -454,7 +455,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     private Runnable moveToSendStateRunnable;
     boolean messageTransitionIsRunning;
     boolean textTransitionIsRunning;
-    private PendingTextSend pendingTextSend;
+    private final ArrayDeque<PendingTextSend> pendingTextSends = new ArrayDeque<>();
     private boolean lastTextSendWasDeferred;
 
     private static class PendingTextSend {
@@ -467,6 +468,10 @@ public class ChatActivityEnterView extends FrameLayout implements
         int scheduleDate;
         int scheduleRepeatPeriod;
         long payStars;
+        long sendAt;
+        MessageObject replyingMessageObject;
+        ChatActivity.ReplyQuote replyingQuote;
+        MessageObject replyingTopMessage;
         ArrayList<SendMessagesHelper.SendMessageParams> messages;
         Runnable sendRunnable;
     }
@@ -6656,7 +6661,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void setDialogId(long id, int account) {
-        if (pendingTextSend != null && (dialog_id != id || currentAccount != account)) {
+        if (!pendingTextSends.isEmpty() && (dialog_id != id || currentAccount != account)) {
             commitPendingDelayedSend(false);
         }
         dialog_id = id;
@@ -7287,13 +7292,9 @@ public class ChatActivityEnterView extends FrameLayout implements
             })) {
                 return;
             }
-            // Preserve send ordering: anything sent after a delayed text must not
-            // overtake it, including voice, video, rich drafts, forwards or replies.
-            if (pendingTextSend != null) {
-                commitPendingDelayedSend();
-            }
             dismissSendPreviewSent = true;
             if (videoToSendMessageObject != null) {
+                flushPendingDelayedSendBeforeDirectSend();
                 delegate.needStartRecordVideo(4, notify, scheduleDate, 0, voiceOnce ? 0x7FFFFFFF : 0, effectId, payStars);
                 sendButton.setEffect(effectId = 0);
                 hideRecordedAudioPanel(true);
@@ -7306,6 +7307,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 millisecondsRecorded = 0;
                 return;
             } else if (audioToSend != null) {
+                flushPendingDelayedSendBeforeDirectSend();
                 MessageObject playing = MediaController.getInstance().getPlayingMessageObject();
                 if (playing != null && playing == audioToSendMessageObject) {
                     MediaController.getInstance().cleanupPlayer(true, true);
@@ -7364,6 +7366,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 millisecondsRecorded = 0;
                 return;
             } else if (richDraftActive && richDraftMessage != null) {
+                flushPendingDelayedSendBeforeDirectSend();
                 sendRichDraft(notify, scheduleDate, scheduleRepeatPeriod, payStars);
                 return;
             }
@@ -7416,6 +7419,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 }
                 lastTypingTimeSend = 0;
             } else if (forceShowSendButton) {
+                flushPendingDelayedSendBeforeDirectSend();
                 if (delegate != null) {
                     delegate.onMessageSend(null, notify, scheduleDate, scheduleRepeatPeriod, payStars);
                 }
@@ -7769,13 +7773,19 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     public boolean processSendingText(CharSequence text, boolean notify, int scheduleDate, int scheduleRepeatPeriod, long payStars) {
         lastTextSendWasDeferred = false;
-        flushPendingDelayedSendBeforeDirectSend();
         final CharSequence originalText = new SpannableStringBuilder(text);
         final int selectionStart = messageEditText == null ? originalText.length() : messageEditText.getSelectionStart();
         final int selectionEnd = messageEditText == null ? originalText.length() : messageEditText.getSelectionEnd();
         final int originalSelectionStart = selectionStart < 0 ? originalText.length() : selectionStart;
         final int originalSelectionEnd = selectionEnd < 0 ? originalText.length() : selectionEnd;
+        final MessageObject originalReplyingMessage = replyingMessageObject;
+        final ChatActivity.ReplyQuote originalReplyingQuote = replyingQuote;
+        final MessageObject originalReplyingTopMessage = replyingTopMessage;
         final boolean delaySend = canDelayTextSend(scheduleDate, payStars);
+        if (!delaySend) {
+            // A non-delayed send must stay behind every queued text message.
+            flushPendingDelayedSendBeforeDirectSend();
+        }
         final ArrayList<SendMessagesHelper.SendMessageParams> delayedMessages = delaySend ? new ArrayList<>() : null;
         if (replyingQuote != null && parentFragment != null && replyingQuote.outdated) {
             parentFragment.showQuoteMessageUpdate();
@@ -7911,7 +7921,10 @@ public class ChatActivityEnterView extends FrameLayout implements
                     notify,
                     scheduleDate,
                     scheduleRepeatPeriod,
-                    payStars
+                    payStars,
+                    originalReplyingMessage,
+                    originalReplyingQuote,
+                    originalReplyingTopMessage
                 );
                 lastTextSendWasDeferred = true;
             }
@@ -7937,7 +7950,6 @@ public class ChatActivityEnterView extends FrameLayout implements
             && editingMessageObject == null
             && delegate != null
             && !delegate.hasForwardingMessages()
-            && (replyingMessageObject == null || replyingMessageObject == getThreadMessage())
             && replyingQuote == null
             && messageWebPage == null
             && delegate.getReplyToStory() == null
@@ -7952,7 +7964,10 @@ public class ChatActivityEnterView extends FrameLayout implements
         boolean notify,
         int scheduleDate,
         int scheduleRepeatPeriod,
-        long payStars
+        long payStars,
+        MessageObject replyingMessageObject,
+        ChatActivity.ReplyQuote replyingQuote,
+        MessageObject replyingTopMessage
     ) {
         final PendingTextSend pending = new PendingTextSend();
         pending.account = currentAccount;
@@ -7965,16 +7980,22 @@ public class ChatActivityEnterView extends FrameLayout implements
         pending.scheduleDate = scheduleDate;
         pending.scheduleRepeatPeriod = scheduleRepeatPeriod;
         pending.payStars = payStars;
-        pending.sendRunnable = () -> {
-            if (pendingTextSend == pending) {
-                commitPendingDelayedSend();
-            }
-        };
-        pendingTextSend = pending;
-        if (delegate != null) {
+        pending.replyingMessageObject = replyingMessageObject;
+        pending.replyingQuote = replyingQuote;
+        pending.replyingTopMessage = replyingTopMessage;
+        final long now = SystemClock.uptimeMillis();
+        final PendingTextSend previous = pendingTextSends.peekLast();
+        pending.sendAt = Math.max(
+            now + LumaDelayedSend.getDelayMs(),
+            previous == null ? 0L : previous.sendAt + 1L
+        );
+        pending.sendRunnable = this::commitPendingDelayedSendsDue;
+        final boolean wasEmpty = pendingTextSends.isEmpty();
+        pendingTextSends.addLast(pending);
+        if (wasEmpty && delegate != null) {
             delegate.onPendingDelayedSendChanged(true);
         }
-        AndroidUtilities.runOnUIThread(pending.sendRunnable, LumaDelayedSend.getDelayMs());
+        AndroidUtilities.runOnUIThread(pending.sendRunnable, Math.max(0L, pending.sendAt - now));
     }
 
     private void commitPendingDelayedSend() {
@@ -7982,17 +8003,28 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     private void commitPendingDelayedSend(boolean prepareUi) {
-        final PendingTextSend pending = pendingTextSend;
-        if (pending == null) {
-            return;
+        while (!pendingTextSends.isEmpty()) {
+            sendPendingDelayedText(pendingTextSends.removeFirst(), prepareUi);
         }
-        pendingTextSend = null;
+        updatePendingDelayedSendButton();
+    }
+
+    private void commitPendingDelayedSendsDue() {
+        final long now = SystemClock.uptimeMillis();
+        while (!pendingTextSends.isEmpty() && pendingTextSends.peekFirst().sendAt <= now) {
+            sendPendingDelayedText(pendingTextSends.removeFirst(), true);
+        }
+        updatePendingDelayedSendButton();
+    }
+
+    private void sendPendingDelayedText(PendingTextSend pending, boolean prepareUi) {
         AndroidUtilities.cancelRunOnUIThread(pending.sendRunnable);
-        if (delegate != null && !destroyed) {
-            delegate.onPendingDelayedSendChanged(false);
-            if (prepareUi && pending.account == currentAccount && pending.dialogId == dialog_id && parentFragment != null) {
-                delegate.prepareMessageSending();
-            }
+        if (delegate != null && !destroyed
+            && prepareUi
+            && pending.account == currentAccount
+            && pending.dialogId == dialog_id
+            && parentFragment != null) {
+            delegate.prepareMessageSending();
         }
         final SendMessagesHelper helper = SendMessagesHelper.getInstance(pending.account);
         for (int i = 0; i < pending.messages.size(); i++) {
@@ -8000,22 +8032,25 @@ public class ChatActivityEnterView extends FrameLayout implements
         }
     }
 
+    private void updatePendingDelayedSendButton() {
+        if (delegate != null && !destroyed) {
+            delegate.onPendingDelayedSendChanged(!pendingTextSends.isEmpty());
+        }
+    }
+
     private void flushPendingDelayedSendBeforeDirectSend() {
-        if (pendingTextSend != null) {
+        if (!pendingTextSends.isEmpty()) {
             commitPendingDelayedSend();
         }
     }
 
     public boolean cancelPendingDelayedSend() {
-        final PendingTextSend pending = pendingTextSend;
+        final PendingTextSend pending = pendingTextSends.pollLast();
         if (pending == null) {
             return false;
         }
-        pendingTextSend = null;
         AndroidUtilities.cancelRunOnUIThread(pending.sendRunnable);
-        if (delegate != null) {
-            delegate.onPendingDelayedSendChanged(false);
-        }
+        updatePendingDelayedSendButton();
 
         final CharSequence currentText = messageEditText == null
             ? ""
@@ -8035,11 +8070,20 @@ public class ChatActivityEnterView extends FrameLayout implements
             messageEditText.setSelection(selection);
             messageEditText.requestFocus();
         }
+        if (pending.replyingMessageObject != null
+            && parentFragment != null
+            && (replyingMessageObject == null || replyingMessageObject == getThreadMessage())) {
+            if (pending.replyingQuote != null) {
+                parentFragment.showFieldPanelForReplyQuote(pending.replyingMessageObject, pending.replyingQuote);
+            } else {
+                parentFragment.showFieldPanelForReply(pending.replyingMessageObject);
+            }
+        }
         return true;
     }
 
     public boolean hasPendingDelayedSend() {
-        return pendingTextSend != null;
+        return !pendingTextSends.isEmpty();
     }
 
     public void flushPendingDelayedSend() {

@@ -88,7 +88,7 @@ public final class LumaTextAnimation {
     }
 
     public static int getHeightLevel() {
-        return clampLevel(preferences().getInt(KEY_HEIGHT_LEVEL, HEIGHT_HIGH));
+        return clampLevel(preferences().getInt(KEY_HEIGHT_LEVEL, HEIGHT_MEDIUM));
     }
 
     public static void setHeightLevel(int level) {
