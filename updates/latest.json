@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.38",
-  "version_code": 70909,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.38/Luma-Telegram-12.9-Liquid38-Signed-arm64.apk",
-  "sha256": "2009d06c38dfedb672b69bc441a483a0bdfd10c3aab98b0ce1b7fea6f96416d7",
-  "changelog": "Исправлена отложенная отправка: теперь ответы и серия быстрых сообщений ждут заданную задержку и отправляются по порядку. Кнопка «Скачать чат» перенесена в видимое меню профиля. Плавная печать и свайп-ввод исправлены для длинного и многострочного текста."
+  "version": "12.9.0-luma.39",
+  "version_code": 71009,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.39/Luma-Telegram-12.9-Liquid39-Signed-arm64.apk",
+  "sha256": "905b15a0e56f00d5ee2f4ec18a6df69884506eaa212de2c74a3ccc5b29639a4b",
+  "changelog": "Добавлен красивый экспорт чатов в PDF: сообщения оформляются пузырями, сохраняются даты, время, отправители, фотографии и карточки вложений. Длинные переписки автоматически разбиваются на аккуратные пронумерованные страницы. PDF можно сохранить в «Загрузки/Telegram» или сразу отправить через меню «Поделиться»."
 }

@@ -55,6 +55,9 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     public static final int HISTORY_REPLIES = 1;
     public static final int HISTORY_SAVED = 2;
 
+    public static final int OUTPUT_ARCHIVE = 0;
+    public static final int OUTPUT_PDF = 1;
+
     public static final int STAGE_HISTORY = 0;
     public static final int STAGE_MEDIA = 1;
     public static final int STAGE_ARCHIVE = 2;
@@ -71,6 +74,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         public long savedParentDialogId;
         public int historyMode = HISTORY_DIALOG;
         public String title;
+        public int outputFormat = OUTPUT_ARCHIVE;
         public boolean includeMedia;
         public long maxMediaBytes = 50L * 1024L * 1024L;
         public boolean secretChat;
@@ -162,6 +166,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     private int expectedMessages;
     private int copiedMedia;
     private int skippedMedia;
+    private long copiedMediaBytes;
     private long activeSourceDialogId;
 
     private volatile String waitingFileName;
@@ -400,7 +405,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
             return;
         }
         notifyProgress(STAGE_ARCHIVE);
-        worker.execute(this::buildArchive);
+        worker.execute(options.outputFormat == OUTPUT_PDF ? this::buildPdf : this::buildArchive);
     }
 
     private JSONObject createMessageJson(TLRPC.Message message, MessageObject object,
@@ -478,7 +483,15 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         if (!options.includeMedia || messageMedia != null && messageMedia.ttl_seconds != 0) {
             return;
         }
+        if (options.outputFormat == OUTPUT_PDF && !attachment.mimeType.startsWith("image/")) {
+            return;
+        }
         if (options.maxMediaBytes > 0 && attachment.declaredSize > options.maxMediaBytes) {
+            skippedMedia++;
+            return;
+        }
+        if (options.maxMediaBytes > 0 && attachment.declaredSize > 0
+                && copiedMediaBytes + attachment.declaredSize > options.maxMediaBytes) {
             skippedMedia++;
             return;
         }
@@ -498,6 +511,10 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
             skippedMedia++;
             return;
         }
+        if (options.maxMediaBytes > 0 && copiedMediaBytes + source.length() > options.maxMediaBytes) {
+            skippedMedia++;
+            return;
+        }
         if (mediaDir.getUsableSpace() < source.length() + 10L * 1024L * 1024L) {
             throw new IllegalStateException("Not enough storage space");
         }
@@ -506,6 +523,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         copyFile(source, destination);
         json.put("media", "media/" + destination.getName());
         copiedMedia++;
+        copiedMediaBytes += destination.length();
     }
 
     @Nullable
@@ -641,6 +659,29 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
             if (archive != null) archive.delete();
         } catch (Throwable e) {
             fail(localized("Не удалось создать ZIP-архив.", "Could not create the ZIP archive."), e);
+        } finally {
+            activeArchive = null;
+        }
+    }
+
+    private void buildPdf() {
+        if (cancelled.get()) {
+            return;
+        }
+        File pdf = null;
+        try {
+            String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(new Date());
+            pdf = uniqueFile(outputDir, "LumaGram_" + sanitizeFileName(options.title) + "_" + timestamp + ".pdf");
+            activeArchive = pdf;
+            LumaChatPdfRenderer.render(pdf, safeTitle(), pageFiles, sessionDir, this::ensureNotCancelled);
+            ensureNotCancelled();
+            activeArchive = null;
+            cleanupSession(false);
+            complete(pdf);
+        } catch (ExportCancelledException e) {
+            if (pdf != null) pdf.delete();
+        } catch (Throwable e) {
+            fail(localized("Не удалось создать PDF-документ.", "Could not create the PDF document."), e);
         } finally {
             activeArchive = null;
         }

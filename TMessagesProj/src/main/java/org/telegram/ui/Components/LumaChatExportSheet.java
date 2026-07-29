@@ -47,6 +47,7 @@ public final class LumaChatExportSheet {
         }
 
         CharSequence[] choices = new CharSequence[] {
+            tr("PDF — красивый документ с фотографиями", "PDF - styled document with photos"),
             tr("HTML + JSON — без медиа", "HTML + JSON - no media"),
             tr("HTML + JSON — с медиа до 50 МБ", "HTML + JSON - media up to 50 MB")
         };
@@ -56,19 +57,25 @@ public final class LumaChatExportSheet {
         );
         builder.setTitle(tr("Скачать чат", "Export chat"));
         builder.setMessage(tr(
-            "LumaGram соберёт историю в ZIP. Внутри будут удобная HTML-страница и полный JSON. Выберите, добавлять ли фотографии, видео, голосовые и файлы.",
-            "LumaGram will create a ZIP containing a readable HTML page and the full JSON history. Choose whether to include photos, videos, voice messages and files."
+            "Выберите формат. PDF оформляется как переписка с пузырями, датами, фотографиями и нумерацией страниц. HTML + JSON сохраняется в ZIP для просмотра и обработки.",
+            "Choose a format. PDF is styled like a chat with bubbles, dates, photos and page numbers. HTML + JSON is saved as a ZIP for viewing and processing."
         ));
-        builder.setItems(choices, (dialog, which) -> startExport(chatActivity, which == 1));
+        builder.setItems(choices, (dialog, which) -> {
+            int outputFormat = which == 0
+                ? LumaChatExportManager.OUTPUT_PDF
+                : LumaChatExportManager.OUTPUT_ARCHIVE;
+            boolean includeMedia = which == 0 || which == 2;
+            startExport(chatActivity, outputFormat, includeMedia);
+        });
         builder.setNegativeButton(tr("Отмена", "Cancel"), null);
         chatActivity.showDialog(builder.create());
     }
 
-    private static void startExport(ChatActivity chatActivity, boolean includeMedia) {
+    private static void startExport(ChatActivity chatActivity, int outputFormat, boolean includeMedia) {
         if (chatActivity.getParentActivity() == null) {
             return;
         }
-        LumaChatExportManager.Options options = createOptions(chatActivity, includeMedia);
+        LumaChatExportManager.Options options = createOptions(chatActivity, outputFormat, includeMedia);
         final LumaChatExportManager[] manager = new LumaChatExportManager[1];
 
         AlertDialog progressDialog = new AlertDialog(
@@ -93,7 +100,9 @@ public final class LumaChatExportSheet {
                 }
                 progressDialog.setProgress(progress.getPercent());
                 if (progress.stage == LumaChatExportManager.STAGE_ARCHIVE) {
-                    progressDialog.setMessage(tr("Создание ZIP-архива…", "Creating ZIP archive..."));
+                    progressDialog.setMessage(outputFormat == LumaChatExportManager.OUTPUT_PDF
+                        ? tr("Оформление PDF-документа…", "Rendering PDF document...")
+                        : tr("Создание ZIP-архива…", "Creating ZIP archive..."));
                 } else if (progress.stage == LumaChatExportManager.STAGE_MEDIA) {
                     progressDialog.setMessage(tr(
                         "Сообщений: " + progress.messages + " · файлов: " + progress.mediaFiles,
@@ -108,18 +117,19 @@ public final class LumaChatExportSheet {
             }
 
             @Override
-            public void onComplete(File archive, LumaChatExportManager.Progress finalProgress) {
+            public void onComplete(File output, LumaChatExportManager.Progress finalProgress) {
                 dismiss(progressDialog);
                 if (chatActivity.getParentActivity() == null) {
                     return;
                 }
+                boolean pdf = outputFormat == LumaChatExportManager.OUTPUT_PDF;
                 MediaController.saveFile(
-                    archive.getAbsolutePath(),
+                    output.getAbsolutePath(),
                     chatActivity.getParentActivity(),
                     2,
-                    archive.getName(),
-                    "application/zip",
-                    uri -> showComplete(chatActivity, uri, archive, finalProgress)
+                    output.getName(),
+                    pdf ? "application/pdf" : "application/zip",
+                    uri -> showComplete(chatActivity, uri, output, finalProgress, pdf)
                 );
             }
 
@@ -142,12 +152,17 @@ public final class LumaChatExportSheet {
         manager[0].start();
     }
 
-    private static LumaChatExportManager.Options createOptions(ChatActivity chatActivity, boolean includeMedia) {
+    private static LumaChatExportManager.Options createOptions(
+        ChatActivity chatActivity,
+        int outputFormat,
+        boolean includeMedia
+    ) {
         LumaChatExportManager.Options options = new LumaChatExportManager.Options(
             chatActivity.getCurrentAccount(),
             chatActivity.getDialogId(),
             getTitle(chatActivity)
         );
+        options.outputFormat = outputFormat;
         options.includeMedia = includeMedia;
         options.maxMediaBytes = 50L * 1024L * 1024L;
         options.mergeDialogId = chatActivity.getMergeDialogId();
@@ -189,19 +204,20 @@ public final class LumaChatExportSheet {
     private static void showComplete(
         ChatActivity chatActivity,
         Uri savedUri,
-        File archive,
-        LumaChatExportManager.Progress finalProgress
+        File output,
+        LumaChatExportManager.Progress finalProgress,
+        boolean pdf
     ) {
         if (chatActivity.getParentActivity() == null) {
             return;
         }
         String details = tr(
-            "Архив сохранён в «Загрузки/Telegram».\n\nСообщений: " + finalProgress.messages
+            (pdf ? "PDF сохранён" : "Архив сохранён") + " в «Загрузки/Telegram».\n\nСообщений: " + finalProgress.messages
                 + "\nМедиафайлов: " + finalProgress.mediaFiles
                 + (finalProgress.skippedMediaFiles > 0
                     ? "\nПропущено медиа: " + finalProgress.skippedMediaFiles
                     : ""),
-            "The archive was saved to Downloads/Telegram.\n\nMessages: " + finalProgress.messages
+            (pdf ? "The PDF was saved" : "The archive was saved") + " to Downloads/Telegram.\n\nMessages: " + finalProgress.messages
                 + "\nMedia files: " + finalProgress.mediaFiles
                 + (finalProgress.skippedMediaFiles > 0
                     ? "\nSkipped media: " + finalProgress.skippedMediaFiles
@@ -211,21 +227,22 @@ public final class LumaChatExportSheet {
             chatActivity.getParentActivity(),
             chatActivity.getResourceProvider()
         );
-        builder.setTitle(tr("Чат скачан", "Chat exported"));
+        builder.setTitle(pdf ? tr("PDF готов", "PDF ready") : tr("Чат скачан", "Chat exported"));
         builder.setMessage(details);
-        builder.setPositiveButton(tr("Поделиться", "Share"), (dialog, which) -> share(chatActivity, savedUri, archive));
+        builder.setPositiveButton(tr("Поделиться", "Share"),
+            (dialog, which) -> share(chatActivity, savedUri, output, pdf));
         builder.setNegativeButton("OK", null);
         chatActivity.showDialog(builder.create());
     }
 
-    private static void share(ChatActivity chatActivity, Uri savedUri, File archive) {
+    private static void share(ChatActivity chatActivity, Uri savedUri, File output, boolean pdf) {
         if (chatActivity.getParentActivity() == null) {
             return;
         }
         try {
             Uri uri = savedUri;
             if (uri == null || !"content".equalsIgnoreCase(uri.getScheme())) {
-                File shareFile = archive;
+                File shareFile = output;
                 if (uri != null && "file".equalsIgnoreCase(uri.getScheme()) && !TextUtils.isEmpty(uri.getPath())) {
                     File savedFile = new File(uri.getPath());
                     if (savedFile.exists()) {
@@ -233,7 +250,7 @@ public final class LumaChatExportSheet {
                     }
                 }
                 if (shareFile == null || !shareFile.exists()) {
-                    showError(chatActivity, tr("Архив больше недоступен.", "The archive is no longer available."));
+                    showError(chatActivity, tr("Файл больше недоступен.", "The file is no longer available."));
                     return;
                 }
                 uri = Build.VERSION.SDK_INT >= 24
@@ -245,14 +262,16 @@ public final class LumaChatExportSheet {
                     : Uri.fromFile(shareFile);
             }
             Intent intent = new Intent(Intent.ACTION_SEND);
-            intent.setType("application/zip");
+            intent.setType(pdf ? "application/pdf" : "application/zip");
             intent.putExtra(Intent.EXTRA_STREAM, uri);
-            intent.putExtra(Intent.EXTRA_SUBJECT, archive.getName());
+            intent.putExtra(Intent.EXTRA_SUBJECT, output.getName());
             if (Build.VERSION.SDK_INT >= 24) {
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             }
             chatActivity.getParentActivity().startActivityForResult(
-                Intent.createChooser(intent, tr("Поделиться архивом", "Share archive")),
+                Intent.createChooser(intent, pdf
+                    ? tr("Поделиться PDF", "Share PDF")
+                    : tr("Поделиться архивом", "Share archive")),
                 500
             );
         } catch (Throwable e) {
