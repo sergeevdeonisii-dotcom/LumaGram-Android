@@ -26,6 +26,8 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
     private static final int ROW_ENABLED = 1;
     private static final int ROW_POWER_SAVER = 2;
     private static final int ROW_RESET = 3;
+    private static final int ROW_ADAPTIVE_COLOR = 4;
+    private static final int ROW_SEPARATE_COLORS = 5;
 
     private UniversalRecyclerView listView;
     private boolean settingsChanged;
@@ -58,6 +60,7 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
 
     private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         final boolean enabled = LiteMode.isEnabledSetting(LiteMode.FLAG_LIQUID_GLASS);
+        final boolean adaptiveColor = LiteMode.getLiquidGlassAdaptiveColorEnabled();
 
         items.add(UItem.asHeader(getString(R.string.LiquidGlassAppearance)));
         items.add(UItem.asCheck(ROW_ENABLED, getString(R.string.LiquidGlassEnable))
@@ -96,6 +99,36 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
             settingsChanged = true;
         }).setEnabled(enabled));
         items.add(UItem.asShadow(getString(R.string.LiquidGlassAdvancedInfo)));
+
+        items.add(UItem.asHeader(getString(R.string.LiquidGlassAdaptiveColor)));
+        items.add(UItem.asCheck(ROW_ADAPTIVE_COLOR, getString(R.string.LiquidGlassAdaptiveColorEnable))
+            .setChecked(adaptiveColor)
+            .setEnabled(enabled));
+        items.add(UItem.asCheck(ROW_SEPARATE_COLORS, getString(R.string.LiquidGlassSeparateColors))
+            .setChecked(LiteMode.getLiquidGlassSeparateColors())
+            .setEnabled(enabled && adaptiveColor));
+        items.add(UItem.asShadow(getString(R.string.LiquidGlassAdaptiveColorInfo)));
+
+        items.add(UItem.asHeader(getString(R.string.LiquidGlassColorStrength)));
+        items.add(UItem.asSlideView(new String[] {
+            getString(R.string.LiquidGlassSoft),
+            getString(R.string.LiquidGlassBalanced),
+            getString(R.string.LiquidGlassStrong)
+        }, LiteMode.getLiquidGlassColorStrengthLevel(), value -> {
+            LiteMode.setLiquidGlassColorStrengthLevel(value);
+            settingsChanged = true;
+        }).setEnabled(enabled && adaptiveColor));
+
+        items.add(UItem.asHeader(getString(R.string.LiquidGlassColorTransition)));
+        items.add(UItem.asSlideView(new String[] {
+            getString(R.string.LiquidGlassTransitionFast),
+            getString(R.string.LiquidGlassTransitionSmooth),
+            getString(R.string.LiquidGlassTransitionGentle)
+        }, LiteMode.getLiquidGlassColorTransitionLevel(), value -> {
+            LiteMode.setLiquidGlassColorTransitionLevel(value);
+            settingsChanged = true;
+        }).setEnabled(enabled && adaptiveColor));
+        items.add(UItem.asShadow(getString(R.string.LiquidGlassColorTransitionInfo)));
         items.add(UItem.asButton(ROW_RESET, getString(R.string.LiquidGlassReset)));
         items.add(UItem.asShadow(null));
     }
@@ -112,6 +145,21 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
         } else if (item.id == ROW_POWER_SAVER) {
             final boolean enabled = !LiteMode.getLiquidGlassKeepInPowerSaver();
             LiteMode.setLiquidGlassKeepInPowerSaver(enabled);
+            settingsChanged = true;
+            if (view instanceof TextCheckCell) {
+                ((TextCheckCell) view).setChecked(enabled);
+            }
+        } else if (item.id == ROW_ADAPTIVE_COLOR) {
+            final boolean enabled = !LiteMode.getLiquidGlassAdaptiveColorEnabled();
+            LiteMode.setLiquidGlassAdaptiveColorEnabled(enabled);
+            settingsChanged = true;
+            if (view instanceof TextCheckCell) {
+                ((TextCheckCell) view).setChecked(enabled);
+            }
+            listView.adapter.update(false);
+        } else if (item.id == ROW_SEPARATE_COLORS) {
+            final boolean enabled = !LiteMode.getLiquidGlassSeparateColors();
+            LiteMode.setLiquidGlassSeparateColors(enabled);
             settingsChanged = true;
             if (view instanceof TextCheckCell) {
                 ((TextCheckCell) view).setChecked(enabled);

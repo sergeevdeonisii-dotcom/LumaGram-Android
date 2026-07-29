@@ -88,8 +88,8 @@ public class ChatInputViewsContainer extends FrameLayout {
         blurredBackgroundDrawable = drawable;
         blurredBackgroundDrawable.setPadding(dp(7));
         blurredBackgroundDrawable.setRadius(dp(INPUT_BUBBLE_RADIUS));
-        blurredBackgroundDrawable.setThickness(dp(14));
-        blurredBackgroundDrawable.setIntensity(1.08f);
+        blurredBackgroundDrawable.setThickness(dp(11));
+        blurredBackgroundDrawable.setIntensity(0.88f);
     }
 
     public void setInputIslandButtonDrawables(BlurredBackgroundDrawable left, BlurredBackgroundDrawable right) {
@@ -99,10 +99,10 @@ public class ChatInputViewsContainer extends FrameLayout {
         rightButtonBackgroundDrawable.setPadding(dp(7));
         leftButtonBackgroundDrawable.setRadius(dp(INPUT_BUBBLE_RADIUS));
         rightButtonBackgroundDrawable.setRadius(dp(INPUT_BUBBLE_RADIUS));
-        leftButtonBackgroundDrawable.setThickness(dp(14));
-        rightButtonBackgroundDrawable.setThickness(dp(14));
-        leftButtonBackgroundDrawable.setIntensity(1.12f);
-        rightButtonBackgroundDrawable.setIntensity(1.12f);
+        leftButtonBackgroundDrawable.setThickness(dp(11));
+        rightButtonBackgroundDrawable.setThickness(dp(11));
+        leftButtonBackgroundDrawable.setIntensity(0.88f);
+        rightButtonBackgroundDrawable.setIntensity(0.88f);
     }
 
     public void setSplitInputEnabled(boolean enabled) {

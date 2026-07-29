@@ -166,6 +166,15 @@ public class BlurredBackgroundDrawableRenderNode extends BlurredBackgroundDrawab
     public void updateColors() {
         super.updateColors();
 
+        applyResolvedColors();
+    }
+
+    @Override
+    protected void onAnimatedColorsChanged() {
+        applyResolvedColors();
+    }
+
+    private void applyResolvedColors() {
         paintShadow.setShadowLayer(shadowLayerRadius, shadowLayerDx, shadowLayerDy, shadowColor);
         paintStrokeTop.setColor(strokeColorTop);
         paintStrokeBottom.setColor(strokeColorBottom);
@@ -175,6 +184,7 @@ public class BlurredBackgroundDrawableRenderNode extends BlurredBackgroundDrawab
 
     @Override
     public void draw(@NonNull Canvas canvas) {
+        updateAnimatedColors();
         if (boundProps.boundsWithPadding.isEmpty()) {
             return;
         }
