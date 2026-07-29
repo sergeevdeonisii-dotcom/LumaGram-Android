@@ -316,6 +316,7 @@
     <string name="LumaMessageStyleMonospace">Моноширинный</string>
     <string name="LumaMessageStyleUnderline">Подчёркнутый</string>
     <string name="LumaMessageStyleStrikethrough">Зачёркнутый</string>
+    <string name="LumaMessageStyleQuote">Цитирование</string>
     <string name="LumaUpdatesTitle">Обновления Luma</string>
     <string name="LumaUpdatesInfo">Безопасная проверка и установка версий</string>
     <string name="LumaUpdateCurrentVersion">Текущая версия</string>

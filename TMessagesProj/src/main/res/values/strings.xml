@@ -11212,6 +11212,7 @@
     <string name="LumaMessageStyleMonospace">Monospace</string>
     <string name="LumaMessageStyleUnderline">Underline</string>
     <string name="LumaMessageStyleStrikethrough">Strikethrough</string>
+    <string name="LumaMessageStyleQuote">Quote</string>
     <string name="LumaUpdatesTitle">Luma Updates</string>
     <string name="LumaUpdatesInfo">Secure updates and version checks</string>
     <string name="LumaUpdateCurrentVersion">Current version</string>
