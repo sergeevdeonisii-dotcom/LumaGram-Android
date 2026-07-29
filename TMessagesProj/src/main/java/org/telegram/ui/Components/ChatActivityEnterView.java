@@ -131,6 +131,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaMessageFormatting;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
@@ -7781,6 +7782,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 }
                 CharSequence[] message = new CharSequence[]{ part };
                 ArrayList<TLRPC.MessageEntity> entities = MediaDataController.getInstance(currentAccount).getEntities(message, supportsNewEntities);
+                entities = LumaMessageFormatting.applyAutoBold(message[0], entities);
                 MessageObject.SendAnimationData sendAnimationData = null;
 
                 if (!delegate.hasForwardingMessages()) {

@@ -30,6 +30,8 @@ import androidx.core.math.MathUtils;
 
 import org.telegram.messenger.LiteMode;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Components.AnimatedColor;
+import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.blur3.Blur3HashImpl;
 import org.telegram.ui.Components.blur3.drawable.color.BlurredBackgroundColorProvider;
 import org.telegram.ui.Components.blur3.drawable.color.BlurredBackgroundProvider;
@@ -187,6 +189,13 @@ public abstract class BlurredBackgroundDrawable extends Drawable {
 
     protected BlurredBackgroundColorProvider colorProvider;
     protected int shadowColor, backgroundColor, strokeColorTop, strokeColorBottom;
+    private int targetShadowColor, targetBackgroundColor, targetStrokeColorTop, targetStrokeColorBottom;
+    private int colorTransitionDuration;
+    private boolean colorsInitialized;
+    private AnimatedColor animatedShadowColor;
+    private AnimatedColor animatedBackgroundColor;
+    private AnimatedColor animatedStrokeColorTop;
+    private AnimatedColor animatedStrokeColorBottom;
 
     public BlurredBackgroundDrawable setColorProvider(BlurredBackgroundColorProvider colorProvider) {
         this.colorProvider = colorProvider;
@@ -204,10 +213,63 @@ public abstract class BlurredBackgroundDrawable extends Drawable {
     public void updateColors() {
         if (colorProvider == null) return;
 
-        backgroundColor = colorProvider.getBackgroundColor();
-        shadowColor = colorProvider.getShadowColor();
-        strokeColorTop = colorProvider.getStrokeColorTop();
-        strokeColorBottom = colorProvider.getStrokeColorBottom();
+        targetBackgroundColor = colorProvider.getBackgroundColor();
+        targetShadowColor = colorProvider.getShadowColor();
+        targetStrokeColorTop = colorProvider.getStrokeColorTop();
+        targetStrokeColorBottom = colorProvider.getStrokeColorBottom();
+
+        final int duration = Math.max(0, colorProvider.getColorTransitionDuration());
+        if (!colorsInitialized || duration <= 0) {
+            backgroundColor = targetBackgroundColor;
+            shadowColor = targetShadowColor;
+            strokeColorTop = targetStrokeColorTop;
+            strokeColorBottom = targetStrokeColorBottom;
+            colorsInitialized = true;
+        }
+        ensureColorAnimators(duration);
+        if (duration <= 0) {
+            animatedBackgroundColor.force(backgroundColor);
+            animatedShadowColor.force(shadowColor);
+            animatedStrokeColorTop.force(strokeColorTop);
+            animatedStrokeColorBottom.force(strokeColorBottom);
+        } else {
+            invalidateSelf();
+        }
+    }
+
+    protected final void updateAnimatedColors() {
+        if (!colorsInitialized || colorTransitionDuration <= 0 || animatedBackgroundColor == null) {
+            return;
+        }
+        final int oldBackground = backgroundColor;
+        final int oldShadow = shadowColor;
+        final int oldStrokeTop = strokeColorTop;
+        final int oldStrokeBottom = strokeColorBottom;
+
+        backgroundColor = animatedBackgroundColor.set(targetBackgroundColor);
+        shadowColor = animatedShadowColor.set(targetShadowColor);
+        strokeColorTop = animatedStrokeColorTop.set(targetStrokeColorTop);
+        strokeColorBottom = animatedStrokeColorBottom.set(targetStrokeColorBottom);
+
+        if (oldBackground != backgroundColor || oldShadow != shadowColor ||
+            oldStrokeTop != strokeColorTop || oldStrokeBottom != strokeColorBottom) {
+            onAnimatedColorsChanged();
+        }
+    }
+
+    protected void onAnimatedColorsChanged() {
+    }
+
+    private void ensureColorAnimators(int duration) {
+        if (animatedBackgroundColor != null && colorTransitionDuration == duration) {
+            return;
+        }
+        colorTransitionDuration = duration;
+        final int safeDuration = Math.max(1, duration);
+        animatedBackgroundColor = new AnimatedColor(backgroundColor, this::invalidateSelf, 0, safeDuration, CubicBezierInterpolator.EASE_OUT_QUINT);
+        animatedShadowColor = new AnimatedColor(shadowColor, this::invalidateSelf, 0, safeDuration, CubicBezierInterpolator.EASE_OUT_QUINT);
+        animatedStrokeColorTop = new AnimatedColor(strokeColorTop, this::invalidateSelf, 0, safeDuration, CubicBezierInterpolator.EASE_OUT_QUINT);
+        animatedStrokeColorBottom = new AnimatedColor(strokeColorBottom, this::invalidateSelf, 0, safeDuration, CubicBezierInterpolator.EASE_OUT_QUINT);
     }
 
 

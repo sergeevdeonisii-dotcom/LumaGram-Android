@@ -267,6 +267,7 @@ import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
 import org.telegram.ui.Components.blur3.DownscaleScrollableNoiseSuppressor;
 import org.telegram.ui.Components.blur3.drawable.color.BlurredBackgroundColorProviderThemed;
 import org.telegram.ui.Components.blur3.drawable.color.impl.BlurredBackgroundProviderImpl;
+import org.telegram.ui.Components.blur3.drawable.color.impl.LumaChatGlassColorProvider;
 import org.telegram.ui.Components.blur3.source.BlurredBackgroundSourceWrapped;
 import org.telegram.ui.Components.blur3.utils.Blur3Utils;
 import org.telegram.ui.Components.chat.ChatActivityBottomViewsVisibilityController;
@@ -397,7 +398,7 @@ public class ChatActivity extends BaseFragment implements
 
     private final WindowInsetsStateHolder windowInsetsStateHolder = new WindowInsetsStateHolder(this::checkInsets);
 
-    private BlurredBackgroundColorProviderThemed blurredBackgroundColorProvider;
+    private LumaChatGlassColorProvider blurredBackgroundColorProvider;
     private BlurredBackgroundColorProviderThemed blurredBackgroundColorProviderWhite;
 
     private final ReferenceList<View> glassAttachedViews = new ReferenceList<>();
@@ -3708,20 +3709,7 @@ public class ChatActivity extends BaseFragment implements
         Timer t = Timer.create("ChatActivity.createView");
         selectLiquidGlassFactory(LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS));
 
-        blurredBackgroundColorProvider = new BlurredBackgroundColorProviderThemed(themeDelegate, Theme.key_chat_messagePanelBackground) {
-            @Override
-            public int getBackgroundColor() {
-                if (!BlurredBackgroundProviderImpl.checkBlurEnabled(currentAccount, themeDelegate)) {
-                    return ColorUtils.setAlphaComponent(getThemedColor(Theme.key_chat_messagePanelBackground), 255);
-                }
-
-                final boolean isThemeLight = themeDelegate != null && !themeDelegate.isDark();
-                if (isThemeLight && !LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS)) {
-                    return ColorUtils.setAlphaComponent(super.getBackgroundColor(), 216);
-                }
-                return super.getBackgroundColor();
-            }
-        };
+        blurredBackgroundColorProvider = new LumaChatGlassColorProvider(currentAccount, themeDelegate);
         blurredBackgroundColorProviderWhite = new BlurredBackgroundColorProviderThemed(themeDelegate, Theme.key_windowBackgroundWhite) {
             @Override
             public int getBackgroundColor() {
@@ -43276,6 +43264,11 @@ public class ChatActivity extends BaseFragment implements
             } else {
                 AndroidUtilities.runOnUIThread(() -> NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.didSetNewTheme, false, true, true));
             }
+        }
+
+        @Override
+        public boolean isDark() {
+            return isDark;
         }
 
         @Override

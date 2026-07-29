@@ -123,7 +123,8 @@ public class BlurredBackgroundProviderImpl {
                     }
 
                     final float alpha = liquidAlpha(isDark);
-                    final int colorBg = Theme.getColor(Theme.key_chat_messagePanelBackground, r);
+                    final int colorBg = LumaAdaptiveGlassPalette.tint(
+                        Theme.getColor(Theme.key_chat_messagePanelBackground, r), r, true);
                     return Theme.multAlpha(colorBg, alpha);
                 })
                 .setStrokeColorTop(0xFFFFFFFF, 0x46FFFFFF)
@@ -131,6 +132,7 @@ public class BlurredBackgroundProviderImpl {
                 .setShadowColor(0x28000000, 0x18000000)
                 .setShadowLayer(dpf2(4f), 0, dpf2(1f))
                 .setStrokeWidth(dpf2(0.67f), dpf2(0.67f))
+                .setColorTransitionDuration(LiteMode.getLiquidGlassColorTransitionDuration())
                 .build();
     }
 
@@ -143,7 +145,8 @@ public class BlurredBackgroundProviderImpl {
                     }
 
                     final float alpha = liquidAlpha(isDark);
-                    final int colorBg = Theme.getColor(Theme.key_chat_topPanelBackground, r);
+                    final int colorBg = LumaAdaptiveGlassPalette.tint(
+                        Theme.getColor(Theme.key_chat_topPanelBackground, r), r, false);
                     return Theme.multAlpha(colorBg, alpha);
                 })
                 .setStrokeColorTop(0xFFFFFFFF, 0x20FFFFFF)
@@ -151,6 +154,7 @@ public class BlurredBackgroundProviderImpl {
                 .setShadowColor(0x20000000, 0)
                 //.setShadowLayer(dpf2(10 / 3f), 0, dpf2(2 / 3f))
                 .setStrokeWidth(dpf2(0.55f), dpf2(0.55f))
+                .setColorTransitionDuration(LiteMode.getLiquidGlassColorTransitionDuration())
                 .build();
     }
 
@@ -179,7 +183,8 @@ public class BlurredBackgroundProviderImpl {
                 }
 
                 final float alpha = liquidAlpha(0.85f);
-                final int colorBg = Theme.getColor(Theme.key_chat_topPanelBackground, r);
+                final int colorBg = LumaAdaptiveGlassPalette.tint(
+                    Theme.getColor(Theme.key_chat_topPanelBackground, r), r, false);
                 return Theme.multAlpha(colorBg, alpha);
             })
             .setStrokeColorTop(0, 0)
@@ -187,6 +192,7 @@ public class BlurredBackgroundProviderImpl {
             .setShadowColor(0, 0)
             .setShadowLayer(0, 0, 0)
             .setStrokeWidth(0, 0)
+            .setColorTransitionDuration(LiteMode.getLiquidGlassColorTransitionDuration())
             .build();
     }
 

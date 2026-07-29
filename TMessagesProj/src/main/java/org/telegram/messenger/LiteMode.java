@@ -49,11 +49,19 @@ public class LiteMode {
     private static final String LIQUID_GLASS_OPACITY = "liquid_glass_opacity";
     private static final String LIQUID_GLASS_INTENSITY = "liquid_glass_intensity";
     private static final String LIQUID_GLASS_INPUT_SIZE = "liquid_glass_input_size";
+    private static final String LIQUID_GLASS_ADAPTIVE_COLOR = "liquid_glass_adaptive_color";
+    private static final String LIQUID_GLASS_COLOR_STRENGTH = "liquid_glass_color_strength";
+    private static final String LIQUID_GLASS_SEPARATE_COLORS = "liquid_glass_separate_colors";
+    private static final String LIQUID_GLASS_COLOR_TRANSITION = "liquid_glass_color_transition";
     private static Boolean liquidGlassEnabled;
     private static Boolean liquidGlassKeepInPowerSaver;
+    private static Boolean liquidGlassAdaptiveColor;
+    private static Boolean liquidGlassSeparateColors;
     private static int liquidGlassOpacity = -1;
     private static int liquidGlassIntensity = -1;
     private static int liquidGlassInputSize = -1;
+    private static int liquidGlassColorStrength = -1;
+    private static int liquidGlassColorTransition = -1;
 
     public static final int FLAG_CALLS_ANIMATIONS = 512;
     public static final int FLAG_AUTOPLAY_VIDEOS = 1024;
@@ -257,18 +265,93 @@ public class LiteMode {
         return 40 + getLiquidGlassInputSizeLevel() * 2;
     }
 
+    public static boolean getLiquidGlassAdaptiveColorEnabled() {
+        if (liquidGlassAdaptiveColor == null) {
+            liquidGlassAdaptiveColor = MessagesController.getGlobalMainSettings().getBoolean(LIQUID_GLASS_ADAPTIVE_COLOR, true);
+        }
+        return liquidGlassAdaptiveColor;
+    }
+
+    public static void setLiquidGlassAdaptiveColorEnabled(boolean value) {
+        liquidGlassAdaptiveColor = value;
+        MessagesController.getGlobalMainSettings().edit().putBoolean(LIQUID_GLASS_ADAPTIVE_COLOR, value).apply();
+    }
+
+    public static int getLiquidGlassColorStrengthLevel() {
+        if (liquidGlassColorStrength < 0) {
+            liquidGlassColorStrength = MathUtils.clamp(MessagesController.getGlobalMainSettings().getInt(LIQUID_GLASS_COLOR_STRENGTH, 1), 0, 2);
+        }
+        return liquidGlassColorStrength;
+    }
+
+    public static void setLiquidGlassColorStrengthLevel(int value) {
+        liquidGlassColorStrength = MathUtils.clamp(value, 0, 2);
+        MessagesController.getGlobalMainSettings().edit().putInt(LIQUID_GLASS_COLOR_STRENGTH, liquidGlassColorStrength).apply();
+    }
+
+    public static float getLiquidGlassColorBlend() {
+        switch (getLiquidGlassColorStrengthLevel()) {
+            case 0: return 0.14f;
+            case 2: return 0.36f;
+            default: return 0.24f;
+        }
+    }
+
+    public static boolean getLiquidGlassSeparateColors() {
+        if (liquidGlassSeparateColors == null) {
+            liquidGlassSeparateColors = MessagesController.getGlobalMainSettings().getBoolean(LIQUID_GLASS_SEPARATE_COLORS, true);
+        }
+        return liquidGlassSeparateColors;
+    }
+
+    public static void setLiquidGlassSeparateColors(boolean value) {
+        liquidGlassSeparateColors = value;
+        MessagesController.getGlobalMainSettings().edit().putBoolean(LIQUID_GLASS_SEPARATE_COLORS, value).apply();
+    }
+
+    public static int getLiquidGlassColorTransitionLevel() {
+        if (liquidGlassColorTransition < 0) {
+            liquidGlassColorTransition = MathUtils.clamp(MessagesController.getGlobalMainSettings().getInt(LIQUID_GLASS_COLOR_TRANSITION, 1), 0, 2);
+        }
+        return liquidGlassColorTransition;
+    }
+
+    public static void setLiquidGlassColorTransitionLevel(int value) {
+        liquidGlassColorTransition = MathUtils.clamp(value, 0, 2);
+        MessagesController.getGlobalMainSettings().edit().putInt(LIQUID_GLASS_COLOR_TRANSITION, liquidGlassColorTransition).apply();
+    }
+
+    public static int getLiquidGlassColorTransitionDuration() {
+        if (!getLiquidGlassAdaptiveColorEnabled()) {
+            return 0;
+        }
+        switch (getLiquidGlassColorTransitionLevel()) {
+            case 0: return 140;
+            case 2: return 420;
+            default: return 260;
+        }
+    }
+
     public static void resetLiquidGlassSettings() {
         liquidGlassEnabled = true;
         liquidGlassKeepInPowerSaver = true;
+        liquidGlassAdaptiveColor = true;
+        liquidGlassSeparateColors = true;
         liquidGlassOpacity = 1;
         liquidGlassIntensity = 1;
         liquidGlassInputSize = 0;
+        liquidGlassColorStrength = 1;
+        liquidGlassColorTransition = 1;
         MessagesController.getGlobalMainSettings().edit()
             .remove(LIQUID_GLASS_ENABLED)
             .remove(LIQUID_GLASS_KEEP_IN_POWER_SAVER)
             .remove(LIQUID_GLASS_OPACITY)
             .remove(LIQUID_GLASS_INTENSITY)
             .remove(LIQUID_GLASS_INPUT_SIZE)
+            .remove(LIQUID_GLASS_ADAPTIVE_COLOR)
+            .remove(LIQUID_GLASS_COLOR_STRENGTH)
+            .remove(LIQUID_GLASS_SEPARATE_COLORS)
+            .remove(LIQUID_GLASS_COLOR_TRANSITION)
             .apply();
         setLiquidGlassEnabled(true);
     }

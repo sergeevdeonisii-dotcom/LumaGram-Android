@@ -25,6 +25,7 @@ public class BlurredBackgroundProviderBuilder implements BlurredBackgroundProvid
     private ColorProvider strokeColorBottom;
     private ColorProvider backgroundColor;
     private float strokeWidthTop, strokeWidthBottom, shadowRadius, shadowDx, shadowDy;
+    private int colorTransitionDuration;
 
     public BlurredBackgroundProviderBuilder setShadowColor(@ColorInt int light, @ColorInt int dark) {
         shadowColor = create(light, dark);
@@ -56,6 +57,11 @@ public class BlurredBackgroundProviderBuilder implements BlurredBackgroundProvid
     public BlurredBackgroundProviderBuilder setStrokeWidth(float top, float bottom) {
         strokeWidthTop = top;
         strokeWidthBottom = bottom;
+        return this;
+    }
+
+    public BlurredBackgroundProviderBuilder setColorTransitionDuration(int duration) {
+        colorTransitionDuration = Math.max(0, duration);
         return this;
     }
 
@@ -104,6 +110,11 @@ public class BlurredBackgroundProviderBuilder implements BlurredBackgroundProvid
     @Override
     public float getShadowDy() {
         return shadowDy;
+    }
+
+    @Override
+    public int getColorTransitionDuration() {
+        return colorTransitionDuration;
     }
 
 

@@ -8,6 +8,7 @@ import android.view.View;
 import android.widget.FrameLayout;
 
 import org.telegram.messenger.LumaTextAnimation;
+import org.telegram.messenger.LumaMessageFormatting;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -23,6 +24,7 @@ import java.util.ArrayList;
 public class TextAnimationSettingsActivity extends BaseFragment {
 
     private static final int ROW_ENABLED = 1;
+    private static final int ROW_AUTO_BOLD = 2;
 
     private UniversalRecyclerView listView;
 
@@ -57,16 +59,26 @@ public class TextAnimationSettingsActivity extends BaseFragment {
         items.add(UItem.asCheck(ROW_ENABLED, getString(R.string.TextAnimationEnable))
             .setChecked(LumaTextAnimation.isEnabled()));
         items.add(UItem.asShadow(getString(R.string.TextAnimationEnableInfo)));
+
+        items.add(UItem.asHeader(getString(R.string.LumaMessageFormatting)));
+        items.add(UItem.asCheck(ROW_AUTO_BOLD, getString(R.string.LumaAutoBoldMessages))
+            .setChecked(LumaMessageFormatting.isAutoBoldEnabled()));
+        items.add(UItem.asShadow(getString(R.string.LumaAutoBoldMessagesInfo)));
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {
-        if (item.id != ROW_ENABLED) {
-            return;
-        }
-        final boolean enabled = !LumaTextAnimation.isEnabled();
-        LumaTextAnimation.setEnabled(enabled);
-        if (view instanceof TextCheckCell) {
-            ((TextCheckCell) view).setChecked(enabled);
+        if (item.id == ROW_ENABLED) {
+            final boolean enabled = !LumaTextAnimation.isEnabled();
+            LumaTextAnimation.setEnabled(enabled);
+            if (view instanceof TextCheckCell) {
+                ((TextCheckCell) view).setChecked(enabled);
+            }
+        } else if (item.id == ROW_AUTO_BOLD) {
+            final boolean enabled = !LumaMessageFormatting.isAutoBoldEnabled();
+            LumaMessageFormatting.setAutoBoldEnabled(enabled);
+            if (view instanceof TextCheckCell) {
+                ((TextCheckCell) view).setChecked(enabled);
+            }
         }
     }
 
