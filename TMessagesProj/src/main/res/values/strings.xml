@@ -11179,6 +11179,11 @@
     <string name="LiquidGlassLarge">Large</string>
     <string name="LiquidGlassAdvancedInfo">The message field keeps its width; only its height and the proportional side buttons change. Visual settings apply after returning to Telegram.</string>
     <string name="LiquidGlassReset">Reset to defaults</string>
+    <string name="TextAnimationSettingsTitle">Typing Animation</string>
+    <string name="TextAnimationSettingsInfo">Smooth animated appearance of typed characters</string>
+    <string name="TextAnimationAppearance">Text appearance</string>
+    <string name="TextAnimationEnable">Animate typed characters</string>
+    <string name="TextAnimationEnableInfo">New characters gently appear from blur and slide. The effect only applies to the message field and can be disabled at any time.</string>
     <string name="LumaUpdatesTitle">Luma Updates</string>
     <string name="LumaUpdatesInfo">Secure updates and version checks</string>
     <string name="LumaUpdateCurrentVersion">Current version</string>

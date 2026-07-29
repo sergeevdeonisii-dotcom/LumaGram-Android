@@ -283,6 +283,11 @@
     <string name="LiquidGlassLarge">Крупное</string>
     <string name="LiquidGlassAdvancedInfo">Ширина поля сообщения не меняется — регулируется только высота и пропорциональные боковые кнопки. Изменения применятся после возврата в Telegram.</string>
     <string name="LiquidGlassReset">Сбросить по умолчанию</string>
+    <string name="TextAnimationSettingsTitle">Анимация ввода</string>
+    <string name="TextAnimationSettingsInfo">Плавное появление набираемых букв</string>
+    <string name="TextAnimationAppearance">Оформление текста</string>
+    <string name="TextAnimationEnable">Анимировать ввод текста</string>
+    <string name="TextAnimationEnableInfo">Новые буквы мягко появляются из размытия и движения. Эффект применяется только к полю сообщения и отключается в любой момент.</string>
     <string name="LumaUpdatesTitle">Обновления Luma</string>
     <string name="LumaUpdatesInfo">Безопасная проверка и установка версий</string>
     <string name="LumaUpdateCurrentVersion">Текущая версия</string>
