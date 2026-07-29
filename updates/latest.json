@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.39",
-  "version_code": 71009,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.39/Luma-Telegram-12.9-Liquid39-Signed-arm64.apk",
-  "sha256": "905b15a0e56f00d5ee2f4ec18a6df69884506eaa212de2c74a3ccc5b29639a4b",
-  "changelog": "Добавлен красивый экспорт чатов в PDF: сообщения оформляются пузырями, сохраняются даты, время, отправители, фотографии и карточки вложений. Длинные переписки автоматически разбиваются на аккуратные пронумерованные страницы. PDF можно сохранить в «Загрузки/Telegram» или сразу отправить через меню «Поделиться»."
+  "version": "12.9.0-luma.40",
+  "version_code": 71109,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.40/Luma-Telegram-12.9-Liquid40-Signed-arm64.apk",
+  "sha256": "bfc4042943d804b4bd21d3b3da883b125e2efb6e362e304c4f57fe939f138987",
+  "changelog": "В экспериментальные функции добавлен полный экспорт аккаунта. Можно выбрать личные чаты, ботов, группы, каналы, основной список, архив и пользовательские папки, а также отдельно фотографии, видео и файлы. Итоговый ZIP содержит красивый index.html со списком чатов, поиском, открываемыми переписками и сохранёнными медиафайлами."
 }
