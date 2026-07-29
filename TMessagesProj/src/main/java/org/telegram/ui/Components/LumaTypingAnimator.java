@@ -22,21 +22,20 @@ import java.util.Iterator;
 
 final class LumaTypingAnimator implements TextWatcher {
 
-    private static final long DURATION_MS = 300L;
-    private static final long WORD_DURATION_MS = 340L;
     private static final float BLUR_TEXT_DELAY = 0.20f;
-    private static final float BLUR_RADIUS_PX = 10.0f;
-    private static final float SLIDE_DISTANCE_DP = 20.0f;
-    private static final float WORD_SLIDE_DISTANCE_DP = 10.0f;
     private static final int MAX_GLYPHS_PER_CHANGE = 48;
     private static final int MAX_ACTIVE_GLYPHS = 72;
     private static final int MAX_INSERT_SCAN_UNITS = 256;
     private static final int MAX_CHANGE_COMPARE_UNITS = 512;
+    private static final int MAX_WORD_BATCH_CODE_POINTS = 32;
     private static final int BLUR_FILTER_STEPS = 8;
+    private static final int INPUT_UNKNOWN = 0;
+    private static final int INPUT_COMMIT = 1;
+    private static final int INPUT_COMPOSING = 2;
 
     private final ArrayList<Glyph> glyphs = new ArrayList<>();
     private final ArrayList<Candidate> candidates = new ArrayList<>(MAX_GLYPHS_PER_CHANGE);
-    private final BlurMaskFilter[] blurFilters = new BlurMaskFilter[BLUR_FILTER_STEPS];
+    private final BlurMaskFilter[][] blurFilters = new BlurMaskFilter[3][BLUR_FILTER_STEPS];
     private final TextPaint animationPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
 
     private EditTextBoldCursor view;
@@ -47,6 +46,7 @@ final class LumaTypingAnimator implements TextWatcher {
     private int pendingCount;
     private String pendingOldSegment;
     private boolean pendingSyntheticChange;
+    private int imeInputKind = INPUT_UNKNOWN;
 
     void setTarget(EditTextBoldCursor view, boolean target) {
         if (this.view != null && this.view != view && watcherAttached) {
@@ -112,14 +112,13 @@ final class LumaTypingAnimator implements TextWatcher {
                 continue;
             }
 
-            final long duration = glyph.wordBatch ? WORD_DURATION_MS : DURATION_MS;
+            final long duration = glyph.durationMs;
             final float progress = Math.min(1.0f, (now - glyph.startTime) / (float) duration);
             final float eased = glyph.wordBatch ? easeOutCubic(progress) : easeOutQuint(progress);
             final int line = layout.getLineForOffset(start);
             final float x = paddingLeft + layout.getPrimaryHorizontal(start) - scrollX;
             final float baseline = textTop + layout.getLineBaseline(line)
-                - AndroidUtilities.dp(glyph.wordBatch ? WORD_SLIDE_DISTANCE_DP : SLIDE_DISTANCE_DP)
-                    * (1.0f - eased);
+                - AndroidUtilities.dp(glyph.slideDistanceDp) * (1.0f - eased);
             if (baseline < -view.getTextSize() || baseline > view.getHeight() + view.getTextSize()) {
                 continue;
             }
@@ -128,7 +127,7 @@ final class LumaTypingAnimator implements TextWatcher {
             final int blurAlpha = (int) (originalAlpha * blur);
             if (blurAlpha > 4) {
                 animationPaint.setAlpha(blurAlpha);
-                animationPaint.setMaskFilter(getBlurFilter(blur));
+                animationPaint.setMaskFilter(getBlurFilter(blur, glyph.blurLevel));
                 canvas.drawText(glyph.text, x, baseline, animationPaint);
             }
 
@@ -206,8 +205,27 @@ final class LumaTypingAnimator implements TextWatcher {
             pruneInvalidGlyphs(editable);
             return;
         }
-        trackTextChange(editable, start, count, oldSegment, SystemClock.uptimeMillis());
+        trackTextChange(
+            editable,
+            start,
+            count,
+            oldSegment,
+            imeInputKind,
+            SystemClock.uptimeMillis()
+        );
         targetView.postInvalidateOnAnimation();
+    }
+
+    void beginImeCommit() {
+        imeInputKind = INPUT_COMMIT;
+    }
+
+    void beginImeComposing() {
+        imeInputKind = INPUT_COMPOSING;
+    }
+
+    void endImeChange() {
+        imeInputKind = INPUT_UNKNOWN;
     }
 
     private boolean canAnimate(EditTextBoldCursor view) {
@@ -224,7 +242,7 @@ final class LumaTypingAnimator implements TextWatcher {
     }
 
     private void trackTextChange(Editable editable, int start, int count,
-                                 String oldSegment, long now) {
+                                 String oldSegment, int inputKind, long now) {
         pruneInvalidGlyphs(editable);
         if (count <= 0 || editable.length() == 0) {
             return;
@@ -255,40 +273,56 @@ final class LumaTypingAnimator implements TextWatcher {
             changedEnd -= suffix;
         }
 
-        // A swipe keyboard normally commits the finished word as one pure
-        // insertion. Draw that insertion as one shaped run so the letters
-        // travel together. Do not regroup composing-word replacements: IMEs
-        // update those repeatedly while the finger is moving, and restarting
-        // the whole word on every replacement is what caused the visible jerk.
-        int groupedStart = changedStart;
-        int groupedEnd = changedEnd;
+        // Only a real IME commit may become a word batch. Composing updates
+        // continue to animate just their changed letters, so repeatedly
+        // replacing the composing word never restarts its whole animation.
+        int groupedStart = inputKind == INPUT_COMMIT ? insertedStart : changedStart;
+        int groupedEnd = inputKind == INPUT_COMMIT ? insertedEnd : changedEnd;
         while (groupedStart < groupedEnd && Character.isWhitespace(editable.charAt(groupedStart))) {
             groupedStart++;
         }
         while (groupedEnd > groupedStart && Character.isWhitespace(editable.charAt(groupedEnd - 1))) {
             groupedEnd--;
         }
-        final boolean animateAsWord = oldSegment != null && oldSegment.isEmpty()
-            && Character.codePointCount(editable, groupedStart, groupedEnd) > 1
+        final int groupedCodePoints = Character.codePointCount(editable, groupedStart, groupedEnd);
+        final boolean committedWord = inputKind == INPUT_COMMIT
+            && groupedCodePoints > 1
+            && groupedCodePoints <= MAX_WORD_BATCH_CODE_POINTS
             && containsOnlyWordCharacters(editable, groupedStart, groupedEnd);
+        final int swipeMode = LumaTextAnimation.getSwipeMode();
+        final int animationStart = committedWord ? groupedStart : changedStart;
+        final int animationEnd = committedWord ? groupedEnd : changedEnd;
 
-        // Keep the previous letter animating when the IME replaces its whole
-        // composing word to append the next character. Touching ranges are not
-        // overlapping ranges.
-        removeGlyphsOverlapping(editable, changedStart, changedEnd, false);
-        if (changedEnd <= changedStart) {
+        // A final commit replaces the complete composing range, including any
+        // hidden spans left by its per-letter animation. Other changes keep
+        // adjacent letters alive; touching ranges are not overlapping ranges.
+        removeGlyphsOverlapping(
+            editable,
+            committedWord ? insertedStart : changedStart,
+            committedWord ? insertedEnd : changedEnd,
+            false
+        );
+        if (animationEnd <= animationStart) {
             return;
         }
 
-        int scanStart = Math.max(changedStart, changedEnd - MAX_INSERT_SCAN_UNITS);
-        if (scanStart > changedStart && scanStart < editable.length()
+        if (committedWord && swipeMode == LumaTextAnimation.SWIPE_NO_ANIMATION) {
+            return;
+        }
+        if (Character.codePointCount(editable, animationStart, animationEnd) > MAX_GLYPHS_PER_CHANGE
+            || containsLineBreak(editable, animationStart, animationEnd)) {
+            return;
+        }
+
+        int scanStart = Math.max(animationStart, animationEnd - MAX_INSERT_SCAN_UNITS);
+        if (scanStart > animationStart && scanStart < editable.length()
             && Character.isLowSurrogate(editable.charAt(scanStart))
             && Character.isHighSurrogate(editable.charAt(scanStart - 1))) {
             scanStart--;
         }
 
         candidates.clear();
-        if (animateAsWord) {
+        if (committedWord && swipeMode == LumaTextAnimation.SWIPE_WHOLE_WORD) {
             candidates.add(new Candidate(
                 groupedStart,
                 groupedEnd,
@@ -297,10 +331,10 @@ final class LumaTypingAnimator implements TextWatcher {
             ));
         } else {
             int offset = scanStart;
-            while (offset < changedEnd) {
+            while (offset < animationEnd) {
                 final int codePoint = Character.codePointAt(editable, offset);
                 final int length = Character.charCount(codePoint);
-                final int end = Math.min(changedEnd, offset + length);
+                final int end = Math.min(animationEnd, offset + length);
                 if (!isWhitespace(editable, offset, end)
                     && !isEmojiLike(editable, offset, end, codePoint)) {
                     if (candidates.size() == MAX_GLYPHS_PER_CHANGE) {
@@ -315,6 +349,11 @@ final class LumaTypingAnimator implements TextWatcher {
         while (glyphs.size() + candidates.size() > MAX_ACTIVE_GLYPHS && !glyphs.isEmpty()) {
             removeGlyphAt(editable, 0);
         }
+        final long characterDurationMs = LumaTextAnimation.getCharacterDurationMs();
+        final long wordDurationMs = LumaTextAnimation.getWordDurationMs();
+        final int blurLevel = LumaTextAnimation.getBlurLevel();
+        final float characterSlideDistanceDp = LumaTextAnimation.getCharacterSlideDistanceDp();
+        final float wordSlideDistanceDp = LumaTextAnimation.getWordSlideDistanceDp();
         for (int i = 0; i < candidates.size(); i++) {
             final Candidate candidate = candidates.get(i);
             if (candidate.start < 0 || candidate.end > editable.length() || candidate.end <= candidate.start) {
@@ -322,7 +361,15 @@ final class LumaTypingAnimator implements TextWatcher {
             }
             final ForegroundColorSpan hiddenSpan = new ForegroundColorSpan(0x00000000);
             editable.setSpan(hiddenSpan, candidate.start, candidate.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            glyphs.add(new Glyph(candidate.text, hiddenSpan, now, candidate.wordBatch));
+            glyphs.add(new Glyph(
+                candidate.text,
+                hiddenSpan,
+                now,
+                candidate.wordBatch,
+                candidate.wordBatch ? wordDurationMs : characterDurationMs,
+                blurLevel,
+                candidate.wordBatch ? wordSlideDistanceDp : characterSlideDistanceDp
+            ));
         }
     }
 
@@ -332,7 +379,7 @@ final class LumaTypingAnimator implements TextWatcher {
             final Glyph glyph = iterator.next();
             final int start = editable.getSpanStart(glyph.hiddenSpan);
             final int end = editable.getSpanEnd(glyph.hiddenSpan);
-            final long duration = glyph.wordBatch ? WORD_DURATION_MS : DURATION_MS;
+            final long duration = glyph.durationMs;
             if (!isValidGlyph(editable, glyph, start, end) || now - glyph.startTime >= duration) {
                 editable.removeSpan(glyph.hiddenSpan);
                 iterator.remove();
@@ -382,16 +429,18 @@ final class LumaTypingAnimator implements TextWatcher {
         candidates.clear();
     }
 
-    private BlurMaskFilter getBlurFilter(float blur) {
+    private BlurMaskFilter getBlurFilter(float blur, int blurLevel) {
+        blurLevel = Math.max(0, Math.min(blurFilters.length - 1, blurLevel));
         final int index = Math.max(1, Math.min(BLUR_FILTER_STEPS - 1,
             Math.round(blur * (BLUR_FILTER_STEPS - 1))));
-        if (blurFilters[index] == null) {
-            blurFilters[index] = new BlurMaskFilter(
-                Math.max(0.1f, BLUR_RADIUS_PX * index / (BLUR_FILTER_STEPS - 1.0f)),
+        if (blurFilters[blurLevel][index] == null) {
+            blurFilters[blurLevel][index] = new BlurMaskFilter(
+                Math.max(0.1f, LumaTextAnimation.getBlurRadiusPx(blurLevel)
+                    * index / (BLUR_FILTER_STEPS - 1.0f)),
                 BlurMaskFilter.Blur.NORMAL
             );
         }
-        return blurFilters[index];
+        return blurFilters[blurLevel][index];
     }
 
     private static boolean isValidGlyph(Editable editable, Glyph glyph, int start, int end) {
@@ -425,6 +474,16 @@ final class LumaTypingAnimator implements TextWatcher {
             offset += Character.charCount(codePoint);
         }
         return offset > start;
+    }
+
+    private static boolean containsLineBreak(CharSequence text, int start, int end) {
+        for (int i = start; i < end; i++) {
+            final char value = text.charAt(i);
+            if (value == '\n' || value == '\r') {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isWordCharacter(int codePoint) {
@@ -489,12 +548,19 @@ final class LumaTypingAnimator implements TextWatcher {
         final ForegroundColorSpan hiddenSpan;
         final long startTime;
         final boolean wordBatch;
+        final long durationMs;
+        final int blurLevel;
+        final float slideDistanceDp;
 
-        Glyph(String text, ForegroundColorSpan hiddenSpan, long startTime, boolean wordBatch) {
+        Glyph(String text, ForegroundColorSpan hiddenSpan, long startTime, boolean wordBatch,
+              long durationMs, int blurLevel, float slideDistanceDp) {
             this.text = text;
             this.hiddenSpan = hiddenSpan;
             this.startTime = startTime;
             this.wordBatch = wordBatch;
+            this.durationMs = durationMs;
+            this.blurLevel = blurLevel;
+            this.slideDistanceDp = slideDistanceDp;
         }
     }
 }

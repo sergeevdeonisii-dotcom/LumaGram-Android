@@ -1,7 +1,7 @@
 {
-    "version":  "12.9.0-luma.35",
-    "version_code":  70609,
-    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.35/Luma-Telegram-12.9-Liquid35-Signed-arm64.apk",
-    "sha256":  "f6fcc86cc28fe77170c7c0d0b58fb9832692a12f6431f97f4d3c7a2d0e2d6baf",
-    "changelog":  "Добавлен режим «Цитирование» в настройку стиля отправляемого текста. Сообщения отправляются как настоящие Telegram-цитаты и видны во всех клиентах."
+    "version":  "12.9.0-luma.36",
+    "version_code":  70709,
+    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.36/Luma-Telegram-12.9-Liquid36-Signed-arm64.apk",
+    "sha256":  "b0e77527df49e13b1b6063caad955e46604d7b9d80fac0d9cc6377b37d047dea",
+    "changelog":  "Добавлен раздел «Экспериментальные функции» с настройками плавной печати: скорость, размытие, высота появления и режим свайп-набора. Большие и многострочные вставки оптимизированы, чтобы текст появлялся без задержек и рывков."
 }

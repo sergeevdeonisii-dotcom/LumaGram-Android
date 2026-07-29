@@ -51,6 +51,10 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputConnectionWrapper;
+import android.view.inputmethod.TextAttribute;
 import android.widget.TextView;
 
 import org.telegram.messenger.AndroidUtilities;
@@ -221,6 +225,75 @@ public class EditTextBoldCursor extends EditTextEffects {
 
     public void setLumaTypingAnimationTarget(boolean target) {
         lumaTypingAnimator.setTarget(this, target);
+    }
+
+    @Override
+    public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+        final InputConnection connection = super.onCreateInputConnection(outAttrs);
+        if (connection == null) {
+            return null;
+        }
+        if (Build.VERSION.SDK_INT >= 33) {
+            return new LumaInputConnectionWrapperApi33(connection, lumaTypingAnimator);
+        }
+        return new LumaInputConnectionWrapper(connection, lumaTypingAnimator);
+    }
+
+    private static class LumaInputConnectionWrapper extends InputConnectionWrapper {
+        final LumaTypingAnimator animator;
+
+        LumaInputConnectionWrapper(InputConnection connection, LumaTypingAnimator animator) {
+            super(connection, false);
+            this.animator = animator;
+        }
+
+        @Override
+        public boolean commitText(CharSequence text, int newCursorPosition) {
+            animator.beginImeCommit();
+            try {
+                return super.commitText(text, newCursorPosition);
+            } finally {
+                animator.endImeChange();
+            }
+        }
+
+        @Override
+        public boolean setComposingText(CharSequence text, int newCursorPosition) {
+            animator.beginImeComposing();
+            try {
+                return super.setComposingText(text, newCursorPosition);
+            } finally {
+                animator.endImeChange();
+            }
+        }
+    }
+
+    @TargetApi(33)
+    private static class LumaInputConnectionWrapperApi33 extends LumaInputConnectionWrapper {
+
+        LumaInputConnectionWrapperApi33(InputConnection connection, LumaTypingAnimator animator) {
+            super(connection, animator);
+        }
+
+        @Override
+        public boolean commitText(CharSequence text, int newCursorPosition, TextAttribute textAttribute) {
+            animator.beginImeCommit();
+            try {
+                return super.commitText(text, newCursorPosition, textAttribute);
+            } finally {
+                animator.endImeChange();
+            }
+        }
+
+        @Override
+        public boolean setComposingText(CharSequence text, int newCursorPosition, TextAttribute textAttribute) {
+            animator.beginImeComposing();
+            try {
+                return super.setComposingText(text, newCursorPosition, textAttribute);
+            } finally {
+                animator.endImeChange();
+            }
+        }
     }
 
     public void useAnimatedTextDrawable() {
