@@ -55,6 +55,11 @@ public class BlurredBackgroundDrawableViewFactory {
 
 
     private boolean isLiquidGlassEffectAllowed;
+    private boolean wallpaperRefractionEnabled;
+
+    public void setWallpaperRefractionEnabled(boolean enabled) {
+        wallpaperRefractionEnabled = enabled;
+    }
 
     public void setLiquidGlassEffectAllowed(boolean liquidGlassEffectAllowed) {
         if (isLiquidGlassEffectAllowed == liquidGlassEffectAllowed) {
@@ -93,6 +98,10 @@ public class BlurredBackgroundDrawableViewFactory {
             if (drawable instanceof BlurredBackgroundDrawableRenderNode) {
                 ((BlurredBackgroundDrawableRenderNode) drawable).setLiquidGlassEffectAllowed(true);
             }
+        }
+        if (drawable instanceof BlurredBackgroundDrawableRenderNode) {
+            ((BlurredBackgroundDrawableRenderNode) drawable)
+                .setWallpaperRefractionEnabled(wallpaperRefractionEnabled);
         }
 
         drawable.setColorProvider(provider);

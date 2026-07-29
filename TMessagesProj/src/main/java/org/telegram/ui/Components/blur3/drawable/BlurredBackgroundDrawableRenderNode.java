@@ -53,6 +53,7 @@ public class BlurredBackgroundDrawableRenderNode extends BlurredBackgroundDrawab
     }
 
     private LiquidGlassEffect liquidGlassEffect;
+    private boolean wallpaperRefractionEnabled;
 
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     public void setLiquidGlassEffectAllowed() {
@@ -65,6 +66,14 @@ public class BlurredBackgroundDrawableRenderNode extends BlurredBackgroundDrawab
             return;
         }
         liquidGlassEffect = allowed ? new LiquidGlassEffect(renderNodeFill) : null;
+        renderNodeInvalidated = true;
+    }
+
+    public void setWallpaperRefractionEnabled(boolean enabled) {
+        if (wallpaperRefractionEnabled == enabled) {
+            return;
+        }
+        wallpaperRefractionEnabled = enabled;
         renderNodeInvalidated = true;
     }
 
@@ -132,7 +141,10 @@ public class BlurredBackgroundDrawableRenderNode extends BlurredBackgroundDrawab
                 thickness,
                 boundProps.liquidIntensity,
                 boundProps.liquidIndex,
-                backgroundColor
+                backgroundColor,
+                wallpaperRefractionEnabled
+                    ? Math.max(1.0f, dp(1.25f) * (0.85f + 0.15f * boundProps.liquidIntensity))
+                    : 0.0f
             );
         }
         source.draw(c, sL, sT, sR, sB);

@@ -37,7 +37,7 @@ public class LumaChatGlassColorProvider implements BlurredBackgroundColorProvide
             return;
         }
         final int tintedColor = LumaAdaptiveGlassPalette.tint(themedColor, resourcesProvider, true);
-        final float alpha = LiteMode.applyLiquidGlassAlpha(dark ? 0.68f : 0.62f);
+        final float alpha = LiteMode.getLiquidGlassChatPanelAlpha(dark);
         backgroundColor = Theme.multAlpha(tintedColor, alpha);
         updateChrome(tintedColor);
     }

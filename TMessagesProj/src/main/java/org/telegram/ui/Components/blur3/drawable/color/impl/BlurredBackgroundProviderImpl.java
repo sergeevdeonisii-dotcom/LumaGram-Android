@@ -122,7 +122,7 @@ public class BlurredBackgroundProviderImpl {
                         return ColorUtils.setAlphaComponent(Theme.getColor(Theme.key_chat_messagePanelBackground, r), 255);
                     }
 
-                    final float alpha = liquidAlpha(isDark);
+                    final float alpha = LiteMode.getLiquidGlassChatPanelAlpha(isDark);
                     final int colorBg = LumaAdaptiveGlassPalette.tint(
                         Theme.getColor(Theme.key_chat_messagePanelBackground, r), r, true);
                     return Theme.multAlpha(colorBg, alpha);
@@ -144,7 +144,7 @@ public class BlurredBackgroundProviderImpl {
                             Theme.key_actionBarDefault : Theme.key_chat_topPanelBackground, r), 255);
                     }
 
-                    final float alpha = liquidAlpha(isDark);
+                    final float alpha = LiteMode.getLiquidGlassChatPanelAlpha(isDark);
                     final int colorBg = LumaAdaptiveGlassPalette.tint(
                         Theme.getColor(Theme.key_chat_topPanelBackground, r), r, false);
                     return Theme.multAlpha(colorBg, alpha);

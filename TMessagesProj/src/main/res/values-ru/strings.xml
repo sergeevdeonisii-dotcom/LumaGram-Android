@@ -283,6 +283,10 @@
     <string name="LiquidGlassLarge">Крупное</string>
     <string name="LiquidGlassAdvancedInfo">Ширина поля сообщения не меняется — регулируется только высота и пропорциональные боковые кнопки. Изменения применятся после возврата в Telegram.</string>
     <string name="LiquidGlassReset">Сбросить по умолчанию</string>
+    <string name="LiquidGlassWallpaperRefraction">Преломление обоев</string>
+    <string name="LiquidGlassWallpaperRefractionEnable">Преломлять обои в панелях чата</string>
+    <string name="LiquidGlassWallpaperRefractionInfo">Верхние овалы и панель сообщения используют реальные обои как источник стекла. Сообщения и элементы интерфейса остаются вне слоя преломления.</string>
+    <string name="LiquidGlassFeatureConflict">Для работы этой функции отключите «%1$s».</string>
     <string name="LiquidGlassAdaptiveColor">Адаптивный цвет стекла</string>
     <string name="LiquidGlassAdaptiveColorEnable">Подстраивать под обои чата</string>
     <string name="LiquidGlassSeparateColors">Разные цвета сверху и снизу</string>

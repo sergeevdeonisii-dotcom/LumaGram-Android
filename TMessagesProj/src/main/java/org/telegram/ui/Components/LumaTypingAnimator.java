@@ -8,6 +8,7 @@ import android.text.Editable;
 import android.text.Layout;
 import android.text.Spanned;
 import android.text.TextPaint;
+import android.text.TextWatcher;
 import android.text.method.PasswordTransformationMethod;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.ReplacementSpan;
@@ -19,26 +20,46 @@ import org.telegram.messenger.LumaTextAnimation;
 import java.util.ArrayList;
 import java.util.Iterator;
 
-final class LumaTypingAnimator {
+final class LumaTypingAnimator implements TextWatcher {
 
     private static final long DURATION_MS = 300L;
     private static final float BLUR_TEXT_DELAY = 0.20f;
     private static final float BLUR_RADIUS_PX = 10.0f;
     private static final float SLIDE_DISTANCE_DP = 20.0f;
-    private static final int MAX_GLYPHS_PER_CHANGE = 32;
+    private static final int MAX_GLYPHS_PER_CHANGE = 48;
+    private static final int MAX_ACTIVE_GLYPHS = 72;
+    private static final int MAX_INSERT_SCAN_UNITS = 256;
+    private static final int BLUR_FILTER_STEPS = 8;
 
     private final ArrayList<Glyph> glyphs = new ArrayList<>();
-    private final ArrayList<ForegroundColorSpan> hiddenSpans = new ArrayList<>();
+    private final ArrayList<Candidate> candidates = new ArrayList<>(MAX_GLYPHS_PER_CHANGE);
+    private final BlurMaskFilter[] blurFilters = new BlurMaskFilter[BLUR_FILTER_STEPS];
     private final TextPaint animationPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
 
-    private String previousText = "";
-    private boolean initialized;
+    private EditTextBoldCursor view;
+    private boolean watcherAttached;
     private boolean target;
+    private int pendingStart;
+    private int pendingBefore;
+    private int pendingCount;
 
     void setTarget(EditTextBoldCursor view, boolean target) {
+        if (this.view != null && this.view != view && watcherAttached) {
+            this.view.removeTextChangedListener(this);
+            watcherAttached = false;
+        }
+        this.view = view;
         this.target = target;
-        if (!target) {
+        if (target && !watcherAttached) {
+            view.addTextChangedListener(this);
+            watcherAttached = true;
+        } else if (!target) {
+            if (watcherAttached) {
+                view.removeTextChangedListener(this);
+                watcherAttached = false;
+            }
             clear(view);
+            this.view = null;
         }
     }
 
@@ -47,41 +68,15 @@ final class LumaTypingAnimator {
         if (editable == null) {
             return;
         }
-        final String currentText = editable.toString();
-        removeHiddenSpans(editable);
-
-        if (!target || !LumaTextAnimation.isEnabled()
-            || view.getTransformationMethod() instanceof PasswordTransformationMethod) {
-            glyphs.clear();
-            previousText = currentText;
-            initialized = true;
+        if (!canAnimate(view)) {
+            clearGlyphs(editable);
             return;
         }
-
-        final long now = SystemClock.uptimeMillis();
-        pruneFinishedGlyphs(currentText, now);
-
-        if (!initialized) {
-            previousText = currentText;
-            initialized = true;
-        } else if (!currentText.equals(previousText)) {
-            trackTextChange(editable, currentText, now);
-            previousText = currentText;
-        }
-
-        for (int i = 0; i < glyphs.size(); i++) {
-            final Glyph glyph = glyphs.get(i);
-            if (glyph.index < 0 || glyph.index + glyph.length > editable.length()) {
-                continue;
-            }
-            final ForegroundColorSpan span = new ForegroundColorSpan(0x00000000);
-            editable.setSpan(span, glyph.index, glyph.index + glyph.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            hiddenSpans.add(span);
-        }
+        pruneFinishedGlyphs(editable, SystemClock.uptimeMillis());
     }
 
     void afterDraw(EditTextBoldCursor view, Canvas canvas) {
-        if (!target || !LumaTextAnimation.isEnabled() || glyphs.isEmpty()) {
+        if (!canAnimate(view) || glyphs.isEmpty()) {
             return;
         }
         final Layout layout = view.getLayout();
@@ -91,11 +86,10 @@ final class LumaTypingAnimator {
         }
 
         final long now = SystemClock.uptimeMillis();
-        final int textLength = editable.length();
         final int paddingLeft = view.getPaddingLeft();
         final int scrollX = view.getScrollX();
         final float verticalOffset = getVerticalOffset(view);
-        final float textTop = view.getExtendedPaddingTop() + verticalOffset;
+        final float textTop = view.getExtendedPaddingTop() + verticalOffset - view.getScrollY();
 
         animationPaint.set(view.getPaint());
         final int originalAlpha = animationPaint.getAlpha();
@@ -104,24 +98,27 @@ final class LumaTypingAnimator {
         canvas.clipRect(0, 0, view.getWidth(), view.getHeight());
         for (int i = 0; i < glyphs.size(); i++) {
             final Glyph glyph = glyphs.get(i);
-            if (glyph.index < 0 || glyph.index >= textLength || now < glyph.startTime) {
+            final int start = editable.getSpanStart(glyph.hiddenSpan);
+            final int end = editable.getSpanEnd(glyph.hiddenSpan);
+            if (!isValidGlyph(editable, glyph, start, end) || now < glyph.startTime) {
                 continue;
             }
+
             final float progress = Math.min(1.0f, (now - glyph.startTime) / (float) DURATION_MS);
             final float eased = easeOutQuint(progress);
-            final int line = layout.getLineForOffset(glyph.index);
-            final float x = paddingLeft + layout.getPrimaryHorizontal(glyph.index) - scrollX;
+            final int line = layout.getLineForOffset(start);
+            final float x = paddingLeft + layout.getPrimaryHorizontal(start) - scrollX;
             final float baseline = textTop + layout.getLineBaseline(line)
                 - AndroidUtilities.dp(SLIDE_DISTANCE_DP) * (1.0f - eased);
+            if (baseline < -view.getTextSize() || baseline > view.getHeight() + view.getTextSize()) {
+                continue;
+            }
 
             final float blur = 1.0f - eased;
             final int blurAlpha = (int) (originalAlpha * blur);
             if (blurAlpha > 4) {
                 animationPaint.setAlpha(blurAlpha);
-                animationPaint.setMaskFilter(new BlurMaskFilter(
-                    Math.max(0.1f, BLUR_RADIUS_PX * blur),
-                    BlurMaskFilter.Blur.NORMAL
-                ));
+                animationPaint.setMaskFilter(getBlurFilter(blur));
                 canvas.drawText(glyph.text, x, baseline, animationPaint);
             }
 
@@ -147,77 +144,176 @@ final class LumaTypingAnimator {
     void clear(EditTextBoldCursor view) {
         final Editable editable = view.getText();
         if (editable != null) {
-            removeHiddenSpans(editable);
-            previousText = editable.toString();
+            clearGlyphs(editable);
         } else {
-            previousText = "";
+            glyphs.clear();
         }
-        glyphs.clear();
-        initialized = true;
         view.invalidate();
     }
 
-    private void trackTextChange(Editable editable, String currentText, long now) {
-        final int previousLength = previousText.length();
-        final int currentLength = currentText.length();
-        int prefix = 0;
-        final int commonLength = Math.min(previousLength, currentLength);
-        while (prefix < commonLength && previousText.charAt(prefix) == currentText.charAt(prefix)) {
-            prefix++;
+    @Override
+    public void beforeTextChanged(CharSequence text, int start, int count, int after) {
+    }
+
+    @Override
+    public void onTextChanged(CharSequence text, int start, int before, int count) {
+        pendingStart = start;
+        pendingBefore = before;
+        pendingCount = count;
+    }
+
+    @Override
+    public void afterTextChanged(Editable editable) {
+        final EditTextBoldCursor targetView = view;
+        if (targetView == null || editable == null) {
+            return;
+        }
+        if (!canAnimate(targetView)) {
+            clearGlyphs(editable);
+            return;
+        }
+        trackTextChange(editable, pendingStart, pendingBefore, pendingCount, SystemClock.uptimeMillis());
+        targetView.postInvalidateOnAnimation();
+    }
+
+    private boolean canAnimate(EditTextBoldCursor view) {
+        return target && LumaTextAnimation.isEnabled()
+            && !(view.getTransformationMethod() instanceof PasswordTransformationMethod);
+    }
+
+    private void trackTextChange(Editable editable, int start, int before, int count, long now) {
+        pruneInvalidGlyphs(editable);
+        if (count <= 0 || editable.length() == 0) {
+            return;
         }
 
-        int suffix = 0;
-        while (suffix < previousLength - prefix && suffix < currentLength - prefix
-            && previousText.charAt(previousLength - 1 - suffix) == currentText.charAt(currentLength - 1 - suffix)) {
-            suffix++;
+        final int insertedStart = Math.max(0, Math.min(editable.length(), start));
+        final int insertedEnd = Math.max(insertedStart, Math.min(editable.length(), start + count));
+        removeGlyphsOverlapping(editable, insertedStart, insertedEnd, before > 0);
+
+        int scanStart = Math.max(insertedStart, insertedEnd - MAX_INSERT_SCAN_UNITS);
+        if (scanStart > insertedStart && scanStart < editable.length()
+            && Character.isLowSurrogate(editable.charAt(scanStart))
+            && Character.isHighSurrogate(editable.charAt(scanStart - 1))) {
+            scanStart--;
         }
 
-        final int oldChangedEnd = previousLength - suffix;
-        final int newChangedEnd = currentLength - suffix;
-        final int delta = (newChangedEnd - prefix) - (oldChangedEnd - prefix);
-
-        final Iterator<Glyph> iterator = glyphs.iterator();
-        while (iterator.hasNext()) {
-            final Glyph glyph = iterator.next();
-            if (glyph.index >= oldChangedEnd) {
-                glyph.index += delta;
-            } else if (glyph.index >= prefix) {
-                iterator.remove();
-            }
-        }
-
-        int animated = 0;
-        int offset = prefix;
-        while (offset < newChangedEnd && animated < MAX_GLYPHS_PER_CHANGE) {
-            final int codePoint = currentText.codePointAt(offset);
+        candidates.clear();
+        int offset = scanStart;
+        while (offset < insertedEnd) {
+            final int codePoint = Character.codePointAt(editable, offset);
             final int length = Character.charCount(codePoint);
-            final int end = Math.min(currentText.length(), offset + length);
-            final String text = currentText.substring(offset, end);
-            if (!text.trim().isEmpty() && !isEmojiLike(editable, offset, end, codePoint)) {
-                glyphs.add(new Glyph(offset, length, text, now));
-                animated++;
+            final int end = Math.min(insertedEnd, offset + length);
+            if (!isWhitespace(editable, offset, end)
+                && !isEmojiLike(editable, offset, end, codePoint)) {
+                if (candidates.size() == MAX_GLYPHS_PER_CHANGE) {
+                    candidates.remove(0);
+                }
+                candidates.add(new Candidate(offset, end, editable.subSequence(offset, end).toString()));
             }
             offset = end;
         }
+
+        while (glyphs.size() + candidates.size() > MAX_ACTIVE_GLYPHS && !glyphs.isEmpty()) {
+            removeGlyphAt(editable, 0);
+        }
+        for (int i = 0; i < candidates.size(); i++) {
+            final Candidate candidate = candidates.get(i);
+            if (candidate.start < 0 || candidate.end > editable.length() || candidate.end <= candidate.start) {
+                continue;
+            }
+            final ForegroundColorSpan hiddenSpan = new ForegroundColorSpan(0x00000000);
+            editable.setSpan(hiddenSpan, candidate.start, candidate.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            glyphs.add(new Glyph(candidate.text, hiddenSpan, now));
+        }
     }
 
-    private void pruneFinishedGlyphs(String text, long now) {
+    private void pruneFinishedGlyphs(Editable editable, long now) {
         final Iterator<Glyph> iterator = glyphs.iterator();
         while (iterator.hasNext()) {
             final Glyph glyph = iterator.next();
-            final boolean invalidRange = glyph.index < 0 || glyph.index + glyph.length > text.length();
-            final boolean changedText = !invalidRange && !text.regionMatches(glyph.index, glyph.text, 0, glyph.length);
-            if (invalidRange || changedText || now - glyph.startTime >= DURATION_MS) {
+            final int start = editable.getSpanStart(glyph.hiddenSpan);
+            final int end = editable.getSpanEnd(glyph.hiddenSpan);
+            if (!isValidGlyph(editable, glyph, start, end) || now - glyph.startTime >= DURATION_MS) {
+                editable.removeSpan(glyph.hiddenSpan);
                 iterator.remove();
             }
         }
     }
 
-    private void removeHiddenSpans(Editable editable) {
-        for (int i = 0; i < hiddenSpans.size(); i++) {
-            editable.removeSpan(hiddenSpans.get(i));
+    private void pruneInvalidGlyphs(Editable editable) {
+        final Iterator<Glyph> iterator = glyphs.iterator();
+        while (iterator.hasNext()) {
+            final Glyph glyph = iterator.next();
+            final int start = editable.getSpanStart(glyph.hiddenSpan);
+            final int end = editable.getSpanEnd(glyph.hiddenSpan);
+            if (!isValidGlyph(editable, glyph, start, end)) {
+                editable.removeSpan(glyph.hiddenSpan);
+                iterator.remove();
+            }
         }
-        hiddenSpans.clear();
+    }
+
+    private void removeGlyphsOverlapping(Editable editable, int start, int end, boolean includeTouching) {
+        final Iterator<Glyph> iterator = glyphs.iterator();
+        while (iterator.hasNext()) {
+            final Glyph glyph = iterator.next();
+            final int glyphStart = editable.getSpanStart(glyph.hiddenSpan);
+            final int glyphEnd = editable.getSpanEnd(glyph.hiddenSpan);
+            final boolean overlaps = includeTouching
+                ? glyphStart <= end && glyphEnd >= start
+                : glyphStart < end && glyphEnd > start;
+            if (overlaps) {
+                editable.removeSpan(glyph.hiddenSpan);
+                iterator.remove();
+            }
+        }
+    }
+
+    private void removeGlyphAt(Editable editable, int index) {
+        final Glyph glyph = glyphs.remove(index);
+        editable.removeSpan(glyph.hiddenSpan);
+    }
+
+    private void clearGlyphs(Editable editable) {
+        for (int i = 0; i < glyphs.size(); i++) {
+            editable.removeSpan(glyphs.get(i).hiddenSpan);
+        }
+        glyphs.clear();
+        candidates.clear();
+    }
+
+    private BlurMaskFilter getBlurFilter(float blur) {
+        final int index = Math.max(1, Math.min(BLUR_FILTER_STEPS - 1,
+            Math.round(blur * (BLUR_FILTER_STEPS - 1))));
+        if (blurFilters[index] == null) {
+            blurFilters[index] = new BlurMaskFilter(
+                Math.max(0.1f, BLUR_RADIUS_PX * index / (BLUR_FILTER_STEPS - 1.0f)),
+                BlurMaskFilter.Blur.NORMAL
+            );
+        }
+        return blurFilters[index];
+    }
+
+    private static boolean isValidGlyph(Editable editable, Glyph glyph, int start, int end) {
+        if (start < 0 || end <= start || end > editable.length() || end - start != glyph.text.length()) {
+            return false;
+        }
+        for (int i = 0; i < glyph.text.length(); i++) {
+            if (editable.charAt(start + i) != glyph.text.charAt(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isWhitespace(CharSequence text, int start, int end) {
+        for (int i = start; i < end; i++) {
+            if (!Character.isWhitespace(text.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean isEmojiLike(Editable editable, int start, int end, int codePoint) {
@@ -247,16 +343,26 @@ final class LumaTypingAnimator {
         return 1.0f - inverse * inverse * inverse * inverse * inverse;
     }
 
-    private static final class Glyph {
-        int index;
-        final int length;
+    private static final class Candidate {
+        final int start;
+        final int end;
         final String text;
+
+        Candidate(int start, int end, String text) {
+            this.start = start;
+            this.end = end;
+            this.text = text;
+        }
+    }
+
+    private static final class Glyph {
+        final String text;
+        final ForegroundColorSpan hiddenSpan;
         final long startTime;
 
-        Glyph(int index, int length, String text, long startTime) {
-            this.index = index;
-            this.length = length;
+        Glyph(String text, ForegroundColorSpan hiddenSpan, long startTime) {
             this.text = text;
+            this.hiddenSpan = hiddenSpan;
             this.startTime = startTime;
         }
     }
