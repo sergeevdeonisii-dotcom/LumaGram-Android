@@ -642,6 +642,10 @@ public class ApplicationLoader extends Application {
         return false;
     }
 
+    public boolean shouldShowCustomUpdatePopupAutomatically() {
+        return true;
+    }
+
     public IUpdateLayout takeUpdateLayout(Activity activity, ViewGroup sideMenuContainer) {
         return null;
     }

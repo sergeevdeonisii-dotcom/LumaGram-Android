@@ -33,7 +33,9 @@ public final class LumaUpdaterController {
         void onFinished(File file, String error);
     }
 
-    private static final long CHECK_INTERVAL = 6L * 60L * 60L * 1000L;
+    // LaunchActivity calls us whenever Luma returns to the foreground. A short throttle keeps
+    // those checks invisible and inexpensive while still surfacing releases quickly.
+    private static final long CHECK_INTERVAL = 15L * 60L * 1000L;
     private static final long MAX_APK_SIZE = 1024L * 1024L * 1024L;
     private static volatile LumaUpdaterController instance;
 
