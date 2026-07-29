@@ -20,6 +20,7 @@ public final class LumaMessageFormatting {
     public static final int STYLE_MONOSPACE = 3;
     public static final int STYLE_UNDERLINE = 4;
     public static final int STYLE_STRIKETHROUGH = 5;
+    public static final int STYLE_QUOTE = 6;
 
     private LumaMessageFormatting() {
     }
@@ -101,7 +102,7 @@ public final class LumaMessageFormatting {
     }
 
     private static int clampStyle(int style) {
-        return style >= STYLE_NONE && style <= STYLE_STRIKETHROUGH ? style : STYLE_NONE;
+        return style >= STYLE_NONE && style <= STYLE_QUOTE ? style : STYLE_NONE;
     }
 
     private static boolean matchesStyle(TLRPC.MessageEntity entity, int style) {
@@ -116,6 +117,8 @@ public final class LumaMessageFormatting {
                 return entity instanceof TLRPC.TL_messageEntityUnderline;
             case STYLE_STRIKETHROUGH:
                 return entity instanceof TLRPC.TL_messageEntityStrike;
+            case STYLE_QUOTE:
+                return entity instanceof TLRPC.TL_messageEntityBlockquote;
             default:
                 return false;
         }
@@ -133,6 +136,8 @@ public final class LumaMessageFormatting {
                 return new TLRPC.TL_messageEntityUnderline();
             case STYLE_STRIKETHROUGH:
                 return new TLRPC.TL_messageEntityStrike();
+            case STYLE_QUOTE:
+                return new TLRPC.TL_messageEntityBlockquote();
             default:
                 return null;
         }

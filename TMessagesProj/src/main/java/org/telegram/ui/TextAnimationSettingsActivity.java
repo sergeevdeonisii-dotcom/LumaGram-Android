@@ -102,7 +102,8 @@ public class TextAnimationSettingsActivity extends BaseFragment {
             getString(R.string.LumaMessageStyleItalic),
             getString(R.string.LumaMessageStyleMonospace),
             getString(R.string.LumaMessageStyleUnderline),
-            getString(R.string.LumaMessageStyleStrikethrough)
+            getString(R.string.LumaMessageStyleStrikethrough),
+            getString(R.string.LumaMessageStyleQuote)
         };
     }
 
