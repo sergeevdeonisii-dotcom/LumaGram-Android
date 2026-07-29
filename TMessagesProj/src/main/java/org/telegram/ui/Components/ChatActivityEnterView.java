@@ -5737,6 +5737,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 }
             }
         };
+        messageEditText.setLumaTypingAnimationTarget(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             messageEditText.setFallbackLineSpacing(false);
         }

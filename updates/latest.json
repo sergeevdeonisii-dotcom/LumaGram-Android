@@ -1,7 +1,7 @@
 {
-    "version":  "12.9.0-luma.26",
-    "version_code":  69889,
-    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.26/Luma-Telegram-12.9-Liquid26-Signed-arm64.apk",
-    "sha256":  "1e6b2b997435f32832ddb19ab8f85e7e77c7050a6bd66980a6b7ef6e5a3b1818",
-    "changelog":  "В настройках Liquid Glass убрано окно живого превью. Настройки, переключатель и сброс по умолчанию сохранены."
+    "version":  "12.9.0-luma.27",
+    "version_code":  69899,
+    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.27/Luma-Telegram-12.9-Liquid27-Signed-arm64.apk",
+    "sha256":  "241031441e943aa637db151549c6f6dcd229a0ea9c79cf87facc53d306c2c08f",
+    "changelog":  "Добавлена плавная анимация набираемых букв с мягким размытием и движением. В обычных настройках появился отдельный тумблер «Анимация ввода»."
 }

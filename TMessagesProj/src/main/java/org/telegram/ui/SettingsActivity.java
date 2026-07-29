@@ -690,6 +690,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));
         items.add(SettingCell.Factory.of(2, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_chat, getString(R.string.SettingsChat), getString(R.string.SettingsChatInfo)));
         items.add(SettingCell.Factory.of(24, IconBackgroundColors.CYAN.top, IconBackgroundColors.PURPLE.bottom, R.drawable.msg2_animations, getString(R.string.LiquidGlassSettingsTitle), getString(R.string.LiquidGlassSettingsInfo)));
+        items.add(SettingCell.Factory.of(26, IconBackgroundColors.PURPLE.top, IconBackgroundColors.BLUE_DEEP.bottom, R.drawable.msg_photo_curve, getString(R.string.TextAnimationSettingsTitle), getString(R.string.TextAnimationSettingsInfo)));
         items.add(SettingCell.Factory.of(25, IconBackgroundColors.BLUE_LIGHT.top, IconBackgroundColors.BLUE_DEEP.bottom, R.drawable.settings_features, getString(R.string.LumaUpdatesTitle), getString(R.string.LumaUpdatesInfo)));
         items.add(SettingCell.Factory.of(3, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_privacy, getString(R.string.SettingsPrivacySecurity), getString(R.string.SettingsPrivacySecurityInfo)));
         items.add(SettingCell.Factory.of(5, IconBackgroundColors.RED.top, IconBackgroundColors.RED.bottom, R.drawable.settings_sounds, getString(R.string.SettingsNotifications), getString(R.string.SettingsNotificationsInfo)));
@@ -821,6 +822,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 break;
             case 25:
                 presentSettingFragment(new LumaUpdateActivity());
+                break;
+            case 26:
+                presentSettingFragment(new TextAnimationSettingsActivity());
                 break;
             case 3:
                 presentSettingFragment(new PrivacySettingsActivity());

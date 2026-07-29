@@ -73,6 +73,8 @@ import java.util.List;
 
 public class EditTextBoldCursor extends EditTextEffects {
 
+    private final LumaTypingAnimator lumaTypingAnimator = new LumaTypingAnimator();
+
     private static Field mEditor;
     private static Field mShowCursorField;
     private static Field mScrollYField;
@@ -215,6 +217,10 @@ public class EditTextBoldCursor extends EditTextEffects {
             setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
         }
         init();
+    }
+
+    public void setLumaTypingAnimationTarget(boolean target) {
+        lumaTypingAnimator.setTarget(this, target);
     }
 
     public void useAnimatedTextDrawable() {
@@ -845,6 +851,7 @@ public class EditTextBoldCursor extends EditTextEffects {
 
     @Override
     protected void onDraw(Canvas canvas) {
+        lumaTypingAnimator.beforeDraw(this);
         drawHint(canvas);
 
         if (ellipsizeByGradient) {
@@ -1043,6 +1050,7 @@ public class EditTextBoldCursor extends EditTextEffects {
             errorLayout.draw(canvas);
             canvas.restore();
         }*/
+        lumaTypingAnimator.afterDraw(this, canvas);
     }
 
     public void setWindowView(View view) {
@@ -1125,6 +1133,7 @@ public class EditTextBoldCursor extends EditTextEffects {
 
     @Override
     protected void onDetachedFromWindow() {
+        lumaTypingAnimator.clear(this);
         super.onDetachedFromWindow();
         attachedToWindow = null;
         Choreographer60FpsContent.getInstance().removeFrameCallback(invalidateCallback);
