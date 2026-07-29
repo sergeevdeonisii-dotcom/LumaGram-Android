@@ -6,6 +6,7 @@ import android.view.View;
 import android.widget.FrameLayout;
 
 import org.telegram.messenger.AccountInstance;
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.FileLog;
@@ -61,6 +62,9 @@ public class LumaAccountExportActivity extends BaseFragment {
     private boolean files = true;
     private UniversalRecyclerView listView;
     private LumaAccountExportManager manager;
+    private AlertDialog dialogScan;
+    private boolean dialogScanCancelled;
+    private long dialogScanDeadline;
 
     @Override
     public View createView(Context context) {
@@ -82,6 +86,9 @@ public class LumaAccountExportActivity extends BaseFragment {
         content.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT,
                 LayoutHelper.MATCH_PARENT, Gravity.FILL));
         actionBar.setAdaptiveBackground(listView);
+        getMessagesController().loadRemoteFilters(false, success -> AndroidUtilities.runOnUIThread(() -> {
+            if (listView != null && listView.adapter != null) listView.adapter.update(false);
+        }));
         return fragmentView = content;
     }
 
@@ -173,6 +180,53 @@ public class LumaAccountExportActivity extends BaseFragment {
             bulletin(tr("Выберите хотя бы одну папку", "Select at least one folder"));
             return;
         }
+        beginDialogScan();
+    }
+
+    private void beginDialogScan() {
+        if (getParentActivity() == null) return;
+        dialogScanCancelled = false;
+        dialogScanDeadline = System.currentTimeMillis() + 5L * 60L * 1000L;
+        dialogScan = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_LOADING, resourceProvider);
+        dialogScan.setMessage(tr("Загрузка полного списка чатов…", "Loading the complete chat list..."));
+        dialogScan.setCancelable(true);
+        dialogScan.setCancelDialog(true);
+        dialogScan.setOnCancelListener(dialog -> dialogScanCancelled = true);
+        dialogScan.show();
+        continueDialogScan();
+    }
+
+    private void continueDialogScan() {
+        if (dialogScanCancelled || dialogScan == null || !dialogScan.isShowing()) return;
+        MessagesController controller = getMessagesController();
+        boolean mainReady = controller.isServerDialogsEndReached(0);
+        boolean archiveReady = controller.isServerDialogsEndReached(1);
+        if (mainReady && archiveReady) {
+            dismiss(dialogScan);
+            dialogScan = null;
+            finishSelection();
+            return;
+        }
+        if (System.currentTimeMillis() >= dialogScanDeadline) {
+            dismiss(dialogScan);
+            dialogScan = null;
+            showError(tr(
+                    "Не удалось получить полный список чатов. Проверьте интернет и попробуйте снова.",
+                    "Could not load the complete chat list. Check your connection and try again."));
+            return;
+        }
+        dialogScan.setMessage(tr("Загрузка полного списка чатов… Найдено: ",
+                "Loading the complete chat list... Found: ") + controller.getAllDialogs().size());
+        if (!mainReady && !controller.isLoadingDialogs(0)) {
+            controller.loadDialogs(0, 0, 100, false);
+        }
+        if (!archiveReady && !controller.isLoadingDialogs(1)) {
+            controller.loadDialogs(1, 0, 100, false);
+        }
+        AndroidUtilities.runOnUIThread(this::continueDialogScan, 500);
+    }
+
+    private void finishSelection() {
         ArrayList<LumaAccountExportManager.ChatSpec> chats = collectChats();
         if (chats.isEmpty()) {
             bulletin(tr("Под выбранные условия не найдено чатов", "No chats match the selected options"));

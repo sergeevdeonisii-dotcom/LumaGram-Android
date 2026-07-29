@@ -9,10 +9,12 @@ import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -256,15 +258,82 @@ public final class LumaAccountExportManager {
             for (int i = 0; i < exported.size(); i++) {
                 ExportedChat chat = exported.get(i);
                 String title = TextUtils.isEmpty(chat.spec.title) ? localized("Без названия", "Untitled") : chat.spec.title;
-                writer.write("<a class=\"chat" + (i == 0 ? " active" : "") + "\" target=\"conversation\" href=\"chats/" + chat.directory + "/messages.html\" data-name=\"" + attribute(title.toLowerCase(locale())) + "\"><span class=\"avatar\">" + html(initial(title)) + "</span><span class=\"ct\"><div class=\"name\">" + html(title) + "</div><div class=\"kind\">" + html(chat.spec.type) + "</div></span></a>");
+                writer.write("<a class=\"chat" + (i == 0 ? " active" : "") + "\" href=\"#\" data-chat=\"" + chat.directory + "\" data-name=\"" + attribute(title.toLowerCase(locale())) + "\"><span class=\"avatar\">" + html(initial(title)) + "</span><span class=\"ct\"><div class=\"name\">" + html(title) + "</div><div class=\"kind\">" + html(chat.spec.type) + "</div></span></a>");
             }
             writer.write("</nav></aside>");
             if (exported.isEmpty()) {
                 writer.write("<main class=\"empty\">" + html(localized("Нет доступных чатов для просмотра", "No available chats to display")) + "</main>");
             } else {
-                writer.write("<iframe class=\"view\" name=\"conversation\" src=\"chats/" + exported.get(0).directory + "/messages.html\"></iframe>");
+                writer.write("<iframe class=\"view\" id=\"conversation\"></iframe>");
             }
-            writer.write("</div><script>const q=document.getElementById('q'),ch=[...document.querySelectorAll('.chat')];q.oninput=()=>ch.forEach(x=>x.hidden=!x.dataset.name.includes(q.value.toLowerCase()));ch.forEach(x=>x.onclick=()=>{ch.forEach(y=>y.classList.remove('active'));x.classList.add('active')});</script></body></html>");
+            writer.write("</div><script>const pages={");
+            for (int i = 0; i < exported.size(); i++) {
+                checkCancelled();
+                ExportedChat chat = exported.get(i);
+                if (i > 0) writer.write(',');
+                writer.write(JSONObject.quote(chat.directory));
+                writer.write(':');
+                writeEmbeddedHtml(writer, new File(new File(chatsDir, chat.directory), "messages.html"), chat.directory);
+            }
+            writer.write("};const q=document.getElementById('q'),ch=[...document.querySelectorAll('.chat')],view=document.getElementById('conversation');q.oninput=()=>ch.forEach(x=>x.hidden=!x.dataset.name.includes(q.value.toLowerCase()));const openChat=x=>{ch.forEach(y=>y.classList.remove('active'));x.classList.add('active');view.srcdoc=pages[x.dataset.chat]||''};ch.forEach(x=>x.onclick=e=>{e.preventDefault();openChat(x)});if(ch[0])openChat(ch[0]);</script></body></html>");
+        }
+    }
+
+    private void writeEmbeddedHtml(BufferedWriter writer, File source, String directory) throws Exception {
+        final String prefix = "<!doctype html><html><head>";
+        writer.write('"');
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                new FileInputStream(source), StandardCharsets.UTF_8), 64 * 1024)) {
+            char[] initial = new char[prefix.length()];
+            int initialRead = 0;
+            while (initialRead < initial.length) {
+                int read = reader.read(initial, initialRead, initial.length - initialRead);
+                if (read < 0) break;
+                initialRead += read;
+            }
+            String beginning = new String(initial, 0, initialRead);
+            if (prefix.equals(beginning)) {
+                writeJsonText(writer, prefix + "<base href=\"chats/" + directory + "/\">");
+            } else {
+                writeJsonText(writer, beginning);
+            }
+            char[] buffer = new char[64 * 1024];
+            int read;
+            while ((read = reader.read(buffer)) != -1) {
+                checkCancelled();
+                writeJsonText(writer, buffer, read);
+            }
+        }
+        writer.write('"');
+    }
+
+    private static void writeJsonText(BufferedWriter writer, String value) throws Exception {
+        writeJsonText(writer, value.toCharArray(), value.length());
+    }
+
+    private static void writeJsonText(BufferedWriter writer, char[] value, int length) throws Exception {
+        final char[] hex = "0123456789abcdef".toCharArray();
+        for (int i = 0; i < length; i++) {
+            char c = value[i];
+            switch (c) {
+                case '"': writer.write("\\\""); break;
+                case '\\': writer.write("\\\\"); break;
+                case '\b': writer.write("\\b"); break;
+                case '\f': writer.write("\\f"); break;
+                case '\n': writer.write("\\n"); break;
+                case '\r': writer.write("\\r"); break;
+                case '\t': writer.write("\\t"); break;
+                default:
+                    if (c < 0x20 || c == 0x2028 || c == 0x2029) {
+                        writer.write("\\u");
+                        writer.write(hex[(c >> 12) & 15]);
+                        writer.write(hex[(c >> 8) & 15]);
+                        writer.write(hex[(c >> 4) & 15]);
+                        writer.write(hex[c & 15]);
+                    } else {
+                        writer.write(c);
+                    }
+            }
         }
     }
 
