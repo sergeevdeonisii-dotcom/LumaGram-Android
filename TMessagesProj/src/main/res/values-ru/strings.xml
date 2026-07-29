@@ -308,6 +308,14 @@
     <string name="LumaMessageFormatting">Оформление сообщений</string>
     <string name="LumaAutoBoldMessages">Всегда отправлять текст жирным</string>
     <string name="LumaAutoBoldMessagesInfo">Перед отправкой обычного текста применяется настоящее жирное форматирование Telegram. Ссылки, премиум-эмодзи и блоки кода сохраняются.</string>
+    <string name="LumaAutomaticMessageStyle">Стиль отправляемого текста</string>
+    <string name="LumaAutomaticMessageStyleInfo">При отправке обычного сообщения автоматически применяется выбранное настоящее форматирование Telegram. Ручное форматирование, ссылки, премиум-эмодзи и блоки кода сохраняются.</string>
+    <string name="LumaMessageStyleNone">Обычный (автостиль выключен)</string>
+    <string name="LumaMessageStyleBold">Жирный</string>
+    <string name="LumaMessageStyleItalic">Курсив</string>
+    <string name="LumaMessageStyleMonospace">Моноширинный</string>
+    <string name="LumaMessageStyleUnderline">Подчёркнутый</string>
+    <string name="LumaMessageStyleStrikethrough">Зачёркнутый</string>
     <string name="LumaUpdatesTitle">Обновления Luma</string>
     <string name="LumaUpdatesInfo">Безопасная проверка и установка версий</string>
     <string name="LumaUpdateCurrentVersion">Текущая версия</string>

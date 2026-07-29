@@ -11204,6 +11204,14 @@
     <string name="LumaMessageFormatting">Message formatting</string>
     <string name="LumaAutoBoldMessages">Always send text in bold</string>
     <string name="LumaAutoBoldMessagesInfo">Applies Telegram’s real bold formatting before regular text messages are sent. Links, custom emoji, and code formatting are preserved.</string>
+    <string name="LumaAutomaticMessageStyle">Sent text style</string>
+    <string name="LumaAutomaticMessageStyleInfo">Automatically applies the selected native Telegram formatting when a regular text message is sent. Manual formatting, links, custom emoji, and code blocks are preserved.</string>
+    <string name="LumaMessageStyleNone">Regular (automatic styling off)</string>
+    <string name="LumaMessageStyleBold">Bold</string>
+    <string name="LumaMessageStyleItalic">Italic</string>
+    <string name="LumaMessageStyleMonospace">Monospace</string>
+    <string name="LumaMessageStyleUnderline">Underline</string>
+    <string name="LumaMessageStyleStrikethrough">Strikethrough</string>
     <string name="LumaUpdatesTitle">Luma Updates</string>
     <string name="LumaUpdatesInfo">Secure updates and version checks</string>
     <string name="LumaUpdateCurrentVersion">Current version</string>
