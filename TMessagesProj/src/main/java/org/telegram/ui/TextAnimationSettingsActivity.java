@@ -2,6 +2,7 @@ package org.telegram.ui;
 
 import static org.telegram.messenger.LocaleController.getString;
 
+import android.app.Dialog;
 import android.content.Context;
 import android.view.Gravity;
 import android.view.View;
@@ -14,6 +15,7 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.TextCheckCell;
+import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
@@ -24,7 +26,7 @@ import java.util.ArrayList;
 public class TextAnimationSettingsActivity extends BaseFragment {
 
     private static final int ROW_ENABLED = 1;
-    private static final int ROW_AUTO_BOLD = 2;
+    private static final int ROW_AUTO_STYLE = 2;
 
     private UniversalRecyclerView listView;
 
@@ -61,9 +63,12 @@ public class TextAnimationSettingsActivity extends BaseFragment {
         items.add(UItem.asShadow(getString(R.string.TextAnimationEnableInfo)));
 
         items.add(UItem.asHeader(getString(R.string.LumaMessageFormatting)));
-        items.add(UItem.asCheck(ROW_AUTO_BOLD, getString(R.string.LumaAutoBoldMessages))
-            .setChecked(LumaMessageFormatting.isAutoBoldEnabled()));
-        items.add(UItem.asShadow(getString(R.string.LumaAutoBoldMessagesInfo)));
+        items.add(UItem.asButton(
+            ROW_AUTO_STYLE,
+            getString(R.string.LumaAutomaticMessageStyle),
+            getStyleNames()[LumaMessageFormatting.getAutomaticStyle()]
+        ));
+        items.add(UItem.asShadow(getString(R.string.LumaAutomaticMessageStyleInfo)));
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {
@@ -73,13 +78,32 @@ public class TextAnimationSettingsActivity extends BaseFragment {
             if (view instanceof TextCheckCell) {
                 ((TextCheckCell) view).setChecked(enabled);
             }
-        } else if (item.id == ROW_AUTO_BOLD) {
-            final boolean enabled = !LumaMessageFormatting.isAutoBoldEnabled();
-            LumaMessageFormatting.setAutoBoldEnabled(enabled);
-            if (view instanceof TextCheckCell) {
-                ((TextCheckCell) view).setChecked(enabled);
-            }
+        } else if (item.id == ROW_AUTO_STYLE) {
+            final Dialog dialog = AlertsCreator.createSingleChoiceDialog(
+                getParentActivity(),
+                getStyleNames(),
+                getString(R.string.LumaAutomaticMessageStyle),
+                LumaMessageFormatting.getAutomaticStyle(),
+                (dialogInterface, which) -> {
+                    LumaMessageFormatting.setAutomaticStyle(which);
+                    if (listView != null && listView.adapter != null) {
+                        listView.adapter.update(false);
+                    }
+                }
+            );
+            showDialog(dialog);
         }
+    }
+
+    private String[] getStyleNames() {
+        return new String[] {
+            getString(R.string.LumaMessageStyleNone),
+            getString(R.string.LumaMessageStyleBold),
+            getString(R.string.LumaMessageStyleItalic),
+            getString(R.string.LumaMessageStyleMonospace),
+            getString(R.string.LumaMessageStyleUnderline),
+            getString(R.string.LumaMessageStyleStrikethrough)
+        };
     }
 
     @Override

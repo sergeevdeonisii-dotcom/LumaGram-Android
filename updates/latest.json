@@ -1,7 +1,7 @@
 {
-    "version":  "12.9.0-luma.33",
-    "version_code":  70409,
-    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.33/Luma-Telegram-12.9-Liquid33-Signed-arm64.apk",
-    "sha256":  "14a9ff88ecee75a2e5eb7fb51608b2ae1f395a3a3db3c980c79f9623a1194a0e",
-    "changelog":  "Добавлен отдельный экран «Расширенные настройки» в разделе Liquid Glass. Исправлен свайп-ввод: слово рисуется единым слоем, мягко опускается с меньшей высоты и больше не перезапускается рывками при промежуточных обновлениях клавиатуры."
+    "version":  "12.9.0-luma.34",
+    "version_code":  70509,
+    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.34/Luma-Telegram-12.9-Liquid34-Signed-arm64.apk",
+    "sha256":  "e64320e96293dafffbd42cd3a68f5a96adac6449df053c9b8acacb0a5e86f30b",
+    "changelog":  "В разделе «Ввод и сообщения» добавлен выбор автоматического стиля отправляемого текста: обычный, жирный, курсив, моноширинный, подчёркнутый или зачёркнутый. Используются настоящие форматы Telegram; прежняя настройка жирного текста переносится автоматически."
 }

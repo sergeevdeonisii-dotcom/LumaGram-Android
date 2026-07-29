@@ -7782,7 +7782,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 }
                 CharSequence[] message = new CharSequence[]{ part };
                 ArrayList<TLRPC.MessageEntity> entities = MediaDataController.getInstance(currentAccount).getEntities(message, supportsNewEntities);
-                entities = LumaMessageFormatting.applyAutoBold(message[0], entities);
+                entities = LumaMessageFormatting.applyAutomaticStyle(message[0], entities);
                 MessageObject.SendAnimationData sendAnimationData = null;
 
                 if (!delegate.hasForwardingMessages()) {
