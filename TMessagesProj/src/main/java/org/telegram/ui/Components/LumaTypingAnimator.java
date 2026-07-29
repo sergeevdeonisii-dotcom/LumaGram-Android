@@ -29,6 +29,7 @@ final class LumaTypingAnimator implements TextWatcher {
     private static final int MAX_GLYPHS_PER_CHANGE = 48;
     private static final int MAX_ACTIVE_GLYPHS = 72;
     private static final int MAX_INSERT_SCAN_UNITS = 256;
+    private static final int MAX_CHANGE_COMPARE_UNITS = 512;
     private static final int BLUR_FILTER_STEPS = 8;
 
     private final ArrayList<Glyph> glyphs = new ArrayList<>();
@@ -42,6 +43,8 @@ final class LumaTypingAnimator implements TextWatcher {
     private int pendingStart;
     private int pendingBefore;
     private int pendingCount;
+    private String pendingOldSegment;
+    private boolean pendingSyntheticChange;
 
     void setTarget(EditTextBoldCursor view, boolean target) {
         if (this.view != null && this.view != view && watcherAttached) {
@@ -153,10 +156,23 @@ final class LumaTypingAnimator implements TextWatcher {
 
     @Override
     public void beforeTextChanged(CharSequence text, int start, int count, int after) {
+        pendingStart = start;
+        pendingBefore = count;
+        pendingCount = after;
+
+        final int textLength = text != null ? text.length() : 0;
+        final int safeStart = Math.max(0, Math.min(textLength, start));
+        final int safeEnd = Math.max(safeStart, Math.min(textLength, start + count));
+        pendingSyntheticChange = start < 0 || count < 0
+            || safeStart != start || safeEnd - safeStart != count;
+        pendingOldSegment = !pendingSyntheticChange && count <= MAX_CHANGE_COMPARE_UNITS
+            ? text.subSequence(safeStart, safeEnd).toString()
+            : null;
     }
 
     @Override
     public void onTextChanged(CharSequence text, int start, int before, int count) {
+        pendingSyntheticChange |= start != pendingStart || before != pendingBefore;
         pendingStart = start;
         pendingBefore = before;
         pendingCount = count;
@@ -166,13 +182,24 @@ final class LumaTypingAnimator implements TextWatcher {
     public void afterTextChanged(Editable editable) {
         final EditTextBoldCursor targetView = view;
         if (targetView == null || editable == null) {
+            resetPendingChange();
             return;
         }
+        final int start = pendingStart;
+        final int count = pendingCount;
+        final String oldSegment = pendingOldSegment;
+        final boolean syntheticChange = pendingSyntheticChange;
+        resetPendingChange();
+
         if (!canAnimate(targetView)) {
             clearGlyphs(editable);
             return;
         }
-        trackTextChange(editable, pendingStart, pendingBefore, pendingCount, SystemClock.uptimeMillis());
+        if (syntheticChange) {
+            pruneInvalidGlyphs(editable);
+            return;
+        }
+        trackTextChange(editable, start, count, oldSegment, SystemClock.uptimeMillis());
         targetView.postInvalidateOnAnimation();
     }
 
@@ -181,7 +208,16 @@ final class LumaTypingAnimator implements TextWatcher {
             && !(view.getTransformationMethod() instanceof PasswordTransformationMethod);
     }
 
-    private void trackTextChange(Editable editable, int start, int before, int count, long now) {
+    private void resetPendingChange() {
+        pendingStart = 0;
+        pendingBefore = 0;
+        pendingCount = 0;
+        pendingOldSegment = null;
+        pendingSyntheticChange = false;
+    }
+
+    private void trackTextChange(Editable editable, int start, int count,
+                                 String oldSegment, long now) {
         pruneInvalidGlyphs(editable);
         if (count <= 0 || editable.length() == 0) {
             return;
@@ -189,10 +225,39 @@ final class LumaTypingAnimator implements TextWatcher {
 
         final int insertedStart = Math.max(0, Math.min(editable.length(), start));
         final int insertedEnd = Math.max(insertedStart, Math.min(editable.length(), start + count));
-        removeGlyphsOverlapping(editable, insertedStart, insertedEnd, before > 0);
+        int changedStart = insertedStart;
+        int changedEnd = insertedEnd;
 
-        int scanStart = Math.max(insertedStart, insertedEnd - MAX_INSERT_SCAN_UNITS);
-        if (scanStart > insertedStart && scanStart < editable.length()
+        if (oldSegment != null) {
+            final int oldLength = oldSegment.length();
+            final int newLength = insertedEnd - insertedStart;
+            final int commonLength = Math.min(oldLength, newLength);
+            int prefix = 0;
+            while (prefix < commonLength
+                && oldSegment.charAt(prefix) == editable.charAt(insertedStart + prefix)) {
+                prefix++;
+            }
+
+            int suffix = 0;
+            while (suffix < oldLength - prefix && suffix < newLength - prefix
+                && oldSegment.charAt(oldLength - 1 - suffix)
+                    == editable.charAt(insertedEnd - 1 - suffix)) {
+                suffix++;
+            }
+            changedStart += prefix;
+            changedEnd -= suffix;
+        }
+
+        // Keep the previous letter animating when the IME replaces its whole
+        // composing word to append the next character. Touching ranges are not
+        // overlapping ranges.
+        removeGlyphsOverlapping(editable, changedStart, changedEnd, false);
+        if (changedEnd <= changedStart) {
+            return;
+        }
+
+        int scanStart = Math.max(changedStart, changedEnd - MAX_INSERT_SCAN_UNITS);
+        if (scanStart > changedStart && scanStart < editable.length()
             && Character.isLowSurrogate(editable.charAt(scanStart))
             && Character.isHighSurrogate(editable.charAt(scanStart - 1))) {
             scanStart--;
@@ -200,10 +265,10 @@ final class LumaTypingAnimator implements TextWatcher {
 
         candidates.clear();
         int offset = scanStart;
-        while (offset < insertedEnd) {
+        while (offset < changedEnd) {
             final int codePoint = Character.codePointAt(editable, offset);
             final int length = Character.charCount(codePoint);
-            final int end = Math.min(insertedEnd, offset + length);
+            final int end = Math.min(changedEnd, offset + length);
             if (!isWhitespace(editable, offset, end)
                 && !isEmojiLike(editable, offset, end, codePoint)) {
                 if (candidates.size() == MAX_GLYPHS_PER_CHANGE) {
