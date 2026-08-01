@@ -25,11 +25,17 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 
 @Keep
 public class HttpGetFileTask extends AsyncTask<String, Void, File> {
+
+    private static final int MAX_REDIRECTS = 5;
 
     private File file;
     private File destinationFile;
@@ -41,6 +47,7 @@ public class HttpGetFileTask extends AsyncTask<String, Void, File> {
 
     private Exception exception;
     private long max_size = -1;
+    private final Set<String> allowedHosts = new HashSet<>();
 
     public HttpGetFileTask(
         Utilities.Callback<File> doneCallback,
@@ -69,26 +76,40 @@ public class HttpGetFileTask extends AsyncTask<String, Void, File> {
         return this;
     }
 
+    /**
+     * Restricts a download to the supplied host names and their subdomains.
+     * Redirect destinations are checked against the same list.
+     */
+    @Keep
+    public HttpGetFileTask setAllowedHosts(String... hosts) {
+        allowedHosts.clear();
+        if (hosts != null) {
+            for (String host : hosts) {
+                String normalized = normalizeHost(host);
+                if (!normalized.isEmpty()) {
+                    allowedHosts.add(normalized);
+                }
+            }
+        }
+        return this;
+    }
+
     @Override
     protected File doInBackground(String... params) {
         String urlString = params[0];
 
         long totalSize = 0L;
         long downloadedSize = file != null && file.exists() ? file.length() : 0L;
+        if (max_size > 0L && downloadedSize > max_size) {
+            deletePartialFile();
+            exception = new FileTooLargeException();
+            return null;
+        }
         for (int i = 0; i < 5; ++i) {
             boolean resuming = downloadedSize > 0L;
             HttpURLConnection urlConnection = null;
             try {
-                URL url = new URL(urlString);
-                urlConnection = (HttpURLConnection) url.openConnection();
-                urlConnection.setRequestMethod("GET");
-                if (resuming) {
-                    urlConnection.setRequestProperty("Range", "bytes=" + downloadedSize + "-");
-                }
-                urlConnection.setDoInput(true);
-                urlConnection.setUseCaches(false);
-                urlConnection.setConnectTimeout(20_000);
-                urlConnection.setReadTimeout(30_000);
+                urlConnection = openValidatedConnection(urlString, resuming, downloadedSize);
 
                 int statusCode = urlConnection.getResponseCode();
                 if (resuming && statusCode == 416 && file != null && file.exists()) {
@@ -121,7 +142,8 @@ public class HttpGetFileTask extends AsyncTask<String, Void, File> {
                 totalSize = responseSize > 0L ? responseSize + (resuming ? downloadedSize : 0L) : 0L;
                 if (max_size > 0 && totalSize > max_size) {
                     in.close();
-                    return null;
+                    deletePartialFile();
+                    throw new FileTooLargeException();
                 }
 
                 if (file == null) {
@@ -138,6 +160,11 @@ public class HttpGetFileTask extends AsyncTask<String, Void, File> {
                     while ((bytesRead = bis.read(buffer)) != -1) {
                         output.write(buffer, 0, bytesRead);
                         downloadedSize += bytesRead;
+
+                        if (max_size > 0L && downloadedSize > max_size) {
+                            deletePartialFile();
+                            throw new FileTooLargeException();
+                        }
 
                         if (isCancelled()) {
                             try {
@@ -169,7 +196,7 @@ public class HttpGetFileTask extends AsyncTask<String, Void, File> {
                 return isCancelled() ? null : file;
             } catch (Exception e) {
                 downloadedSize = file != null && file.exists() ? file.length() : 0L;
-                if (!isCancelled() && e instanceof IOException && i < 4) {
+                if (!isCancelled() && e instanceof IOException && !(e instanceof NonRetryableDownloadException) && i < 4) {
                     FileLog.d("download interrupted at " + downloadedSize + " bytes, retrying with Range");
                     try {
                         Thread.sleep(Math.min(2_000L, 350L * (i + 1L)));
@@ -191,6 +218,156 @@ public class HttpGetFileTask extends AsyncTask<String, Void, File> {
         }
         this.exception = new RuntimeException("too many retries");
         return null;
+    }
+
+    private HttpURLConnection openValidatedConnection(String urlString, boolean resuming, long downloadedSize) throws IOException {
+        URL current = new URL(urlString);
+        for (int redirect = 0; redirect <= MAX_REDIRECTS; redirect++) {
+            validateRemoteUrl(current);
+            HttpURLConnection connection = (HttpURLConnection) current.openConnection();
+            connection.setInstanceFollowRedirects(false);
+            connection.setRequestMethod("GET");
+            if (resuming) {
+                connection.setRequestProperty("Range", "bytes=" + downloadedSize + "-");
+            }
+            connection.setDoInput(true);
+            connection.setUseCaches(false);
+            connection.setConnectTimeout(20_000);
+            connection.setReadTimeout(30_000);
+
+            int statusCode = connection.getResponseCode();
+            if (!isRedirect(statusCode)) {
+                return connection;
+            }
+            String location = connection.getHeaderField("Location");
+            connection.disconnect();
+            if (location == null || location.trim().isEmpty()) {
+                throw new UnsafeUrlException("Redirect without a destination");
+            }
+            if (redirect == MAX_REDIRECTS) {
+                throw new UnsafeUrlException("Too many redirects");
+            }
+            current = new URL(current, location);
+        }
+        throw new UnsafeUrlException("Too many redirects");
+    }
+
+    private void validateRemoteUrl(URL url) throws IOException {
+        if (!"https".equalsIgnoreCase(url.getProtocol())) {
+            throw new UnsafeUrlException("Only HTTPS downloads are allowed");
+        }
+        if (url.getUserInfo() != null || (url.getPort() != -1 && url.getPort() != 443)) {
+            throw new UnsafeUrlException("Unsafe URL authority");
+        }
+        String host = normalizeHost(url.getHost());
+        if (host.isEmpty() || !isAllowedHost(host)) {
+            throw new UnsafeUrlException("Download host is not allowed");
+        }
+        InetAddress[] addresses = InetAddress.getAllByName(host);
+        if (addresses.length == 0) {
+            throw new UnsafeUrlException("Download host could not be resolved");
+        }
+        for (InetAddress address : addresses) {
+            if (!isPublicAddress(address)) {
+                throw new UnsafeUrlException("Private or reserved network address is not allowed");
+            }
+        }
+    }
+
+    private boolean isAllowedHost(String host) {
+        if (allowedHosts.isEmpty()) {
+            return true;
+        }
+        for (String allowed : allowedHosts) {
+            if (host.equals(allowed) || host.endsWith("." + allowed)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String normalizeHost(String host) {
+        if (host == null) {
+            return "";
+        }
+        String normalized = host.trim().toLowerCase(Locale.US);
+        while (normalized.startsWith(".")) {
+            normalized = normalized.substring(1);
+        }
+        if (normalized.startsWith("[") && normalized.endsWith("]")) {
+            normalized = normalized.substring(1, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private static boolean isPublicAddress(InetAddress address) {
+        if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()
+                || address.isSiteLocalAddress() || address.isMulticastAddress()) {
+            return false;
+        }
+        byte[] bytes = address.getAddress();
+        if (bytes.length == 4) {
+            int a = bytes[0] & 0xff;
+            int b = bytes[1] & 0xff;
+            int c = bytes[2] & 0xff;
+            return a != 0
+                    && a != 10
+                    && a != 127
+                    && !(a == 100 && b >= 64 && b <= 127)
+                    && !(a == 169 && b == 254)
+                    && !(a == 172 && b >= 16 && b <= 31)
+                    && !(a == 192 && b == 0 && c == 0)
+                    && !(a == 192 && b == 0 && c == 2)
+                    && !(a == 192 && b == 168)
+                    && !(a == 198 && (b == 18 || b == 19))
+                    && !(a == 198 && b == 51 && c == 100)
+                    && !(a == 203 && b == 0 && c == 113)
+                    && a < 224;
+        }
+        if (bytes.length == 16) {
+            int first = bytes[0] & 0xff;
+            int second = bytes[1] & 0xff;
+            return (first & 0xfe) != 0xfc
+                    && !(first == 0xfe && (second & 0xc0) == 0x80)
+                    && !(first == 0x20 && second == 0x01 && (bytes[2] & 0xff) == 0x0d && (bytes[3] & 0xff) == 0xb8);
+        }
+        return false;
+    }
+
+    private static boolean isRedirect(int statusCode) {
+        return statusCode == HttpURLConnection.HTTP_MOVED_PERM
+                || statusCode == HttpURLConnection.HTTP_MOVED_TEMP
+                || statusCode == HttpURLConnection.HTTP_SEE_OTHER
+                || statusCode == 307
+                || statusCode == 308;
+    }
+
+    private void deletePartialFile() {
+        if (file != null && file.exists()) {
+            try {
+                file.delete();
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        }
+    }
+
+    private static class NonRetryableDownloadException extends IOException {
+        NonRetryableDownloadException(String message) {
+            super(message);
+        }
+    }
+
+    private static final class UnsafeUrlException extends NonRetryableDownloadException {
+        UnsafeUrlException(String message) {
+            super(message);
+        }
+    }
+
+    private static final class FileTooLargeException extends NonRetryableDownloadException {
+        FileTooLargeException() {
+            super("Download exceeds the configured size limit");
+        }
     }
 
     @Override

@@ -130,12 +130,15 @@ public final class LumaAccountExportManager {
             return;
         }
         try {
-            File cache = ApplicationLoader.applicationContext.getExternalCacheDir();
-            if (cache == null) cache = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE);
-            if (cache == null) throw new IllegalStateException("No cache directory");
-            outputDir = new File(cache, "luma_account_exports");
+            File privateCache = ApplicationLoader.applicationContext.getCacheDir();
+            File exportCache = ApplicationLoader.applicationContext.getExternalCacheDir();
+            if (exportCache == null) exportCache = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE);
+            if (privateCache == null || exportCache == null) throw new IllegalStateException("No cache directory");
+            outputDir = new File(exportCache, "luma_account_exports");
             if (!outputDir.exists() && !outputDir.mkdirs()) throw new IllegalStateException("Could not create output directory");
-            sessionDir = new File(outputDir, ".session_" + System.currentTimeMillis());
+            File sessionRoot = new File(privateCache, "luma_account_export_sessions");
+            if (!sessionRoot.exists() && !sessionRoot.mkdirs()) throw new IllegalStateException("Could not create session root");
+            sessionDir = new File(sessionRoot, ".session_" + System.currentTimeMillis());
             chatsDir = new File(sessionDir, "chats");
             if (!chatsDir.mkdirs()) throw new IllegalStateException("Could not create session directory");
         } catch (Throwable e) {

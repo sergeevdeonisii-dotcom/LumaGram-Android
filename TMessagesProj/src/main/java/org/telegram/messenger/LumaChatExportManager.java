@@ -240,18 +240,23 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     }
 
     private void createSessionDirectories() throws Exception {
-        File externalCache = ApplicationLoader.applicationContext.getExternalCacheDir();
-        if (externalCache == null) {
-            externalCache = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE);
+        File privateCache = ApplicationLoader.applicationContext.getCacheDir();
+        File exportCache = ApplicationLoader.applicationContext.getExternalCacheDir();
+        if (exportCache == null) {
+            exportCache = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE);
         }
-        if (externalCache == null) {
+        if (privateCache == null || exportCache == null) {
             throw new IllegalStateException("No cache directory");
         }
-        outputDir = new File(externalCache, "luma_chat_exports");
+        outputDir = new File(exportCache, "luma_chat_exports");
         if (!outputDir.exists() && !outputDir.mkdirs()) {
             throw new IllegalStateException("Could not create output directory");
         }
-        sessionDir = new File(outputDir, ".session_" + System.currentTimeMillis() + "_" + Math.abs(options.dialogId));
+        File sessionRoot = new File(privateCache, "luma_chat_export_sessions");
+        if (!sessionRoot.exists() && !sessionRoot.mkdirs()) {
+            throw new IllegalStateException("Could not create session root");
+        }
+        sessionDir = new File(sessionRoot, ".session_" + System.currentTimeMillis() + "_" + Math.abs(options.dialogId));
         pagesDir = new File(sessionDir, "pages");
         mediaDir = new File(sessionDir, "media");
         if (!pagesDir.mkdirs() || !mediaDir.mkdirs()) {

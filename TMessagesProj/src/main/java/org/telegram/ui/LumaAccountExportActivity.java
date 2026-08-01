@@ -451,10 +451,19 @@ public class LumaAccountExportActivity extends BaseFragment {
             public void onComplete(File archive, int exportedChats, int skippedChats, int messages, int mediaFiles) {
                 dismiss(progress);
                 manager = null;
-                if (getParentActivity() == null) return;
+                if (getParentActivity() == null) {
+                    //noinspection ResultOfMethodCallIgnored
+                    archive.delete();
+                    return;
+                }
                 MediaController.saveFile(archive.getAbsolutePath(), getParentActivity(), 2,
-                        archive.getName(), "application/zip", uri -> showComplete(exportedChats,
-                                skippedChats, messages, mediaFiles));
+                        archive.getName(), "application/zip", uri -> {
+                            // The user-facing copy now lives in Downloads/Telegram. Do not keep a
+                            // second plaintext export in the app's private cache.
+                            //noinspection ResultOfMethodCallIgnored
+                            archive.delete();
+                            showComplete(exportedChats, skippedChats, messages, mediaFiles);
+                        });
             }
 
             @Override
