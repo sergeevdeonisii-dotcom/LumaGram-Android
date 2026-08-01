@@ -283,6 +283,9 @@ public class LumaAccountExportActivity extends BaseFragment {
         controller.putUsers(page.users, false);
         controller.putChats(page.chats, false);
         for (TLRPC.Dialog dialog : page.dialogs) {
+            // Dialog.id is a client-only field and is not serialized by MTProto. A raw
+            // messages.getDialogs response therefore has id == 0 until it is initialized.
+            DialogObject.initDialog(dialog);
             if (dialog != null && scannedDialogIds.add(dialog.id)) {
                 scannedDialogs.add(dialog);
             }
@@ -302,13 +305,26 @@ public class LumaAccountExportActivity extends BaseFragment {
         for (int i = page.dialogs.size() - 1; i >= 0 && offsetMessage == null; i--) {
             TLRPC.Dialog candidate = page.dialogs.get(i);
             if (candidate == null || candidate.pinned || candidate.top_message <= 0) continue;
+            TLRPC.Message fallbackMessage = null;
             for (TLRPC.Message message : page.messages) {
-                if (message != null && message.id == candidate.top_message
-                        && MessageObject.getPeerId(message.peer_id) == candidate.id) {
+                if (message == null || message.id <= 0 || message.date <= 0
+                        || MessageObject.getDialogId(message) != candidate.id) {
+                    continue;
+                }
+                if (message.id == candidate.top_message) {
                     offsetDialog = candidate;
                     offsetMessage = message;
                     break;
                 }
+                if (fallbackMessage == null || message.date > fallbackMessage.date) {
+                    fallbackMessage = message;
+                }
+            }
+            // Some service/deleted top messages are omitted from the response. Any dated
+            // message returned for the same last dialog is still a valid pagination anchor.
+            if (offsetMessage == null && fallbackMessage != null) {
+                offsetDialog = candidate;
+                offsetMessage = fallbackMessage;
             }
         }
         if (offsetDialog == null || offsetMessage == null) {
