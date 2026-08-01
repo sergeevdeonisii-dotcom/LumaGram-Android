@@ -724,8 +724,10 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(target), StandardCharsets.UTF_8))) {
             writer.write("<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
             writer.write("<title>" + html(safeTitle()) + "</title><style>");
-            writer.write(LumaExportHtmlTheme.CSS);
+            writer.write(LumaExportHtmlTheme.css());
             writer.write("</style></head><body><div class=\"page_wrap\"><div class=\"page_header\"><div class=\"content\"><div class=\"text bold\">" + html(safeTitle()) + "</div></div></div><div class=\"page_body chat_page\"><div class=\"history\">");
+            String previousSender = null;
+            long previousDate = 0;
             for (int i = pageFiles.size() - 1; i >= 0; i--) {
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(pageFiles.get(i)), StandardCharsets.UTF_8))) {
                     String line;
@@ -733,10 +735,18 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
                         ensureNotCancelled();
                         JSONObject item = new JSONObject(line);
                         String sender = item.optString("from");
+                        long unixDate = item.optLong("date_unixtime", 0);
+                        boolean wrap = previousSender == null || !previousSender.equals(sender)
+                                || unixDate <= 0 || Math.abs(unixDate - previousDate) > 15 * 60;
                         int color = (sender.hashCode() & 0x7fffffff) % 8 + 1;
-                        writer.write("<div class=\"message default clearfix\">");
-                        writer.write("<div class=\"pull_left userpic_wrap\"><div class=\"userpic userpic" + color + "\"><div class=\"initials\">" + html(exportInitial(sender)) + "</div></div></div>");
-                        writer.write("<div class=\"body\"><div class=\"pull_right date details\">" + html(item.optString("date")) + "</div><div class=\"from_name\">" + html(sender) + "</div>");
+                        writer.write("<div class=\"message default clearfix" + (wrap ? "" : " joined") + "\">");
+                        if (wrap) {
+                            writer.write("<div class=\"pull_left userpic_wrap\"><div class=\"userpic userpic" + color + "\"><div class=\"initials\">" + html(exportInitial(sender)) + "</div></div></div>");
+                        }
+                        String fullDate = unixDate > 0 ? formatExportDateTime(unixDate) : item.optString("date");
+                        String shortDate = unixDate > 0 ? formatExportTime(unixDate) : item.optString("date");
+                        writer.write("<div class=\"body\"><div class=\"pull_right date details\" title=\"" + htmlAttribute(fullDate) + "\">" + html(shortDate) + "</div>");
+                        if (wrap) writer.write("<div class=\"from_name\">" + html(sender) + "</div>");
                         String text = item.optString("text");
                         if (!TextUtils.isEmpty(text)) {
                             writer.write("<div class=\"text\">" + html(text) + "</div>");
@@ -751,6 +761,8 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
                             }
                         }
                         writer.write("</div></div>");
+                        previousSender = sender;
+                        previousDate = unixDate;
                     }
                 }
             }
@@ -904,6 +916,16 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         if (trimmed.isEmpty()) return "?";
         int codePoint = trimmed.codePointAt(0);
         return new String(Character.toChars(codePoint)).toUpperCase(Locale.getDefault());
+    }
+
+    private static String formatExportTime(long unixSeconds) {
+        return new SimpleDateFormat("HH:mm", Locale.getDefault())
+                .format(new Date(unixSeconds * 1000L));
+    }
+
+    private static String formatExportDateTime(long unixSeconds) {
+        return new SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
+                .format(new Date(unixSeconds * 1000L));
     }
 
     private static String formatDate(int unixSeconds) {

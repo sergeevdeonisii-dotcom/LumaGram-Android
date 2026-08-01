@@ -253,7 +253,7 @@ public final class LumaAccountExportManager {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(target), StandardCharsets.UTF_8))) {
             writer.write("<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
             writer.write("<title>LumaGram - " + html(config.accountName) + "</title><style>");
-            writer.write(LumaExportHtmlTheme.CSS);
+            writer.write(LumaExportHtmlTheme.css());
             writer.write("</style></head><body><div class=\"page_wrap\" id=\"home\"><div class=\"page_header\"><div class=\"content\"><div class=\"text bold\">" + html(localized("Чаты", "Chats")) + "</div></div></div><div class=\"page_body list_page\">");
             writer.write("<div class=\"page_about\"><div class=\"bold\">" + html(config.accountName) + "</div><div class=\"details\">" + exported.size() + " " + html(localized("чатов", "chats")) + " · " + totalMessages + " " + html(localized("сообщений", "messages")) + "</div></div>");
             writer.write("<input class=\"export_search\" id=\"q\" placeholder=\"" + html(localized("Поиск чатов", "Search chats")) + "\"><div class=\"entry_list\" id=\"list\">");
