@@ -253,20 +253,25 @@ public final class LumaAccountExportManager {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(target), StandardCharsets.UTF_8))) {
             writer.write("<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
             writer.write("<title>LumaGram - " + html(config.accountName) + "</title><style>");
-            writer.write("*{box-sizing:border-box}body{margin:0;background:#0a0b10;color:#f4f2ff;font:15px system-ui,-apple-system,sans-serif;overflow:hidden}.app{height:100vh;display:grid;grid-template-columns:330px 1fr}.side{background:#141621;border-right:1px solid #2b2d3a;display:flex;flex-direction:column}.head{padding:24px 20px 16px;background:linear-gradient(135deg,#6c4ed5,#9c65e8)}.brand{font-size:22px;font-weight:800}.account{opacity:.8;margin-top:4px}.search{margin:14px;padding:11px 14px;border:0;border-radius:14px;background:#242733;color:white;outline:none}.list{overflow:auto;padding:0 8px 14px}.chat{display:flex;gap:11px;align-items:center;padding:10px;border-radius:14px;color:#f4f2ff;text-decoration:none}.chat:hover,.chat.active{background:#272a38}.avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:linear-gradient(135deg,#7257cf,#42a5e8)}.ct{min-width:0}.name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kind{font-size:12px;color:#9ea4b8;margin-top:3px}.view{width:100%;height:100%;border:0;background:#0b0d12}.empty{padding:40px;color:#aaa}@media(max-width:720px){.app{grid-template-columns:42% 58%}.side{min-width:0}.head{padding:16px 12px}.brand{font-size:18px}.search{margin:10px 8px}.chat{padding:8px}.avatar{width:36px;height:36px}.kind{display:none}}\n");
-            writer.write("</style></head><body><div class=\"app\"><aside class=\"side\"><div class=\"head\"><div class=\"brand\">LumaGram</div><div class=\"account\">" + html(config.accountName) + "</div></div><input class=\"search\" id=\"q\" placeholder=\"" + html(localized("Поиск чатов", "Search chats")) + "\"><nav class=\"list\" id=\"list\">");
+            writer.write(LumaExportHtmlTheme.CSS);
+            writer.write("</style></head><body><div class=\"page_wrap\" id=\"home\"><div class=\"page_header\"><div class=\"content\"><div class=\"text bold\">" + html(localized("Чаты", "Chats")) + "</div></div></div><div class=\"page_body list_page\">");
+            writer.write("<div class=\"page_about\"><div class=\"bold\">" + html(config.accountName) + "</div><div class=\"details\">" + exported.size() + " " + html(localized("чатов", "chats")) + " · " + totalMessages + " " + html(localized("сообщений", "messages")) + "</div></div>");
+            writer.write("<input class=\"export_search\" id=\"q\" placeholder=\"" + html(localized("Поиск чатов", "Search chats")) + "\"><div class=\"entry_list\" id=\"list\">");
             for (int i = 0; i < exported.size(); i++) {
                 ExportedChat chat = exported.get(i);
                 String title = TextUtils.isEmpty(chat.spec.title) ? localized("Без названия", "Untitled") : chat.spec.title;
-                writer.write("<a class=\"chat" + (i == 0 ? " active" : "") + "\" href=\"#\" data-chat=\"" + chat.directory + "\" data-name=\"" + attribute(title.toLowerCase(locale())) + "\"><span class=\"avatar\">" + html(initial(title)) + "</span><span class=\"ct\"><div class=\"name\">" + html(title) + "</div><div class=\"kind\">" + html(chat.spec.type) + "</div></span></a>");
+                int color = (title.hashCode() & 0x7fffffff) % 8 + 1;
+                writer.write("<a class=\"entry block_link clearfix chat\" href=\"#\" data-chat=\"" + chat.directory + "\" data-title=\"" + attribute(title) + "\" data-name=\"" + attribute(title.toLowerCase(locale())) + "\"><span class=\"pull_left userpic userpic" + color + "\"><span class=\"initials\">" + html(initial(title)) + "</span></span><div class=\"body\"><div class=\"name bold\">" + html(title) + "</div><div class=\"details_entry details\">" + html(chat.spec.type) + "</div><div class=\"info details\">" + html(localized("Открыть историю сообщений", "Open message history")) + "</div></div></a>");
             }
-            writer.write("</nav></aside>");
+            writer.write("</div>");
             if (exported.isEmpty()) {
-                writer.write("<main class=\"empty\">" + html(localized("Нет доступных чатов для просмотра", "No available chats to display")) + "</main>");
-            } else {
-                writer.write("<iframe class=\"view\" id=\"conversation\"></iframe>");
+                writer.write("<div class=\"empty\">" + html(localized("Нет доступных чатов для просмотра", "No available chats to display")) + "</div>");
             }
-            writer.write("</div><script>const pages={");
+            writer.write("</div></div><button class=\"account_back\" id=\"back\" aria-label=\"" + html(localized("Назад", "Back")) + "\">‹</button>");
+            if (!exported.isEmpty()) {
+                writer.write("<iframe class=\"account_view\" id=\"conversation\" title=\"" + html(localized("История чата", "Chat history")) + "\"></iframe>");
+            }
+            writer.write("<script>const pages={");
             for (int i = 0; i < exported.size(); i++) {
                 checkCancelled();
                 ExportedChat chat = exported.get(i);
@@ -275,7 +280,7 @@ public final class LumaAccountExportManager {
                 writer.write(':');
                 writeEmbeddedHtml(writer, new File(new File(chatsDir, chat.directory), "messages.html"), chat.directory);
             }
-            writer.write("};const q=document.getElementById('q'),ch=[...document.querySelectorAll('.chat')],view=document.getElementById('conversation');q.oninput=()=>ch.forEach(x=>x.hidden=!x.dataset.name.includes(q.value.toLowerCase()));const openChat=x=>{ch.forEach(y=>y.classList.remove('active'));x.classList.add('active');view.srcdoc=pages[x.dataset.chat]||''};ch.forEach(x=>x.onclick=e=>{e.preventDefault();openChat(x)});if(ch[0])openChat(ch[0]);</script></body></html>");
+            writer.write("};const q=document.getElementById('q'),ch=[...document.querySelectorAll('.chat')],view=document.getElementById('conversation'),back=document.getElementById('back');q.oninput=()=>ch.forEach(x=>x.hidden=!x.dataset.name.includes(q.value.toLowerCase()));window.closeChat=()=>{if(!view)return;view.classList.remove('visible');back.classList.remove('visible');view.srcdoc='';document.title='LumaGram'};const openChat=x=>{if(!view)return;view.srcdoc=pages[x.dataset.chat]||'';view.classList.add('visible');back.classList.add('visible');document.title=x.dataset.title+' - LumaGram'};ch.forEach(x=>x.onclick=e=>{e.preventDefault();openChat(x)});back.onclick=closeChat;document.addEventListener('keydown',e=>{if(e.key==='Escape')closeChat()});</script></body></html>");
         }
     }
 
@@ -293,7 +298,7 @@ public final class LumaAccountExportManager {
             }
             String beginning = new String(initial, 0, initialRead);
             if (prefix.equals(beginning)) {
-                writeJsonText(writer, prefix + "<base href=\"chats/" + directory + "/\">");
+                writeJsonText(writer, prefix + "<base href=\"chats/" + directory + "/\"><style>.page_header .content .text{padding-left:70px!important}</style>");
             } else {
                 writeJsonText(writer, beginning);
             }
