@@ -7,6 +7,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.os.Build;
+import android.os.SystemClock;
 import android.text.TextUtils;
 
 import org.json.JSONObject;
@@ -63,6 +64,8 @@ public final class LumaUpdaterController {
     private boolean checking;
     private boolean downloading;
     private float downloadingProgress;
+    private float lastNotifiedProgress;
+    private long lastProgressNotificationTime;
     private String lastError;
     private HttpGetFileTask downloadingTask;
     private int checkGeneration;
@@ -281,13 +284,15 @@ public final class LumaUpdaterController {
             return;
         }
         File destination = new File(directory, "luma-update-" + versionCode + ".apk");
-        if (destination.exists()) {
+        if (destination.exists() && (destination.length() <= 0L || destination.length() > MAX_APK_SIZE)) {
             //noinspection ResultOfMethodCallIgnored
             destination.delete();
         }
 
         downloading = true;
         downloadingProgress = 0f;
+        lastNotifiedProgress = -1f;
+        lastProgressNotificationTime = 0L;
         lastError = null;
         final int generation = ++downloadGeneration;
         notifyDownloadProgress();
@@ -329,8 +334,13 @@ public final class LumaUpdaterController {
             if (generation != downloadGeneration) {
                 return;
             }
-            downloadingProgress = progress;
-            notifyDownloadProgress();
+            downloadingProgress = Math.max(downloadingProgress, Math.min(1f, progress));
+            long now = SystemClock.uptimeMillis();
+            if (downloadingProgress >= 1f || lastNotifiedProgress < 0f || now - lastProgressNotificationTime >= 250L) {
+                lastNotifiedProgress = downloadingProgress;
+                lastProgressNotificationTime = now;
+                notifyDownloadProgress();
+            }
         }).setDestFile(destination).setMaxSize(MAX_APK_SIZE).setOverrideExtension("apk");
         downloadingTask.execute(fileUrl);
     }
