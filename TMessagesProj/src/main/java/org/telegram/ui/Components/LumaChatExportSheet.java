@@ -120,6 +120,8 @@ public final class LumaChatExportSheet {
             public void onComplete(File output, LumaChatExportManager.Progress finalProgress) {
                 dismiss(progressDialog);
                 if (chatActivity.getParentActivity() == null) {
+                    //noinspection ResultOfMethodCallIgnored
+                    output.delete();
                     return;
                 }
                 boolean pdf = outputFormat == LumaChatExportManager.OUTPUT_PDF;
@@ -129,7 +131,14 @@ public final class LumaChatExportSheet {
                     2,
                     output.getName(),
                     pdf ? "application/pdf" : "application/zip",
-                    uri -> showComplete(chatActivity, uri, output, finalProgress, pdf)
+                    uri -> {
+                        if (uri != null && "content".equalsIgnoreCase(uri.getScheme())) {
+                            // MediaStore owns the saved copy; discard the private cache duplicate.
+                            //noinspection ResultOfMethodCallIgnored
+                            output.delete();
+                        }
+                        showComplete(chatActivity, uri, output, finalProgress, pdf);
+                    }
                 );
             }
 

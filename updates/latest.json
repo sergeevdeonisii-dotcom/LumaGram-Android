@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.44",
-  "version_code": 71239,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.44/Luma-Telegram-12.9-Liquid44-Signed-arm64.apk",
-  "sha256": "dfebf8accb1e42e1e5b2606ad298ddf2a04be62a50ef44605f5fc76bfbed4046",
-  "changelog": "Исправлена ошибка «Telegram не вернул смещение для следующей страницы чатов» при полном экспорте аккаунта. LumaGram теперь инициализирует ID сырых диалогов до пагинации и правильно сопоставляет входящие и исходящие сообщения. Сохраняются загрузка всех выбранных чатов и оформление в стиле Telegram Desktop."
+  "version": "12.9.0-luma.45",
+  "version_code": 71249,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.45/Luma-Telegram-12.9-Liquid45-Signed-arm64.apk",
+  "sha256": "9687e8a87b0b915879e213b7b8f0d2dd81f8ebdc965568a5bc89fb7908435606",
+  "changelog": "Экспорт аккаунта теперь использует оригинальное оформление Telegram Desktop: структуру export_results.html, CSS, скрипт и 42 графических элемента. Исправлена загрузка полного списка диалогов, включая случай с отдельной страницей закреплённых чатов, а временные файлы экспорта и загрузка обновлений дополнительно защищены."
 }

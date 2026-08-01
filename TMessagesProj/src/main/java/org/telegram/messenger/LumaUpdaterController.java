@@ -341,7 +341,10 @@ public final class LumaUpdaterController {
                 lastProgressNotificationTime = now;
                 notifyDownloadProgress();
             }
-        }).setDestFile(destination).setMaxSize(MAX_APK_SIZE).setOverrideExtension("apk");
+        }).setDestFile(destination)
+                .setMaxSize(MAX_APK_SIZE)
+                .setOverrideExtension("apk")
+                .setAllowedHosts("github.com", "githubusercontent.com");
         downloadingTask.execute(fileUrl);
     }
 
