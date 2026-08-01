@@ -22,17 +22,17 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import java.net.ProtocolException;
 import java.net.URL;
-import java.nio.channels.FileChannel;
 
 @Keep
 public class HttpGetFileTask extends AsyncTask<String, Void, File> {
 
     private File file;
+    private File destinationFile;
 
     private Utilities.Callback<File> doneCallback;
     private Utilities.Callback<Float> progressCallback;
@@ -59,6 +59,7 @@ public class HttpGetFileTask extends AsyncTask<String, Void, File> {
     @Keep
     public HttpGetFileTask setDestFile(File file) {
         this.file = file;
+        this.destinationFile = file;
         return this;
     }
 
@@ -73,28 +74,34 @@ public class HttpGetFileTask extends AsyncTask<String, Void, File> {
         String urlString = params[0];
 
         long totalSize = 0L;
-        long downloadedSize = 0L;
+        long downloadedSize = file != null && file.exists() ? file.length() : 0L;
         for (int i = 0; i < 5; ++i) {
-            boolean resuming = i > 0;
+            boolean resuming = downloadedSize > 0L;
+            HttpURLConnection urlConnection = null;
             try {
                 URL url = new URL(urlString);
-                HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+                urlConnection = (HttpURLConnection) url.openConnection();
                 urlConnection.setRequestMethod("GET");
                 if (resuming) {
                     urlConnection.setRequestProperty("Range", "bytes=" + downloadedSize + "-");
                 }
                 urlConnection.setDoInput(true);
+                urlConnection.setUseCaches(false);
+                urlConnection.setConnectTimeout(20_000);
+                urlConnection.setReadTimeout(30_000);
 
                 int statusCode = urlConnection.getResponseCode();
-                InputStream in;
-                if (statusCode >= 200 && statusCode < 300) {
-                    in = urlConnection.getInputStream();
-                } else {
-                    in = urlConnection.getErrorStream();
+                if (resuming && statusCode == 416 && file != null && file.exists()) {
+                    // The previous request may have completed the file just before its callback
+                    // was interrupted. Let the caller's hash/signature verification decide.
+                    return file;
                 }
+                if (statusCode < 200 || statusCode >= 300) {
+                    throw new IOException("HTTP " + statusCode);
+                }
+                InputStream in = urlConnection.getInputStream();
 
-                final int status = urlConnection.getResponseCode();
-                if (resuming && status != 206) {
+                if (resuming && statusCode != HttpURLConnection.HTTP_PARTIAL) {
                     FileLog.d("failed to resume, server doesn't support partial content. downloading from the beginning");
                     downloadedSize = 0L;
                     resuming = false;
@@ -102,17 +109,18 @@ public class HttpGetFileTask extends AsyncTask<String, Void, File> {
                         try {
                             file.delete();
                         } catch (Exception ignore) {};
-                        file = null;
                     }
+                    file = destinationFile;
                 }
+                long responseSize;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    totalSize = urlConnection.getContentLengthLong();
+                    responseSize = urlConnection.getContentLengthLong();
                 } else {
-                    totalSize = urlConnection.getContentLength();
+                    responseSize = urlConnection.getContentLength();
                 }
+                totalSize = responseSize > 0L ? responseSize + (resuming ? downloadedSize : 0L) : 0L;
                 if (max_size > 0 && totalSize > max_size) {
                     in.close();
-                    if (file != null) file = null;
                     return null;
                 }
 
@@ -121,15 +129,14 @@ public class HttpGetFileTask extends AsyncTask<String, Void, File> {
                     file = StoryEntry.makeCacheFile(UserConfig.selectedAccount, ext);
                 }
 
-                try (BufferedInputStream bis = new BufferedInputStream(in, 16_384);
-                     FileOutputStream fos = new FileOutputStream(file, resuming);
-                     FileChannel fileChannel = fos.getChannel()) {
+                try (BufferedInputStream bis = new BufferedInputStream(in, 64 * 1024);
+                     BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(file, resuming), 64 * 1024)) {
 
-                    byte[] buffer = new byte[16_384];
+                    byte[] buffer = new byte[64 * 1024];
                     int bytesRead;
 
                     while ((bytesRead = bis.read(buffer)) != -1) {
-                        fileChannel.write(java.nio.ByteBuffer.wrap(buffer, 0, bytesRead));
+                        output.write(buffer, 0, bytesRead);
                         downloadedSize += bytesRead;
 
                         if (isCancelled()) {
@@ -148,6 +155,11 @@ public class HttpGetFileTask extends AsyncTask<String, Void, File> {
                             }
                         }
                     }
+                    output.flush();
+
+                    if (totalSize > 0L && downloadedSize < totalSize) {
+                        throw new IOException("Unexpected end of stream: " + downloadedSize + "/" + totalSize);
+                    }
 
                     if (progressCallback != null) {
                         AndroidUtilities.runOnUIThread(() -> progressCallback.run(1.0f));
@@ -156,14 +168,25 @@ public class HttpGetFileTask extends AsyncTask<String, Void, File> {
 
                 return isCancelled() ? null : file;
             } catch (Exception e) {
-                if (e instanceof ProtocolException) {
-                    // unexpected end of stream, lets try again!
-                    FileLog.d("got unexpected end of stream, lets try to resume");
+                downloadedSize = file != null && file.exists() ? file.length() : 0L;
+                if (!isCancelled() && e instanceof IOException && i < 4) {
+                    FileLog.d("download interrupted at " + downloadedSize + " bytes, retrying with Range");
+                    try {
+                        Thread.sleep(Math.min(2_000L, 350L * (i + 1L)));
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        this.exception = interrupted;
+                        return null;
+                    }
                     continue;
                 }
                 this.exception = e;
                 FileLog.e(e);
                 return null;
+            } finally {
+                if (urlConnection != null) {
+                    urlConnection.disconnect();
+                }
             }
         }
         this.exception = new RuntimeException("too many retries");

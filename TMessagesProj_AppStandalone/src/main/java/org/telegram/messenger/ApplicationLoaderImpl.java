@@ -185,6 +185,9 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
     }
 
     private void showLumaDownloadProgress(Context context, Activity activity) {
+        if (!isActivityUsable(activity)) {
+            return;
+        }
         LumaUpdaterController controller = LumaUpdaterController.getInstance();
         AlertDialog progressDialog = new AlertDialog(context, AlertDialog.ALERT_TYPE_LOADING);
         progressDialog.setMessage(LocaleController.getString(R.string.LumaUpdateDownloading));
@@ -194,7 +197,15 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
         listener[0] = new LumaUpdaterController.DownloadListener() {
             @Override
             public void onProgress(float progress) {
-                progressDialog.setProgress((int) (progress * 100));
+                if (!isActivityUsable(activity)) {
+                    controller.removeDownloadListener(this);
+                    return;
+                }
+                try {
+                    progressDialog.setProgress((int) (progress * 100));
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
             }
 
             @Override
@@ -204,14 +215,20 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
                     progressDialog.dismiss();
                 } catch (Exception ignore) {
                 }
-                if (file != null) {
+                if (!isActivityUsable(activity)) {
+                    return;
+                } else if (file != null) {
                     controller.install(activity);
                 } else if (!cancelled[0] && !TextUtils.isEmpty(error)) {
-                    new AlertDialog.Builder(context)
-                            .setTitle(LocaleController.getString(R.string.LumaUpdatesTitle))
-                            .setMessage(error)
-                            .setPositiveButton(LocaleController.getString(R.string.OK), null)
-                            .show();
+                    try {
+                        new AlertDialog.Builder(activity)
+                                .setTitle(LocaleController.getString(R.string.LumaUpdatesTitle))
+                                .setMessage(error)
+                                .setPositiveButton(LocaleController.getString(R.string.OK), null)
+                                .show();
+                    } catch (Exception e) {
+                        FileLog.e(e);
+                    }
                 }
             }
         };
@@ -222,6 +239,10 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
         progressDialog.setOnDismissListener(dialog -> controller.removeDownloadListener(listener[0]));
         progressDialog.show();
         controller.downloadUpdate(listener[0]);
+    }
+
+    private static boolean isActivityUsable(Activity activity) {
+        return activity != null && !activity.isFinishing() && (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR1 || !activity.isDestroyed());
     }
 
     @Override
