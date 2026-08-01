@@ -724,16 +724,29 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(target), StandardCharsets.UTF_8))) {
             writer.write("<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
             writer.write("<title>" + html(safeTitle()) + "</title><style>");
-            writer.write("body{margin:0;background:#0b0d12;color:#eef2ff;font:15px system-ui,-apple-system,sans-serif}.wrap{max-width:860px;margin:auto;padding:24px 14px 60px}h1{font-size:24px}.meta{color:#8d96aa;margin-bottom:24px}.m{max-width:78%;padding:10px 12px;margin:7px 0;border-radius:17px;background:#202532;box-shadow:0 5px 18px #0005}.m.out{margin-left:auto;background:#5943a7}.from{font-weight:700;color:#9dc6ff}.date{font-size:12px;color:#aeb6c8;margin-left:8px}.text{white-space:pre-wrap;word-break:break-word;margin-top:4px}.media{display:inline-block;margin-top:7px;color:#9ed2ff}img.preview{display:block;max-width:100%;max-height:480px;border-radius:12px;margin-top:8px}@media(max-width:600px){.m{max-width:90%}}</style></head><body><div class=\"wrap\">");
-            writer.write("<h1>" + html(safeTitle()) + "</h1><div class=\"meta\">LumaGram · " + html(formatDate((int) (System.currentTimeMillis() / 1000L))) + "</div>");
+            writer.write(LumaExportHtmlTheme.css());
+            writer.write("</style></head><body><div class=\"page_wrap\"><div class=\"page_header\"><div class=\"content\"><div class=\"text bold\">" + html(safeTitle()) + "</div></div></div><div class=\"page_body chat_page\"><div class=\"history\">");
+            String previousSender = null;
+            long previousDate = 0;
             for (int i = pageFiles.size() - 1; i >= 0; i--) {
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(pageFiles.get(i)), StandardCharsets.UTF_8))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
                         ensureNotCancelled();
                         JSONObject item = new JSONObject(line);
-                        writer.write("<article class=\"m" + (item.optBoolean("out") ? " out" : "") + "\">");
-                        writer.write("<div><span class=\"from\">" + html(item.optString("from")) + "</span><span class=\"date\">" + html(item.optString("date")) + "</span></div>");
+                        String sender = item.optString("from");
+                        long unixDate = item.optLong("date_unixtime", 0);
+                        boolean wrap = previousSender == null || !previousSender.equals(sender)
+                                || unixDate <= 0 || Math.abs(unixDate - previousDate) > 15 * 60;
+                        int color = (sender.hashCode() & 0x7fffffff) % 8 + 1;
+                        writer.write("<div class=\"message default clearfix" + (wrap ? "" : " joined") + "\">");
+                        if (wrap) {
+                            writer.write("<div class=\"pull_left userpic_wrap\"><div class=\"userpic userpic" + color + "\"><div class=\"initials\">" + html(exportInitial(sender)) + "</div></div></div>");
+                        }
+                        String fullDate = unixDate > 0 ? formatExportDateTime(unixDate) : item.optString("date");
+                        String shortDate = unixDate > 0 ? formatExportTime(unixDate) : item.optString("date");
+                        writer.write("<div class=\"body\"><div class=\"pull_right date details\" title=\"" + htmlAttribute(fullDate) + "\">" + html(shortDate) + "</div>");
+                        if (wrap) writer.write("<div class=\"from_name\">" + html(sender) + "</div>");
                         String text = item.optString("text");
                         if (!TextUtils.isEmpty(text)) {
                             writer.write("<div class=\"text\">" + html(text) + "</div>");
@@ -742,16 +755,18 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
                         if (!TextUtils.isEmpty(media)) {
                             String label = item.optString("media_original_name", media);
                             if (item.optString("mime_type").startsWith("image/")) {
-                                writer.write("<a href=\"" + htmlAttribute(media) + "\"><img class=\"preview\" loading=\"lazy\" src=\"" + htmlAttribute(media) + "\" alt=\"" + htmlAttribute(label) + "\"></a>");
+                                writer.write("<a class=\"media_wrap\" href=\"" + htmlAttribute(media) + "\"><img class=\"photo\" loading=\"lazy\" src=\"" + htmlAttribute(media) + "\" alt=\"" + htmlAttribute(label) + "\"></a>");
                             } else {
-                                writer.write("<a class=\"media\" href=\"" + htmlAttribute(media) + "\">?? " + html(label) + "</a>");
+                                writer.write("<a class=\"media clearfix\" href=\"" + htmlAttribute(media) + "\"><span class=\"fill\">↓</span><span class=\"body\"><span class=\"title bold\">" + html(label) + "</span><span class=\"status details\">" + html(item.optString("mime_type")) + "</span></span></a>");
                             }
                         }
-                        writer.write("</article>");
+                        writer.write("</div></div>");
+                        previousSender = sender;
+                        previousDate = unixDate;
                     }
                 }
             }
-            writer.write("</div></body></html>");
+            writer.write("</div></div></div></body></html>");
         }
     }
 
@@ -893,6 +908,24 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
 
     private String safeTitle() {
         return TextUtils.isEmpty(options.title) ? localized("Чат", "Chat") : options.title;
+    }
+
+    private static String exportInitial(String value) {
+        if (TextUtils.isEmpty(value)) return "?";
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) return "?";
+        int codePoint = trimmed.codePointAt(0);
+        return new String(Character.toChars(codePoint)).toUpperCase(Locale.getDefault());
+    }
+
+    private static String formatExportTime(long unixSeconds) {
+        return new SimpleDateFormat("HH:mm", Locale.getDefault())
+                .format(new Date(unixSeconds * 1000L));
+    }
+
+    private static String formatExportDateTime(long unixSeconds) {
+        return new SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
+                .format(new Date(unixSeconds * 1000L));
     }
 
     private static String formatDate(int unixSeconds) {

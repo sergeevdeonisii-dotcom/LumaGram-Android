@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.40",
-  "version_code": 71109,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.40/Luma-Telegram-12.9-Liquid40-Signed-arm64.apk",
-  "sha256": "bfc4042943d804b4bd21d3b3da883b125e2efb6e362e304c4f57fe939f138987",
-  "changelog": "В экспериментальные функции добавлен полный экспорт аккаунта. Можно выбрать личные чаты, ботов, группы, каналы, основной список, архив и пользовательские папки, а также отдельно фотографии, видео и файлы. Итоговый ZIP содержит красивый index.html со списком чатов, поиском, открываемыми переписками и сохранёнными медиафайлами."
+  "version": "12.9.0-luma.43",
+  "version_code": 71229,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.43/Luma-Telegram-12.9-Liquid43-Signed-arm64.apk",
+  "sha256": "bfa347560519717cc824f68c71f6146007e8e580d1466adcccac237fa38e16d8",
+  "changelog": "Исправлен полный экспорт аккаунта: список чатов теперь загружается напрямую с серверов Telegram страницами по 100 и больше не ограничивается пятью чатами из кэша. HTML использует официальный стиль экспортера Telegram Desktop, включая его размеры, цвета, список чатов, группировку сообщений и светлую/тёмную тему. Исправлено открытие переписок и медиа из Android content://."
 }

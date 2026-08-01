@@ -6,10 +6,12 @@ import android.view.View;
 import android.widget.FrameLayout;
 
 import org.telegram.messenger.AccountInstance;
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LumaAccountExportManager;
+import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
@@ -36,6 +38,8 @@ import java.util.Locale;
 /** Selection and progress UI for the experimental full-account HTML export. */
 public class LumaAccountExportActivity extends BaseFragment {
 
+    private static final int DIALOG_PAGE_SIZE = 100;
+
     private static final int ROW_PRIVATE = 1;
     private static final int ROW_BOTS = 2;
     private static final int ROW_GROUPS = 3;
@@ -61,6 +65,18 @@ public class LumaAccountExportActivity extends BaseFragment {
     private boolean files = true;
     private UniversalRecyclerView listView;
     private LumaAccountExportManager manager;
+    private AlertDialog dialogScan;
+    private boolean dialogScanCancelled;
+    private long dialogScanDeadline;
+    private final ArrayList<TLRPC.Dialog> scannedDialogs = new ArrayList<>();
+    private final ArrayList<Integer> dialogScanFolders = new ArrayList<>();
+    private final HashSet<Long> scannedDialogIds = new HashSet<>();
+    private int dialogScanFolderIndex;
+    private int dialogScanRequestId;
+    private int dialogScanOffsetId;
+    private int dialogScanOffsetDate;
+    private TLRPC.InputPeer dialogScanOffsetPeer;
+    private int dialogScanFolderLoaded;
 
     @Override
     public View createView(Context context) {
@@ -82,6 +98,9 @@ public class LumaAccountExportActivity extends BaseFragment {
         content.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT,
                 LayoutHelper.MATCH_PARENT, Gravity.FILL));
         actionBar.setAdaptiveBackground(listView);
+        getMessagesController().loadRemoteFilters(false, success -> AndroidUtilities.runOnUIThread(() -> {
+            if (listView != null && listView.adapter != null) listView.adapter.update(false);
+        }));
         return fragmentView = content;
     }
 
@@ -117,8 +136,8 @@ public class LumaAccountExportActivity extends BaseFragment {
 
         items.add(UItem.asButton(ROW_START, tr("Создать HTML-экспорт", "Create HTML export")).accent());
         items.add(UItem.asShadow(tr(
-                "В ZIP появится index.html: слева список чатов, справа — вся переписка с поиском и открываемыми медиафайлами.",
-                "The ZIP contains index.html with a chat list, full conversations, search and openable media.")));
+                "В ZIP появится index.html в стиле экспорта Telegram Desktop: список чатов, полные переписки, поиск и открываемые медиафайлы.",
+                "The ZIP contains a Telegram Desktop-style index.html with chats, full conversations, search and openable media.")));
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {
@@ -173,6 +192,146 @@ public class LumaAccountExportActivity extends BaseFragment {
             bulletin(tr("Выберите хотя бы одну папку", "Select at least one folder"));
             return;
         }
+        beginDialogScan();
+    }
+
+    private void beginDialogScan() {
+        if (getParentActivity() == null) return;
+        dialogScanCancelled = false;
+        dialogScanDeadline = System.currentTimeMillis() + 5L * 60L * 1000L;
+        scannedDialogs.clear();
+        scannedDialogIds.clear();
+        dialogScanFolders.clear();
+        if (mainFolder || !selectedFilters.isEmpty()) dialogScanFolders.add(0);
+        if (archiveFolder || !selectedFilters.isEmpty()) dialogScanFolders.add(1);
+        dialogScanFolderIndex = 0;
+        dialogScanRequestId = 0;
+        resetDialogScanOffset();
+        dialogScan = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_LOADING, resourceProvider);
+        dialogScan.setMessage(tr("Загрузка полного списка чатов…", "Loading the complete chat list..."));
+        dialogScan.setCancelable(true);
+        dialogScan.setCancelDialog(true);
+        dialogScan.setOnCancelListener(dialog -> {
+            dialogScanCancelled = true;
+            if (dialogScanRequestId != 0) {
+                getConnectionsManager().cancelRequest(dialogScanRequestId, true);
+                dialogScanRequestId = 0;
+            }
+        });
+        dialogScan.show();
+        continueDialogScan();
+    }
+
+    private void continueDialogScan() {
+        if (dialogScanCancelled || dialogScan == null || !dialogScan.isShowing()) return;
+        if (dialogScanFolderIndex >= dialogScanFolders.size()) {
+            dismiss(dialogScan);
+            dialogScan = null;
+            finishSelection();
+            return;
+        }
+        if (System.currentTimeMillis() >= dialogScanDeadline) {
+            if (dialogScanRequestId != 0) {
+                getConnectionsManager().cancelRequest(dialogScanRequestId, true);
+                dialogScanRequestId = 0;
+            }
+            dismiss(dialogScan);
+            dialogScan = null;
+            showError(tr(
+                    "Не удалось получить полный список чатов. Проверьте интернет и попробуйте снова.",
+                    "Could not load the complete chat list. Check your connection and try again."));
+            return;
+        }
+        dialogScan.setMessage(tr("Загрузка полного списка чатов… Найдено: ",
+                "Loading the complete chat list... Found: ") + scannedDialogs.size());
+        if (dialogScanRequestId == 0) requestDialogPage();
+        AndroidUtilities.runOnUIThread(this::continueDialogScan, 500);
+    }
+
+    private void requestDialogPage() {
+        if (dialogScanFolderIndex >= dialogScanFolders.size()) return;
+        int folderId = dialogScanFolders.get(dialogScanFolderIndex);
+        TLRPC.TL_messages_getDialogs request = new TLRPC.TL_messages_getDialogs();
+        request.limit = DIALOG_PAGE_SIZE;
+        request.exclude_pinned = dialogScanOffsetId != 0;
+        request.offset_id = dialogScanOffsetId;
+        request.offset_date = dialogScanOffsetDate;
+        request.offset_peer = dialogScanOffsetPeer == null
+                ? new TLRPC.TL_inputPeerEmpty() : dialogScanOffsetPeer;
+        if (folderId != 0) {
+            request.flags |= 2;
+            request.folder_id = folderId;
+        }
+        dialogScanRequestId = getConnectionsManager().sendRequest(request, (response, error) ->
+                AndroidUtilities.runOnUIThread(() -> handleDialogPage(response, error)));
+    }
+
+    private void handleDialogPage(org.telegram.tgnet.TLObject response, TLRPC.TL_error error) {
+        dialogScanRequestId = 0;
+        if (dialogScanCancelled || dialogScan == null || !dialogScan.isShowing()) return;
+        if (error != null || !(response instanceof TLRPC.messages_Dialogs)) {
+            dismiss(dialogScan);
+            dialogScan = null;
+            String detail = error == null || error.text == null ? "" : "\n" + error.text;
+            showError(tr("Не удалось загрузить полный список чатов.",
+                    "Could not load the complete chat list.") + detail);
+            return;
+        }
+
+        TLRPC.messages_Dialogs page = (TLRPC.messages_Dialogs) response;
+        MessagesController controller = getMessagesController();
+        controller.putUsers(page.users, false);
+        controller.putChats(page.chats, false);
+        for (TLRPC.Dialog dialog : page.dialogs) {
+            if (dialog != null && scannedDialogIds.add(dialog.id)) {
+                scannedDialogs.add(dialog);
+            }
+        }
+        dialogScanFolderLoaded += page.dialogs.size();
+
+        boolean reachedCount = page.count > 0 && dialogScanFolderLoaded >= page.count;
+        if (page.dialogs.isEmpty() || page.dialogs.size() < DIALOG_PAGE_SIZE || reachedCount) {
+            dialogScanFolderIndex++;
+            resetDialogScanOffset();
+            continueDialogScan();
+            return;
+        }
+
+        TLRPC.Dialog offsetDialog = null;
+        TLRPC.Message offsetMessage = null;
+        for (int i = page.dialogs.size() - 1; i >= 0 && offsetMessage == null; i--) {
+            TLRPC.Dialog candidate = page.dialogs.get(i);
+            if (candidate == null || candidate.pinned || candidate.top_message <= 0) continue;
+            for (TLRPC.Message message : page.messages) {
+                if (message != null && message.id == candidate.top_message
+                        && MessageObject.getPeerId(message.peer_id) == candidate.id) {
+                    offsetDialog = candidate;
+                    offsetMessage = message;
+                    break;
+                }
+            }
+        }
+        if (offsetDialog == null || offsetMessage == null) {
+            dismiss(dialogScan);
+            dialogScan = null;
+            showError(tr("Telegram не вернул смещение для следующей страницы чатов.",
+                    "Telegram did not return an offset for the next dialog page."));
+            return;
+        }
+        dialogScanOffsetId = offsetMessage.id;
+        dialogScanOffsetDate = offsetMessage.date;
+        dialogScanOffsetPeer = controller.getInputPeer(offsetDialog.id);
+        requestDialogPage();
+    }
+
+    private void resetDialogScanOffset() {
+        dialogScanOffsetId = 0;
+        dialogScanOffsetDate = 0;
+        dialogScanOffsetPeer = new TLRPC.TL_inputPeerEmpty();
+        dialogScanFolderLoaded = 0;
+    }
+
+    private void finishSelection() {
         ArrayList<LumaAccountExportManager.ChatSpec> chats = collectChats();
         if (chats.isEmpty()) {
             bulletin(tr("Под выбранные условия не найдено чатов", "No chats match the selected options"));
@@ -191,7 +350,7 @@ public class LumaAccountExportActivity extends BaseFragment {
     private ArrayList<LumaAccountExportManager.ChatSpec> collectChats() {
         ArrayList<LumaAccountExportManager.ChatSpec> result = new ArrayList<>();
         AccountInstance account = AccountInstance.getInstance(currentAccount);
-        for (TLRPC.Dialog dialog : getMessagesController().getAllDialogs()) {
+        for (TLRPC.Dialog dialog : scannedDialogs) {
             if (dialog == null || DialogObject.isFolderDialogId(dialog.id)
                     || DialogObject.isEncryptedDialog(dialog.id)) continue;
             String type;
