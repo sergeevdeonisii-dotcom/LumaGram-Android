@@ -77,6 +77,7 @@ public class LumaAccountExportActivity extends BaseFragment {
     private int dialogScanOffsetDate;
     private TLRPC.InputPeer dialogScanOffsetPeer;
     private int dialogScanFolderLoaded;
+    private boolean dialogScanExcludePinned;
 
     @Override
     public View createView(Context context) {
@@ -136,8 +137,8 @@ public class LumaAccountExportActivity extends BaseFragment {
 
         items.add(UItem.asButton(ROW_START, tr("Создать HTML-экспорт", "Create HTML export")).accent());
         items.add(UItem.asShadow(tr(
-                "В ZIP появится index.html в стиле экспорта Telegram Desktop: список чатов, полные переписки, поиск и открываемые медиафайлы.",
-                "The ZIP contains a Telegram Desktop-style index.html with chats, full conversations, search and openable media.")));
+                "В ZIP появится export_results.html со структурой и оформлением экспорта Telegram Desktop: список чатов, полные переписки и открываемые медиафайлы.",
+                "The ZIP contains export_results.html with the Telegram Desktop export structure and styling: chats, full conversations and openable media.")));
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {
@@ -253,7 +254,7 @@ public class LumaAccountExportActivity extends BaseFragment {
         int folderId = dialogScanFolders.get(dialogScanFolderIndex);
         TLRPC.TL_messages_getDialogs request = new TLRPC.TL_messages_getDialogs();
         request.limit = DIALOG_PAGE_SIZE;
-        request.exclude_pinned = dialogScanOffsetId != 0;
+        request.exclude_pinned = dialogScanExcludePinned;
         request.offset_id = dialogScanOffsetId;
         request.offset_date = dialogScanOffsetDate;
         request.offset_peer = dialogScanOffsetPeer == null
@@ -280,23 +281,40 @@ public class LumaAccountExportActivity extends BaseFragment {
 
         TLRPC.messages_Dialogs page = (TLRPC.messages_Dialogs) response;
         MessagesController controller = getMessagesController();
+        boolean excludedPinnedOnRequest = dialogScanExcludePinned;
+        boolean containsPinned = false;
+        int addedDialogs = 0;
         controller.putUsers(page.users, false);
         controller.putChats(page.chats, false);
         for (TLRPC.Dialog dialog : page.dialogs) {
             // Dialog.id is a client-only field and is not serialized by MTProto. A raw
             // messages.getDialogs response therefore has id == 0 until it is initialized.
             DialogObject.initDialog(dialog);
+            containsPinned |= dialog != null && dialog.pinned;
             if (dialog != null && scannedDialogIds.add(dialog.id)) {
                 scannedDialogs.add(dialog);
+                addedDialogs++;
             }
         }
-        dialogScanFolderLoaded += page.dialogs.size();
+        dialogScanFolderLoaded += addedDialogs;
+        // Some Telegram servers return a short page containing only pinned dialogs first.
+        // All following pages must explicitly exclude those pinned rows.
+        dialogScanExcludePinned = true;
 
         boolean reachedCount = page.count > 0 && dialogScanFolderLoaded >= page.count;
-        if (page.dialogs.isEmpty() || page.dialogs.size() < DIALOG_PAGE_SIZE || reachedCount) {
+        boolean shortPage = page.dialogs.size() < DIALOG_PAGE_SIZE;
+        if (page.dialogs.isEmpty()
+                || (excludedPinnedOnRequest || !containsPinned) && (shortPage || reachedCount)) {
             dialogScanFolderIndex++;
             resetDialogScanOffset();
             continueDialogScan();
+            return;
+        }
+        if (excludedPinnedOnRequest && addedDialogs == 0) {
+            dismiss(dialogScan);
+            dialogScan = null;
+            showError(tr("Telegram повторил ту же страницу чатов. Попробуйте экспорт ещё раз.",
+                    "Telegram repeated the same dialog page. Please retry the export."));
             return;
         }
 
@@ -327,7 +345,51 @@ public class LumaAccountExportActivity extends BaseFragment {
                 offsetMessage = fallbackMessage;
             }
         }
-        if (offsetDialog == null || offsetMessage == null) {
+
+        // A pinned-only first response has no regular-dialog offset. Probe the regular list
+        // from its beginning instead of mistaking the pinned count for the complete account.
+        if ((offsetDialog == null || offsetMessage == null)
+                && !excludedPinnedOnRequest && containsPinned) {
+            dialogScanOffsetId = 0;
+            dialogScanOffsetDate = 0;
+            dialogScanOffsetPeer = new TLRPC.TL_inputPeerEmpty();
+            requestDialogPage();
+            return;
+        }
+
+        TLRPC.InputPeer offsetPeer = offsetDialog == null ? null : controller.getInputPeer(offsetDialog.id);
+        // Deleted/service top messages can be omitted. The oldest dated response message is
+        // still a valid MTProto pagination tuple.
+        if (offsetMessage == null || offsetPeer instanceof TLRPC.TL_inputPeerEmpty) {
+            offsetMessage = null;
+            offsetPeer = null;
+            for (TLRPC.Message message : page.messages) {
+                if (message == null || message.id <= 0 || message.date <= 0) continue;
+                TLRPC.InputPeer peer = controller.getInputPeer(MessageObject.getDialogId(message));
+                if (peer instanceof TLRPC.TL_inputPeerEmpty) continue;
+                if (offsetMessage == null || message.date < offsetMessage.date) {
+                    offsetMessage = message;
+                    offsetPeer = peer;
+                }
+            }
+        }
+
+        // Last resort for a dialog whose top message is not present in page.messages.
+        if (offsetMessage == null || offsetPeer == null) {
+            for (int i = page.dialogs.size() - 1; i >= 0; i--) {
+                TLRPC.Dialog candidate = page.dialogs.get(i);
+                if (candidate == null || candidate.pinned || candidate.top_message <= 0) continue;
+                TLRPC.InputPeer peer = controller.getInputPeer(candidate.id);
+                if (peer instanceof TLRPC.TL_inputPeerEmpty) continue;
+                dialogScanOffsetId = candidate.top_message;
+                dialogScanOffsetDate = Math.max(0, candidate.last_message_date);
+                dialogScanOffsetPeer = peer;
+                requestDialogPage();
+                return;
+            }
+        }
+
+        if (offsetMessage == null || offsetPeer == null) {
             dismiss(dialogScan);
             dialogScan = null;
             showError(tr("Telegram не вернул смещение для следующей страницы чатов.",
@@ -336,7 +398,7 @@ public class LumaAccountExportActivity extends BaseFragment {
         }
         dialogScanOffsetId = offsetMessage.id;
         dialogScanOffsetDate = offsetMessage.date;
-        dialogScanOffsetPeer = controller.getInputPeer(offsetDialog.id);
+        dialogScanOffsetPeer = offsetPeer;
         requestDialogPage();
     }
 
@@ -345,6 +407,7 @@ public class LumaAccountExportActivity extends BaseFragment {
         dialogScanOffsetDate = 0;
         dialogScanOffsetPeer = new TLRPC.TL_inputPeerEmpty();
         dialogScanFolderLoaded = 0;
+        dialogScanExcludePinned = false;
     }
 
     private void finishSelection() {
@@ -489,8 +552,8 @@ public class LumaAccountExportActivity extends BaseFragment {
         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), resourceProvider);
         builder.setTitle(tr("Экспорт готов", "Export ready"));
         builder.setMessage(tr(
-                "ZIP сохранён в «Загрузки/Telegram». Распакуйте его и откройте index.html.\n\nЧатов: " + chats + "\nПропущено: " + skipped + "\nСообщений: " + messages + "\nМедиафайлов: " + media,
-                "The ZIP was saved to Downloads/Telegram. Extract it and open index.html.\n\nChats: " + chats + "\nSkipped: " + skipped + "\nMessages: " + messages + "\nMedia files: " + media));
+                "ZIP сохранён в «Загрузки/Telegram». Распакуйте его и откройте export_results.html.\n\nЧатов: " + chats + "\nПропущено: " + skipped + "\nСообщений: " + messages + "\nМедиафайлов: " + media,
+                "The ZIP was saved to Downloads/Telegram. Extract it and open export_results.html.\n\nChats: " + chats + "\nSkipped: " + skipped + "\nMessages: " + messages + "\nMedia files: " + media));
         builder.setPositiveButton("OK", null);
         showDialog(builder.create());
     }

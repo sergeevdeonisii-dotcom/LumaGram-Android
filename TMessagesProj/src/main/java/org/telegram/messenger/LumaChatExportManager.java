@@ -82,6 +82,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         public long maxMediaBytes = 50L * 1024L * 1024L;
         public boolean secretChat;
         public boolean protectedContent;
+        public boolean desktopAccountLayout;
 
         public Options(int account, long dialogId, String title) {
             this.account = account;
@@ -646,6 +647,10 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
             File html = new File(sessionDir, "messages.html");
             buildJson(json);
             ensureNotCancelled();
+            if (!options.desktopAccountLayout) {
+                LumaExportHtmlTheme.writeAssets(sessionDir);
+                ensureNotCancelled();
+            }
             buildHtml(html);
             ensureNotCancelled();
             String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(new Date());
@@ -656,6 +661,11 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
                 ensureNotCancelled();
                 addToZip(zip, html, "messages.html");
                 ensureNotCancelled();
+                if (!options.desktopAccountLayout) {
+                    addDirectoryToZip(zip, new File(sessionDir, "css"), "css/");
+                    addDirectoryToZip(zip, new File(sessionDir, "js"), "js/");
+                    addDirectoryToZip(zip, new File(sessionDir, "images"), "images/");
+                }
                 File[] mediaFiles = mediaDir.listFiles();
                 if (mediaFiles != null) {
                     for (File media : mediaFiles) {
@@ -727,10 +737,20 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
 
     private void buildHtml(File target) throws Exception {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(target), StandardCharsets.UTF_8))) {
-            writer.write("<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
-            writer.write("<title>" + html(safeTitle()) + "</title><style>");
-            writer.write(LumaExportHtmlTheme.css());
-            writer.write("</style></head><body><div class=\"page_wrap\"><div class=\"page_header\"><div class=\"content\"><div class=\"text bold\">" + html(safeTitle()) + "</div></div></div><div class=\"page_body chat_page\"><div class=\"history\">");
+            String assetPrefix = options.desktopAccountLayout ? "../../" : "";
+            writer.write("<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>" + html(safeTitle()) + "</title>");
+            writer.write("<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\"/>");
+            writer.write("<link href=\"" + assetPrefix + "css/style.css\" rel=\"stylesheet\"/>");
+            writer.write("<script src=\"" + assetPrefix + "js/script.js\" type=\"text/javascript\"></script></head>");
+            writer.write("<body onload=\"CheckLocation();\"><div class=\"page_wrap\"><div class=\"page_header\">");
+            if (options.desktopAccountLayout) {
+                writer.write("<a class=\"content block_link\" href=\"../../lists/chats.html\" onclick=\"return GoBack(this)\">");
+            } else {
+                writer.write("<div class=\"content\">");
+            }
+            writer.write("<div class=\"text bold\">" + html(safeTitle()) + "</div>");
+            writer.write(options.desktopAccountLayout ? "</a>" : "</div>");
+            writer.write("</div><div class=\"page_body chat_page\"><div class=\"history\">");
             String previousSender = null;
             long previousDate = 0;
             for (int i = pageFiles.size() - 1; i >= 0; i--) {
@@ -744,9 +764,11 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
                         boolean wrap = previousSender == null || !previousSender.equals(sender)
                                 || unixDate <= 0 || Math.abs(unixDate - previousDate) > 15 * 60;
                         int color = (sender.hashCode() & 0x7fffffff) % 8 + 1;
-                        writer.write("<div class=\"message default clearfix" + (wrap ? "" : " joined") + "\">");
+                        long messageId = item.optLong("id", 0);
+                        writer.write("<div class=\"message default clearfix" + (wrap ? "" : " joined") + "\""
+                                + (messageId != 0 ? " id=\"message" + messageId + "\"" : "") + ">");
                         if (wrap) {
-                            writer.write("<div class=\"pull_left userpic_wrap\"><div class=\"userpic userpic" + color + "\"><div class=\"initials\">" + html(exportInitial(sender)) + "</div></div></div>");
+                            writer.write("<div class=\"pull_left userpic_wrap\"><div class=\"userpic userpic" + color + "\" style=\"width: 42px; height: 42px\"><div class=\"initials\" style=\"line-height: 42px\">" + html(exportInitial(sender)) + "</div></div></div>");
                         }
                         String fullDate = unixDate > 0 ? formatExportDateTime(unixDate) : item.optString("date");
                         String shortDate = unixDate > 0 ? formatExportTime(unixDate) : item.optString("date");
@@ -786,6 +808,19 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
             }
         }
         zip.closeEntry();
+    }
+
+    private void addDirectoryToZip(ZipOutputStream zip, File directory, String prefix) throws Exception {
+        File[] files = directory.listFiles();
+        if (files == null) return;
+        for (File file : files) {
+            ensureNotCancelled();
+            if (file.isDirectory()) {
+                addDirectoryToZip(zip, file, prefix + file.getName() + "/");
+            } else {
+                addToZip(zip, file, prefix + file.getName());
+            }
+        }
     }
 
     private void copyFile(File source, File destination) throws Exception {
