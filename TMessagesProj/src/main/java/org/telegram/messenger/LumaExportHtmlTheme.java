@@ -18,6 +18,8 @@ final class LumaExportHtmlTheme {
 
     private static final int IMAGE_MAP_COUNT = 7;
     private static volatile String cachedCss;
+    private static volatile String cachedInlineCss;
+    private static volatile String cachedScript;
 
     private LumaExportHtmlTheme() {
     }
@@ -35,6 +37,50 @@ final class LumaExportHtmlTheme {
         return result;
     }
 
+    /**
+     * CSS variant for documents opened through Android's content:// provider.
+     * Chrome cannot resolve sibling files from those URLs, so the small UI
+     * images used by Telegram Desktop are embedded as data URIs.
+     */
+    static String inlineCss() {
+        String result = cachedInlineCss;
+        if (result != null) return result;
+        synchronized (LumaExportHtmlTheme.class) {
+            result = cachedInlineCss;
+            if (result != null) return result;
+            try {
+                result = css();
+                for (int index = 0; index < IMAGE_MAP_COUNT; index++) {
+                    JSONObject images = new JSONObject(readTextAsset("luma_export/images_" + index + ".json"));
+                    Iterator<String> names = images.keys();
+                    while (names.hasNext()) {
+                        String name = names.next();
+                        result = result.replace("../images/" + name,
+                                "data:image/png;base64," + images.getString(name));
+                    }
+                }
+            } catch (Throwable error) {
+                FileLog.e(error);
+                result = css();
+            }
+            cachedInlineCss = result;
+            return result;
+        }
+    }
+
+    static String script() {
+        String result = cachedScript;
+        if (result != null) return result;
+        try {
+            result = readTextAsset("luma_export/script.js");
+        } catch (Throwable error) {
+            FileLog.e(error);
+            result = "function CheckLocation(){}function GoBack(){return true;}";
+        }
+        cachedScript = result;
+        return result;
+    }
+
     static void writeAssets(File exportRoot) throws Exception {
         File cssDir = new File(exportRoot, "css");
         File jsDir = new File(exportRoot, "js");
@@ -44,7 +90,7 @@ final class LumaExportHtmlTheme {
         ensureDirectory(imagesDir);
 
         writeBytes(new File(cssDir, "style.css"), css().getBytes(StandardCharsets.UTF_8));
-        writeBytes(new File(jsDir, "script.js"), readTextAsset("luma_export/script.js").getBytes(StandardCharsets.UTF_8));
+        writeBytes(new File(jsDir, "script.js"), script().getBytes(StandardCharsets.UTF_8));
 
         String imagesRoot = imagesDir.getCanonicalPath() + File.separator;
         for (int index = 0; index < IMAGE_MAP_COUNT; index++) {
