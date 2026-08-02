@@ -737,14 +737,16 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
 
     private void buildHtml(File target) throws Exception {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(target), StandardCharsets.UTF_8))) {
-            String assetPrefix = options.desktopAccountLayout ? "../../" : "";
             writer.write("<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>" + html(safeTitle()) + "</title>");
             writer.write("<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\"/>");
-            writer.write("<link href=\"" + assetPrefix + "css/style.css\" rel=\"stylesheet\"/>");
-            writer.write("<script src=\"" + assetPrefix + "js/script.js\" type=\"text/javascript\"></script></head>");
+            writer.write("<style>");
+            writer.write(LumaExportHtmlTheme.inlineCss());
+            writer.write("@media(max-width:520px){.page_header .content,.page_body{width:100%;box-sizing:border-box}}</style><script>");
+            writer.write(LumaExportHtmlTheme.script());
+            writer.write("</script></head>");
             writer.write("<body onload=\"CheckLocation();\"><div class=\"page_wrap\"><div class=\"page_header\">");
             if (options.desktopAccountLayout) {
-                writer.write("<a class=\"content block_link\" href=\"../../lists/chats.html\" onclick=\"return GoBack(this)\">");
+                writer.write("<a class=\"content block_link\" href=\"../../lists/chats.html\" onclick=\"if(parent!==window&&parent.LumaExportBack)return parent.LumaExportBack();return GoBack(this)\">");
             } else {
                 writer.write("<div class=\"content\">");
             }

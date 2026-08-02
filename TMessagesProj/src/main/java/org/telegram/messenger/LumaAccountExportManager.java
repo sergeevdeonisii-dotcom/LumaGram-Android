@@ -9,10 +9,12 @@ import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -235,8 +237,8 @@ public final class LumaAccountExportManager {
             if (!listsDir.exists() && !listsDir.mkdirs()) {
                 throw new IllegalStateException("Could not create lists directory");
             }
-            writeIndex(new File(sessionDir, "export_results.html"));
             writeChatsList(new File(listsDir, "chats.html"));
+            writeIndex(new File(sessionDir, "export_results.html"));
             writeManifest(new File(sessionDir, "account.json"));
             String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(new Date());
             activeArchive = uniqueFile(outputDir, "LumaGram_Account_" + timestamp + ".zip");
@@ -260,7 +262,7 @@ public final class LumaAccountExportManager {
 
     private void writeIndex(File target) throws Exception {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(target), StandardCharsets.UTF_8))) {
-            writeDocumentHead(writer, localized("Экспортированные данные", "Exported Data"), "");
+            writeDocumentHead(writer, localized("Экспортированные данные", "Exported Data"));
             String accountName = TextUtils.isEmpty(config.accountName) ? "LumaGram" : config.accountName;
             int color = (accountName.hashCode() & 0x7fffffff) % 8 + 1;
             writer.write("<body onload=\"CheckLocation();\"><div class=\"page_wrap\">");
@@ -273,20 +275,38 @@ public final class LumaAccountExportManager {
             writer.write("<div class=\"rows names\"><div class=\"row\"><div class=\"label details\">"
                     + html(localized("Имя", "Name")) + "</div><div class=\"value bold\">" + html(accountName)
                     + "</div></div></div></div>");
-            writer.write("<div class=\"sections with_divider\"><a class=\"section block_link chats\" href=\"lists/chats.html#allow_back\">"
+            writer.write("<div class=\"sections with_divider\"><a class=\"section block_link chats\" href=\"lists/chats.html#allow_back\" onclick=\"return LumaExportOpen('lists/chats')\">"
                     + "<div class=\"counter details\">" + exported.size() + "</div><div class=\"label bold\">"
                     + html(localized("Чаты", "Chats")) + "</div></a></div>");
             writer.write("<div class=\"page_about details with_divider\">"
                     + html(localized("Здесь находятся данные, экспортированные из LumaGram.",
-                    "Here are the data exported from LumaGram.")) + "</div></div></div></body></html>");
+                    "Here are the data exported from LumaGram.")) + "</div></div></div>");
+            writer.write("<iframe id=\"luma_export_view\" title=\"" + html(localized("Просмотр экспорта", "Export viewer"))
+                    + "\" hidden></iframe><script>(function(){const pages={");
+            writer.write(JSONObject.quote("lists/chats"));
+            writer.write(':');
+            writeEmbeddedHtml(writer, new File(new File(sessionDir, "lists"), "chats.html"), "lists/");
+            for (ExportedChat chat : exported) {
+                checkCancelled();
+                writer.write(',');
+                writer.write(JSONObject.quote(chat.directory));
+                writer.write(':');
+                writeEmbeddedHtml(writer, new File(new File(chatsDir, chat.directory), "messages.html"),
+                        "chats/" + chat.directory + "/");
+            }
+            writer.write("};const view=document.getElementById('luma_export_view'),stack=[];"
+                    + "function show(key){const page=pages[key];if(!page)return true;view.srcdoc=page;view.hidden=false;return false;}"
+                    + "window.LumaExportOpen=function(key){if(!pages[key])return true;if(stack[stack.length-1]!==key)stack.push(key);return show(key);};"
+                    + "window.LumaExportBack=function(){stack.pop();if(stack.length)return show(stack[stack.length-1]);view.hidden=true;view.srcdoc='';return false;};"
+                    + "})();</script></body></html>");
         }
     }
 
     private void writeChatsList(File target) throws Exception {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(target), StandardCharsets.UTF_8))) {
-            writeDocumentHead(writer, localized("Чаты", "Chats"), "../");
+            writeDocumentHead(writer, localized("Чаты", "Chats"));
             writer.write("<body onload=\"CheckLocation();\"><div class=\"page_wrap\"><div class=\"page_header\">"
-                    + "<a class=\"content block_link\" href=\"../export_results.html\" onclick=\"return GoBack(this)\">"
+                    + "<a class=\"content block_link\" href=\"../export_results.html\" onclick=\"if(parent!==window&&parent.LumaExportBack)return parent.LumaExportBack();return GoBack(this)\">"
                     + "<div class=\"text bold\">" + html(localized("Чаты", "Chats")) + "</div></a></div>");
             writer.write("<div class=\"page_body list_page\"><div class=\"page_about details\">"
                     + html(localized("В этом списке показаны экспортированные чаты.",
@@ -296,7 +316,8 @@ public final class LumaAccountExportManager {
                 String title = TextUtils.isEmpty(chat.spec.title) ? localized("Без названия", "Untitled") : chat.spec.title;
                 int color = (title.hashCode() & 0x7fffffff) % 8 + 1;
                 writer.write("<a class=\"entry block_link clearfix\" href=\"../chats/" + chat.directory
-                        + "/messages.html#allow_back\"><div class=\"pull_left userpic_wrap\"><div class=\"userpic userpic"
+                        + "/messages.html#allow_back\" onclick=\"if(parent!==window&&parent.LumaExportOpen)return parent.LumaExportOpen('"
+                        + chat.directory + "')\"><div class=\"pull_left userpic_wrap\"><div class=\"userpic userpic"
                         + color + "\" style=\"width: 48px; height: 48px\"><div class=\"initials\" style=\"line-height: 48px\">"
                         + html(initial(title)) + "</div></div></div><div class=\"body\"><div class=\"pull_right info details\">"
                         + chat.messages + "</div><div class=\"name bold\">" + html(title)
@@ -306,11 +327,74 @@ public final class LumaAccountExportManager {
         }
     }
 
-    private static void writeDocumentHead(BufferedWriter writer, String title, String prefix) throws Exception {
+    private static void writeDocumentHead(BufferedWriter writer, String title) throws Exception {
         writer.write("<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>" + html(title) + "</title>"
                 + "<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\"/>"
-                + "<link href=\"" + prefix + "css/style.css\" rel=\"stylesheet\"/>"
-                + "<script src=\"" + prefix + "js/script.js\" type=\"text/javascript\"></script></head>");
+                + "<style>");
+        writer.write(LumaExportHtmlTheme.inlineCss());
+        writer.write("#luma_export_view{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#fff}"
+                + "@media(max-width:520px){.page_header .content,.page_body{width:100%;box-sizing:border-box}}"
+                + "@media(prefers-color-scheme:dark){#luma_export_view{background:#1a2026}}</style><script>");
+        writer.write(LumaExportHtmlTheme.script());
+        writer.write("</script></head>");
+    }
+
+    private void writeEmbeddedHtml(BufferedWriter writer, File source, String basePath) throws Exception {
+        final String prefix = "<!DOCTYPE html><html><head>";
+        writer.write('"');
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                new FileInputStream(source), StandardCharsets.UTF_8), 64 * 1024)) {
+            char[] initial = new char[prefix.length()];
+            int initialRead = 0;
+            while (initialRead < initial.length) {
+                int read = reader.read(initial, initialRead, initial.length - initialRead);
+                if (read < 0) break;
+                initialRead += read;
+            }
+            String beginning = new String(initial, 0, initialRead);
+            if (prefix.equals(beginning)) {
+                writeJsonText(writer, prefix + "<base href=\"" + basePath + "\">");
+            } else {
+                writeJsonText(writer, beginning);
+            }
+            char[] buffer = new char[64 * 1024];
+            int read;
+            while ((read = reader.read(buffer)) != -1) {
+                checkCancelled();
+                writeJsonText(writer, buffer, read);
+            }
+        }
+        writer.write('"');
+    }
+
+    private static void writeJsonText(BufferedWriter writer, String value) throws Exception {
+        writeJsonText(writer, value.toCharArray(), value.length());
+    }
+
+    private static void writeJsonText(BufferedWriter writer, char[] value, int length) throws Exception {
+        final char[] hex = "0123456789abcdef".toCharArray();
+        for (int i = 0; i < length; i++) {
+            char c = value[i];
+            switch (c) {
+                case '"': writer.write("\\\""); break;
+                case '\\': writer.write("\\\\"); break;
+                case '\b': writer.write("\\b"); break;
+                case '\f': writer.write("\\f"); break;
+                case '\n': writer.write("\\n"); break;
+                case '\r': writer.write("\\r"); break;
+                case '\t': writer.write("\\t"); break;
+                default:
+                    if (c < 0x20 || c == '<' || c == '>' || c == '&' || c == 0x2028 || c == 0x2029) {
+                        writer.write("\\u");
+                        writer.write(hex[(c >> 12) & 15]);
+                        writer.write(hex[(c >> 8) & 15]);
+                        writer.write(hex[(c >> 4) & 15]);
+                        writer.write(hex[c & 15]);
+                    } else {
+                        writer.write(c);
+                    }
+            }
+        }
     }
 
     private void writeManifest(File target) throws Exception {
