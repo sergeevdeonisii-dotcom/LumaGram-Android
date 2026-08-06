@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.46",
-  "version_code": 71259,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.46/Luma-Telegram-12.9-Liquid46-Signed-arm64.apk",
-  "sha256": "8d6ece499ccd3f1b80abb06202adabaa0a3c4000d14a03d558ae691daad92f68",
-  "changelog": "Исправлено открытие экспорта аккаунта на Android: оформление Telegram Desktop, скрипты и графические элементы теперь встроены прямо в HTML и не блокируются при открытии через content://. Главный файл содержит автономную навигацию по списку и экспортированным чатам, а ширина страниц адаптирована под экран телефона."
+    "version":  "12.9.0-luma.47",
+    "version_code":  71269,
+    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.47/Luma-Telegram-12.9-Liquid47-Signed-arm64.apk",
+    "sha256":  "616358385dec1e2fa6e50d55948c3a25a9ba3932333e5b3b2c7eb79146cfd893",
+    "changelog":  "Исправлено позиционирование надписи «Сообщение» в поле ввода при кнопке «Открыть» в режиме Liquid Glass. Переход остаётся плавным, обычный интерфейс Telegram не изменён."
 }
