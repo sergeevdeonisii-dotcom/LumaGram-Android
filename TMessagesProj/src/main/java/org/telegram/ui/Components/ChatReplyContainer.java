@@ -99,6 +99,12 @@ public class ChatReplyContainer extends FrameLayout {
         }
     }
 
+    public void setLiquidGlassMode(boolean enabled) {
+        for (Layout layout : layouts) {
+            layout.setLiquidGlassMode(enabled);
+        }
+    }
+
     public class Layout extends FrameLayout implements Theme.Colorable {
 
         private final Theme.ResourcesProvider resourcesProvider;
@@ -166,6 +172,24 @@ public class ChatReplyContainer extends FrameLayout {
             addView(image, LayoutHelper.createFrame(34, 34, Gravity.TOP | Gravity.LEFT, 52, 6, 0, 0));
 
             updateColors();
+        }
+
+        private void setLiquidGlassMode(boolean enabled) {
+            // Keep long reply snippets away from the rounded edge. Reducing the
+            // measured width lets SimpleTextView ellipsize normally instead of
+            // drawing the last characters outside the glass island.
+            final int rightMargin = enabled ? dp(4) : 0;
+            setRightMargin(name, rightMargin);
+            setRightMargin(obj, rightMargin);
+            setRightMargin(objHint, rightMargin);
+        }
+
+        private void setRightMargin(View view, int rightMargin) {
+            final FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) view.getLayoutParams();
+            if (params.rightMargin != rightMargin) {
+                params.rightMargin = rightMargin;
+                view.setLayoutParams(params);
+            }
         }
 
         @Override

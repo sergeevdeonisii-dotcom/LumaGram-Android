@@ -2810,6 +2810,8 @@ public class ChatActivity extends BaseFragment implements
             return;
         }
 
+        replyLayout.setLiquidGlassMode(enabled);
+
         final FrameLayout.LayoutParams replyParams = (FrameLayout.LayoutParams) replyLayout.getLayoutParams();
         final FrameLayout.LayoutParams closeParams = (FrameLayout.LayoutParams) replyCloseImageView.getLayoutParams();
         if (enabled) {
@@ -15604,7 +15606,8 @@ public class ChatActivity extends BaseFragment implements
                 if (thumbMediaMessageObject.isRoundVideo()) {
                     replyImageView.setRoundRadius(AndroidUtilities.dp(17));
                 } else {
-                    replyImageView.setRoundRadius(AndroidUtilities.dp(2));
+                    replyImageView.setRoundRadius(AndroidUtilities.dp(
+                        LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS) ? 8 : 2));
                 }
                 replyImageSize = size;
                 replyImageCacheType = cacheType;
@@ -15619,7 +15622,7 @@ public class ChatActivity extends BaseFragment implements
             }
             replyNameTextView.setLayoutParams(layoutParams1);
             replyObjectTextView.setLayoutParams(layoutParams2);
-            replyObjectTextView.setLayoutParams(layoutParams3);
+            replyObjectHintTextView.setLayoutParams(layoutParams3);
             chatActivityEnterView.showTopView(true, openKeyboard);
         } else {
             fieldPanelShown = 0;

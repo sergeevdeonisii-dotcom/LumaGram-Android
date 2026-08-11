@@ -4604,11 +4604,11 @@ public class ChatActivityEnterView extends FrameLayout implements
         emojiButton.setTranslationX(offset);
         if (messageEditText != null) {
             // The Liquid Glass input island already reserves the space occupied by
-            // the WebView button. Applying the full 64dp control animation to the
-            // text layer as well leaves the hint noticeably too far to the right.
+            // the WebView button. Moving the text layer as well leaves the hint
+            // noticeably too far to the right, especially in bot chats.
             // Keep stock Telegram positioning when Liquid Glass is disabled.
             messageTextTranslationX = LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS)
-                    ? offset * 0.5f
+                    ? 0f
                     : offset;
             updateMessageTextParams();
         }

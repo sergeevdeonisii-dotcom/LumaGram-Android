@@ -1,7 +1,7 @@
 {
-    "version":  "12.9.0-luma.47",
-    "version_code":  71269,
-    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.47/Luma-Telegram-12.9-Liquid47-Signed-arm64.apk",
-    "sha256":  "616358385dec1e2fa6e50d55948c3a25a9ba3932333e5b3b2c7eb79146cfd893",
-    "changelog":  "Исправлено позиционирование надписи «Сообщение» в поле ввода при кнопке «Открыть» в режиме Liquid Glass. Переход остаётся плавным, обычный интерфейс Telegram не изменён."
+    "version":  "12.9.0-luma.48",
+    "version_code":  71279,
+    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.48/Luma-Telegram-12.9-Liquid48-Signed-arm64.apk",
+    "sha256":  "5b98161d73d5363176f9afe2d068307faf1b2eb6f8d3f89d33f9f74ba6e335de",
+    "changelog":  "Исправлены превью ответов с фото и обычным текстом в Liquid Glass, выровнены анимация и подпись записи голоса в верхней панели, а подсказка «Сообщение» в чатах с ботами сдвинута на правильную позицию."
 }

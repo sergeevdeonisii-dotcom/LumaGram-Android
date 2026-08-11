@@ -74,6 +74,7 @@ import me.vkryl.android.animator.FactorAnimator;
 public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.Target, NotificationCenter.NotificationCenterDelegate {
 
     private static final int ANIMATOR_ID_TIME_ITEM_VISIBLE = 0;
+    private static final String TYPING_DRAWABLE_PLACEHOLDER = "**oo**";
     private final BoolAnimator animatorTimeVisible = new BoolAnimator(ANIMATOR_ID_TIME_ITEM_VISIBLE, this, CubicBezierInterpolator.EASE_OUT_QUINT, 320);
 
     public boolean allowDrawStories;
@@ -1111,9 +1112,13 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         if (start) {
             try {
                 int type = subtitleIsThinkingBot ? 0 : MessagesController.getInstance(currentAccount).getPrintingStringType(parentFragment.getDialogId(), parentFragment.getThreadId());
-                if (statusDrawables[type] == null) return;
-                if (type == 5) {
-                    subtitleTextView.replaceTextWithDrawable(statusDrawables[type], "**oo**");
+                if (type < 0 || type >= statusDrawables.length || statusDrawables[type] == null) return;
+                if (type == 5 || externalAvatarMode) {
+                    // In the centered Liquid Glass header the drawable must be part
+                    // of the text layout. A separate left drawable stays at the
+                    // edge of the full-width view and visually splits the animation
+                    // from labels such as "recording voice".
+                    subtitleTextView.replaceTextWithDrawable(statusDrawables[type], TYPING_DRAWABLE_PLACEHOLDER);
                     statusDrawables[type].setColor(getThemedColor(Theme.key_chat_status));
                     subtitleTextView.setLeftDrawable(null);
                 } else {
@@ -1347,6 +1352,10 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             Integer type = MessagesController.getInstance(currentAccount).getPrintingStringType(parentFragment.getDialogId(), parentFragment.getThreadId());
             if (type != null && type == 5) {
                 newSubtitle = Emoji.replaceEmoji(newSubtitle, getSubtitlePaint().getFontMetricsInt(), false);
+            } else if (externalAvatarMode && type != null && type >= 0 && type < statusDrawables.length) {
+                // Reserve an inline slot for the animated typing/recording icon so
+                // icon and label are centered as one compact group.
+                newSubtitle = TYPING_DRAWABLE_PLACEHOLDER + " " + newSubtitle;
             }
             useOnlineColor = true;
             setTypingAnimation(true);
