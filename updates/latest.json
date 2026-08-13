@@ -1,7 +1,7 @@
 {
-    "version":  "12.9.0-luma.48",
-    "version_code":  71279,
-    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.48/Luma-Telegram-12.9-Liquid48-Signed-arm64.apk",
-    "sha256":  "5b98161d73d5363176f9afe2d068307faf1b2eb6f8d3f89d33f9f74ba6e335de",
-    "changelog":  "Исправлены превью ответов с фото и обычным текстом в Liquid Glass, выровнены анимация и подпись записи голоса в верхней панели, а подсказка «Сообщение» в чатах с ботами сдвинута на правильную позицию."
+    "version":  "12.9.0-luma.49",
+    "version_code":  71289,
+    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.49/Luma-Telegram-12.9-Liquid49-Signed-arm64.apk",
+    "sha256":  "8e2f626a5965184181a412c7526e404255876417402913abc6ddb2c2830e8123",
+    "changelog":  "Добавлен режим «Экстренная связь» для очень слабого интернета: выбор приоритетного чата, уведомления только от него, автоматическая загрузка только текста, приостановка фото, видео, голосовых, файлов, историй и фоновой проверки обновлений."
 }
