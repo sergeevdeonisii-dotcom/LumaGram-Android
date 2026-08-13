@@ -160,6 +160,12 @@ public final class LumaUpdaterController {
     }
 
     public void checkForUpdate(boolean force, Runnable whenDone) {
+        if (!force && LumaEmergencyMode.isEnabled(UserConfig.selectedAccount)) {
+            if (whenDone != null) {
+                whenDone.run();
+            }
+            return;
+        }
         if (checking) {
             if (whenDone != null) {
                 whenDone.run();

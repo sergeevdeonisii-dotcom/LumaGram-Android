@@ -320,6 +320,15 @@
     <string name="ExperimentalFeaturesTitle">Экспериментальные функции</string>
     <string name="ExperimentalFeaturesInfo">Тонкая настройка новых возможностей LumaGram</string>
     <string name="ExperimentalFeaturesWarning">Эти параметры экспериментальные. Значения по умолчанию сохраняют первоначальную плавную анимацию ввода.</string>
+    <string name="EmergencyConnectionHeader">Экстренная связь</string>
+    <string name="EmergencyConnectionEnable">Использовать экстренную связь</string>
+    <string name="EmergencyConnectionChat">Приоритетный чат</string>
+    <string name="EmergencyConnectionChooseChat">Выбрать чат</string>
+    <string name="EmergencyConnectionInfo">Для очень слабого интернета: автоматически загружается только текст. Фото, видео, голосовые сообщения, файлы, истории и фоновая проверка обновлений приостанавливаются; медиа остаются видны и их можно загрузить вручную. Telegram всё равно может получать небольшие служебные обновления, необходимые для синхронизации сообщений.</string>
+    <string name="EmergencyConnectionChooseFirst">Сначала выберите приоритетный чат</string>
+    <string name="EmergencyConnectionEnabled">Экстренная связь включена</string>
+    <string name="EmergencyConnectionDisabled">Экстренная связь выключена</string>
+    <string name="EmergencyConnectionSelectTitle">Выберите приоритетный чат</string>
     <string name="ExperimentalTypingHeader">Плавная печать</string>
     <string name="ExperimentalTypingInfo">Настройте появление новых символов в поле сообщения. Изменения применяются сразу и не затрагивают сам текст.</string>
     <string name="ExperimentalTypingSpeed">Скорость анимации</string>

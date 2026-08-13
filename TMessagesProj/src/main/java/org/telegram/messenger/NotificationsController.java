@@ -1021,6 +1021,10 @@ public class NotificationsController extends BaseController implements Notificat
         if (messageObjects != null) {
             for (int i = 0; i < messageObjects.size(); ++i) {
                 final MessageObject messageObject = messageObjects.get(i);
+                if (messageObject != null && LumaEmergencyMode.isEnabled(currentAccount)
+                        && !LumaEmergencyMode.isSelectedDialog(currentAccount, messageObject.getDialogId())) {
+                    continue;
+                }
                 if (messageObject != null && messageObject.messageOwner != null&& !messageObject.isOutOwner() && messageObject.messageOwner.action instanceof TLRPC.TL_messageActionConferenceCall) {
                     final TLRPC.TL_messageActionConferenceCall action = (TLRPC.TL_messageActionConferenceCall) messageObject.messageOwner.action;
                     if (!action.active && !action.missed && (getConnectionsManager().getCurrentTime() - messageObject.messageOwner.date) < getMessagesController().callRingTimeout / 1000L) {
@@ -1065,6 +1069,10 @@ public class NotificationsController extends BaseController implements Notificat
 
             for (int a = 0; a < messageObjects.size(); a++) {
                 MessageObject messageObject = messageObjects.get(a);
+                if (LumaEmergencyMode.isEnabled(currentAccount)
+                        && !LumaEmergencyMode.isSelectedDialog(currentAccount, messageObject.getDialogId())) {
+                    continue;
+                }
                 if (messageObject.messageOwner != null && (messageObject.isImportedForward() ||
                         messageObject.messageOwner.action instanceof TLRPC.TL_messageActionSetMessagesTTL ||
                         messageObject.messageOwner.silent && (messageObject.messageOwner.action instanceof TLRPC.TL_messageActionContactSignUp || messageObject.messageOwner.action instanceof TLRPC.TL_messageActionUserJoined)) ||
