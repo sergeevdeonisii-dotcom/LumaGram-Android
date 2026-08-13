@@ -509,6 +509,9 @@ public class DownloadController extends BaseController implements NotificationCe
     }
 
     protected int getAutodownloadMaskAll() {
+        if (LumaEmergencyMode.isEnabled(currentAccount)) {
+            return 0;
+        }
         if (!mobilePreset.enabled && !roamingPreset.enabled && !wifiPreset.enabled) {
             return 0;
         }
@@ -607,6 +610,9 @@ public class DownloadController extends BaseController implements NotificationCe
     }
 
     public boolean canDownloadMedia(MessageObject messageObject) {
+        if (LumaEmergencyMode.isEnabled(currentAccount)) {
+            return false;
+        }
         if (messageObject.type == MessageObject.TYPE_STORY) {
             if (!SharedConfig.isAutoplayVideo()) return false;
             TLRPC.TL_messageMediaStory mediaStory = (TLRPC.TL_messageMediaStory) MessageObject.getMedia(messageObject);
@@ -625,6 +631,9 @@ public class DownloadController extends BaseController implements NotificationCe
     }
 
     public boolean canDownloadMedia(int type, long size) {
+        if (LumaEmergencyMode.isEnabled(currentAccount)) {
+            return false;
+        }
         Preset preset;
         int networkType = ApplicationLoader.getAutodownloadNetworkType();
         if (networkType == StatsController.TYPE_WIFI) {
@@ -650,6 +659,9 @@ public class DownloadController extends BaseController implements NotificationCe
     }
 
     public int canDownloadMediaType(MessageObject messageObject) {
+        if (LumaEmergencyMode.isEnabled(currentAccount)) {
+            return 0;
+        }
         if (messageObject.type == MessageObject.TYPE_STORY) {
             if (!SharedConfig.isAutoplayVideo()) return 0;
             TLRPC.TL_messageMediaStory mediaStory = (TLRPC.TL_messageMediaStory) MessageObject.getMedia(messageObject);
@@ -668,6 +680,9 @@ public class DownloadController extends BaseController implements NotificationCe
     }
 
     public int canDownloadMediaType(MessageObject messageObject, long overrideSize) {
+        if (LumaEmergencyMode.isEnabled(currentAccount)) {
+            return 0;
+        }
         if (messageObject.type == MessageObject.TYPE_STORY) {
             if (!SharedConfig.isAutoplayVideo()) return 0;
             TLRPC.TL_messageMediaStory mediaStory = (TLRPC.TL_messageMediaStory) MessageObject.getMedia(messageObject);
@@ -686,6 +701,9 @@ public class DownloadController extends BaseController implements NotificationCe
     }
 
     private int canDownloadMediaInternal(MessageObject message) {
+        if (LumaEmergencyMode.isEnabled(currentAccount)) {
+            return 0;
+        }
         if (message == null || message.messageOwner == null) return 0;
         if (message.messageOwner.media instanceof TLRPC.TL_messageMediaStory) {
             return canPreloadStories() ? 2 : 0;
@@ -776,6 +794,9 @@ public class DownloadController extends BaseController implements NotificationCe
     }
 
     private int canDownloadMediaInternal(MessageObject message, long overrideSize) {
+        if (LumaEmergencyMode.isEnabled(currentAccount)) {
+            return 0;
+        }
         if (message == null || message.messageOwner == null) return 0;
         if (message.messageOwner.media instanceof TLRPC.TL_messageMediaStory) {
             return canPreloadStories() ? 2 : 0;
@@ -859,6 +880,9 @@ public class DownloadController extends BaseController implements NotificationCe
     }
 
     public int canDownloadMedia(TLRPC.Message message) {
+        if (LumaEmergencyMode.isEnabled(currentAccount)) {
+            return 0;
+        }
         if (message == null || message.media instanceof TLRPC.TL_messageMediaStory) {
             return canPreloadStories() ? 2 : 0;
         }
@@ -940,6 +964,9 @@ public class DownloadController extends BaseController implements NotificationCe
     }
 
     public int canDownloadMedia(TLRPC.Message message, TLRPC.MessageMedia media) {
+        if (LumaEmergencyMode.isEnabled(currentAccount)) {
+            return 0;
+        }
         if (message == null || media instanceof TLRPC.TL_messageMediaStory) {
             return canPreloadStories() ? 2 : 0;
         }
@@ -1022,6 +1049,9 @@ public class DownloadController extends BaseController implements NotificationCe
     }
 
     protected boolean canDownloadNextTrack() {
+        if (LumaEmergencyMode.isEnabled(currentAccount)) {
+            return false;
+        }
         int networkType = ApplicationLoader.getAutodownloadNetworkType();
         if (networkType == StatsController.TYPE_WIFI) {
             return wifiPreset.enabled && getCurrentWiFiPreset().preloadMusic;
@@ -1033,6 +1063,9 @@ public class DownloadController extends BaseController implements NotificationCe
     }
 
     public int getCurrentDownloadMask() {
+        if (LumaEmergencyMode.isEnabled(currentAccount)) {
+            return 0;
+        }
         int networkType = ApplicationLoader.getAutodownloadNetworkType();
         if (networkType == StatsController.TYPE_WIFI) {
             if (!wifiPreset.enabled) {
@@ -1786,6 +1819,9 @@ public class DownloadController extends BaseController implements NotificationCe
     }
 
     public boolean canPreloadStories() {
+        if (LumaEmergencyMode.isEnabled(currentAccount)) {
+            return false;
+        }
         Preset preset;
         int networkType = ApplicationLoader.getAutodownloadNetworkType();
         if (networkType == StatsController.TYPE_WIFI) {

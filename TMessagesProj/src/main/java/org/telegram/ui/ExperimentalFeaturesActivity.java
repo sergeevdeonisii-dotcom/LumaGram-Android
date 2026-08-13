@@ -3,14 +3,21 @@ package org.telegram.ui;
 import static org.telegram.messenger.LocaleController.getString;
 
 import android.content.Context;
+import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
 
+import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.LumaDelayedSend;
+import org.telegram.messenger.LumaEmergencyMode;
 import org.telegram.messenger.LumaTextAnimation;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
+import org.telegram.tgnet.TLObject;
+import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
@@ -30,6 +37,8 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private static final int ROW_RESET = 2;
     private static final int ROW_DELAYED_SEND_ENABLED = 3;
     private static final int ROW_ACCOUNT_EXPORT = 4;
+    private static final int ROW_EMERGENCY_ENABLED = 5;
+    private static final int ROW_EMERGENCY_CHAT = 6;
 
     private UniversalRecyclerView listView;
 
@@ -120,6 +129,17 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         ).setEnabled(delayedSendEnabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalDelayedSendInfo)));
 
+        final boolean emergencyEnabled = LumaEmergencyMode.isEnabled(currentAccount);
+        items.add(UItem.asHeader(getString(R.string.EmergencyConnectionHeader)));
+        items.add(UItem.asCheck(ROW_EMERGENCY_ENABLED, getString(R.string.EmergencyConnectionEnable))
+            .setChecked(emergencyEnabled));
+        items.add(UItem.asButton(
+            ROW_EMERGENCY_CHAT,
+            getString(R.string.EmergencyConnectionChat),
+            getEmergencyChatTitle()
+        ));
+        items.add(UItem.asShadow(getString(R.string.EmergencyConnectionInfo)));
+
         items.add(UItem.asHeader(tr("Данные аккаунта", "Account data")));
         items.add(UItem.asButton(ROW_ACCOUNT_EXPORT,
                 tr("Экспорт аккаунта", "Account export"),
@@ -159,9 +179,78 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             if (listView != null && listView.adapter != null) {
                 listView.adapter.update(false);
             }
+        } else if (item.id == ROW_EMERGENCY_ENABLED) {
+            if (LumaEmergencyMode.getDialogId(currentAccount) == 0) {
+                BulletinFactory.of(this).createSimpleBulletin(
+                    R.raw.info,
+                    getString(R.string.EmergencyConnectionChooseFirst)
+                ).show();
+                openEmergencyChatPicker();
+                return;
+            }
+            final boolean enabled = !LumaEmergencyMode.isEnabled(currentAccount);
+            LumaEmergencyMode.setEnabled(currentAccount, enabled);
+            if (view instanceof TextCheckCell) {
+                ((TextCheckCell) view).setChecked(enabled);
+            }
+            if (listView != null && listView.adapter != null) {
+                listView.adapter.update(false);
+            }
+            BulletinFactory.of(this).createSimpleBulletin(
+                R.raw.info,
+                getString(enabled ? R.string.EmergencyConnectionEnabled : R.string.EmergencyConnectionDisabled)
+            ).show();
+        } else if (item.id == ROW_EMERGENCY_CHAT) {
+            openEmergencyChatPicker();
         } else if (item.id == ROW_ACCOUNT_EXPORT) {
             presentFragment(new LumaAccountExportActivity());
         }
+    }
+
+    private void openEmergencyChatPicker() {
+        Bundle args = new Bundle();
+        args.putBoolean("onlySelect", true);
+        args.putBoolean("checkCanWrite", true);
+        args.putBoolean("allowGlobalSearch", true);
+        DialogsActivity activity = new DialogsActivity(args);
+        activity.setCurrentAccount(currentAccount);
+        activity.setDelegate((fragment, dids, message, param, notify, scheduleDate, scheduleRepeatPeriod, topicsFragment) -> {
+            if (dids.isEmpty()) {
+                return true;
+            }
+            LumaEmergencyMode.selectDialog(currentAccount, dids.get(0).dialogId);
+            activity.finishFragment();
+            if (listView != null && listView.adapter != null) {
+                listView.adapter.update(false);
+            }
+            BulletinFactory.of(this).createSimpleBulletin(
+                R.raw.info,
+                getString(R.string.EmergencyConnectionEnabled)
+            ).show();
+            return true;
+        });
+        presentFragment(activity);
+    }
+
+    private String getEmergencyChatTitle() {
+        long dialogId = LumaEmergencyMode.getDialogId(currentAccount);
+        if (dialogId == 0) {
+            return getString(R.string.EmergencyConnectionChooseChat);
+        }
+        MessagesController controller = MessagesController.getInstance(currentAccount);
+        TLObject peer = null;
+        if (DialogObject.isUserDialog(dialogId)) {
+            peer = controller.getUser(dialogId);
+        } else if (DialogObject.isChatDialog(dialogId)) {
+            peer = controller.getChat(-dialogId);
+        } else if (DialogObject.isEncryptedDialog(dialogId)) {
+            TLRPC.EncryptedChat encryptedChat = controller.getEncryptedChat(DialogObject.getEncryptedChatId(dialogId));
+            if (encryptedChat != null) {
+                peer = controller.getUser(encryptedChat.user_id);
+            }
+        }
+        String title = DialogObject.getDialogTitle(peer);
+        return TextUtils.isEmpty(title) ? getString(R.string.EmergencyConnectionChooseChat) : title;
     }
 
     @Override

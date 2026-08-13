@@ -11216,6 +11216,15 @@
     <string name="ExperimentalFeaturesTitle">Experimental Features</string>
     <string name="ExperimentalFeaturesInfo">Fine-tune new LumaGram features</string>
     <string name="ExperimentalFeaturesWarning">These controls are experimental. Defaults preserve the original smooth typing animation.</string>
+    <string name="EmergencyConnectionHeader">Emergency connection</string>
+    <string name="EmergencyConnectionEnable">Use emergency connection</string>
+    <string name="EmergencyConnectionChat">Priority chat</string>
+    <string name="EmergencyConnectionChooseChat">Choose a chat</string>
+    <string name="EmergencyConnectionInfo">For a very weak connection: only text is loaded automatically. Photos, videos, voice messages, files, stories and background update checks are paused; media remains visible and can be loaded manually. Telegram may still receive small service updates needed to keep messages synchronized.</string>
+    <string name="EmergencyConnectionChooseFirst">Choose a priority chat first</string>
+    <string name="EmergencyConnectionEnabled">Emergency connection is on</string>
+    <string name="EmergencyConnectionDisabled">Emergency connection is off</string>
+    <string name="EmergencyConnectionSelectTitle">Select priority chat</string>
     <string name="ExperimentalTypingHeader">Smooth typing</string>
     <string name="ExperimentalTypingInfo">Fine-tune how new characters appear in the message field. Changes apply immediately and never affect the text itself.</string>
     <string name="ExperimentalTypingSpeed">Animation speed</string>
