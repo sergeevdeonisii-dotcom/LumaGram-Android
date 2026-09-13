@@ -1,7 +1,7 @@
 {
-    "version":  "12.9.0-luma.49",
-    "version_code":  71289,
-    "file_url":  "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.49/Luma-Telegram-12.9-Liquid49-Signed-arm64.apk",
-    "sha256":  "8e2f626a5965184181a412c7526e404255876417402913abc6ddb2c2830e8123",
-    "changelog":  "Добавлен режим «Экстренная связь» для очень слабого интернета: выбор приоритетного чата, уведомления только от него, автоматическая загрузка только текста, приостановка фото, видео, голосовых, файлов, историй и фоновой проверки обновлений."
+  "version": "12.9.0-luma.50",
+  "version_code": 71299,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.50/Luma-Telegram-12.9-Liquid50-Signed-arm64.apk",
+  "sha256": "edcfafb0499578af301f2c4933763febcb86af90ee61b188efb8571fcb9b16a9",
+  "changelog": "Исправлена анимация записи голосовых и кружков, выравнивание поля ввода ботов, добавлено массовое скрытие подарков и безлимитное локальное закрепление любых подарков."
 }
