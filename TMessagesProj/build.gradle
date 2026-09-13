@@ -102,8 +102,6 @@ android {
     buildToolsVersion '35.0.0'
     ndkVersion "27.2.12479018"
 
-    sourceSets.main.jniLibs.srcDirs = ['./jni/']
-
     externalNativeBuild {
         cmake {
             path 'jni/CMakeLists.txt'
