@@ -1936,6 +1936,10 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                                 o.dismiss();
                             });
                         }
+                        o.add(R.drawable.menu_hide_gift, getString(R.string.LumaHideAllGifts), () -> {
+                            o.dismiss();
+                            giftsContainer.confirmHideAllGifts();
+                        });
                         gap = true;
                     }
                     if (gap) o.addGap();

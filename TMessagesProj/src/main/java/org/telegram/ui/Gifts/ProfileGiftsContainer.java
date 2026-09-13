@@ -13,6 +13,7 @@ import static org.telegram.ui.Stars.StarGiftSheet.isMineWithActions;
 import android.app.Activity;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
@@ -133,6 +134,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
     private final StarsController.GiftsList list;
     public final StarsController.GiftsCollections collections;
     private final Theme.ResourcesProvider resourcesProvider;
+    private final HashSet<String> localPinnedGiftIds = new HashSet<>();
     private int backgroundColor;
 
     private final ViewPagerFixed viewPager;
@@ -430,6 +432,9 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                     return;
 
                 update(true);
+                if (list == parent.list && !list.endReached && parent.hasMissingLocalPins(list)) {
+                    list.load();
+                }
                 if (list != null && isAttachedToWindow() && (!listView.canScrollVertically(1) || isLoadingVisible())) {
                     list.load();
                 }
@@ -615,14 +620,19 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
             final int spanCount = Math.max(1, list == null || list.totalCount == 0 ? 3 : Math.min(3, list.totalCount));
             if (list != null) {
                 int spanCountLeft = 3;
-                for (TL_stars.SavedStarGift userGift : list.gifts) {
-                    items.add(
-                        GiftSheet.GiftCell.Factory.asStarGift(0, userGift, true, false, isCollection)
-                            .setReordering(reordering && (list == parent.list ? userGift.pinned_to_top : true))
-                    );
-                    spanCountLeft--;
-                    if (spanCountLeft == 0) {
-                        spanCountLeft = 3;
+                for (int localPinnedPass = 1; localPinnedPass >= 0; localPinnedPass--) {
+                    for (TL_stars.SavedStarGift userGift : list.gifts) {
+                        if (parent.isGiftPinnedLocally(userGift) != (localPinnedPass == 1)) {
+                            continue;
+                        }
+                        items.add(
+                            GiftSheet.GiftCell.Factory.asStarGift(0, userGift, true, false, isCollection)
+                                .setReordering(reordering && (list == parent.list ? userGift.pinned_to_top : true))
+                        );
+                        spanCountLeft--;
+                        if (spanCountLeft == 0) {
+                            spanCountLeft = 3;
+                        }
                     }
                 }
                 if (list.loading || !list.endReached) {
@@ -825,6 +835,17 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                     });
                     o.addGap();
                 }
+                final boolean locallyPinned = parent.isGiftPinnedLocally(savedStarGift);
+                o.add(locallyPinned ? R.drawable.msg_unpin : R.drawable.msg_pin, getString(locallyPinned ? R.string.LumaLocalUnpinGift : R.string.LumaLocalPinGift), () -> {
+                    parent.setGiftPinnedLocally(savedStarGift, !locallyPinned);
+                    update(true);
+                    if (!locallyPinned) {
+                        listView.scrollToPosition(0);
+                    }
+                    BulletinFactory.of(parent.fragment)
+                        .createSimpleBulletin(locallyPinned ? R.raw.ic_unpin : R.raw.ic_pin, getString(locallyPinned ? R.string.LumaLocalGiftUnpinned : R.string.LumaLocalGiftPinned))
+                        .show();
+                });
                 if (savedStarGift.gift instanceof TL_stars.TL_starGiftUnique) {
                     if (parent.canReorder() && !isCollection && (!savedStarGift.unsaved || !savedStarGift.pinned_to_top)) {
                         o.add(savedStarGift.pinned_to_top ? R.drawable.msg_unpin : R.drawable.msg_pin, savedStarGift.pinned_to_top ? getString(R.string.Gift2Unpin) : getString(R.string.Gift2Pin), () -> {
@@ -1014,6 +1035,8 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         } else {
             this.dialogId = did;
         }
+        final SharedPreferences preferences = MessagesController.getMainSettings(currentAccount);
+        localPinnedGiftIds.addAll(new HashSet<>(preferences.getStringSet(getLocalPinsKey(), new HashSet<>())));
         StarsController.getInstance(currentAccount).invalidateProfileGifts(dialogId);
         this.list = StarsController.getInstance(currentAccount).getProfileGiftsList(dialogId);
         this.collections = StarsController.getInstance(currentAccount).getProfileGiftCollectionsList(dialogId, true);
@@ -1594,6 +1617,127 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         if (dialogId >= 0) return false;
         final TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-dialogId);
         return ChatObject.canUserDoAction(chat, ChatObject.ACTION_POST);
+    }
+
+    private String getLocalPinsKey() {
+        return "luma_local_gift_pins_" + dialogId;
+    }
+
+    private String getLocalGiftId(TL_stars.SavedStarGift gift) {
+        if (gift == null) return null;
+        if ((gift.flags & 8) != 0 && gift.msg_id != 0) {
+            return "message:" + gift.msg_id;
+        }
+        if (gift.saved_id != 0) {
+            return "saved:" + gift.saved_id;
+        }
+        if (gift.gift != null && !TextUtils.isEmpty(gift.gift.slug)) {
+            return "slug:" + gift.gift.slug;
+        }
+        if (gift.gift != null) {
+            return "gift:" + gift.gift.id + ':' + gift.date + ':' + gift.gift_num;
+        }
+        return null;
+    }
+
+    private boolean isGiftPinnedLocally(TL_stars.SavedStarGift gift) {
+        final String id = getLocalGiftId(gift);
+        return id != null && localPinnedGiftIds.contains(id);
+    }
+
+    private boolean hasMissingLocalPins(StarsController.GiftsList giftsList) {
+        if (localPinnedGiftIds.isEmpty() || giftsList == null) return false;
+        final HashSet<String> missing = new HashSet<>(localPinnedGiftIds);
+        for (TL_stars.SavedStarGift gift : giftsList.gifts) {
+            missing.remove(getLocalGiftId(gift));
+        }
+        return !missing.isEmpty();
+    }
+
+    private void setGiftPinnedLocally(TL_stars.SavedStarGift gift, boolean pinned) {
+        final String id = getLocalGiftId(gift);
+        if (id == null) return;
+        if (pinned) {
+            localPinnedGiftIds.add(id);
+        } else {
+            localPinnedGiftIds.remove(id);
+        }
+        MessagesController.getMainSettings(currentAccount)
+            .edit()
+            .putStringSet(getLocalPinsKey(), new HashSet<>(localPinnedGiftIds))
+            .apply();
+    }
+
+    public void confirmHideAllGifts() {
+        if (!canFilterHidden()) return;
+        new AlertDialog.Builder(getContext(), resourcesProvider)
+            .setTitle(getString(R.string.LumaHideAllGiftsTitle))
+            .setMessage(getString(R.string.LumaHideAllGiftsText))
+            .setPositiveButton(getString(R.string.Hide), (dialog, which) -> hideAllGifts())
+            .setNegativeButton(getString(R.string.Cancel), null)
+            .show();
+    }
+
+    private void hideAllGifts() {
+        final AlertDialog progressDialog = new AlertDialog(getContext(), AlertDialog.ALERT_TYPE_SPINNER, resourcesProvider);
+        progressDialog.showDelayed(200);
+        loadVisibleGiftsForHiding("", new ArrayList<>(), progressDialog);
+    }
+
+    private void loadVisibleGiftsForHiding(String offset, ArrayList<TL_stars.InputSavedStarGift> gifts, AlertDialog progressDialog) {
+        final TL_stars.getSavedStarGifts req = new TL_stars.getSavedStarGifts();
+        req.exclude_unsaved = true;
+        req.peer = dialogId == 0 ? new TLRPC.TL_inputPeerSelf() : MessagesController.getInstance(currentAccount).getInputPeer(dialogId);
+        req.offset = offset;
+        req.limit = 100;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
+            if (err != null || !(res instanceof TL_stars.TL_payments_savedStarGifts)) {
+                progressDialog.dismissUnless(200);
+                if (err != null) {
+                    BulletinFactory.of(fragment).showForError(err);
+                }
+                return;
+            }
+            final TL_stars.TL_payments_savedStarGifts result = (TL_stars.TL_payments_savedStarGifts) res;
+            for (TL_stars.SavedStarGift gift : result.gifts) {
+                final TL_stars.InputSavedStarGift input = list.getInput(gift);
+                if (input != null) {
+                    gifts.add(input);
+                }
+            }
+            if (!TextUtils.isEmpty(result.next_offset)) {
+                loadVisibleGiftsForHiding(result.next_offset, gifts, progressDialog);
+            } else if (gifts.isEmpty()) {
+                progressDialog.dismissUnless(200);
+                BulletinFactory.of(fragment)
+                    .createSimpleBulletin(R.raw.done, getString(R.string.LumaHideAllGiftsEmpty))
+                    .show();
+            } else {
+                hideGiftAt(gifts, 0, progressDialog);
+            }
+        }));
+    }
+
+    private void hideGiftAt(ArrayList<TL_stars.InputSavedStarGift> gifts, int index, AlertDialog progressDialog) {
+        if (index >= gifts.size()) {
+            progressDialog.dismissUnless(200);
+            StarsController.getInstance(currentAccount).invalidateProfileGifts(dialogId);
+            BulletinFactory.of(fragment)
+                .createSimpleBulletin(R.raw.done, getString(R.string.LumaHideAllGiftsDone))
+                .show();
+            return;
+        }
+        final TL_stars.saveStarGift req = new TL_stars.saveStarGift();
+        req.stargift = gifts.get(index);
+        req.unsave = true;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
+            if (err != null) {
+                progressDialog.dismissUnless(200);
+                BulletinFactory.of(fragment).showForError(err);
+            } else {
+                hideGiftAt(gifts, index + 1, progressDialog);
+            }
+        }), ConnectionsManager.RequestFlagInvokeAfter);
     }
 
     public boolean canReorder() {

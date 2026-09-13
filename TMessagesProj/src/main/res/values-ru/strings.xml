@@ -389,4 +389,13 @@
     <string name="LumaUpdateBannerSubtitle">Нажмите, чтобы узнать подробности и скачать.</string>
     <string name="LumaUpdateBannerDownloading">Безопасная загрузка — %1$d%%</string>
     <string name="LumaUpdateBannerReady">Обновление проверено. Нажмите, чтобы установить.</string>
+    <string name="LumaHideAllGifts">Скрыть все подарки</string>
+    <string name="LumaHideAllGiftsTitle">Скрыть все подарки?</string>
+    <string name="LumaHideAllGiftsText">Все подарки, которые сейчас видны в профиле, будут скрыты. Их можно будет снова показывать по одному.</string>
+    <string name="LumaHideAllGiftsDone">Все подарки скрыты</string>
+    <string name="LumaHideAllGiftsEmpty">Все подарки уже скрыты</string>
+    <string name="LumaLocalPinGift">Закрепить локально</string>
+    <string name="LumaLocalUnpinGift">Открепить локально</string>
+    <string name="LumaLocalGiftPinned">Подарок закреплён локально</string>
+    <string name="LumaLocalGiftUnpinned">Локальное закрепление снято</string>
 </resources>
