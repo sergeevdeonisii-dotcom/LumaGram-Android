@@ -11290,6 +11290,11 @@
     <string name="LumaHideAllGiftsText">All gifts currently shown on this profile will be hidden. You can show them again individually.</string>
     <string name="LumaHideAllGiftsDone">All gifts are now hidden</string>
     <string name="LumaHideAllGiftsEmpty">All gifts are already hidden</string>
+    <string name="LumaShowAllGifts">Show all gifts</string>
+    <string name="LumaShowAllGiftsTitle">Show all gifts?</string>
+    <string name="LumaShowAllGiftsText">All hidden gifts will be visible on the profile again.</string>
+    <string name="LumaShowAllGiftsDone">All gifts are visible again</string>
+    <string name="LumaShowAllGiftsEmpty">All gifts are already visible</string>
     <string name="LumaLocalPinGift">Pin locally</string>
     <string name="LumaLocalUnpinGift">Unpin locally</string>
     <string name="LumaLocalGiftPinned">Gift pinned locally</string>
