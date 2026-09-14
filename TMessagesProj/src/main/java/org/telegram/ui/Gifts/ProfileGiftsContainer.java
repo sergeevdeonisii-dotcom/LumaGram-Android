@@ -128,7 +128,7 @@ import me.vkryl.android.animator.BoolAnimator;
 
 public class ProfileGiftsContainer extends FrameLayout implements NotificationCenter.NotificationCenterDelegate {
 
-    private static final int ITEM_HIDE_ALL_GIFTS = -1001;
+    private static final int ITEM_TOGGLE_ALL_GIFTS = -1001;
 
     private final BaseFragment fragment;
     private final int currentAccount;
@@ -621,7 +621,12 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                 return;
             final int spanCount = Math.max(1, list == null || list.totalCount == 0 ? 3 : Math.min(3, list.totalCount));
             if (parent.list == list && parent.canFilterHidden()) {
-                items.add(UItem.asButton(ITEM_HIDE_ALL_GIFTS, R.drawable.menu_hide_gift, getString(R.string.LumaHideAllGifts)).setSpanCount(spanCount));
+                final boolean allGiftsHidden = parent.areAllGiftsHidden();
+                items.add(UItem.asButton(
+                    ITEM_TOGGLE_ALL_GIFTS,
+                    allGiftsHidden ? R.drawable.msg_message : R.drawable.menu_hide_gift,
+                    getString(allGiftsHidden ? R.string.LumaShowAllGifts : R.string.LumaHideAllGifts)
+                ).setSpanCount(spanCount));
             }
             if (list != null) {
                 int spanCountLeft = 3;
@@ -679,8 +684,8 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
 
         public void onItemClick(UItem item, View view, int position, float x, float y) {
             if (list == null) return;
-            if (item.id == ITEM_HIDE_ALL_GIFTS) {
-                parent.confirmHideAllGifts();
+            if (item.id == ITEM_TOGGLE_ALL_GIFTS) {
+                parent.confirmToggleAllGifts();
                 return;
             }
             if (item.object instanceof TL_stars.SavedStarGift) {
@@ -1632,6 +1637,23 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         return ChatObject.canUserDoAction(chat, ChatObject.ACTION_POST);
     }
 
+    private boolean areAllGiftsHidden() {
+        if (list == null || !list.endReached || list.gifts.isEmpty()) {
+            return false;
+        }
+        boolean hasHiddenGifts = false;
+        for (TL_stars.SavedStarGift gift : list.gifts) {
+            if (gift == null) {
+                continue;
+            }
+            if (!gift.unsaved) {
+                return false;
+            }
+            hasHiddenGifts = true;
+        }
+        return hasHiddenGifts;
+    }
+
     private String getLocalPinsKey() {
         return "luma_local_gift_pins_" + dialogId;
     }
@@ -1681,6 +1703,20 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
             .apply();
     }
 
+    public void confirmToggleAllGifts() {
+        if (!canFilterHidden()) return;
+        if (areAllGiftsHidden()) {
+            new AlertDialog.Builder(getContext(), resourcesProvider)
+                .setTitle(getString(R.string.LumaShowAllGiftsTitle))
+                .setMessage(getString(R.string.LumaShowAllGiftsText))
+                .setPositiveButton(getString(R.string.LumaShowAllGifts), (dialog, which) -> showAllGifts())
+                .setNegativeButton(getString(R.string.Cancel), null)
+                .show();
+        } else {
+            confirmHideAllGifts();
+        }
+    }
+
     public void confirmHideAllGifts() {
         if (!canFilterHidden()) return;
         new AlertDialog.Builder(getContext(), resourcesProvider)
@@ -1695,6 +1731,12 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         final AlertDialog progressDialog = new AlertDialog(getContext(), AlertDialog.ALERT_TYPE_SPINNER, resourcesProvider);
         progressDialog.showDelayed(200);
         loadVisibleGiftsForHiding("", new ArrayList<>(), progressDialog);
+    }
+
+    private void showAllGifts() {
+        final AlertDialog progressDialog = new AlertDialog(getContext(), AlertDialog.ALERT_TYPE_SPINNER, resourcesProvider);
+        progressDialog.showDelayed(200);
+        loadHiddenGiftsForShowing("", new ArrayList<>(), progressDialog);
     }
 
     private void loadVisibleGiftsForHiding(String offset, ArrayList<TL_stars.InputSavedStarGift> gifts, AlertDialog progressDialog) {
@@ -1731,6 +1773,40 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         }));
     }
 
+    private void loadHiddenGiftsForShowing(String offset, ArrayList<TL_stars.InputSavedStarGift> gifts, AlertDialog progressDialog) {
+        final TL_stars.getSavedStarGifts req = new TL_stars.getSavedStarGifts();
+        req.exclude_saved = true;
+        req.peer = dialogId == 0 ? new TLRPC.TL_inputPeerSelf() : MessagesController.getInstance(currentAccount).getInputPeer(dialogId);
+        req.offset = offset;
+        req.limit = 100;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
+            if (err != null || !(res instanceof TL_stars.TL_payments_savedStarGifts)) {
+                progressDialog.dismissUnless(200);
+                if (err != null) {
+                    BulletinFactory.of(fragment).showForError(err);
+                }
+                return;
+            }
+            final TL_stars.TL_payments_savedStarGifts result = (TL_stars.TL_payments_savedStarGifts) res;
+            for (TL_stars.SavedStarGift gift : result.gifts) {
+                final TL_stars.InputSavedStarGift input = list.getInput(gift);
+                if (input != null) {
+                    gifts.add(input);
+                }
+            }
+            if (!TextUtils.isEmpty(result.next_offset)) {
+                loadHiddenGiftsForShowing(result.next_offset, gifts, progressDialog);
+            } else if (gifts.isEmpty()) {
+                progressDialog.dismissUnless(200);
+                BulletinFactory.of(fragment)
+                    .createSimpleBulletin(R.raw.done, getString(R.string.LumaShowAllGiftsEmpty))
+                    .show();
+            } else {
+                showGiftAt(gifts, 0, progressDialog);
+            }
+        }));
+    }
+
     private void hideGiftAt(ArrayList<TL_stars.InputSavedStarGift> gifts, int index, AlertDialog progressDialog) {
         if (index >= gifts.size()) {
             progressDialog.dismissUnless(200);
@@ -1749,6 +1825,28 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                 BulletinFactory.of(fragment).showForError(err);
             } else {
                 hideGiftAt(gifts, index + 1, progressDialog);
+            }
+        }), ConnectionsManager.RequestFlagInvokeAfter);
+    }
+
+    private void showGiftAt(ArrayList<TL_stars.InputSavedStarGift> gifts, int index, AlertDialog progressDialog) {
+        if (index >= gifts.size()) {
+            progressDialog.dismissUnless(200);
+            StarsController.getInstance(currentAccount).invalidateProfileGifts(dialogId);
+            BulletinFactory.of(fragment)
+                .createSimpleBulletin(R.raw.done, getString(R.string.LumaShowAllGiftsDone))
+                .show();
+            return;
+        }
+        final TL_stars.saveStarGift req = new TL_stars.saveStarGift();
+        req.stargift = gifts.get(index);
+        req.unsave = false;
+        ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
+            if (err != null) {
+                progressDialog.dismissUnless(200);
+                BulletinFactory.of(fragment).showForError(err);
+            } else {
+                showGiftAt(gifts, index + 1, progressDialog);
             }
         }), ConnectionsManager.RequestFlagInvokeAfter);
     }

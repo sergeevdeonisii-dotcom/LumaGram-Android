@@ -394,6 +394,11 @@
     <string name="LumaHideAllGiftsText">Все подарки, которые сейчас видны в профиле, будут скрыты. Их можно будет снова показывать по одному.</string>
     <string name="LumaHideAllGiftsDone">Все подарки скрыты</string>
     <string name="LumaHideAllGiftsEmpty">Все подарки уже скрыты</string>
+    <string name="LumaShowAllGifts">Открыть все подарки</string>
+    <string name="LumaShowAllGiftsTitle">Открыть все подарки?</string>
+    <string name="LumaShowAllGiftsText">Все скрытые подарки снова будут видны в профиле.</string>
+    <string name="LumaShowAllGiftsDone">Все подарки открыты</string>
+    <string name="LumaShowAllGiftsEmpty">Все подарки уже открыты</string>
     <string name="LumaLocalPinGift">Закрепить локально</string>
     <string name="LumaLocalUnpinGift">Открепить локально</string>
     <string name="LumaLocalGiftPinned">Подарок закреплён локально</string>
