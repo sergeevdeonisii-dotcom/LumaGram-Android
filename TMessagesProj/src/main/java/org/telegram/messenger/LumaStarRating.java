@@ -11,6 +11,7 @@ public final class LumaStarRating {
 
     private static final String KEY_ENABLED = "luma_star_rating_enabled_";
     private static final String KEY_LEVEL = "luma_star_rating_level_";
+    private static final String KEY_PROGRESS = "luma_star_rating_progress_";
     public static final int MIN_LEVEL = 1;
     public static final int MAX_LEVEL = 100;
 
@@ -74,14 +75,39 @@ public final class LumaStarRating {
         local.flags = original.flags;
         local.level = level;
         local.current_level_stars = current;
-        local.stars = current;
         if (level < MAX_LEVEL) {
             local.next_level_stars = getRequiredStars(level + 1);
+            local.stars = getDisplayStars(account, level, current, local.next_level_stars);
             local.flags |= 1;
         } else {
             local.next_level_stars = 0L;
+            local.stars = current;
             local.flags &= ~1;
         }
         return local;
+    }
+
+    /**
+     * Returns a stable, locally generated position inside the current level's
+     * range. Keeping it in preferences prevents the progress bar from jumping
+     * every time the profile is rebound while still making the preview look
+     * like an in-progress level instead of an empty bar.
+     */
+    private static long getDisplayStars(int account, int level, long current, long next) {
+        if (next <= current) {
+            return current;
+        }
+        SharedPreferences prefs = preferences();
+        String key = KEY_PROGRESS + account + "_" + level;
+        long percent;
+        if (prefs.contains(key)) {
+            percent = prefs.getLong(key, 50L);
+        } else {
+            // Keep the thumb away from both ends so the preview is clearly visible.
+            percent = 20L + Utilities.random.nextInt(66);
+            prefs.edit().putLong(key, percent).apply();
+        }
+        percent = Math.max(1L, Math.min(99L, percent));
+        return current + Math.max(1L, (next - current) * percent / 100L);
     }
 }

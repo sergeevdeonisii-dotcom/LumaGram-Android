@@ -351,6 +351,16 @@
     <string name="ExperimentalAnonymousNumberInfo">Показывает выбранный номер Fragment +888 в профиле и настройках только на этом устройстве. Регистрация, вход и серверный номер не изменяются.</string>
     <string name="ExperimentalAnonymousNumberEnabled">Локальный анонимный номер включён</string>
     <string name="ExperimentalAnonymousNumberDisabled">Локальный анонимный номер выключен</string>
+    <string name="ExperimentalProfileVerificationHeader">Верификация профиля (локально)</string>
+    <string name="ExperimentalProfileVerificationEnable">Показывать отметку Telegram</string>
+    <string name="ExperimentalProfileVerificationInfo">Добавляет визуальную подпись о подтверждении Telegram в собственном профиле только на этом устройстве. Статус аккаунта на сервере не меняется.</string>
+    <string name="ExperimentalProfileVerificationEnabled">Локальная отметка верификации включена</string>
+    <string name="ExperimentalProfileVerificationDisabled">Локальная отметка верификации выключена</string>
+    <string name="LumaProfileVerifiedInfo">Этот аккаунт подтверждён как официальный представителями Telegram.</string>
+    <string name="LumaAnonymousSheetTitle">**%s** — коллекционный номер телефона, принадлежащий</string>
+    <string name="LumaAnonymousSheetMessage">Этот номер приобретён на платформе **Fragment** за **%s** (локальная визуализация)</string>
+    <string name="LumaAnonymousSheetDetails">Подробнее</string>
+    <string name="LumaAnonymousSheetCopy">Копировать номер</string>
     <string name="ExperimentalDeletedMessagesHeader">Удалённые сообщения</string>
     <string name="ExperimentalDeletedMessagesEnable">Сохранять удалённые сообщения локально</string>
     <string name="ExperimentalDeletedMessagesInfo">Удалённые сообщения остаются только на этом устройстве, становятся тусклее и получают значок корзины. Telegram и другие устройства не изменяются.</string>

@@ -17,6 +17,7 @@ import org.telegram.messenger.LumaEmergencyMode;
 import org.telegram.messenger.LumaGhostMode;
 import org.telegram.messenger.LumaDeletedMessages;
 import org.telegram.messenger.LumaAnonymousNumber;
+import org.telegram.messenger.LumaProfileVerification;
 import org.telegram.messenger.LumaStarRating;
 import org.telegram.messenger.LumaTextAnimation;
 import org.telegram.messenger.LocaleController;
@@ -52,6 +53,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private static final int ROW_DELETED_MESSAGES_ENABLED = 10;
     private static final int ROW_ANONYMOUS_NUMBER_ENABLED = 11;
     private static final int ROW_ANONYMOUS_NUMBER = 12;
+    private static final int ROW_PROFILE_VERIFICATION_ENABLED = 13;
 
     private UniversalRecyclerView listView;
 
@@ -179,6 +181,12 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         ).setEnabled(anonymousNumberEnabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalAnonymousNumberInfo)));
 
+        final boolean localVerificationEnabled = LumaProfileVerification.isEnabled(currentAccount);
+        items.add(UItem.asHeader(getString(R.string.ExperimentalProfileVerificationHeader)));
+        items.add(UItem.asCheck(ROW_PROFILE_VERIFICATION_ENABLED, getString(R.string.ExperimentalProfileVerificationEnable))
+            .setChecked(localVerificationEnabled));
+        items.add(UItem.asShadow(getString(R.string.ExperimentalProfileVerificationInfo)));
+
         final boolean deletedMessagesEnabled = LumaDeletedMessages.isEnabled(currentAccount);
         items.add(UItem.asHeader(getString(R.string.ExperimentalDeletedMessagesHeader)));
         items.add(UItem.asCheck(ROW_DELETED_MESSAGES_ENABLED, getString(R.string.ExperimentalDeletedMessagesEnable))
@@ -290,6 +298,19 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             ).show();
         } else if (item.id == ROW_ANONYMOUS_NUMBER) {
             showAnonymousNumberDialog();
+        } else if (item.id == ROW_PROFILE_VERIFICATION_ENABLED) {
+            final boolean enabled = !LumaProfileVerification.isEnabled(currentAccount);
+            LumaProfileVerification.setEnabled(currentAccount, enabled);
+            if (view instanceof TextCheckCell) {
+                ((TextCheckCell) view).setChecked(enabled);
+            }
+            if (listView != null && listView.adapter != null) {
+                listView.adapter.update(false);
+            }
+            BulletinFactory.of(this).createSimpleBulletin(
+                R.raw.info,
+                getString(enabled ? R.string.ExperimentalProfileVerificationEnabled : R.string.ExperimentalProfileVerificationDisabled)
+            ).show();
         } else if (item.id == ROW_DELETED_MESSAGES_ENABLED) {
             final boolean enabled = !LumaDeletedMessages.isEnabled(currentAccount);
             LumaDeletedMessages.setEnabled(currentAccount, enabled);
