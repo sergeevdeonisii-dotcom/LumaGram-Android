@@ -128,6 +128,8 @@ import me.vkryl.android.animator.BoolAnimator;
 
 public class ProfileGiftsContainer extends FrameLayout implements NotificationCenter.NotificationCenterDelegate {
 
+    private static final int ITEM_HIDE_ALL_GIFTS = -1001;
+
     private final BaseFragment fragment;
     private final int currentAccount;
     private final long dialogId;
@@ -618,6 +620,9 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
             if (list.hasFilters() && list.gifts.size() <= 0 && list.endReached && !list.loading)
                 return;
             final int spanCount = Math.max(1, list == null || list.totalCount == 0 ? 3 : Math.min(3, list.totalCount));
+            if (parent.list == list && parent.canFilterHidden()) {
+                items.add(UItem.asButton(ITEM_HIDE_ALL_GIFTS, R.drawable.menu_hide_gift, getString(R.string.LumaHideAllGifts)).setSpanCount(spanCount));
+            }
             if (list != null) {
                 int spanCountLeft = 3;
                 for (int localPinnedPass = 1; localPinnedPass >= 0; localPinnedPass--) {
@@ -625,10 +630,13 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                         if (parent.isGiftPinnedLocally(userGift) != (localPinnedPass == 1)) {
                             continue;
                         }
-                        items.add(
-                            GiftSheet.GiftCell.Factory.asStarGift(0, userGift, true, false, isCollection)
-                                .setReordering(reordering && (list == parent.list ? userGift.pinned_to_top : true))
-                        );
+                        final UItem giftItem = GiftSheet.GiftCell.Factory.asStarGift(0, userGift, true, false, isCollection)
+                            .setReordering(reordering && (list == parent.list ? userGift.pinned_to_top : true));
+                        // SavedStarGift already uses its server pin flag for the
+                        // regular Telegram badge. Keep the local-only pin state
+                        // in object2 so it survives adapter rebinds as well.
+                        giftItem.object2 = parent.isGiftPinnedLocally(userGift);
+                        items.add(giftItem);
                         spanCountLeft--;
                         if (spanCountLeft == 0) {
                             spanCountLeft = 3;
@@ -671,6 +679,10 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
 
         public void onItemClick(UItem item, View view, int position, float x, float y) {
             if (list == null) return;
+            if (item.id == ITEM_HIDE_ALL_GIFTS) {
+                parent.confirmHideAllGifts();
+                return;
+            }
             if (item.object instanceof TL_stars.SavedStarGift) {
                 final TL_stars.SavedStarGift userGift = (TL_stars.SavedStarGift) item.object;
                 if (reordering) {
@@ -838,6 +850,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                 final boolean locallyPinned = parent.isGiftPinnedLocally(savedStarGift);
                 o.add(locallyPinned ? R.drawable.msg_unpin : R.drawable.msg_pin, getString(locallyPinned ? R.string.LumaLocalUnpinGift : R.string.LumaLocalPinGift), () -> {
                     parent.setGiftPinnedLocally(savedStarGift, !locallyPinned);
+                    cell.setPinned(savedStarGift.pinned_to_top || !locallyPinned, true);
                     update(true);
                     if (!locallyPinned) {
                         listView.scrollToPosition(0);
