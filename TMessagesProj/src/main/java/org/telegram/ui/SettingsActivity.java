@@ -75,6 +75,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LumaAnonymousNumber;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessagesController;
@@ -535,7 +536,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         titleView.setText(UserObject.getUserName(user));
         final StringBuilder sb = new StringBuilder();
         if (user != null) {
-            sb.append(PhoneFormat.getInstance().format("+" + user.phone));
+            String phone = LumaAnonymousNumber.getDisplayPhone(currentAccount, user.id, user.phone);
+            if (!TextUtils.isEmpty(phone)) {
+                sb.append(PhoneFormat.getInstance().format("+" + phone));
+            }
         }
         final String username = UserObject.getPublicUsername(user);
         if (username != null) {

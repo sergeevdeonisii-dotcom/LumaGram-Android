@@ -16,6 +16,7 @@ import org.telegram.messenger.LumaDelayedSend;
 import org.telegram.messenger.LumaEmergencyMode;
 import org.telegram.messenger.LumaGhostMode;
 import org.telegram.messenger.LumaDeletedMessages;
+import org.telegram.messenger.LumaAnonymousNumber;
 import org.telegram.messenger.LumaStarRating;
 import org.telegram.messenger.LumaTextAnimation;
 import org.telegram.messenger.LocaleController;
@@ -49,6 +50,8 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private static final int ROW_STAR_RATING_ENABLED = 8;
     private static final int ROW_STAR_RATING_LEVEL = 9;
     private static final int ROW_DELETED_MESSAGES_ENABLED = 10;
+    private static final int ROW_ANONYMOUS_NUMBER_ENABLED = 11;
+    private static final int ROW_ANONYMOUS_NUMBER = 12;
 
     private UniversalRecyclerView listView;
 
@@ -166,6 +169,16 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         ).setEnabled(starRatingEnabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalStarRatingInfo)));
 
+        final boolean anonymousNumberEnabled = LumaAnonymousNumber.isEnabled(currentAccount);
+        items.add(UItem.asHeader(getString(R.string.ExperimentalAnonymousNumberHeader)));
+        items.add(UItem.asCheck(ROW_ANONYMOUS_NUMBER_ENABLED, getString(R.string.ExperimentalAnonymousNumberEnable))
+            .setChecked(anonymousNumberEnabled));
+        items.add(UItem.asButton(
+            ROW_ANONYMOUS_NUMBER,
+            LocaleController.formatString(R.string.ExperimentalAnonymousNumberValue, "+" + LumaAnonymousNumber.getPhone(currentAccount))
+        ).setEnabled(anonymousNumberEnabled));
+        items.add(UItem.asShadow(getString(R.string.ExperimentalAnonymousNumberInfo)));
+
         final boolean deletedMessagesEnabled = LumaDeletedMessages.isEnabled(currentAccount);
         items.add(UItem.asHeader(getString(R.string.ExperimentalDeletedMessagesHeader)));
         items.add(UItem.asCheck(ROW_DELETED_MESSAGES_ENABLED, getString(R.string.ExperimentalDeletedMessagesEnable))
@@ -262,6 +275,21 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             ).show();
         } else if (item.id == ROW_STAR_RATING_LEVEL) {
             showStarRatingLevelDialog();
+        } else if (item.id == ROW_ANONYMOUS_NUMBER_ENABLED) {
+            final boolean enabled = !LumaAnonymousNumber.isEnabled(currentAccount);
+            LumaAnonymousNumber.setEnabled(currentAccount, enabled);
+            if (view instanceof TextCheckCell) {
+                ((TextCheckCell) view).setChecked(enabled);
+            }
+            if (listView != null && listView.adapter != null) {
+                listView.adapter.update(false);
+            }
+            BulletinFactory.of(this).createSimpleBulletin(
+                R.raw.info,
+                getString(enabled ? R.string.ExperimentalAnonymousNumberEnabled : R.string.ExperimentalAnonymousNumberDisabled)
+            ).show();
+        } else if (item.id == ROW_ANONYMOUS_NUMBER) {
+            showAnonymousNumberDialog();
         } else if (item.id == ROW_DELETED_MESSAGES_ENABLED) {
             final boolean enabled = !LumaDeletedMessages.isEnabled(currentAccount);
             LumaDeletedMessages.setEnabled(currentAccount, enabled);
@@ -305,6 +333,36 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 return;
             }
             LumaStarRating.setLevel(currentAccount, level);
+            if (listView != null && listView.adapter != null) {
+                listView.adapter.update(false);
+            }
+        });
+        showDialog(builder.create());
+        editText.requestFocus();
+    }
+
+    private void showAnonymousNumberDialog() {
+        final EditText editText = new EditText(getParentActivity());
+        editText.setInputType(InputType.TYPE_CLASS_NUMBER);
+        editText.setSingleLine(true);
+        editText.setHint("00000000");
+        editText.setText(LumaAnonymousNumber.getDigits(currentAccount));
+        editText.setSelectAllOnFocus(true);
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), resourceProvider);
+        builder.setTitle(getString(R.string.ExperimentalAnonymousNumberChooseTitle));
+        builder.setMessage(getString(R.string.ExperimentalAnonymousNumberChooseInfo));
+        builder.setView(editText);
+        builder.setNegativeButton(getString(R.string.Cancel), null);
+        builder.setPositiveButton(getString(R.string.OK), (dialog, which) -> {
+            String value = editText.getText().toString();
+            if (value.replaceAll("\\D", "").length() != 8) {
+                BulletinFactory.of(this).createSimpleBulletin(
+                    R.raw.info,
+                    getString(R.string.ExperimentalAnonymousNumberInvalid)
+                ).show();
+                return;
+            }
+            LumaAnonymousNumber.setDigits(currentAccount, value);
             if (listView != null && listView.adapter != null) {
                 listView.adapter.update(false);
             }
