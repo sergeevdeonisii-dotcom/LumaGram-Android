@@ -1,7 +1,7 @@
 {
   "version": "12.9.0-luma.54",
   "version_code": 71339,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.54/app.apk",
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.54/Luma-Telegram-12.9-Liquid54-Signed-arm64.apk",
   "sha256": "c3cbbce46661eabf81cb8bed17dda499abc135b8fb86461a15e1a8043e00918e",
   "changelog": "Добавлен экспериментальный призрачный режим: LumaGram не публикует статус «онлайн» при включённой функции. Настройки Telegram и статусы других устройств аккаунта не изменяются."
 }
