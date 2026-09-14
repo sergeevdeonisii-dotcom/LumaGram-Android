@@ -148,6 +148,7 @@ import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaStarRating;
 import org.telegram.messenger.LumaAnonymousNumber;
+import org.telegram.messenger.LumaProfileVerification;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
@@ -681,6 +682,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int botAppRow;
     private int unofficialSecurityRiskRow;
     private int unofficialSecurityRiskDividerRow;
+    private int verificationInfoRow;
 
     private int linkedCommunityRow;
     private int linkedCommunityDividerRow;
@@ -7383,9 +7385,21 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         } else if (position == noteRow) {
 
         } else if (position == phoneRow || position == numberRow) {
+            final TLRPC.User user = getMessagesController().getUser(userId);
+            if (position == phoneRow && user != null
+                    && user.id == getUserConfig().getClientUserId()
+                    && LumaAnonymousNumber.isEnabled(currentAccount)
+                    && getContext() != null) {
+                FragmentUsernameBottomSheet.openLocalPhone(
+                        getContext(),
+                        LumaAnonymousNumber.getPhone(currentAccount),
+                        user,
+                        getResourceProvider()
+                );
+                return true;
+            }
             if (editRow(view, position)) return true;
 
-            final TLRPC.User user = getMessagesController().getUser(userId);
             if (user == null || user.phone == null || user.phone.length() == 0 || getParentActivity() == null) {
                 return false;
             }
@@ -10479,6 +10493,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         botPermissionsDivider = -1;
         unofficialSecurityRiskRow = -1;
         unofficialSecurityRiskDividerRow = -1;
+        verificationInfoRow = -1;
         linkedCommunityRow = -1;
         linkedCommunityDividerRow = -1;
 
@@ -10689,6 +10704,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 }
                 if (user != null && username != null) {
                     usernameRow = rowCount++;
+                }
+                final boolean localVerified = user != null
+                        && user.id == getUserConfig().getClientUserId()
+                        && LumaProfileVerification.isEnabled(currentAccount);
+                if (user != null && (user.verified || localVerified)) {
+                    verificationInfoRow = rowCount++;
                 }
                 if (userInfo != null) {
                     if (userInfo.birthday != null) {
@@ -13700,7 +13721,18 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 case VIEW_TYPE_TEXT2:
                     TextView textView = (TextView) holder.itemView;
                     textView.setPadding(dp(16), dp(10), dp(16), dp(10));
-                    if (position == unofficialSecurityRiskRow) {
+                    textView.setCompoundDrawables(null, null, null, null);
+                    textView.setCompoundDrawablePadding(0);
+                    if (position == verificationInfoRow) {
+                        textView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText, resourcesProvider));
+                        Drawable verifiedDrawable = ContextCompat.getDrawable(mContext, R.drawable.verified_profile);
+                        if (verifiedDrawable != null) {
+                            textView.setCompoundDrawablesWithIntrinsicBounds(verifiedDrawable.mutate(), null, null, null);
+                            textView.setCompoundDrawablePadding(dp(8));
+                        }
+                        textView.setText(getString(R.string.LumaProfileVerifiedInfo));
+                    } else if (position == unofficialSecurityRiskRow) {
+                        textView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, resourcesProvider));
                         final SpannableStringBuilder sb = new SpannableStringBuilder("⚠️");
                         final ColoredImageSpan span = new ColoredImageSpan(R.drawable.round_warn);
                         span.translate(0, dp(1));
@@ -13709,6 +13741,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         sb.append(" ");
                         sb.append(formatString(R.string.ProfileUnofficialSecurityRisk, UserObject.getForcedFirstName(getMessagesController().getUser(userId))));
                         textView.setText(sb);
+                    } else {
+                        textView.setText("");
                     }
                     break;
                 case VIEW_TYPE_PREMIUM_TEXT_CELL:
@@ -14393,7 +14427,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 return VIEW_TYPE_BOT_APP;
             } else if (position == infoSectionRow || position == infoAffiliateRow) {
                 return VIEW_TYPE_SHADOW_TEXT;
-            } else if (position == unofficialSecurityRiskRow) {
+            } else if (position == unofficialSecurityRiskRow || position == verificationInfoRow) {
                 return VIEW_TYPE_TEXT2;
             } else if (position == linkedCommunityRow) {
                 return VIEW_TYPE_LINKED_COMMUNITY;
@@ -15740,6 +15774,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             put(++pointer, affiliateRow, sparseIntArray);
             put(++pointer, infoAffiliateRow, sparseIntArray);
             put(++pointer, unofficialSecurityRiskRow, sparseIntArray);
+            put(++pointer, verificationInfoRow, sparseIntArray);
             put(++pointer, sendMessageRow, sparseIntArray);
             put(++pointer, reportRow, sparseIntArray);
             put(++pointer, deleteReactionRow, sparseIntArray);

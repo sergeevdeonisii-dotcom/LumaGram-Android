@@ -11247,6 +11247,16 @@
     <string name="ExperimentalAnonymousNumberInfo">Shows the selected Fragment +888 number in the profile and settings only on this device. Sign-in, registration, and the server-side number are unchanged.</string>
     <string name="ExperimentalAnonymousNumberEnabled">Local anonymous number enabled</string>
     <string name="ExperimentalAnonymousNumberDisabled">Local anonymous number disabled</string>
+    <string name="ExperimentalProfileVerificationHeader">Profile verification (local)</string>
+    <string name="ExperimentalProfileVerificationEnable">Show Telegram verification mark</string>
+    <string name="ExperimentalProfileVerificationInfo">Adds a visual Telegram verification note to your own profile on this device only. The server-side account status is unchanged.</string>
+    <string name="ExperimentalProfileVerificationEnabled">Local verification mark enabled</string>
+    <string name="ExperimentalProfileVerificationDisabled">Local verification mark disabled</string>
+    <string name="LumaProfileVerifiedInfo">This account is verified as official by the representatives of Telegram.</string>
+    <string name="LumaAnonymousSheetTitle">**%s** is a collectible phone number that belongs to</string>
+    <string name="LumaAnonymousSheetMessage">This phone number was bought on **Fragment** for **%s** (local visual preview)</string>
+    <string name="LumaAnonymousSheetDetails">More details</string>
+    <string name="LumaAnonymousSheetCopy">Copy phone number</string>
     <string name="ExperimentalDeletedMessagesHeader">Deleted messages</string>
     <string name="ExperimentalDeletedMessagesEnable">Keep deleted messages locally</string>
     <string name="ExperimentalDeletedMessagesInfo">Deleted messages stay only on this device, appear dimmed, and get a small trash icon. Telegram and other devices are unchanged.</string>
