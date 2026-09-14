@@ -2040,6 +2040,9 @@ public class GiftSheet extends BottomSheetWithRecyclerListView implements Notifi
                 } else if (item.object instanceof TL_stars.SavedStarGift) {
                     TL_stars.SavedStarGift gift = (TL_stars.SavedStarGift) item.object;
                     animated = cell.setStarsGift(gift, item.accent, item.red);
+                    if (item.object2 instanceof Boolean) {
+                        cell.setPinned(gift.pinned_to_top || (Boolean) item.object2, animated);
+                    }
                 }
                 if (item.collapsed) { // checkable
                     cell.setChecked(item.checked, animated);
@@ -2101,7 +2104,7 @@ public class GiftSheet extends BottomSheetWithRecyclerListView implements Notifi
                     } else if (a.object instanceof TL_stars.SavedStarGift && b.object instanceof TL_stars.SavedStarGift) {
                         final TL_stars.SavedStarGift ag = (TL_stars.SavedStarGift) a.object;
                         final TL_stars.SavedStarGift bg = (TL_stars.SavedStarGift) b.object;
-                        return ag.gift.id == bg.gift.id && ag.date == bg.date && ag.saved_id == bg.saved_id;
+                        return ag.gift.id == bg.gift.id && ag.date == bg.date && ag.saved_id == bg.saved_id && a.object2 == b.object2;
                     }
                 }
                 return (

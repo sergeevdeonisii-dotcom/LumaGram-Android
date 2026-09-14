@@ -14654,7 +14654,10 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (botCommandsMenuButton != null && botCommandsMenuButton.getTag() != null) {
             botCommandsMenuButton.measure(widthMeasureSpec, heightMeasureSpec);
             final int botMenuButtonWidth = botCommandsMenuButton.getMeasuredWidth();
-            final int botMenuTextOffset = LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS) ? 10 : 71;
+            // Keep the hint close to the bot menu button while leaving a small
+            // visual gap inside the Liquid Glass input island. The previous
+            // 10dp offset made "Message" sit too far to the left in bot chats.
+            final int botMenuTextOffset = LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS) ? 40 : 71;
             ((MarginLayoutParams) emojiButton.getLayoutParams()).leftMargin = dp(10) + botMenuButtonWidth;
             if (deleteRichDraftButton != null) {
                 ((MarginLayoutParams) deleteRichDraftButton.getLayoutParams()).leftMargin = dp(10) + botMenuButtonWidth;

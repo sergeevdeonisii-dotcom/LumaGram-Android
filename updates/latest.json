@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.50",
-  "version_code": 71299,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.50/Luma-Telegram-12.9-Liquid50-Signed-arm64.apk",
-  "sha256": "edcfafb0499578af301f2c4933763febcb86af90ee61b188efb8571fcb9b16a9",
-  "changelog": "Исправлена анимация записи голосовых и кружков, выравнивание поля ввода ботов, добавлено массовое скрытие подарков и безлимитное локальное закрепление любых подарков."
+  "version": "12.9.0-luma.52",
+  "version_code": 71319,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.52/app.apk",
+  "sha256": "0569fdc72965130db5b7063c24a3d38e38a6b8034a31da886f23ab8b7e02c257",
+  "changelog": "Исправлены heads-up-уведомления: обычные личные сообщения больше не переиспользуют тихий канал, добавлены отдельные silent-каналы для диалогов и снижена частота лишних обновлений уведомлений."
 }
