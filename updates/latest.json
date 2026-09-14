@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.54",
-  "version_code": 71339,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.54-hotfix/app.apk",
-  "sha256": "c3cbbce46661eabf81cb8bed17dda499abc135b8fb86461a15e1a8043e00918e",
-  "changelog": "Добавлен экспериментальный призрачный режим: LumaGram не публикует статус «онлайн» при включённой функции. Настройки Telegram и статусы других устройств аккаунта не изменяются."
+  "version": "12.9.0-luma.55",
+  "version_code": 71349,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.55-hotfix/app.apk",
+  "sha256": "516258b8d913997080b096b0134f8b707629a9568faf9fe8198de585c2db788d",
+  "changelog": "Добавлен локальный уровень профиля по потраченным Stars с сохранением настройки. Удалённые сообщения можно сохранять только на этом устройстве: они становятся тусклее и получают значок корзины."
 }
