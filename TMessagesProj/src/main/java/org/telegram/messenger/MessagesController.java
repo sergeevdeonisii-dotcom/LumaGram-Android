@@ -10502,6 +10502,33 @@ public class MessagesController extends BaseController implements NotificationCe
         });
     }
 
+    /**
+     * Applies the local Luma ghost mode without changing Telegram privacy settings.
+     * The next timer tick will keep this client offline while it is active; disabling
+     * the mode allows the normal foreground status update to resume.
+     */
+    public void setLumaGhostModeEnabled(boolean enabled) {
+        ignoreSetOnline = enabled;
+        if (enabled) {
+            if (statusRequest != 0) {
+                getConnectionsManager().cancelRequest(statusRequest, true);
+            }
+            statusSettingState = 2;
+            TL_account.updateStatus req = new TL_account.updateStatus();
+            req.offline = true;
+            statusRequest = getConnectionsManager().sendRequest(req, (response, error) -> {
+                if (error == null) {
+                    offlineSent = true;
+                }
+                statusSettingState = 0;
+                statusRequest = 0;
+            });
+        } else {
+            offlineSent = false;
+            statusSettingState = 0;
+        }
+    }
+
     public void updateTimerProc() {
         long currentTime = System.currentTimeMillis();
 
@@ -10509,7 +10536,7 @@ public class MessagesController extends BaseController implements NotificationCe
         checkReadTasks();
 
         if (getUserConfig().isClientActivated()) {
-            if (!ignoreSetOnline && getConnectionsManager().getPauseTime() == 0 && ApplicationLoader.isScreenOn && !ApplicationLoader.mainInterfacePausedStageQueue) {
+            if (!ignoreSetOnline && !LumaGhostMode.isEnabled(currentAccount) && getConnectionsManager().getPauseTime() == 0 && ApplicationLoader.isScreenOn && !ApplicationLoader.mainInterfacePausedStageQueue) {
                 if (ApplicationLoader.mainInterfacePausedStageQueueTime != 0 && Math.abs(ApplicationLoader.mainInterfacePausedStageQueueTime - System.currentTimeMillis()) > 1000) {
                     if (statusSettingState != 1 && (lastStatusUpdateTime == 0 || Math.abs(System.currentTimeMillis() - lastStatusUpdateTime) >= 55000 || offlineSent)) {
                         statusSettingState = 1;

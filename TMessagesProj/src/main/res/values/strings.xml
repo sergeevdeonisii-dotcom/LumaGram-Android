@@ -11225,6 +11225,11 @@
     <string name="EmergencyConnectionEnabled">Emergency connection is on</string>
     <string name="EmergencyConnectionDisabled">Emergency connection is off</string>
     <string name="EmergencyConnectionSelectTitle">Select priority chat</string>
+    <string name="ExperimentalGhostHeader">Ghost mode</string>
+    <string name="ExperimentalGhostEnable">Hide online status</string>
+    <string name="ExperimentalGhostInfo">LumaGram will not publish an online status while this mode is enabled. Telegram privacy settings are not changed; other devices on the account may still publish a status.</string>
+    <string name="ExperimentalGhostEnabled">Ghost mode is on</string>
+    <string name="ExperimentalGhostDisabled">Ghost mode is off</string>
     <string name="ExperimentalTypingHeader">Smooth typing</string>
     <string name="ExperimentalTypingInfo">Fine-tune how new characters appear in the message field. Changes apply immediately and never affect the text itself.</string>
     <string name="ExperimentalTypingSpeed">Animation speed</string>

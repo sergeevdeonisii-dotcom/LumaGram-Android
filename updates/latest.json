@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.53",
-  "version_code": 71329,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.53/app.apk",
-  "sha256": "afd4a477ab4ac56592c85ccc93738a5daeb05ab52263793ec553749a162e458d",
-  "changelog": "В профиле подарков кнопка теперь переключается между «Скрыть все подарки» и «Открыть все подарки». Добавлено пакетное открытие скрытых подарков с обновлением профиля; локальные закрепы сохранены."
+  "version": "12.9.0-luma.54",
+  "version_code": 71339,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.54/app.apk",
+  "sha256": "c3cbbce46661eabf81cb8bed17dda499abc135b8fb86461a15e1a8043e00918e",
+  "changelog": "Добавлен экспериментальный призрачный режим: LumaGram не публикует статус «онлайн» при включённой функции. Настройки Telegram и статусы других устройств аккаунта не изменяются."
 }
