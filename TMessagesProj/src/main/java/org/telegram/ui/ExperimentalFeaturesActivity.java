@@ -12,6 +12,7 @@ import android.widget.FrameLayout;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.LumaDelayedSend;
 import org.telegram.messenger.LumaEmergencyMode;
+import org.telegram.messenger.LumaGhostMode;
 import org.telegram.messenger.LumaTextAnimation;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
@@ -39,6 +40,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private static final int ROW_ACCOUNT_EXPORT = 4;
     private static final int ROW_EMERGENCY_ENABLED = 5;
     private static final int ROW_EMERGENCY_CHAT = 6;
+    private static final int ROW_GHOST_ENABLED = 7;
 
     private UniversalRecyclerView listView;
 
@@ -140,6 +142,12 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         ));
         items.add(UItem.asShadow(getString(R.string.EmergencyConnectionInfo)));
 
+        final boolean ghostEnabled = LumaGhostMode.isEnabled(currentAccount);
+        items.add(UItem.asHeader(getString(R.string.ExperimentalGhostHeader)));
+        items.add(UItem.asCheck(ROW_GHOST_ENABLED, getString(R.string.ExperimentalGhostEnable))
+            .setChecked(ghostEnabled));
+        items.add(UItem.asShadow(getString(R.string.ExperimentalGhostInfo)));
+
         items.add(UItem.asHeader(tr("Данные аккаунта", "Account data")));
         items.add(UItem.asButton(ROW_ACCOUNT_EXPORT,
                 tr("Экспорт аккаунта", "Account export"),
@@ -202,6 +210,19 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             ).show();
         } else if (item.id == ROW_EMERGENCY_CHAT) {
             openEmergencyChatPicker();
+        } else if (item.id == ROW_GHOST_ENABLED) {
+            final boolean enabled = !LumaGhostMode.isEnabled(currentAccount);
+            LumaGhostMode.setEnabled(currentAccount, enabled);
+            if (view instanceof TextCheckCell) {
+                ((TextCheckCell) view).setChecked(enabled);
+            }
+            if (listView != null && listView.adapter != null) {
+                listView.adapter.update(false);
+            }
+            BulletinFactory.of(this).createSimpleBulletin(
+                R.raw.info,
+                getString(enabled ? R.string.ExperimentalGhostEnabled : R.string.ExperimentalGhostDisabled)
+            ).show();
         } else if (item.id == ROW_ACCOUNT_EXPORT) {
             presentFragment(new LumaAccountExportActivity());
         }

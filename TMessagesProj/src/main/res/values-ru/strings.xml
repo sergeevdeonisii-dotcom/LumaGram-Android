@@ -329,6 +329,11 @@
     <string name="EmergencyConnectionEnabled">Экстренная связь включена</string>
     <string name="EmergencyConnectionDisabled">Экстренная связь выключена</string>
     <string name="EmergencyConnectionSelectTitle">Выберите приоритетный чат</string>
+    <string name="ExperimentalGhostHeader">Призрачный режим</string>
+    <string name="ExperimentalGhostEnable">Не показывать онлайн</string>
+    <string name="ExperimentalGhostInfo">LumaGram не отправляет статус «онлайн», пока режим включён. Настройки приватности Telegram не изменяются; другие устройства аккаунта могут по-прежнему публиковать статус.</string>
+    <string name="ExperimentalGhostEnabled">Призрачный режим включён</string>
+    <string name="ExperimentalGhostDisabled">Призрачный режим выключен</string>
     <string name="ExperimentalTypingHeader">Плавная печать</string>
     <string name="ExperimentalTypingInfo">Настройте появление новых символов в поле сообщения. Изменения применяются сразу и не затрагивают сам текст.</string>
     <string name="ExperimentalTypingSpeed">Скорость анимации</string>
