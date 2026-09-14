@@ -147,6 +147,7 @@ import org.telegram.messenger.LanguageDetector;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaStarRating;
+import org.telegram.messenger.LumaAnonymousNumber;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
@@ -13497,7 +13498,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         String text;
                         TLRPC.User user = getMessagesController().getUser(userId);
                         String phoneNumber;
-                        if (user != null && !TextUtils.isEmpty(vcardPhone)) {
+                        if (user != null && user.id == getUserConfig().getClientUserId() && LumaAnonymousNumber.isEnabled(currentAccount)) {
+                            phoneNumber = LumaAnonymousNumber.getPhone(currentAccount);
+                            text = PhoneFormat.getInstance().format("+" + phoneNumber);
+                        } else if (user != null && !TextUtils.isEmpty(vcardPhone)) {
                             text = PhoneFormat.getInstance().format("+" + vcardPhone);
                             phoneNumber = vcardPhone;
                         } else if (user != null && !TextUtils.isEmpty(user.phone)) {
