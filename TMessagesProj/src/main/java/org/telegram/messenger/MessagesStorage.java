@@ -14067,6 +14067,7 @@ public class MessagesStorage extends BaseController {
             ArrayList<Long> dialogsIds = new ArrayList<>();
             final boolean scheduled = mode == ChatActivity.MODE_SCHEDULED;
             final boolean quickReplies = mode == ChatActivity.MODE_QUICK_REPLIES;
+            final boolean keepDeletedMessages = LumaDeletedMessages.isEnabled(currentAccount) && !scheduled && !quickReplies;
             if (quickReplies) {
                 String ids = TextUtils.join(",", messages);
 
@@ -14154,6 +14155,9 @@ public class MessagesStorage extends BaseController {
                             messagesByDialogs.put(did, mids);
                         }
                         mids.add(mid);
+                        if (keepDeletedMessages) {
+                            LumaDeletedMessages.rememberDeleted(currentAccount, did, mid);
+                        }
                         if (did != currentUser) {
                             int read_state = cursor.intValue(2);
                             if (cursor.intValue(3) == 0) {
@@ -14181,7 +14185,7 @@ public class MessagesStorage extends BaseController {
                                 deletedMessages.add(message);
                             }
                             data.reuse();
-                            if (DialogObject.isEncryptedDialog(did) || deleteFiles) {
+                            if (!keepDeletedMessages && (DialogObject.isEncryptedDialog(did) || deleteFiles)) {
                                 addFilesToDelete(message, filesToDelete, idsToDelete, namesToDelete, false);
                             }
 
@@ -14217,13 +14221,18 @@ public class MessagesStorage extends BaseController {
                         int mid = cursor.intValue(5);
                         long topicId = 0;
                         unknownMessagesInTopics.remove((Integer) mid);
+                        if (keepDeletedMessages) {
+                            LumaDeletedMessages.rememberDeleted(currentAccount, did, mid);
+                        }
 
                         NativeByteBuffer data = cursor.byteBufferValue(1);
                         if (data != null) {
                             TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
                             message.readAttachPath(data, getUserConfig().clientUserId);
                             data.reuse();
-                            addFilesToDelete(message, filesToDelete, idsToDelete, namesToDelete, false);
+                            if (!keepDeletedMessages) {
+                                addFilesToDelete(message, filesToDelete, idsToDelete, namesToDelete, false);
+                            }
                             if (message.action instanceof TLRPC.TL_messageActionTopicCreate) {
                                 if (topicsToDelete == null) {
                                     topicsToDelete = new ArrayList<>();
@@ -14259,7 +14268,7 @@ public class MessagesStorage extends BaseController {
                 cursor = null;
 
                 database.beginTransaction();
-                for (int i = 0; i < 4; i++) {
+                if (!keepDeletedMessages) for (int i = 0; i < 4; i++) {
                     if (i == 0) {
                         if (dialogId != 0) {
                             state = getMessagesStorage().getDatabase().executeFast("UPDATE messages_v2 SET replydata = ? WHERE reply_to_message_id IN(?) AND uid = ?");
@@ -14297,9 +14306,11 @@ public class MessagesStorage extends BaseController {
                     data.reuse();
                 }
 
-                deleteFromDownloadQueue(idsToDelete, true);
-                AndroidUtilities.runOnUIThread(() -> getFileLoader().cancelLoadFiles(namesToDelete));
-                getFileLoader().deleteFiles(filesToDelete, 0);
+                if (!keepDeletedMessages) {
+                    deleteFromDownloadQueue(idsToDelete, true);
+                    AndroidUtilities.runOnUIThread(() -> getFileLoader().cancelLoadFiles(namesToDelete));
+                    getFileLoader().deleteFiles(filesToDelete, 0);
+                }
 
                 for (int a = 0; a < dialogsToUpdate.size(); a++) {
                     long did = dialogsToUpdate.keyAt(a);
@@ -14394,6 +14405,7 @@ public class MessagesStorage extends BaseController {
                     long did = messagesByDialogs.keyAt(a);
                     ArrayList<Integer> mids = messagesByDialogs.valueAt(a);
                     String idsStr = TextUtils.join(",", mids);
+                    if (!keepDeletedMessages) {
                     if (!DialogObject.isEncryptedDialog(did)) {
                         if (DialogObject.isChatDialog(did)) {
                             database.executeFast(String.format(Locale.US, "UPDATE chat_settings_v2 SET pinned = 0 WHERE uid = %d AND pinned IN (%s)", -did, idsStr)).stepThis().dispose();
@@ -14546,11 +14558,14 @@ public class MessagesStorage extends BaseController {
                     }
                     database.executeFast(String.format(Locale.US, "DELETE FROM media_v4 WHERE mid IN(%s) AND uid = %d", ids, did)).stepThis().dispose();
                     database.executeFast(String.format(Locale.US, "DELETE FROM media_topics WHERE mid IN(%s) AND uid = %d", ids, did)).stepThis().dispose();
+                    }
                 }
-                if (!savedMessagesByDialogs.isEmpty()) {
+                if (!keepDeletedMessages && !savedMessagesByDialogs.isEmpty()) {
                     AndroidUtilities.runOnUIThread(() -> getMessagesController().getSavedMessagesController().updateDeleted(savedMessagesByDialogs));
                 }
-                database.executeFast(String.format(Locale.US, "DELETE FROM messages_seq WHERE mid IN(%s)", ids)).stepThis().dispose();
+                if (!keepDeletedMessages) {
+                    database.executeFast(String.format(Locale.US, "DELETE FROM messages_seq WHERE mid IN(%s)", ids)).stepThis().dispose();
+                }
                 if (!unknownMessages.isEmpty()) {
                     if (dialogId == 0) {
                         database.executeFast("UPDATE media_counts_v2 SET old = 1 WHERE 1").stepThis().dispose();
@@ -14558,7 +14573,7 @@ public class MessagesStorage extends BaseController {
                         database.executeFast(String.format(Locale.US, "UPDATE media_counts_v2 SET old = 1 WHERE uid = %d", dialogId)).stepThis().dispose();
                     }
                 }
-                if (deletedMessages != null && !deletedMessages.isEmpty()) {
+                if (!keepDeletedMessages && deletedMessages != null && !deletedMessages.isEmpty()) {
                     AndroidUtilities.runOnUIThread(() -> {
                         boolean changed = false;
                         HashSet<Long> topicIds = new HashSet<>();
@@ -14572,7 +14587,7 @@ public class MessagesStorage extends BaseController {
                             getMessagesController().updateSavedReactionTags(topicIds);
                         }
                     });
-                } else if (deletedMessages != null && deletedMessages.isEmpty()) {
+                } else if (!keepDeletedMessages && deletedMessages != null && deletedMessages.isEmpty()) {
                     AndroidUtilities.runOnUIThread(() -> {
                         HashSet<Long> topicIds = new HashSet<>();
                         boolean changed = false;
@@ -14588,21 +14603,23 @@ public class MessagesStorage extends BaseController {
                         }
                     });
                 }
-                if (!unknownMessagesInTopics.isEmpty()) {
+                if (!keepDeletedMessages && !unknownMessagesInTopics.isEmpty()) {
                     if (dialogId == 0) {
                         database.executeFast("UPDATE media_counts_topics SET old = 1 WHERE 1").stepThis().dispose();
                     } else {
                         database.executeFast(String.format(Locale.US, "UPDATE media_counts_topics SET old = 1 WHERE uid = %d", dialogId)).stepThis().dispose();
                     }
                 }
-                getMediaDataController().clearBotKeyboard(null, messages);
+                if (!keepDeletedMessages) {
+                    getMediaDataController().clearBotKeyboard(null, messages);
+                }
 
                 if (dialogsToUpdate.size() != 0) {
                     resetAllUnreadCounters(false);
                 }
                 updateWidgets(dialogsIds);
 
-                if (topicsToDelete != null) {
+                if (!keepDeletedMessages && topicsToDelete != null) {
                     for (int i = 0; i < topicsToDelete.size(); i++) {
                         TopicKey topicKey = topicsToDelete.get(i);
                         database.executeFast(String.format(Locale.US, "DELETE FROM topics WHERE did = %d AND topic_id = %d", topicKey.dialogId, topicKey.topicId)).stepThis().dispose();

@@ -9357,6 +9357,14 @@ public class MessagesController extends BaseController implements NotificationCe
                 }
                 getMessagesStorage().markMessagesAsDeleted(dialogId, messages, true, false, ChatActivity.MODE_QUICK_REPLIES, topicId);
             } else {
+                if (LumaDeletedMessages.isEnabled(currentAccount)) {
+                    for (int a = 0; a < messages.size(); a++) {
+                        Integer id = messages.get(a);
+                        if (id != null) {
+                            LumaDeletedMessages.rememberDeleted(currentAccount, dialogId, id);
+                        }
+                    }
+                }
                 if (channelId == 0) {
                     for (int a = 0; a < messages.size(); a++) {
                         Integer id = messages.get(a);

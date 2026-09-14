@@ -146,6 +146,7 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LanguageDetector;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaStarRating;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
@@ -5625,7 +5626,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         });
         ratingView.setOnClickListener(this::showStarRatingBottomSheet);
         if (userInfo != null) {
-            ratingView.set(userInfo.stars_rating);
+            ratingView.set(LumaStarRating.getDisplayRating(currentAccount, userId, userInfo.stars_rating));
         }
 
         avatarContainer2.addView(ratingView);
@@ -9204,7 +9205,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             if (uid == userId) {
                 userInfo = (TLRPC.UserFull) args[1];
                 if (ratingView != null) {
-                    ratingView.set(userInfo.stars_rating);
+                    ratingView.set(LumaStarRating.getDisplayRating(currentAccount, userId, userInfo.stars_rating));
                 }
                 if (storyView != null) {
                     storyView.setStories(userInfo.stories);
@@ -10332,7 +10333,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     ) {
         userInfo = value;
         if (ratingView != null) {
-            ratingView.set(userInfo.stars_rating);
+            ratingView.set(LumaStarRating.getDisplayRating(currentAccount, userId, userInfo.stars_rating));
         }
         if (storyView != null) {
             storyView.setStories(userInfo.stories);
@@ -16672,7 +16673,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private void showStarRatingBottomSheet(View ignoreView) {
         final Context context = getContext();
         final TLRPC.UserFull userFull = getUserInfo();
-        if (userFull == null || userFull.stars_rating == null) {
+        final TL_stars.Tl_starsRating displayRating = userFull == null ? null : LumaStarRating.getDisplayRating(currentAccount, getDialogId(), userFull.stars_rating);
+        if (userFull == null || displayRating == null) {
             return;
         }
 
@@ -16688,7 +16690,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         {
             limitPreviewView = new LimitPreviewView(getContext(), R.drawable.filled_rating_crown, 0, 0, resourcesProvider);
             limitPreviewView.setHideNegativeValues(getDialogId() != UserConfig.getInstance(currentAccount).getClientUserId());
-            limitPreviewView.setStarRating(userFull.stars_rating);
+            limitPreviewView.setStarRating(displayRating);
             limitPreviewView.setTranslationY(-dp(14));
             linearLayout.addView(limitPreviewView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 0, 20, 0, 10));
         }
@@ -16736,14 +16738,14 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
             final boolean isSelf = getDialogId() == UserConfig.getInstance(currentAccount).getClientUserId();
 
-            final long dcurrent = userFull.stars_rating.stars;
-            final long dpoints = userFull.stars_my_pending_rating != null ? userFull.stars_my_pending_rating.stars - userFull.stars_rating.stars : 0;
+            final long dcurrent = displayRating.stars;
+            final long dpoints = userFull.stars_my_pending_rating != null ? userFull.stars_my_pending_rating.stars - displayRating.stars : 0;
             final long debt = -dcurrent - dpoints;
             final int days = Math.max(1, (userFull.stars_my_pending_rating_date - ConnectionsManager.getInstance(currentAccount).getCurrentTime()) / (24 * 60 * 60));
-            final long points = userFull.stars_my_pending_rating.stars - userFull.stars_rating.stars;
+            final long points = userFull.stars_my_pending_rating.stars - displayRating.stars;
 
             SpannableStringBuilder sb;
-            if (userFull.stars_rating.stars < 0 && !isSelf || isSelf && debt > 0) {
+            if (displayRating.stars < 0 && !isSelf || isSelf && debt > 0) {
                 textView[0].setTextColor(Theme.getColor(Theme.key_text_RedBold));
                 if (isSelf) {
                     textView[0].setText(AndroidUtilities.replaceTags(formatPluralStringComma("StarRatingLevelNegativeYou", (int) debt)));
@@ -16758,11 +16760,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 ));
                 sb.append(" ");
                 sb.append(AndroidUtilities.replaceArrows(AndroidUtilities.premiumText(getString(R.string.StarRatingFuturePendingPointsPreview), () -> {
-                    limitPreviewView.animateStarRating(userFull.stars_rating, userFull.stars_my_pending_rating);
+                    limitPreviewView.animateStarRating(displayRating, userFull.stars_my_pending_rating);
                     update.run(true);
                 }), true));
                 textView[0].setOnClickListener(v -> {
-                    limitPreviewView.animateStarRating(userFull.stars_rating, userFull.stars_my_pending_rating);
+                    limitPreviewView.animateStarRating(displayRating, userFull.stars_my_pending_rating);
                     update.run(true);
                 });
                 textView[0].setText(sb);
@@ -16775,11 +16777,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             ));
             sb.append(" ");
             sb.append(AndroidUtilities.replaceArrows(AndroidUtilities.premiumText(getString(R.string.StarRatingFuturePendingPointsPreviewBack), () -> {
-                limitPreviewView.animateStarRating(userFull.stars_my_pending_rating, userFull.stars_rating);
+                limitPreviewView.animateStarRating(userFull.stars_my_pending_rating, displayRating);
                 update.run(false);
             }), true));
             textView[1].setOnClickListener(v -> {
-                limitPreviewView.animateStarRating(userFull.stars_my_pending_rating, userFull.stars_rating);
+                limitPreviewView.animateStarRating(userFull.stars_my_pending_rating, displayRating);
                 update.run(false);
             });
             textView[1].setText(sb);

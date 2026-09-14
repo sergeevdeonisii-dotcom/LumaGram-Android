@@ -20044,6 +20044,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         }
 
         final int restore = canvas.getSaveCount();
+        if (currentMessageObject.deleted && !currentMessageObject.deletedByThanos) {
+            canvas.saveLayerAlpha(0, 0, getMeasuredWidth(), getMeasuredHeight(), 185, Canvas.ALL_SAVE_FLAG);
+        }
         int restoreToSponosoredAlpha = -1;
         if (sponosoredAlpha != 255) {
             restoreToSponosoredAlpha = canvas.saveLayerAlpha(0, 0, getMeasuredWidth(), getMeasuredHeight(), sponosoredAlpha);
@@ -23683,7 +23686,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     private void drawTimeInternal(Canvas canvas, float alpha, boolean fromParent, float timeX, StaticLayout timeLayout, float timeWidth, boolean drawSelectionBackground) {
-        if ((!drawTime || groupPhotoInvisible) && shouldDrawTimeOnMedia() || timeLayout == null || (currentMessageObject.deleted && currentPosition != null) || currentMessageObject.type == MessageObject.TYPE_PHONE_CALL) {
+        if ((!drawTime || groupPhotoInvisible) && shouldDrawTimeOnMedia() || timeLayout == null || (currentMessageObject.deletedByThanos && currentPosition != null) || currentMessageObject.type == MessageObject.TYPE_PHONE_CALL) {
             return;
         }
         if (currentMessageObject.type == MessageObject.TYPE_ROUND_VIDEO) {
@@ -24031,6 +24034,19 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             }
         }
         canvas.restore();
+
+        if (currentMessageObject.deleted && !currentMessageObject.deletedByThanos && timeLayout != null) {
+            Drawable deletedDrawable = ContextCompat.getDrawable(getContext(), R.drawable.msg_delete);
+            if (deletedDrawable != null) {
+                final int size = dp(11);
+                final int x = (int) drawTimeX - dp(13);
+                final int y = (int) drawTimeY + Math.max(0, (timeLayout.getHeight() - size) / 2);
+                deletedDrawable.setBounds(x, y, x + size, y + size);
+                deletedDrawable.setAlpha((int) (255 * alpha * .85f));
+                deletedDrawable.draw(canvas);
+                deletedDrawable.setAlpha(255);
+            }
+        }
 
         if (unlockLayout != null) {
             if (unlockX == 0 || unlockY == 0) {
