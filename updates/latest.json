@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.56",
-  "version_code": 71359,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.56-hotfix2/app.apk",
-  "sha256": "719d1671863d4fd63a61fba8f1c440c8f147f8f6818ea891bc1d64733aee5fc7",
-  "changelog": "Пороги локальных уровней Stars приведены к шкале Telegram: 80-й уровень — 1 000 000 Stars, максимум — 100. Добавлен визуальный локальный Anonymous Number +888 в экспериментальных настройках; реальный номер аккаунта не меняется."
+  "version": "12.9.0-luma.57",
+  "version_code": 71369,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.57-hotfix2/app.apk",
+  "sha256": "6471cfe9df8b49af207463813b123203d59e980e772ef2333fab7b908d97e496",
+  "changelog": "Добавлен локальный экран Anonymous Number в стиле Fragment с аватаром и случайной ценой, локальная отметка официальной верификации профиля и случайный прогресс внутри диапазона уровня Stars. Серверные данные аккаунта не изменяются."
 }
