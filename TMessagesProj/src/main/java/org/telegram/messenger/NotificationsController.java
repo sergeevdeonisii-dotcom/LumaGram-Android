@@ -144,6 +144,9 @@ public class NotificationsController extends BaseController implements Notificat
 
     private Runnable notificationDelayRunnable;
     private PowerManager.WakeLock notificationDelayWakelock;
+    private boolean notificationUpdateScheduled;
+    private boolean notificationUpdateNotifyAboutLast;
+    private long lastNotificationUpdateTime;
 
     private long lastSoundPlay;
     private long lastSoundOutPlay;
@@ -257,10 +260,9 @@ public class NotificationsController extends BaseController implements Notificat
         if (Build.VERSION.SDK_INT < 26) {
             return;
         }
-        SharedPreferences preferences = null;
+        SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("Notifications", Activity.MODE_PRIVATE);
         if (OTHER_NOTIFICATIONS_CHANNEL == null) {
-            preferences = ApplicationLoader.applicationContext.getSharedPreferences("Notifications", Activity.MODE_PRIVATE);
-            OTHER_NOTIFICATIONS_CHANNEL = preferences.getString("OtherKey", "Other3");
+            OTHER_NOTIFICATIONS_CHANNEL = preferences.getString("OtherKey", "Other4");
         }
         NotificationChannel notificationChannel = systemNotificationManager.getNotificationChannel(OTHER_NOTIFICATIONS_CHANNEL);
         if (notificationChannel != null && notificationChannel.getImportance() == NotificationManager.IMPORTANCE_NONE) {
@@ -272,18 +274,27 @@ public class NotificationsController extends BaseController implements Notificat
             OTHER_NOTIFICATIONS_CHANNEL = null;
             notificationChannel = null;
         }
+        // Older builds used a default/silent summary channel.  Android keeps a
+        // channel's importance forever, so move the summary to a versioned high
+        // channel instead of reusing the old low-priority channel.
+        if (notificationChannel != null && notificationChannel.getImportance() < NotificationManager.IMPORTANCE_HIGH) {
+            OTHER_NOTIFICATIONS_CHANNEL = "Other4";
+            preferences.edit().putString("OtherKey", OTHER_NOTIFICATIONS_CHANNEL).commit();
+            notificationChannel = systemNotificationManager.getNotificationChannel(OTHER_NOTIFICATIONS_CHANNEL);
+        }
         if (OTHER_NOTIFICATIONS_CHANNEL == null) {
-            if (preferences == null) {
-                preferences = ApplicationLoader.applicationContext.getSharedPreferences("Notifications", Activity.MODE_PRIVATE);
-            }
-            OTHER_NOTIFICATIONS_CHANNEL = "Other" + Utilities.random.nextLong();
+            OTHER_NOTIFICATIONS_CHANNEL = "Other4";
             preferences.edit().putString("OtherKey", OTHER_NOTIFICATIONS_CHANNEL).commit();
         }
         if (notificationChannel == null) {
-            notificationChannel = new NotificationChannel(OTHER_NOTIFICATIONS_CHANNEL, "Internal notifications", NotificationManager.IMPORTANCE_DEFAULT);
-            notificationChannel.enableLights(false);
-            notificationChannel.enableVibration(false);
-            notificationChannel.setSound(null, null);
+            notificationChannel = new NotificationChannel(OTHER_NOTIFICATIONS_CHANNEL, "Internal notifications", NotificationManager.IMPORTANCE_HIGH);
+            notificationChannel.enableLights(true);
+            notificationChannel.enableVibration(true);
+            notificationChannel.setVibrationPattern(new long[]{0, 250});
+            notificationChannel.setSound(Settings.System.DEFAULT_NOTIFICATION_URI, new AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .build());
             try {
                 systemNotificationManager.createNotificationChannel(notificationChannel);
             } catch (Exception e) {
@@ -384,6 +395,8 @@ public class NotificationsController extends BaseController implements Notificat
             openedInBubbleDialogs.clear();
             delayedPushMessages.clear();
             notifyCheck = false;
+            notificationUpdateScheduled = false;
+            notificationUpdateNotifyAboutLast = false;
             lastBadgeCount = 0;
             try {
                 if (notificationDelayWakelock.isHeld()) {
@@ -583,7 +596,7 @@ public class NotificationsController extends BaseController implements Notificat
             if (old_unread_count != total_unread_count) {
                 if (!notifyCheck) {
                     delayedPushMessages.clear();
-                    showOrUpdateNotification(notifyCheck);
+                    requestNotificationUpdate(notifyCheck);
                 } else {
                     scheduleNotificationDelay(lastOnlineFromOtherDevice > getConnectionsManager().getCurrentTime());
                 }
@@ -667,7 +680,7 @@ public class NotificationsController extends BaseController implements Notificat
             if (old_unread_count != total_unread_count) {
                 if (!notifyCheck) {
                     delayedPushMessages.clear();
-                    showOrUpdateNotification(notifyCheck);
+                    requestNotificationUpdate(notifyCheck);
                 } else {
                     scheduleNotificationDelay(lastOnlineFromOtherDevice > getConnectionsManager().getCurrentTime());
                 }
@@ -1289,7 +1302,7 @@ public class NotificationsController extends BaseController implements Notificat
                         FileLog.d("NotificationsController processNewMessages: edited branch, showOrUpdateNotification " + notifyCheck);
                     }
                     delayedPushMessages.clear();
-                    showOrUpdateNotification(notifyCheck);
+                    requestNotificationUpdate(notifyCheck);
                 } else if (added) {
                     if (BuildVars.LOGS_ENABLED) {
                         FileLog.d("NotificationsController processNewMessages: added branch");
@@ -1342,7 +1355,7 @@ public class NotificationsController extends BaseController implements Notificat
                         if (BuildVars.LOGS_ENABLED) {
                             FileLog.d("NotificationsController processNewMessages: added branch: " + notifyCheck);
                         }
-                        showOrUpdateNotification(notifyCheck);
+                        requestNotificationUpdate(notifyCheck);
                         int pushDialogsCount = pushDialogs.size();
                         AndroidUtilities.runOnUIThread(() -> {
                             NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.notificationsCountUpdated, currentAccount);
@@ -1489,7 +1502,7 @@ public class NotificationsController extends BaseController implements Notificat
             if (old_unread_count != total_unread_count) {
                 if (!notifyCheck) {
                     delayedPushMessages.clear();
-                    showOrUpdateNotification(notifyCheck);
+                requestNotificationUpdate(notifyCheck);
                 } else {
                     scheduleNotificationDelay(lastOnlineFromOtherDevice > getConnectionsManager().getCurrentTime());
                 }
@@ -3819,7 +3832,10 @@ public class NotificationsController extends BaseController implements Notificat
         }
         if (isSilent) {
             name = LocaleController.getString(R.string.NotificationsSilent);
-            key = "silent";
+            // A single shared silent channel lets Android carry a muted
+            // priority from one dialog into every other dialog.  Keep silent
+            // channels scoped to the dialog/topic instead.
+            key = "silent_" + dialogId + "_" + topicId;
         } else if (isDefault) {
             name = isInApp ? LocaleController.getString(R.string.NotificationsInAppDefault) : LocaleController.getString(R.string.NotificationsDefault);
             if (type == TYPE_CHANNEL) {
@@ -4749,7 +4765,38 @@ public class NotificationsController extends BaseController implements Notificat
     }
 
     private boolean isSilentMessage(MessageObject messageObject) {
-        return messageObject.messageOwner.silent || messageObject.isReactionPush;
+        if (messageObject.isReactionPush) {
+            return true;
+        }
+        if (messageObject.messageOwner == null || !messageObject.messageOwner.silent) {
+            return false;
+        }
+        // The FCM payload may carry `silent` for server-side delivery reasons.
+        // Do not turn that into a permanently low Android channel unless this
+        // account explicitly muted the dialog (or chose silent delivery).
+        final long dialogId = messageObject.getDialogId();
+        final SharedPreferences preferences = getAccountInstance().getNotificationsSettings();
+        final boolean explicitlySilent = preferences.getBoolean("silent_" + dialogId, false);
+        final int notifyOverride = getNotifyOverride(preferences, dialogId, 0);
+        return explicitlySilent || notifyOverride == 2;
+    }
+
+    /** Coalesce bursts of FCM/read updates into one Android notification post. */
+    private void requestNotificationUpdate(boolean notifyAboutLast) {
+        notificationUpdateNotifyAboutLast |= notifyAboutLast;
+        if (notificationUpdateScheduled) {
+            return;
+        }
+        notificationUpdateScheduled = true;
+        long elapsed = SystemClock.elapsedRealtime() - lastNotificationUpdateTime;
+        long delay = Math.max(0, 250 - elapsed);
+        notificationsQueue.postRunnable(() -> {
+            boolean notify = notificationUpdateNotifyAboutLast;
+            notificationUpdateNotifyAboutLast = false;
+            notificationUpdateScheduled = false;
+            lastNotificationUpdateTime = SystemClock.elapsedRealtime();
+            showOrUpdateNotification(notify);
+        }, delay);
     }
 
     @SuppressLint("NewApi")
