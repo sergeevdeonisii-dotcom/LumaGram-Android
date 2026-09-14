@@ -1917,6 +1917,7 @@ public class MessageObject {
 
         currentAccount = accountNum;
         messageOwner = message;
+        deleted = LumaDeletedMessages.isDeleted(accountNum, getDialogId(message), message.id);
         replyMessageObject = replyToMessage;
         eventId = eid;
         wasUnread = !messageOwner.out && messageOwner.unread;

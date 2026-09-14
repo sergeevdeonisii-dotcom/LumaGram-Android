@@ -164,6 +164,7 @@ import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LanguageDetector;
 import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LumaDeletedMessages;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
@@ -26361,6 +26362,7 @@ public class ChatActivity extends BaseFragment implements
     }
     private void processDeletedMessages(ArrayList<Integer> markAsDeletedMessages, long channelId, boolean sent, boolean thanos) {
         ArrayList<Integer> removedIndexes = new ArrayList<>();
+        ArrayList<Integer> changedIndexes = new ArrayList<>();
         ArrayList<Integer> thanosMessagesIndexes = new ArrayList<>();
         final int currentTime = getConnectionsManager().getCurrentTime();
         int loadIndex = 0;
@@ -26457,6 +26459,17 @@ public class ChatActivity extends BaseFragment implements
                 }
                 if (editingMessageObject == obj) {
                     hideFieldPanel(true);
+                }
+                if (LumaDeletedMessages.isEnabled(currentAccount) && !obj.scheduled && chatMode != MODE_SCHEDULED && chatMode != MODE_QUICK_REPLIES) {
+                    LumaDeletedMessages.rememberDeleted(currentAccount, obj.getDialogId(), obj.getId());
+                    int changedIndex = chatAdapter != null && chatAdapter.isFiltered && filteredMessagesDict != null
+                        ? chatAdapter.filteredMessages.indexOf(filteredMessagesDict.get(mid))
+                        : messages.indexOf(obj);
+                    if (changedIndex >= 0) {
+                        changedIndexes.add(chatAdapter != null ? chatAdapter.messagesStartRow + changedIndex : changedIndex);
+                    }
+                    updated = true;
+                    continue;
                 }
                 int index = chatAdapter != null && chatAdapter.isFiltered && filteredMessagesDict != null ? chatAdapter.filteredMessages.indexOf(filteredMessagesDict.get(mid)) : messages.indexOf(obj);
                 if (index != -1) {
@@ -26659,6 +26672,9 @@ public class ChatActivity extends BaseFragment implements
                 for (int a = 0, N = removedIndexes.size(); a < N; a++) {
                     final int pos = removedIndexes.get(a);
                     chatAdapter.notifyItemRemoved(pos, thanosMessagesIndexes.contains(pos));
+                }
+                for (int a = 0, N = changedIndexes.size(); a < N; a++) {
+                    chatAdapter.notifyItemChanged(changedIndexes.get(a));
                 }
                 if (!isThreadChat() || messages.size() <= 3) {
                     removeUnreadPlane(false);

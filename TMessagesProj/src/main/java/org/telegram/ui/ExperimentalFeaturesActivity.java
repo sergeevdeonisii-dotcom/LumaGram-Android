@@ -4,7 +4,9 @@ import static org.telegram.messenger.LocaleController.getString;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.text.InputType;
 import android.text.TextUtils;
+import android.widget.EditText;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -13,6 +15,8 @@ import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.LumaDelayedSend;
 import org.telegram.messenger.LumaEmergencyMode;
 import org.telegram.messenger.LumaGhostMode;
+import org.telegram.messenger.LumaDeletedMessages;
+import org.telegram.messenger.LumaStarRating;
 import org.telegram.messenger.LumaTextAnimation;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
@@ -20,6 +24,7 @@ import org.telegram.messenger.R;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.TextCheckCell;
@@ -41,6 +46,9 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private static final int ROW_EMERGENCY_ENABLED = 5;
     private static final int ROW_EMERGENCY_CHAT = 6;
     private static final int ROW_GHOST_ENABLED = 7;
+    private static final int ROW_STAR_RATING_ENABLED = 8;
+    private static final int ROW_STAR_RATING_LEVEL = 9;
+    private static final int ROW_DELETED_MESSAGES_ENABLED = 10;
 
     private UniversalRecyclerView listView;
 
@@ -148,6 +156,22 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             .setChecked(ghostEnabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalGhostInfo)));
 
+        final boolean starRatingEnabled = LumaStarRating.isEnabled(currentAccount);
+        items.add(UItem.asHeader(getString(R.string.ExperimentalStarRatingHeader)));
+        items.add(UItem.asCheck(ROW_STAR_RATING_ENABLED, getString(R.string.ExperimentalStarRatingEnable))
+            .setChecked(starRatingEnabled));
+        items.add(UItem.asButton(
+            ROW_STAR_RATING_LEVEL,
+            LocaleController.formatString(R.string.ExperimentalStarRatingLevel, LumaStarRating.getLevel(currentAccount))
+        ).setEnabled(starRatingEnabled));
+        items.add(UItem.asShadow(getString(R.string.ExperimentalStarRatingInfo)));
+
+        final boolean deletedMessagesEnabled = LumaDeletedMessages.isEnabled(currentAccount);
+        items.add(UItem.asHeader(getString(R.string.ExperimentalDeletedMessagesHeader)));
+        items.add(UItem.asCheck(ROW_DELETED_MESSAGES_ENABLED, getString(R.string.ExperimentalDeletedMessagesEnable))
+            .setChecked(deletedMessagesEnabled));
+        items.add(UItem.asShadow(getString(R.string.ExperimentalDeletedMessagesInfo)));
+
         items.add(UItem.asHeader(tr("Данные аккаунта", "Account data")));
         items.add(UItem.asButton(ROW_ACCOUNT_EXPORT,
                 tr("Экспорт аккаунта", "Account export"),
@@ -223,9 +247,70 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 R.raw.info,
                 getString(enabled ? R.string.ExperimentalGhostEnabled : R.string.ExperimentalGhostDisabled)
             ).show();
+        } else if (item.id == ROW_STAR_RATING_ENABLED) {
+            final boolean enabled = !LumaStarRating.isEnabled(currentAccount);
+            LumaStarRating.setEnabled(currentAccount, enabled);
+            if (view instanceof TextCheckCell) {
+                ((TextCheckCell) view).setChecked(enabled);
+            }
+            if (listView != null && listView.adapter != null) {
+                listView.adapter.update(false);
+            }
+            BulletinFactory.of(this).createSimpleBulletin(
+                R.raw.info,
+                getString(enabled ? R.string.ExperimentalStarRatingEnabled : R.string.ExperimentalStarRatingDisabled)
+            ).show();
+        } else if (item.id == ROW_STAR_RATING_LEVEL) {
+            showStarRatingLevelDialog();
+        } else if (item.id == ROW_DELETED_MESSAGES_ENABLED) {
+            final boolean enabled = !LumaDeletedMessages.isEnabled(currentAccount);
+            LumaDeletedMessages.setEnabled(currentAccount, enabled);
+            if (view instanceof TextCheckCell) {
+                ((TextCheckCell) view).setChecked(enabled);
+            }
+            if (listView != null && listView.adapter != null) {
+                listView.adapter.update(false);
+            }
+            BulletinFactory.of(this).createSimpleBulletin(
+                R.raw.info,
+                getString(enabled ? R.string.ExperimentalDeletedMessagesEnabled : R.string.ExperimentalDeletedMessagesDisabled)
+            ).show();
         } else if (item.id == ROW_ACCOUNT_EXPORT) {
             presentFragment(new LumaAccountExportActivity());
         }
+    }
+
+    private void showStarRatingLevelDialog() {
+        final EditText editText = new EditText(getParentActivity());
+        editText.setInputType(InputType.TYPE_CLASS_NUMBER);
+        editText.setSingleLine(true);
+        editText.setText(String.valueOf(LumaStarRating.getLevel(currentAccount)));
+        editText.setSelectAllOnFocus(true);
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), resourceProvider);
+        builder.setTitle(getString(R.string.ExperimentalStarRatingChooseTitle));
+        builder.setView(editText);
+        builder.setNegativeButton(getString(R.string.Cancel), null);
+        builder.setPositiveButton(getString(R.string.OK), (dialog, which) -> {
+            int level;
+            try {
+                level = Integer.parseInt(editText.getText().toString());
+            } catch (Exception e) {
+                level = 0;
+            }
+            if (level < LumaStarRating.MIN_LEVEL || level > LumaStarRating.MAX_LEVEL) {
+                BulletinFactory.of(this).createSimpleBulletin(
+                    R.raw.info,
+                    getString(R.string.ExperimentalStarRatingInvalid)
+                ).show();
+                return;
+            }
+            LumaStarRating.setLevel(currentAccount, level);
+            if (listView != null && listView.adapter != null) {
+                listView.adapter.update(false);
+            }
+        });
+        showDialog(builder.create());
+        editText.requestFocus();
     }
 
     private void openEmergencyChatPicker() {
