@@ -440,4 +440,9 @@
     <string name="LumaLocalUnpinGift">Открепить локально</string>
     <string name="LumaLocalGiftPinned">Подарок закреплён локально</string>
     <string name="LumaLocalGiftUnpinned">Локальное закрепление снято</string>
+    <string name="LumaEditHistoryTitle">История изменений</string>
+    <string name="LumaEditHistoryPrevious">Предыдущая версия</string>
+    <string name="LumaEditHistoryCurrent">Текущая версия</string>
+    <string name="LumaEditHistoryUnavailable">Предыдущие версии пока не сохранены на этом устройстве.</string>
+    <string name="LumaEditHistoryEmpty">(без текста)</string>
 </resources>

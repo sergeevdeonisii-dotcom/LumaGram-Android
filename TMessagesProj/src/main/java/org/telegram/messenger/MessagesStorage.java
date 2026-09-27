@@ -15798,6 +15798,7 @@ public class MessagesStorage extends BaseController {
                                     TLRPC.Message oldMessage = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
                                     oldMessage.readAttachPath(data, getUserConfig().clientUserId);
                                     data.reuse();
+                                    LumaEditHistory.rememberEdit(currentAccount, dialogId, oldMessage, message);
                                     if (reactionUpdates != null) {
                                         reactionUpdates.add(new SavedReactionsUpdate(selfId, oldMessage, message));
                                     }
