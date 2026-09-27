@@ -165,6 +165,7 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LanguageDetector;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LumaDeletedMessages;
+import org.telegram.messenger.LumaEditHistory;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
@@ -199,6 +200,8 @@ import org.telegram.messenger.voip.VoIPService;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.telegram.tgnet.tl.TL_account;
 import org.telegram.tgnet.tl.TL_bots;
 import org.telegram.tgnet.tl.TL_iv;
@@ -26730,6 +26733,41 @@ public class ChatActivity extends BaseFragment implements
     private final BotForumHelper.BotDraftAnimationsPool botDraftAnimationsPool = new BotForumHelper.BotDraftAnimationsPool();
     private final ChatActivityDraftMessageMeasureController botDraftHeightController = new ChatActivityDraftMessageMeasureController();
 
+    private void showLocalEditHistory(MessageObject message) {
+        if (getParentActivity() == null) {
+            return;
+        }
+        JSONArray versions = LumaEditHistory.getVersions(currentAccount, message.getDialogId(), message.getId());
+        StringBuilder body = new StringBuilder();
+        if (versions.length() == 0) {
+            body.append(getString(R.string.LumaEditHistoryUnavailable)).append("\n\n");
+        }
+        for (int i = 0; i < versions.length(); i++) {
+            JSONObject version = versions.optJSONObject(i);
+            if (version == null) {
+                continue;
+            }
+            int date = version.optInt("date");
+            body.append(i == versions.length() - 1 ? getString(R.string.LumaEditHistoryCurrent) : getString(R.string.LumaEditHistoryPrevious));
+            if (date > 0) {
+                body.append(" · ").append(LocaleController.formatDateTime(date, false));
+            }
+            body.append("\n");
+            String text = version.optString("text");
+            body.append(TextUtils.isEmpty(text) ? getString(R.string.LumaEditHistoryEmpty) : text).append("\n\n");
+        }
+        if (versions.length() == 0) {
+            String text = message.messageOwner.message;
+            body.append(getString(R.string.LumaEditHistoryCurrent)).append("\n")
+                    .append(TextUtils.isEmpty(text) ? getString(R.string.LumaEditHistoryEmpty) : text);
+        }
+        showDialog(new AlertDialog.Builder(getParentActivity(), themeDelegate)
+                .setTitle(getString(R.string.LumaEditHistoryTitle))
+                .setMessage(body.toString().trim())
+                .setPositiveButton(getString(R.string.OK), null)
+                .create());
+    }
+
     private void replaceMessageObjects(ArrayList<MessageObject> messageObjects, int loadIndex, boolean remove) {
         replaceMessageObjects(messageObjects, loadIndex, remove, false);
     }
@@ -39438,6 +39476,13 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void didPressTime(ChatMessageCell cell) {
+            MessageObject message = cell.getMessageObject();
+            if (message != null && message.messageOwner != null
+                    && (message.messageOwner.flags & TLRPC.MESSAGE_FLAG_EDITED) != 0
+                    && !message.messageOwner.edit_hide) {
+                showLocalEditHistory(message);
+                return;
+            }
             createUndoView();
             if (undoView == null) {
                 return;

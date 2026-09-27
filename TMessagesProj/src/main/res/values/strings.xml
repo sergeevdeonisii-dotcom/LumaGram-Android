@@ -1464,6 +1464,11 @@
     <string name="PinnedCall">Pinned Call</string>
     <string name="PreviousPinnedMessage">Previous Message</string>
     <string name="EditedMessage">edited</string>
+    <string name="LumaEditHistoryTitle">Edit history</string>
+    <string name="LumaEditHistoryPrevious">Previous version</string>
+    <string name="LumaEditHistoryCurrent">Current version</string>
+    <string name="LumaEditHistoryUnavailable">Earlier versions were not captured on this device yet.</string>
+    <string name="LumaEditHistoryEmpty">(no text)</string>
     <string name="EditMessage">Edit Message</string>
     <string name="EditCaption">Edit Caption</string>
     <string name="EditMessageMedia">Tap to edit media</string>

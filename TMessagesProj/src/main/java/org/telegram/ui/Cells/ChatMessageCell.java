@@ -4137,7 +4137,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     private boolean checkDateMotionEvent(MotionEvent event) {
-        if (!currentMessageObject.isImportedForward()) {
+        if (!currentMessageObject.isImportedForward() && (currentMessageObject.messageOwner == null
+                || (currentMessageObject.messageOwner.flags & TLRPC.MESSAGE_FLAG_EDITED) == 0
+                || currentMessageObject.messageOwner.edit_hide)) {
             return false;
         }
         int x = (int) getEventX(event);
@@ -18450,7 +18452,18 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 currentTimeString = TextUtils.concat(formatString(R.string.MessageScheduledRepeatSeconds, period), ", ", currentTimeString);
             }
         }
-        timeTextWidth = timeWidth = (int) Math.ceil(Theme.chat_timePaint.measureText(currentTimeString, 0, currentTimeString == null ? 0 : currentTimeString.length()));
+        if (currentMessageObject.deleted && !currentMessageObject.deletedByThanos && !TextUtils.isEmpty(currentTimeString)) {
+            SpannableStringBuilder markedTime = new SpannableStringBuilder("\uFFFC  ").append(currentTimeString);
+            ColoredImageSpan deletedIcon = new ColoredImageSpan(R.drawable.msg_delete, ColoredImageSpan.ALIGN_CENTER);
+            deletedIcon.setSize(dp(11));
+            deletedIcon.setWidth(dp(12));
+            markedTime.setSpan(deletedIcon, 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            currentTimeString = markedTime;
+        }
+        timeTextWidth = timeWidth = currentTimeString == null ? 0 : (int) Math.ceil(
+                currentMessageObject.deleted && !currentMessageObject.deletedByThanos
+                        ? Layout.getDesiredWidth(currentTimeString, Theme.chat_timePaint)
+                        : Theme.chat_timePaint.measureText(currentTimeString, 0, currentTimeString.length()));
         if (currentMessageObject.scheduled && currentMessageObject.messageOwner.date == 0x7FFFFFFE || currentMessageObject.notime) {
             timeWidth -= dp(8);
         }
@@ -24034,19 +24047,6 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             }
         }
         canvas.restore();
-
-        if (currentMessageObject.deleted && !currentMessageObject.deletedByThanos && timeLayout != null) {
-            Drawable deletedDrawable = ContextCompat.getDrawable(getContext(), R.drawable.msg_delete);
-            if (deletedDrawable != null) {
-                final int size = dp(11);
-                final int x = (int) drawTimeX - dp(13);
-                final int y = (int) drawTimeY + Math.max(0, (timeLayout.getHeight() - size) / 2);
-                deletedDrawable.setBounds(x, y, x + size, y + size);
-                deletedDrawable.setAlpha((int) (255 * alpha * .85f));
-                deletedDrawable.draw(canvas);
-                deletedDrawable.setAlpha(255);
-            }
-        }
 
         if (unlockLayout != null) {
             if (unlockX == 0 || unlockY == 0) {
