@@ -331,7 +331,7 @@
     <string name="EmergencyConnectionSelectTitle">Выберите приоритетный чат</string>
     <string name="ExperimentalGhostHeader">Призрачный режим</string>
     <string name="ExperimentalGhostEnable">Не показывать онлайн</string>
-    <string name="ExperimentalGhostInfo">LumaGram не отправляет статус «онлайн», пока режим включён. Настройки приватности Telegram не изменяются; другие устройства аккаунта могут по-прежнему публиковать статус.</string>
+    <string name="ExperimentalGhostInfo">Скрывает присутствие и статус «печатает», а отметки прочтения личных чатов откладывает до выключения режима. После отправки сообщения Telegram всё ещё может ненадолго показать вас в сети; другие устройства аккаунта тоже могут публиковать статус.</string>
     <string name="ExperimentalGhostEnabled">Призрачный режим включён</string>
     <string name="ExperimentalGhostDisabled">Призрачный режим выключен</string>
     <string name="ExperimentalStarRatingHeader">Уровень Stars (локально)</string>

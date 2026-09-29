@@ -11403,7 +11403,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean sendTyping(long dialogId, long threadMsgId, int action, String emojicon, int classGuid) {
-        if (action < 0 || action >= sendingTypings.length || dialogId == 0) {
+        if (LumaGhostMode.isEnabled(currentAccount) || action < 0 || action >= sendingTypings.length || dialogId == 0) {
             return false;
         }
         final long selfId = UserConfig.getInstance(UserConfig.selectedAccount).getClientUserId();
@@ -14533,6 +14533,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     private void completeReadTask(ReadTask task) {
+        if (task.dialogId > 0 && LumaGhostMode.isEnabled(currentAccount)) {
+            return;
+        }
         if (task.replyId != 0 && task.monoForumPeerId == 0) {
             TLRPC.TL_messages_readDiscussion req = new TLRPC.TL_messages_readDiscussion();
             req.msg_id = (int) task.replyId;
@@ -14589,6 +14592,9 @@ public class MessagesController extends BaseController implements NotificationCe
         long time = SystemClock.elapsedRealtime();
         for (int a = 0, size = readTasks.size(); a < size; a++) {
             ReadTask task = readTasks.get(a);
+            if (task.dialogId > 0 && LumaGhostMode.isEnabled(currentAccount)) {
+                continue;
+            }
             if (task.sendRequestTime > time) {
                 continue;
             }
@@ -14600,6 +14606,9 @@ public class MessagesController extends BaseController implements NotificationCe
         }
         for (int a = 0, size = repliesReadTasks.size(); a < size; a++) {
             ReadTask task = repliesReadTasks.get(a);
+            if (task.dialogId > 0 && LumaGhostMode.isEnabled(currentAccount)) {
+                continue;
+            }
             if (task.sendRequestTime > time) {
                 continue;
             }
@@ -14612,6 +14621,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void markDialogAsReadNow(long dialogId, long replyId) {
+        if (dialogId > 0 && LumaGhostMode.isEnabled(currentAccount)) {
+            return;
+        }
         Utilities.stageQueue.postRunnable(() -> {
             if (replyId != 0) {
                 String key = dialogId + "_" + replyId;
@@ -14773,6 +14785,7 @@ public class MessagesController extends BaseController implements NotificationCe
 
         if (createReadTask) {
             Utilities.stageQueue.postRunnable(() -> {
+                boolean deferRead = dialogId > 0 && LumaGhostMode.isEnabled(currentAccount);
                 ReadTask currentReadTask;
                 if (threadId != 0) {
                     currentReadTask = threadsReadTasksMap.get(dialogId + "_" + threadId);
@@ -14785,7 +14798,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     currentReadTask.replyId = threadId;
                     currentReadTask.monoForumPeerId = monoForumPeerId;
                     currentReadTask.sendRequestTime = SystemClock.elapsedRealtime() + 5000;
-                    if (!readNow) {
+                    if (!readNow || deferRead) {
                         if (threadId != 0) {
                             threadsReadTasksMap.put(dialogId + "_" + threadId, currentReadTask);
                             repliesReadTasks.add(currentReadTask);
@@ -14797,7 +14810,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 }
                 currentReadTask.maxDate = maxDate;
                 currentReadTask.maxId = maxPositiveId;
-                if (readNow) {
+                if (readNow && !deferRead) {
                     completeReadTask(currentReadTask);
                 }
             });
