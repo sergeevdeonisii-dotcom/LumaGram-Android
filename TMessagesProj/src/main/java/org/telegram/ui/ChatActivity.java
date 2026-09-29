@@ -164,6 +164,7 @@ import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LanguageDetector;
 import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LumaGhostMode;
 import org.telegram.messenger.LumaDeletedMessages;
 import org.telegram.messenger.LumaEditHistory;
 import org.telegram.messenger.LocaleController;
@@ -22423,7 +22424,7 @@ public class ChatActivity extends BaseFragment implements
                 scheduleNowDialog = null;
             }
             processDeletedMessages(markAsDeletedMessages, channelId, sent, !movedToScheduled);
-            if (movedToScheduled && chatMode != ChatActivity.MODE_SCHEDULED) {
+            if (movedToScheduled && chatMode != ChatActivity.MODE_SCHEDULED && !LumaGhostMode.isAutomaticScheduledSendEnabled(currentAccount)) {
                 getMessagesController().forceNoReload(dialog_id, ChatActivity.MODE_SCHEDULED);
                 openScheduledMessages(scheduledMessageId, true);
             } else if (chatMode == ChatActivity.MODE_SCHEDULED && update && conversion && LaunchActivity.getSafeLastFragment() == this && isFullyVisible && sentMessages != null && !sentMessages.isEmpty() && parentLayout != null) {
