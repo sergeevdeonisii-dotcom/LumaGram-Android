@@ -164,7 +164,6 @@ import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LanguageDetector;
 import org.telegram.messenger.LiteMode;
-import org.telegram.messenger.LumaGhostMode;
 import org.telegram.messenger.LumaDeletedMessages;
 import org.telegram.messenger.LumaEditHistory;
 import org.telegram.messenger.LocaleController;
@@ -22099,7 +22098,7 @@ public class ChatActivity extends BaseFragment implements
                 int mode = (Integer) args[3];
                 if (mode != chatMode && chatMode != MODE_SAVED && chatMode != MODE_SUGGESTIONS) {
                     if (chatMode != MODE_SCHEDULED && mode == MODE_SCHEDULED && !isPaused && LaunchActivity.getSafeLastFragment() == this && messagePreviewParams == null) {
-                        if (!arr.isEmpty() && arr.get(0).getId() < 0) {
+                        if (!arr.isEmpty() && arr.get(0).getId() < 0 && !arr.get(0).lumaGhostAutoScheduled) {
                             openScheduledMessages(arr.get(0).getId(), arr.get(0).messageOwner != null && arr.get(0).messageOwner.video_processing_pending);
                         }
                     }
@@ -22406,12 +22405,14 @@ public class ChatActivity extends BaseFragment implements
             MessageObject conversionMessage = null;
             boolean conversion = false;
             boolean deletedThreadMessage = false;
+            boolean ghostAutoScheduled = false;
             for (int msg_id : markAsDeletedMessages) {
                 MessageObject msg = messagesDict[0].get(msg_id);
                 if (msg_id == threadMessageId) {
                     deletedThreadMessage = true;
                 }
                 if (msg != null) {
+                    ghostAutoScheduled |= msg.lumaGhostAutoScheduled;
                     if (msg.messageOwner != null && msg.messageOwner.video_processing_pending) {
                         if (conversionMessage == null) conversionMessage = msg;
                         conversion = true;
@@ -22424,7 +22425,7 @@ public class ChatActivity extends BaseFragment implements
                 scheduleNowDialog = null;
             }
             processDeletedMessages(markAsDeletedMessages, channelId, sent, !movedToScheduled);
-            if (movedToScheduled && chatMode != ChatActivity.MODE_SCHEDULED && !LumaGhostMode.isAutomaticScheduledSendEnabled(currentAccount)) {
+            if (movedToScheduled && chatMode != ChatActivity.MODE_SCHEDULED && !ghostAutoScheduled) {
                 getMessagesController().forceNoReload(dialog_id, ChatActivity.MODE_SCHEDULED);
                 openScheduledMessages(scheduledMessageId, true);
             } else if (chatMode == ChatActivity.MODE_SCHEDULED && update && conversion && LaunchActivity.getSafeLastFragment() == this && isFullyVisible && sentMessages != null && !sentMessages.isEmpty() && parentLayout != null) {

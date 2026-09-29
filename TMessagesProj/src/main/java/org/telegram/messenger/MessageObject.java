@@ -298,6 +298,8 @@ public class MessageObject {
     public boolean cancelEditing;
 
     public boolean scheduled;
+    // Local-only marker: an ordinary send was scheduled automatically by ghost mode.
+    public boolean lumaGhostAutoScheduled;
     public boolean scheduledSent;
     public boolean preview;
     public boolean previewForward;
