@@ -2101,6 +2101,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 return 0;
             }
             final int outgoingScheduleDate = LumaGhostMode.getAutomaticScheduleDate(currentAccount, peer, requestedScheduleDate);
+            final boolean lumaGhostAutoScheduled = requestedScheduleDate == 0 && outgoingScheduleDate != 0;
             if (DialogObject.isUserDialog(peer)) {
                 TLRPC.User sendToUser = getMessagesController().getUser(peer);
                 if (sendToUser == null) {
@@ -2466,6 +2467,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
 
                 MessageObject newMsgObj = new MessageObject(currentAccount, newMsg, true, true);
                 newMsgObj.scheduled = outgoingScheduleDate != 0;
+                newMsgObj.lumaGhostAutoScheduled = lumaGhostAutoScheduled;
                 newMsgObj.messageOwner.send_state = MessageObject.MESSAGE_SEND_STATE_SENDING;
                 newMsgObj.wasJustSent = true;
                 objArr.add(newMsgObj);
@@ -4264,7 +4266,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             return;
         }
 
+        final int requestedScheduleDate = scheduleDate;
         scheduleDate = LumaGhostMode.getAutomaticScheduleDate(currentAccount, peer, scheduleDate);
+        final boolean lumaGhostAutoScheduled = requestedScheduleDate == 0 && scheduleDate != 0;
 
         if (replyQuote != null && replyQuote.message != null && replyToMsg != null) {
             replyToMsg = replyQuote.message;
@@ -5052,6 +5056,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             newMsgObj.wasJustSent = true;
             newMsgObj.sentHighQuality = sendMessageParams.sendingHighQuality;
             newMsgObj.scheduled = scheduleDate != 0;
+            newMsgObj.lumaGhostAutoScheduled = lumaGhostAutoScheduled;
             if (!newMsgObj.isForwarded() && (newMsgObj.type == MessageObject.TYPE_VIDEO || videoEditedInfo != null || newMsgObj.type == MessageObject.TYPE_VOICE) && !TextUtils.isEmpty(newMsg.attachPath)) {
                 newMsgObj.attachPathExists = true;
             }

@@ -48,6 +48,6 @@ public final class LumaGhostMode {
         }
         int serverTime = ConnectionsManager.getInstance(account).getCurrentTime();
         int deviceTime = (int) (System.currentTimeMillis() / 1000L);
-        return Math.max(serverTime, deviceTime) + SCHEDULE_SEND_DELAY_SECONDS;
+        return (serverTime > 0 ? serverTime : deviceTime) + SCHEDULE_SEND_DELAY_SECONDS;
     }
 }
