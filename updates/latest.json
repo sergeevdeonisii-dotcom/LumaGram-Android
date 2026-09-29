@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.58",
-  "version_code": 71379,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.58/app.apk",
-  "sha256": "766e0d2e36b256d30aee5b8790dfec9b18dacfbe1b1e2878c8c351abf879950b",
-  "changelog": "Выровнен значок удалённого сообщения. Добавлена локальная история изменений текста и подписей: нажми на отметку «изменено». История собирается после установки этой версии."
+  "version": "12.9.0-luma.59",
+  "version_code": 71389,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.59/app.apk",
+  "sha256": "b88e8f09079a6c3fe5c9ab1387b5046293bd7a22fab10a5fc180cfcbf16a5c91",
+  "changelog": "Улучшен режим «Призрак»: Luma не отправляет индикатор набора, а отметки о прочтении личных чатов откладываются до выключения режима. Telegram может кратковременно показывать статус «в сети» после отправки сообщения; другие устройства с аккаунтом тоже могут передавать статус."
 }
