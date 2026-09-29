@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.59",
-  "version_code": 71389,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.59/app.apk",
-  "sha256": "b88e8f09079a6c3fe5c9ab1387b5046293bd7a22fab10a5fc180cfcbf16a5c91",
-  "changelog": "Улучшен режим «Призрак»: Luma не отправляет индикатор набора, а отметки о прочтении личных чатов откладываются до выключения режима. Telegram может кратковременно показывать статус «в сети» после отправки сообщения; другие устройства с аккаунтом тоже могут передавать статус."
+  "version": "12.9.0-luma.60",
+  "version_code": 71399,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.60/app.apk",
+  "sha256": "24836adbb08e6d4d80637770a751af70aec5fd3e01d3e56116d2d655536f31ff",
+  "changelog": "Режим «Призрак»: добавлена отправка через штатное планирование Telegram на 20 секунд — личные сообщения и медиа появляются в списке запланированных и отправляются сервером. В секретных чатах планирование недоступно; остальные улучшения Ghost сохраняются."
 }

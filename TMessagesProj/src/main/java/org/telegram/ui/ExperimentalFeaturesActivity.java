@@ -54,6 +54,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private static final int ROW_ANONYMOUS_NUMBER_ENABLED = 11;
     private static final int ROW_ANONYMOUS_NUMBER = 12;
     private static final int ROW_PROFILE_VERIFICATION_ENABLED = 13;
+    private static final int ROW_GHOST_SCHEDULE_SEND_ENABLED = 14;
 
     private UniversalRecyclerView listView;
 
@@ -159,6 +160,14 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         items.add(UItem.asHeader(getString(R.string.ExperimentalGhostHeader)));
         items.add(UItem.asCheck(ROW_GHOST_ENABLED, getString(R.string.ExperimentalGhostEnable))
             .setChecked(ghostEnabled));
+        items.add(UItem.asCheck(
+            ROW_GHOST_SCHEDULE_SEND_ENABLED,
+            LocaleController.formatString(R.string.ExperimentalGhostScheduledSend, LumaGhostMode.SCHEDULE_SEND_DELAY_SECONDS)
+        ).setChecked(LumaGhostMode.isScheduledSendEnabled(currentAccount)).setEnabled(ghostEnabled));
+        items.add(UItem.asShadow(LocaleController.formatString(
+            R.string.ExperimentalGhostScheduledSendInfo,
+            LumaGhostMode.SCHEDULE_SEND_DELAY_SECONDS
+        )));
         items.add(UItem.asShadow(getString(R.string.ExperimentalGhostInfo)));
 
         final boolean starRatingEnabled = LumaStarRating.isEnabled(currentAccount);
@@ -267,6 +276,21 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             BulletinFactory.of(this).createSimpleBulletin(
                 R.raw.info,
                 getString(enabled ? R.string.ExperimentalGhostEnabled : R.string.ExperimentalGhostDisabled)
+            ).show();
+        } else if (item.id == ROW_GHOST_SCHEDULE_SEND_ENABLED) {
+            final boolean enabled = !LumaGhostMode.isScheduledSendEnabled(currentAccount);
+            LumaGhostMode.setScheduledSendEnabled(currentAccount, enabled);
+            if (view instanceof TextCheckCell) {
+                ((TextCheckCell) view).setChecked(enabled);
+            }
+            if (listView != null && listView.adapter != null) {
+                listView.adapter.update(false);
+            }
+            BulletinFactory.of(this).createSimpleBulletin(
+                R.raw.info,
+                enabled
+                    ? LocaleController.formatString(R.string.ExperimentalGhostScheduledSendEnabled, LumaGhostMode.SCHEDULE_SEND_DELAY_SECONDS)
+                    : getString(R.string.ExperimentalGhostScheduledSendDisabled)
             ).show();
         } else if (item.id == ROW_STAR_RATING_ENABLED) {
             final boolean enabled = !LumaStarRating.isEnabled(currentAccount);
