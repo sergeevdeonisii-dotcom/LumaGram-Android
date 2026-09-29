@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.60",
-  "version_code": 71399,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.60/app.apk",
-  "sha256": "24836adbb08e6d4d80637770a751af70aec5fd3e01d3e56116d2d655536f31ff",
-  "changelog": "Режим «Призрак»: добавлена отправка через штатное планирование Telegram на 20 секунд — личные сообщения и медиа появляются в списке запланированных и отправляются сервером. В секретных чатах планирование недоступно; остальные улучшения Ghost сохраняются."
+  "version": "12.9.0-luma.61",
+  "version_code": 71409,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.61/app.apk",
+  "sha256": "eeb5c9376bc14ac0075f04d8934a9288c4c3801def966806ee559d99771c2b03",
+  "changelog": "Ghost: при автоматической отложенной отправке через 20 секунд больше не открывается экран «Отложенная отправка» — остаёшься в текущем чате. Сообщение по-прежнему планируется на сервере Telegram. В секретных чатах отправка по расписанию недоступна."
 }

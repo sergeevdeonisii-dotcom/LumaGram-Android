@@ -38,8 +38,12 @@ public final class LumaGhostMode {
         preferences().edit().putBoolean(KEY_SCHEDULE_SEND + account, enabled).apply();
     }
 
+    public static boolean isAutomaticScheduledSendEnabled(int account) {
+        return isEnabled(account) && isScheduledSendEnabled(account);
+    }
+
     public static int getAutomaticScheduleDate(int account, long dialogId, int requestedScheduleDate) {
-        if (requestedScheduleDate != 0 || !isEnabled(account) || !isScheduledSendEnabled(account) || DialogObject.isEncryptedDialog(dialogId)) {
+        if (requestedScheduleDate != 0 || !isAutomaticScheduledSendEnabled(account) || DialogObject.isEncryptedDialog(dialogId)) {
             return requestedScheduleDate;
         }
         int serverTime = ConnectionsManager.getInstance(account).getCurrentTime();
