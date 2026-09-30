@@ -27,14 +27,22 @@ public class LauncherIconController {
     public static void setIcon(LauncherIcon icon) {
         Context ctx = ApplicationLoader.applicationContext;
         PackageManager pm = ctx.getPackageManager();
+        // Keep a launcher entry enabled throughout the switch.
+        pm.setComponentEnabledSetting(icon.getComponentName(ctx), PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP);
         for (LauncherIcon i : LauncherIcon.values()) {
-            pm.setComponentEnabledSetting(i.getComponentName(ctx), i == icon ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED :
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
+            if (i != icon) {
+                pm.setComponentEnabledSetting(i.getComponentName(ctx), PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
+            }
         }
     }
 
     public enum LauncherIcon {
         DEFAULT("DefaultIcon", R.drawable.icon_background_sa, R.mipmap.icon_foreground_sa, R.string.AppIconDefault),
+        GRAPHITE("LumaGraphiteIcon", R.drawable.luma_icon_graphite_background, R.drawable.luma_icon_silver_foreground, R.string.AppIconLumaGraphite),
+        NAVY("LumaNavyIcon", R.drawable.luma_icon_navy_background, R.drawable.luma_icon_silver_foreground, R.string.AppIconLumaNavy),
+        SILVER("LumaSilverIcon", R.drawable.luma_icon_silver_background, R.drawable.luma_icon_silver_foreground, R.string.AppIconLumaSilver),
+        GARNET("LumaGarnetIcon", R.drawable.luma_icon_garnet_background, R.drawable.luma_icon_gold_foreground, R.string.AppIconLumaGarnet),
+        VIOLET("LumaVioletIcon", R.drawable.luma_icon_violet_background, R.drawable.luma_icon_silver_foreground, R.string.AppIconLumaViolet),
         VINTAGE("VintageIcon", R.drawable.icon_6_background_sa, R.mipmap.icon_6_foreground_sa, R.string.AppIconVintage),
         AQUA("AquaIcon", R.drawable.icon_4_background_sa, R.mipmap.icon_foreground_sa, R.string.AppIconAqua),
         PREMIUM("PremiumIcon", R.drawable.icon_3_background_sa, R.mipmap.icon_3_foreground_sa, R.string.AppIconPremium, true),
