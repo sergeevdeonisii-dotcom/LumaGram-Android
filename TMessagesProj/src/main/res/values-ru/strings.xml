@@ -330,12 +330,13 @@
     <string name="EmergencyConnectionDisabled">Экстренная связь выключена</string>
     <string name="EmergencyConnectionSelectTitle">Выберите приоритетный чат</string>
     <string name="ExperimentalGhostHeader">Призрачный режим</string>
+    <string name="GhostReadMessage">Прочитать</string>
     <string name="ExperimentalGhostEnable">Не показывать онлайн</string>
     <string name="ExperimentalGhostScheduledSend">Отправлять сообщения через %1$d секунд</string>
     <string name="ExperimentalGhostScheduledSendInfo">Сообщения будут добавляться в запланированные и отправляться серверами Telegram через %1$d секунд. В секретных чатах отложенная отправка недоступна.</string>
     <string name="ExperimentalGhostScheduledSendEnabled">Отложенная отправка включена: %1$d секунд</string>
     <string name="ExperimentalGhostScheduledSendDisabled">Отложенная отправка выключена</string>
-    <string name="ExperimentalGhostInfo">Скрывает присутствие и статус «печатает», а отметки прочтения личных чатов откладывает до выключения режима. После отправки сообщения Telegram всё ещё может ненадолго показать вас в сети; другие устройства аккаунта тоже могут публиковать статус.</string>
+    <string name="ExperimentalGhostInfo">Скрывает присутствие и статус «печатает» и не отправляет автоматические отметки прочтения личных чатов, пока режим включён. Для явной отправки откройте меню сообщения и нажмите «Прочитать». После отправки сообщения Telegram всё ещё может ненадолго показать вас в сети; другие устройства аккаунта тоже могут публиковать статус.</string>
     <string name="ExperimentalGhostEnabled">Призрачный режим включён</string>
     <string name="ExperimentalGhostDisabled">Призрачный режим выключен</string>
     <string name="ExperimentalStarRatingHeader">Уровень Stars (локально)</string>

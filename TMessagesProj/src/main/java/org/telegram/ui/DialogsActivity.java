@@ -115,6 +115,7 @@ import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaGhostMode;
 import org.telegram.messenger.LumaUpdaterController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
@@ -13705,6 +13706,16 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             io.setTranslationY(-dp(64));
             return;
         }
+
+        io.addChecked(LumaGhostMode.isEnabled(currentAccount), getString(R.string.ExperimentalGhostHeader), () -> {
+            boolean enabled = !LumaGhostMode.isEnabled(currentAccount);
+            LumaGhostMode.setEnabled(currentAccount, enabled);
+            BulletinFactory.of(this).createSimpleBulletin(
+                    R.raw.info,
+                    getString(enabled ? R.string.ExperimentalGhostEnabled : R.string.ExperimentalGhostDisabled)
+            ).show();
+        });
+        io.addGap();
 
         final boolean isCurrentThemeDark;
         if (resourceProvider != null) {

@@ -10518,6 +10518,22 @@ public class MessagesController extends BaseController implements NotificationCe
     public void setLumaGhostModeEnabled(boolean enabled) {
         ignoreSetOnline = enabled;
         if (enabled) {
+            Utilities.stageQueue.postRunnable(() -> {
+                for (int i = readTasks.size() - 1; i >= 0; i--) {
+                    ReadTask task = readTasks.get(i);
+                    if (task.dialogId > 0) {
+                        readTasks.remove(i);
+                        readTasksMap.remove(task.dialogId);
+                    }
+                }
+                for (int i = repliesReadTasks.size() - 1; i >= 0; i--) {
+                    ReadTask task = repliesReadTasks.get(i);
+                    if (task.dialogId > 0) {
+                        repliesReadTasks.remove(i);
+                        threadsReadTasksMap.remove(task.dialogId + "_" + task.replyId);
+                    }
+                }
+            });
             if (statusRequest != 0) {
                 getConnectionsManager().cancelRequest(statusRequest, true);
             }
@@ -14381,6 +14397,9 @@ public class MessagesController extends BaseController implements NotificationCe
         long dialogId = messageObject.getDialogId();
         getMessagesStorage().markMessagesContentAsRead(dialogId, arrayList, 0, 0);
         getNotificationCenter().postNotificationName(NotificationCenter.messagesReadContent, dialogId, arrayList);
+        if (dialogId > 0 && !messageObject.isOutOwner() && LumaGhostMode.isEnabled(currentAccount)) {
+            return;
+        }
         if (messageObject.getId() < 0) {
             markMessageAsRead(messageObject.getDialogId(), messageObject.messageOwner.random_id, Integer.MIN_VALUE);
         } else {
@@ -14646,6 +14665,26 @@ public class MessagesController extends BaseController implements NotificationCe
         });
     }
 
+    /** Sends a read receipt only after an explicit action in a private chat. */
+    public void readMessageInGhostMode(long dialogId, int messageId) {
+        if (dialogId <= 0 || dialogId == getUserConfig().getClientUserId() || messageId <= 0 || !LumaGhostMode.isEnabled(currentAccount)) {
+            return;
+        }
+        TLRPC.InputPeer peer = getInputPeer(dialogId);
+        if (peer == null || peer instanceof TLRPC.TL_inputPeerEmpty) {
+            return;
+        }
+        TLRPC.TL_messages_readHistory request = new TLRPC.TL_messages_readHistory();
+        request.peer = peer;
+        request.max_id = messageId;
+        getConnectionsManager().sendRequest(request, (response, error) -> {
+            if (error == null && response instanceof TLRPC.TL_messages_affectedMessages) {
+                TLRPC.TL_messages_affectedMessages result = (TLRPC.TL_messages_affectedMessages) response;
+                processNewDifferenceParams(-1, result.pts, -1, result.pts_count);
+            }
+        });
+    }
+
     public void markMentionsAsRead(long dialogId, long topicId) {
         if (DialogObject.isEncryptedDialog(dialogId) || dialogId == getUserConfig().getClientUserId()) {
             return;
@@ -14785,7 +14824,10 @@ public class MessagesController extends BaseController implements NotificationCe
 
         if (createReadTask) {
             Utilities.stageQueue.postRunnable(() -> {
-                boolean deferRead = dialogId > 0 && LumaGhostMode.isEnabled(currentAccount);
+                boolean suppressRead = dialogId > 0 && LumaGhostMode.isEnabled(currentAccount);
+                if (suppressRead) {
+                    return;
+                }
                 ReadTask currentReadTask;
                 if (threadId != 0) {
                     currentReadTask = threadsReadTasksMap.get(dialogId + "_" + threadId);
@@ -14798,7 +14840,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     currentReadTask.replyId = threadId;
                     currentReadTask.monoForumPeerId = monoForumPeerId;
                     currentReadTask.sendRequestTime = SystemClock.elapsedRealtime() + 5000;
-                    if (!readNow || deferRead) {
+                    if (!readNow) {
                         if (threadId != 0) {
                             threadsReadTasksMap.put(dialogId + "_" + threadId, currentReadTask);
                             repliesReadTasks.add(currentReadTask);
@@ -14810,7 +14852,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 }
                 currentReadTask.maxDate = maxDate;
                 currentReadTask.maxId = maxPositiveId;
-                if (readNow && !deferRead) {
+                if (readNow) {
                     completeReadTask(currentReadTask);
                 }
             });

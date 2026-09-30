@@ -11231,12 +11231,13 @@
     <string name="EmergencyConnectionDisabled">Emergency connection is off</string>
     <string name="EmergencyConnectionSelectTitle">Select priority chat</string>
     <string name="ExperimentalGhostHeader">Ghost mode</string>
+    <string name="GhostReadMessage">Mark as read</string>
     <string name="ExperimentalGhostEnable">Hide online status</string>
     <string name="ExperimentalGhostScheduledSend">Send messages after %1$d seconds</string>
     <string name="ExperimentalGhostScheduledSendInfo">Messages are added to Scheduled Messages and delivered by Telegram servers after %1$d seconds. Scheduled sending is unavailable in Secret Chats.</string>
     <string name="ExperimentalGhostScheduledSendEnabled">Scheduled sending enabled: %1$d seconds</string>
     <string name="ExperimentalGhostScheduledSendDisabled">Scheduled sending disabled</string>
-    <string name="ExperimentalGhostInfo">Hides presence and typing, and delays read receipts in private chats until you turn this off. Telegram may still show you online briefly after you send a message; other devices can publish status too.</string>
+    <string name="ExperimentalGhostInfo">Hides presence and typing, and does not send automatic read receipts in private chats while enabled. Use Mark as read in a message menu to send one explicitly. Telegram may still show you online briefly after you send a message; other devices can publish status too.</string>
     <string name="ExperimentalGhostEnabled">Ghost mode is on</string>
     <string name="ExperimentalGhostDisabled">Ghost mode is off</string>
     <string name="ExperimentalStarRatingHeader">Stars level (local)</string>
