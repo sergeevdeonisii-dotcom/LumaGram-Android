@@ -1,7 +1,7 @@
 {
-  "version": "12.9.0-luma.62",
-  "version_code": 71419,
-  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.62/Luma-Telegram-12.9-Liquid62-Signed-arm64.apk",
-  "sha256": "26acbe40eac9eef62296284d789aaeaaf8218bca1f818b193a51fc650f0f17a5",
-  "changelog": "Исправлен оставшийся переход в «Отложенную отправку» при автоматической 20-секундной отправке в режиме призрака. Ручная отложенная отправка работает как раньше. Время автозадержки теперь считается по времени сервера, даже если часы телефона спешат."
+  "version": "12.9.0-luma.63",
+  "version_code": 71429,
+  "file_url": "https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.63/app.apk",
+  "sha256": "97e5f47946fa8b63a0e247ac5fb45dc08cce68186495e6da96856e9987cfcac9",
+  "changelog": "В режиме призрака в меню входящего сообщения появилась кнопка «Прочитать»: она отправляет отметку прочтения до выбранного сообщения. Автоматические отметки в личных чатах больше не копятся для отправки после выключения режима. В меню ⋮ на экране чатов появился быстрый переключатель режима призрака."
 }

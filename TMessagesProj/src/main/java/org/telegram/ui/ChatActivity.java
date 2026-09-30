@@ -166,6 +166,7 @@ import org.telegram.messenger.LanguageDetector;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LumaDeletedMessages;
 import org.telegram.messenger.LumaEditHistory;
+import org.telegram.messenger.LumaGhostMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
@@ -1253,6 +1254,7 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_SUGGESTION_ADD_OFFER = 114;
 
     public final static int OPTION_VIEW_STATISTICS = 115;
+    public final static int OPTION_GHOST_READ = 116;
 
     private final static int[] allowedNotificationsDuringChatListAnimations = new int[]{
             NotificationCenter.messagesRead,
@@ -33403,6 +33405,13 @@ public class ChatActivity extends BaseFragment implements
         }
         boolean preserveDim = false;
         switch (option) {
+            case OPTION_GHOST_READ: {
+                if (dialog_id > 0 && selectedObject.getId() > 0 && !selectedObject.isOutOwner()
+                        && LumaGhostMode.isEnabled(currentAccount)) {
+                    getMessagesController().readMessageInGhostMode(dialog_id, selectedObject.getId());
+                }
+                break;
+            }
             case OPTION_RETRY: {
                 final MessageObject object = selectedObject;
                 final MessageObject.GroupedMessages group = selectedObjectGroup;
@@ -46244,6 +46253,17 @@ public class ChatActivity extends BaseFragment implements
                 options.add(OPTION_DELETE);
                 icons.add(deleteIconRes);
             }
+        }
+        if (LumaGhostMode.isEnabled(currentAccount) && chatMode == MODE_DEFAULT
+                && dialog_id > 0 && dialog_id != getUserConfig().getClientUserId()
+                && currentChat == null && currentEncryptedChat == null
+                && message.getId() > 0 && !message.isOutOwner() && !message.isSponsored()
+                && message.messageOwner.action == null && !isEphemeral) {
+            int replyIndex = options.indexOf(OPTION_REPLY);
+            int insertIndex = replyIndex >= 0 ? replyIndex + 1 : 0;
+            items.add(insertIndex, getString(R.string.GhostReadMessage));
+            options.add(insertIndex, OPTION_GHOST_READ);
+            icons.add(insertIndex, R.drawable.msg_markread);
         }
     }
 
