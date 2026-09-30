@@ -5747,6 +5747,11 @@
     <string name="AppIconPremium">Premium</string>
     <string name="AppIconTurbo">Turbo</string>
     <string name="AppIconNox">Nox</string>
+    <string name="AppIconLumaGraphite">Luma Graphite</string>
+    <string name="AppIconLumaNavy">Luma Navy</string>
+    <string name="AppIconLumaSilver">Luma Silver</string>
+    <string name="AppIconLumaGarnet">Luma Garnet</string>
+    <string name="AppIconLumaViolet">Luma Violet</string>
     <string name="AppIconChangedTo">App icon has been changed to %1$s</string>
     <string name="FileTooLarge">File Too Large</string>
     <string name="PremiumPreviewAppIcon">Premium App Icon</string>

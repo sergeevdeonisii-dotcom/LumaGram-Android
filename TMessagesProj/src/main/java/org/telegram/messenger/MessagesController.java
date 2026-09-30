@@ -399,7 +399,7 @@ public class MessagesController extends BaseController implements NotificationCe
 
     private long lastStatusUpdateTime;
     private int statusRequest;
-    private int statusSettingState;
+    private final LumaPresenceRequestState presenceRequestState = new LumaPresenceRequestState();
     private boolean offlineSent;
     private String uploadingAvatar;
 
@@ -6669,8 +6669,6 @@ public class MessagesController extends BaseController implements NotificationCe
         firstGettingTask = false;
         updatingState = false;
         resetingDialogs = false;
-        lastStatusUpdateTime = 0;
-        offlineSent = false;
         registeringForPush = false;
         getDifferenceFirstSync = true;
         uploadingAvatar = null;
@@ -6678,10 +6676,10 @@ public class MessagesController extends BaseController implements NotificationCe
         uploadingWallpaperInfo = null;
         uploadingThemes.clear();
         gettingChatInviters.clear();
-        statusRequest = 0;
-        statusSettingState = 0;
-
         Utilities.stageQueue.postRunnable(() -> {
+            cancelStatusUpdate();
+            lastStatusUpdateTime = 0;
+            offlineSent = false;
             FileLog.d("cleanup: isUpdating = false");
             getConnectionsManager().setIsUpdating(false);
             updatesQueueChannels.clear();
@@ -10516,9 +10514,15 @@ public class MessagesController extends BaseController implements NotificationCe
      * the mode allows the normal foreground status update to resume.
      */
     public void setLumaGhostModeEnabled(boolean enabled) {
-        ignoreSetOnline = enabled;
-        if (enabled) {
-            Utilities.stageQueue.postRunnable(() -> {
+        Utilities.stageQueue.postRunnable(() -> {
+            // A second toggle may have superseded this one before the stage queue ran.
+            if (enabled != LumaGhostMode.isEnabled(currentAccount)) {
+                return;
+            }
+            cancelStatusUpdate();
+            offlineSent = false;
+            lastStatusUpdateTime = 0;
+            if (enabled) {
                 for (int i = readTasks.size() - 1; i >= 0; i--) {
                     ReadTask task = readTasks.get(i);
                     if (task.dialogId > 0) {
@@ -10533,24 +10537,40 @@ public class MessagesController extends BaseController implements NotificationCe
                         threadsReadTasksMap.remove(task.dialogId + "_" + task.replyId);
                     }
                 }
-            });
-            if (statusRequest != 0) {
-                getConnectionsManager().cancelRequest(statusRequest, true);
-            }
-            statusSettingState = 2;
-            TL_account.updateStatus req = new TL_account.updateStatus();
-            req.offline = true;
-            statusRequest = getConnectionsManager().sendRequest(req, (response, error) -> {
-                if (error == null) {
-                    offlineSent = true;
+                if (getUserConfig().isClientActivated()) {
+                    sendStatusUpdate(true);
                 }
-                statusSettingState = 0;
-                statusRequest = 0;
-            });
-        } else {
-            offlineSent = false;
-            statusSettingState = 0;
+            }
+        });
+    }
+
+    private void cancelStatusUpdate() {
+        presenceRequestState.cancel();
+        if (statusRequest != 0) {
+            getConnectionsManager().cancelRequest(statusRequest, true);
+            statusRequest = 0;
         }
+    }
+
+    private void sendStatusUpdate(boolean offline) {
+        final int generation = presenceRequestState.begin(offline);
+        if (statusRequest != 0) {
+            getConnectionsManager().cancelRequest(statusRequest, true);
+        }
+        TL_account.updateStatus req = new TL_account.updateStatus();
+        req.offline = offline;
+        statusRequest = getConnectionsManager().sendRequest(req, (response, error) -> {
+            if (!presenceRequestState.complete(generation, SystemClock.elapsedRealtime(), error == null)) {
+                return;
+            }
+            statusRequest = 0;
+            if (error == null) {
+                offlineSent = offline;
+                if (!offline) {
+                    lastStatusUpdateTime = System.currentTimeMillis();
+                }
+            }
+        });
     }
 
     public void updateTimerProc() {
@@ -10562,46 +10582,12 @@ public class MessagesController extends BaseController implements NotificationCe
         if (getUserConfig().isClientActivated()) {
             if (!ignoreSetOnline && !LumaGhostMode.isEnabled(currentAccount) && getConnectionsManager().getPauseTime() == 0 && ApplicationLoader.isScreenOn && !ApplicationLoader.mainInterfacePausedStageQueue) {
                 if (ApplicationLoader.mainInterfacePausedStageQueueTime != 0 && Math.abs(ApplicationLoader.mainInterfacePausedStageQueueTime - System.currentTimeMillis()) > 1000) {
-                    if (statusSettingState != 1 && (lastStatusUpdateTime == 0 || Math.abs(System.currentTimeMillis() - lastStatusUpdateTime) >= 55000 || offlineSent)) {
-                        statusSettingState = 1;
-
-                        if (statusRequest != 0) {
-                            getConnectionsManager().cancelRequest(statusRequest, true);
-                        }
-
-                        TL_account.updateStatus req = new TL_account.updateStatus();
-                        req.offline = false;
-                        statusRequest = getConnectionsManager().sendRequest(req, (response, error) -> {
-                            if (error == null) {
-                                lastStatusUpdateTime = System.currentTimeMillis();
-                                offlineSent = false;
-                                statusSettingState = 0;
-                            } else {
-                                if (lastStatusUpdateTime != 0) {
-                                    lastStatusUpdateTime += 5000;
-                                }
-                            }
-                            statusRequest = 0;
-                        });
+                    if (presenceRequestState.canSend(false, SystemClock.elapsedRealtime()) && (lastStatusUpdateTime == 0 || Math.abs(currentTime - lastStatusUpdateTime) >= 55000 || offlineSent)) {
+                        sendStatusUpdate(false);
                     }
                 }
-            } else if (statusSettingState != 2 && !offlineSent && Math.abs(System.currentTimeMillis() - getConnectionsManager().getPauseTime()) >= 2000) {
-                statusSettingState = 2;
-                if (statusRequest != 0) {
-                    getConnectionsManager().cancelRequest(statusRequest, true);
-                }
-                TL_account.updateStatus req = new TL_account.updateStatus();
-                req.offline = true;
-                statusRequest = getConnectionsManager().sendRequest(req, (response, error) -> {
-                    if (error == null) {
-                        offlineSent = true;
-                    } else {
-                        if (lastStatusUpdateTime != 0) {
-                            lastStatusUpdateTime += 5000;
-                        }
-                    }
-                    statusRequest = 0;
-                });
+            } else if (presenceRequestState.canSend(true, SystemClock.elapsedRealtime()) && !offlineSent && Math.abs(currentTime - getConnectionsManager().getPauseTime()) >= 2000) {
+                sendStatusUpdate(true);
             }
 
             if (updatesQueueChannels.size() != 0) {
@@ -14701,6 +14687,8 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public void markDialogAsRead(long dialogId, int maxPositiveId, int maxNegativeId, int maxDate, boolean popup, long threadId, int countDiff, boolean readNow, int scheduledCount) {
         boolean createReadTask;
+        // Do not queue reads made in ghost mode, even if it is disabled before execution.
+        final boolean suppressRead = dialogId > 0 && LumaGhostMode.isEnabled(currentAccount);
 
         if (threadId != 0) {
             createReadTask = maxPositiveId != Integer.MAX_VALUE;
@@ -14822,10 +14810,9 @@ public class MessagesController extends BaseController implements NotificationCe
             monoForumPeerId = 0;
         }
 
-        if (createReadTask) {
+        if (createReadTask && !suppressRead) {
             Utilities.stageQueue.postRunnable(() -> {
-                boolean suppressRead = dialogId > 0 && LumaGhostMode.isEnabled(currentAccount);
-                if (suppressRead) {
+                if (dialogId > 0 && LumaGhostMode.isEnabled(currentAccount)) {
                     return;
                 }
                 ReadTask currentReadTask;
@@ -14853,6 +14840,13 @@ public class MessagesController extends BaseController implements NotificationCe
                 currentReadTask.maxDate = maxDate;
                 currentReadTask.maxId = maxPositiveId;
                 if (readNow) {
+                    if (threadId != 0) {
+                        threadsReadTasksMap.remove(dialogId + "_" + threadId);
+                        repliesReadTasks.remove(currentReadTask);
+                    } else {
+                        readTasksMap.remove(dialogId);
+                        readTasks.remove(currentReadTask);
+                    }
                     completeReadTask(currentReadTask);
                 }
             });

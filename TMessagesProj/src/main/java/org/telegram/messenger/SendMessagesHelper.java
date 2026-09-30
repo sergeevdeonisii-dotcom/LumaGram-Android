@@ -2156,6 +2156,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     if (msgObj.type == MessageObject.TYPE_TEXT && !TextUtils.isEmpty(msgObj.messageText)) {
                         TLRPC.WebPage webPage = msgObj.messageOwner.media != null ? msgObj.messageOwner.media.webpage : null;
                         final SendMessageParams params = SendMessageParams.of(msgObj.messageText.toString(), peer, null, replyToTopMsg, webPage, webPage != null, msgObj.messageOwner.entities, null, null, notify, outgoingScheduleDate, scheduleRepeatPeriod, null, false);
+                        params.lumaGhostAutoScheduled = lumaGhostAutoScheduled;
                         params.suggestionParams = suggestionParams;
                         params.monoForumPeer = monoForumPeerId;
                         params.quick_reply_shortcut = msgObj.getQuickReplyName();
@@ -4268,7 +4269,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
 
         final int requestedScheduleDate = scheduleDate;
         scheduleDate = LumaGhostMode.getAutomaticScheduleDate(currentAccount, peer, scheduleDate);
-        final boolean lumaGhostAutoScheduled = requestedScheduleDate == 0 && scheduleDate != 0;
+        final boolean lumaGhostAutoScheduled = scheduleDate != 0 && (requestedScheduleDate == 0 || sendMessageParams.lumaGhostAutoScheduled);
 
         if (replyQuote != null && replyQuote.message != null && replyToMsg != null) {
             replyToMsg = replyQuote.message;
@@ -12037,6 +12038,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         public HashMap<String, String> params;
         public boolean notify;
         public int scheduleDate;
+        public boolean lumaGhostAutoScheduled;
         public int scheduleRepeatPeriod;
         public int ttl;
         public Object parentObject;
