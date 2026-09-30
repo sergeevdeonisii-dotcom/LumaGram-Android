@@ -20,6 +20,7 @@ import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaGhostMode;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
@@ -878,6 +879,10 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
     }
 
     private void sendCurrentTaps() {
+        if (LumaGhostMode.isEnabled(currentAccount)) {
+            clearSendingInfo();
+            return;
+        }
         if (lastTappedMsgId == 0) {
             return;
         }
