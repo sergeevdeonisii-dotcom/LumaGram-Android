@@ -142,6 +142,7 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
     private void checkNow() {
         LumaUpdaterController controller = LumaUpdaterController.getInstance();
         AlertDialog progressDialog = new AlertDialog(getContext(), AlertDialog.ALERT_TYPE_SPINNER);
+        final String checkedSource = controller.getManifestUrl();
         progressDialog.show();
         controller.checkForUpdate(true, () -> {
             try {
@@ -149,6 +150,7 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
             } catch (Exception ignore) {
             }
             updateList();
+            if (!TextUtils.equals(checkedSource, controller.getManifestUrl())) return;
             if (!TextUtils.isEmpty(controller.getLastError())) {
                 new AlertDialog.Builder(getContext(), resourceProvider)
                         .setTitle(getString(R.string.LumaUpdatesTitle))

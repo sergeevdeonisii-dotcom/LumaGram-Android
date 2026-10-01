@@ -16,16 +16,16 @@ public final class LumaDeletedMessages {
     private LumaDeletedMessages() {
     }
 
-    private static SharedPreferences preferences() {
-        return MessagesController.getGlobalMainSettings();
+    private static SharedPreferences preferences(int account) {
+        return LumaAccountData.preferences(account);
     }
 
     public static boolean isEnabled(int account) {
-        return preferences().getBoolean(KEY_ENABLED + account, false);
+        return preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
-        preferences().edit().putBoolean(KEY_ENABLED + account, enabled).apply();
+        preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
 
     private static String key(long dialogId, int messageId) {
@@ -36,10 +36,10 @@ public final class LumaDeletedMessages {
         if (!isEnabled(account) || messageId == 0) {
             return;
         }
-        SharedPreferences prefs = preferences();
-        Set<String> saved = new HashSet<>(prefs.getStringSet(KEY_IDS + account, new HashSet<>()));
+        SharedPreferences prefs = preferences(account);
+        Set<String> saved = new HashSet<>(prefs.getStringSet(KEY_IDS, new HashSet<>()));
         if (saved.add(key(dialogId, messageId))) {
-            prefs.edit().putStringSet(KEY_IDS + account, saved).apply();
+            prefs.edit().putStringSet(KEY_IDS, saved).apply();
         }
     }
 
@@ -47,6 +47,6 @@ public final class LumaDeletedMessages {
         if (messageId == 0) {
             return false;
         }
-        return preferences().getStringSet(KEY_IDS + account, new HashSet<>()).contains(key(dialogId, messageId));
+        return preferences(account).getStringSet(KEY_IDS, new HashSet<>()).contains(key(dialogId, messageId));
     }
 }

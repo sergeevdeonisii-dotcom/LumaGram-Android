@@ -13,27 +13,27 @@ public final class LumaEmergencyMode {
     private LumaEmergencyMode() {
     }
 
-    private static SharedPreferences preferences() {
-        return MessagesController.getGlobalMainSettings();
+    private static SharedPreferences preferences(int account) {
+        return LumaAccountData.preferences(account);
     }
 
     public static boolean isEnabled(int account) {
-        return getDialogId(account) != 0 && preferences().getBoolean(KEY_ENABLED + account, false);
+        return getDialogId(account) != 0 && preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
-        preferences().edit().putBoolean(KEY_ENABLED + account, enabled && getDialogId(account) != 0).apply();
+        preferences(account).edit().putBoolean(KEY_ENABLED, enabled && getDialogId(account) != 0).apply();
         apply(account);
     }
 
     public static long getDialogId(int account) {
-        return preferences().getLong(KEY_DIALOG_ID + account, 0);
+        return preferences(account).getLong(KEY_DIALOG_ID, 0);
     }
 
     public static void selectDialog(int account, long dialogId) {
-        preferences().edit()
-                .putLong(KEY_DIALOG_ID + account, dialogId)
-                .putBoolean(KEY_ENABLED + account, dialogId != 0)
+        preferences(account).edit()
+                .putLong(KEY_DIALOG_ID, dialogId)
+                .putBoolean(KEY_ENABLED, dialogId != 0)
                 .apply();
         apply(account);
     }

@@ -459,6 +459,7 @@ public class UserConfig extends BaseController {
     }
 
     public void clearConfig() {
+        LumaAccountData.clearOnLogout(currentAccount, getClientUserId());
         getPreferences().edit().clear().apply();
 
         sharingMyLocationUntil = 0;

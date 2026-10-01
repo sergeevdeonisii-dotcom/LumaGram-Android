@@ -61,6 +61,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.LumaAccountData;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
@@ -1053,7 +1054,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         } else {
             this.dialogId = did;
         }
-        final SharedPreferences preferences = MessagesController.getMainSettings(currentAccount);
+        final SharedPreferences preferences = LumaAccountData.preferences(currentAccount);
         localPinnedGiftIds.addAll(new HashSet<>(preferences.getStringSet(getLocalPinsKey(), new HashSet<>())));
         StarsController.getInstance(currentAccount).invalidateProfileGifts(dialogId);
         this.list = StarsController.getInstance(currentAccount).getProfileGiftsList(dialogId);
@@ -1697,7 +1698,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         } else {
             localPinnedGiftIds.remove(id);
         }
-        MessagesController.getMainSettings(currentAccount)
+        LumaAccountData.preferences(currentAccount)
             .edit()
             .putStringSet(getLocalPinsKey(), new HashSet<>(localPinnedGiftIds))
             .apply();
@@ -1822,6 +1823,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
             if (err != null) {
                 progressDialog.dismissUnless(200);
+                StarsController.getInstance(currentAccount).invalidateProfileGifts(dialogId);
                 BulletinFactory.of(fragment).showForError(err);
             } else {
                 hideGiftAt(gifts, index + 1, progressDialog);
@@ -1844,6 +1846,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
             if (err != null) {
                 progressDialog.dismissUnless(200);
+                StarsController.getInstance(currentAccount).invalidateProfileGifts(dialogId);
                 BulletinFactory.of(fragment).showForError(err);
             } else {
                 showGiftAt(gifts, index + 1, progressDialog);

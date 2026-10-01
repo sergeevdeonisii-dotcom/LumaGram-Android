@@ -37,24 +37,24 @@ public final class LumaStarRating {
     private LumaStarRating() {
     }
 
-    private static SharedPreferences preferences() {
-        return MessagesController.getGlobalMainSettings();
+    private static SharedPreferences preferences(int account) {
+        return LumaAccountData.preferences(account);
     }
 
     public static boolean isEnabled(int account) {
-        return preferences().getBoolean(KEY_ENABLED + account, false);
+        return preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
-        preferences().edit().putBoolean(KEY_ENABLED + account, enabled).apply();
+        preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
 
     public static int getLevel(int account) {
-        return clampLevel(preferences().getInt(KEY_LEVEL + account, MIN_LEVEL));
+        return clampLevel(preferences(account).getInt(KEY_LEVEL, MIN_LEVEL));
     }
 
     public static void setLevel(int account, int level) {
-        preferences().edit().putInt(KEY_LEVEL + account, clampLevel(level)).apply();
+        preferences(account).edit().putInt(KEY_LEVEL, clampLevel(level)).apply();
     }
 
     public static int clampLevel(int level) {
@@ -66,13 +66,13 @@ public final class LumaStarRating {
     }
 
     public static TL_stars.Tl_starsRating getDisplayRating(int account, long userId, TL_stars.Tl_starsRating original) {
-        if (original == null || !isEnabled(account) || userId != UserConfig.getInstance(account).getClientUserId()) {
+        if (!isEnabled(account) || userId != UserConfig.getInstance(account).getClientUserId()) {
             return original;
         }
         int level = getLevel(account);
         long current = getRequiredStars(level);
         TL_stars.Tl_starsRating local = new TL_stars.Tl_starsRating();
-        local.flags = original.flags;
+        local.flags = original == null ? 0 : original.flags;
         local.level = level;
         local.current_level_stars = current;
         if (level < MAX_LEVEL) {
@@ -97,8 +97,8 @@ public final class LumaStarRating {
         if (next <= current) {
             return current;
         }
-        SharedPreferences prefs = preferences();
-        String key = KEY_PROGRESS + account + "_" + level;
+        SharedPreferences prefs = preferences(account);
+        String key = KEY_PROGRESS + level;
         long percent;
         if (prefs.contains(key)) {
             percent = prefs.getLong(key, 50L);

@@ -460,6 +460,7 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     private static class PendingTextSend {
         int account;
+        long ownerId;
         long dialogId;
         CharSequence text;
         int selectionStart;
@@ -6490,7 +6491,7 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     public void onDestroy() {
         destroyed = true;
-        commitPendingDelayedSend(false);
+        detachPendingDelayedSends();
         if (audioTimelineView != null) {
             audioTimelineView.destroy();
         }
@@ -6612,7 +6613,6 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     public void onPause() {
         isPaused = true;
-        commitPendingDelayedSend(false);
         if (senderSelectPopupWindow != null) {
             senderSelectPopupWindow.setPauseNotifications(false);
             senderSelectPopupWindow.dismiss();
@@ -6668,7 +6668,7 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     public void setDialogId(long id, int account) {
         if (!pendingTextSends.isEmpty() && (dialog_id != id || currentAccount != account)) {
-            commitPendingDelayedSend(false);
+            detachPendingDelayedSends();
         }
         dialog_id = id;
         if (currentAccount != account) {
@@ -7977,6 +7977,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     ) {
         final PendingTextSend pending = new PendingTextSend();
         pending.account = currentAccount;
+        pending.ownerId = UserConfig.getInstance(currentAccount).getClientUserId();
         pending.dialogId = dialog_id;
         pending.text = new SpannableStringBuilder(text);
         pending.selectionStart = selectionStart;
@@ -8025,7 +8026,8 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     private void sendPendingDelayedText(PendingTextSend pending, boolean prepareUi) {
         AndroidUtilities.cancelRunOnUIThread(pending.sendRunnable);
-        if (delegate != null && !destroyed
+        if (pending.ownerId == 0 || pending.ownerId != UserConfig.getInstance(pending.account).getClientUserId()) return;
+        if (delegate != null && !destroyed && !isPaused
             && prepareUi
             && pending.account == currentAccount
             && pending.dialogId == dialog_id
@@ -8036,6 +8038,19 @@ public class ChatActivityEnterView extends FrameLayout implements
         for (int i = 0; i < pending.messages.size(); i++) {
             helper.sendMessage(pending.messages.get(i));
         }
+    }
+
+    private void detachPendingDelayedSends() {
+        while (!pendingTextSends.isEmpty()) {
+            PendingTextSend pending = pendingTextSends.removeFirst();
+            AndroidUtilities.cancelRunOnUIThread(pending.sendRunnable);
+            // The timer now retains only immutable sending context, not the old chat/view.
+            for (SendMessagesHelper.SendMessageParams params : pending.messages) {
+                params.sendAnimationData = null;
+            }
+            LumaDelayedSend.sendDetached(pending.account, pending.ownerId, pending.messages, pending.sendAt);
+        }
+        updatePendingDelayedSendButton();
     }
 
     private void updatePendingDelayedSendButton() {

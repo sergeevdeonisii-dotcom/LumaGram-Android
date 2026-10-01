@@ -16,24 +16,24 @@ public final class LumaAnonymousNumber {
     private LumaAnonymousNumber() {
     }
 
-    private static SharedPreferences preferences() {
-        return MessagesController.getGlobalMainSettings();
+    private static SharedPreferences preferences(int account) {
+        return LumaAccountData.preferences(account);
     }
 
     public static boolean isEnabled(int account) {
-        return preferences().getBoolean(KEY_ENABLED + account, false);
+        return preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
-        preferences().edit().putBoolean(KEY_ENABLED + account, enabled).apply();
+        preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
 
     public static String getDigits(int account) {
-        return normalize(preferences().getString(KEY_DIGITS + account, DEFAULT_DIGITS));
+        return normalize(preferences(account).getString(KEY_DIGITS, DEFAULT_DIGITS));
     }
 
     public static void setDigits(int account, String digits) {
-        preferences().edit().putString(KEY_DIGITS + account, normalize(digits)).apply();
+        preferences(account).edit().putString(KEY_DIGITS, normalize(digits)).apply();
     }
 
     public static String getPhone(int account) {

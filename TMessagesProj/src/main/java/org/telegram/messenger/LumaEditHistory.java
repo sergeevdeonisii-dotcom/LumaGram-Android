@@ -19,12 +19,12 @@ public final class LumaEditHistory {
     private LumaEditHistory() {
     }
 
-    private static SharedPreferences preferences() {
-        return MessagesController.getGlobalMainSettings();
+    private static SharedPreferences preferences(int account) {
+        return LumaAccountData.preferences(account);
     }
 
     private static String key(int account, long dialogId, int messageId) {
-        return PREFIX + account + "_" + dialogId + "_" + messageId;
+        return PREFIX + dialogId + "_" + messageId;
     }
 
     private static String text(TLRPC.Message message) {
@@ -50,7 +50,7 @@ public final class LumaEditHistory {
             return;
         }
         String storageKey = key(account, dialogId, before.id);
-        SharedPreferences prefs = preferences();
+        SharedPreferences prefs = preferences(account);
         try {
             JSONArray previous = new JSONArray(prefs.getString(storageKey, "[]"));
             JSONArray versions = new JSONArray();
@@ -62,7 +62,7 @@ public final class LumaEditHistory {
             }
             versions.put(version(after));
 
-            String indexKey = INDEX_PREFIX + account;
+            String indexKey = INDEX_PREFIX;
             JSONArray oldIndex = new JSONArray(prefs.getString(indexKey, "[]"));
             JSONArray index = new JSONArray();
             for (int i = 0; i < oldIndex.length(); i++) {
@@ -89,7 +89,7 @@ public final class LumaEditHistory {
 
     public static synchronized JSONArray getVersions(int account, long dialogId, int messageId) {
         try {
-            return new JSONArray(preferences().getString(key(account, dialogId, messageId), "[]"));
+            return new JSONArray(preferences(account).getString(key(account, dialogId, messageId), "[]"));
         } catch (JSONException exception) {
             FileLog.e(exception);
             return new JSONArray();
