@@ -17,25 +17,25 @@ public final class LumaGhostMode {
     private LumaGhostMode() {
     }
 
-    private static SharedPreferences preferences() {
-        return MessagesController.getGlobalMainSettings();
+    private static SharedPreferences preferences(int account) {
+        return LumaAccountData.preferences(account);
     }
 
     public static boolean isEnabled(int account) {
-        return preferences().getBoolean(KEY_ENABLED + account, false);
+        return preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
-        preferences().edit().putBoolean(KEY_ENABLED + account, enabled).apply();
+        preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
         MessagesController.getInstance(account).setLumaGhostModeEnabled(enabled);
     }
 
     public static boolean isScheduledSendEnabled(int account) {
-        return preferences().getBoolean(KEY_SCHEDULE_SEND + account, false);
+        return preferences(account).getBoolean(KEY_SCHEDULE_SEND, false);
     }
 
     public static void setScheduledSendEnabled(int account, boolean enabled) {
-        preferences().edit().putBoolean(KEY_SCHEDULE_SEND + account, enabled).apply();
+        preferences(account).edit().putBoolean(KEY_SCHEDULE_SEND, enabled).apply();
     }
 
     public static boolean isAutomaticScheduledSendEnabled(int account) {

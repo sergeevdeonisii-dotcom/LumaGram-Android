@@ -1,6 +1,9 @@
 package org.telegram.messenger;
 
 import android.content.SharedPreferences;
+import android.os.SystemClock;
+
+import java.util.ArrayList;
 
 public final class LumaDelayedSend {
 
@@ -36,6 +39,20 @@ public final class LumaDelayedSend {
 
     public static long getDelayMs() {
         return getDelayStep() * 200L;
+    }
+
+    /** Preserve the deadline after closing a chat, without retaining its UI or a reused account slot. */
+    public static void sendDetached(int account, long ownerId,
+                                    ArrayList<SendMessagesHelper.SendMessageParams> messages, long sendAt) {
+        AndroidUtilities.runOnUIThread(() -> {
+            if (ownerId <= 0 || UserConfig.getInstance(account).getClientUserId() != ownerId) return;
+            SendMessagesHelper helper = SendMessagesHelper.getInstance(account);
+            for (SendMessagesHelper.SendMessageParams message : messages) helper.sendMessage(message);
+        }, remainingDelay(sendAt, SystemClock.uptimeMillis()));
+    }
+
+    static long remainingDelay(long sendAt, long now) {
+        return Math.max(0L, sendAt - now);
     }
 
     private static int clampStep(int step) {

@@ -1,0 +1,1 @@
+package org.telegram.messenger; public class FileLoader { public static final int MEDIA_DIR_CACHE=0; public static java.io.File getDirectory(int type) { return ApplicationLoader.applicationContext.getCacheDir(); } }

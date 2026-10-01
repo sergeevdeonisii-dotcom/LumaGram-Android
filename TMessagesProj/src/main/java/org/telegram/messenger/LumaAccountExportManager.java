@@ -161,7 +161,7 @@ public final class LumaAccountExportManager {
         if (cancelled.get() || terminal.get()) return;
         if (chatIndex >= config.chats.size()) {
             notifyProgress(new Progress(chatIndex, config.chats.size(), "", 100, totalMessages, true));
-            worker.execute(this::buildArchive);
+            executeIfActive(this::buildArchive);
             return;
         }
 
@@ -185,11 +185,14 @@ public final class LumaAccountExportManager {
             @Override
             public void onComplete(File archive, LumaChatExportManager.Progress progress) {
                 activeManager = null;
-                worker.execute(() -> consumeChatArchive(spec, archive, progress));
+                if (!executeIfActive(() -> consumeChatArchive(spec, archive, progress))) {
+                    archive.delete();
+                }
             }
 
             @Override
             public void onError(String message, Throwable error) {
+                if (terminal.get() || cancelled.get()) return;
                 if (error != null) FileLog.e(error);
                 activeManager = null;
                 skippedChats++;
@@ -226,6 +229,8 @@ public final class LumaAccountExportManager {
             skippedChats++;
             chatIndex++;
             AndroidUtilities.runOnUIThread(this::exportNext);
+        } finally {
+            archive.delete();
         }
     }
 
@@ -247,10 +252,15 @@ public final class LumaAccountExportManager {
             }
             checkCancelled();
             File result = activeArchive;
-            activeArchive = null;
             deleteRecursively(sessionDir);
-            if (!terminal.compareAndSet(false, true)) return;
-            worker.shutdown();
+            synchronized (worker) {
+                if (!terminal.compareAndSet(false, true)) {
+                    result.delete();
+                    return;
+                }
+                activeArchive = null;
+                worker.shutdown();
+            }
             AndroidUtilities.runOnUIThread(() -> listener.onComplete(result, exported.size(), skippedChats,
                     totalMessages, totalMedia));
         } catch (CancelledException e) {
@@ -468,25 +478,37 @@ public final class LumaAccountExportManager {
     }
 
     private void finishCancelled() {
-        if (!terminal.compareAndSet(false, true)) return;
-        worker.execute(() -> {
-            if (activeArchive != null) activeArchive.delete();
-            deleteRecursively(sessionDir);
-            worker.shutdown();
-            AndroidUtilities.runOnUIThread(listener::onCancelled);
-        });
+        synchronized (worker) {
+            if (!terminal.compareAndSet(false, true)) return;
+            worker.execute(() -> {
+                if (activeArchive != null) activeArchive.delete();
+                deleteRecursively(sessionDir);
+                worker.shutdown();
+                AndroidUtilities.runOnUIThread(listener::onCancelled);
+            });
+        }
     }
 
     private void fail(String message, Throwable error) {
-        if (!terminal.compareAndSet(false, true)) return;
-        cancelled.set(true);
-        if (error != null) FileLog.e(error);
-        worker.execute(() -> {
-            if (activeArchive != null) activeArchive.delete();
-            deleteRecursively(sessionDir);
-            worker.shutdown();
-            AndroidUtilities.runOnUIThread(() -> listener.onError(message, error));
-        });
+        synchronized (worker) {
+            if (!terminal.compareAndSet(false, true)) return;
+            cancelled.set(true);
+            if (error != null) FileLog.e(error);
+            worker.execute(() -> {
+                if (activeArchive != null) activeArchive.delete();
+                deleteRecursively(sessionDir);
+                worker.shutdown();
+                AndroidUtilities.runOnUIThread(() -> listener.onError(message, error));
+            });
+        }
+    }
+
+    private boolean executeIfActive(Runnable task) {
+        synchronized (worker) {
+            if (terminal.get() || cancelled.get()) return false;
+            worker.execute(task);
+            return true;
+        }
     }
 
     private void checkCancelled() throws CancelledException {

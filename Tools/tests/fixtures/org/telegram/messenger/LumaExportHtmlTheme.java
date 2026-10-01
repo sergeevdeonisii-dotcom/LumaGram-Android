@@ -1,0 +1,1 @@
+package org.telegram.messenger; public class LumaExportHtmlTheme { public static void writeAssets(java.io.File file) {} public static String inlineCss(){return "";} public static String script(){return "";} }

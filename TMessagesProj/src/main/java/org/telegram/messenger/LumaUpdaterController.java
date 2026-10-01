@@ -70,6 +70,7 @@ public final class LumaUpdaterController {
     private HttpGetFileTask downloadingTask;
     private int checkGeneration;
     private int downloadGeneration;
+    private Runnable checkCompletion;
 
     private LumaUpdaterController() {
         load();
@@ -88,9 +89,11 @@ public final class LumaUpdaterController {
         sha256 = prefs.getString("sha256", null);
         path = prefs.getString("path", null);
         lastCheck = prefs.getLong("last_check", 0L);
-        if (versionCode <= getCurrentVersionCode() || !TextUtils.isEmpty(path) && !new File(path).exists()) {
-            clearPendingUpdate(false);
+        final int installedVersion = getCurrentVersionCode();
+        if (versionCode <= installedVersion || !TextUtils.isEmpty(path) && !new File(path).exists()) {
+            clearPendingUpdate(true);
         }
+        Utilities.globalQueue.postRunnable(() -> LumaUpdateFiles.cleanupInstalled(updateDirectory(), installedVersion));
     }
 
     private void save() {
@@ -131,10 +134,20 @@ public final class LumaUpdaterController {
             return false;
         }
         if (!TextUtils.equals(value, getManifestUrl())) {
+            ++checkGeneration;
+            checking = false;
+            Runnable completion = checkCompletion;
+            checkCompletion = null;
+            cancelDownloadingUpdate();
             preferences().edit().putString("manifest_url", value).apply();
             clearPendingUpdate(true);
             lastCheck = 0L;
+            lastError = null;
             save();
+            NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateAvailable);
+            // Release any spinner owned by the invalidated request. Its late result is ignored.
+            if (completion != null) completion.run();
+            checkForUpdate(true, null);
         }
         return true;
     }
@@ -194,6 +207,7 @@ public final class LumaUpdaterController {
         }
 
         checking = true;
+        checkCompletion = whenDone;
         lastError = null;
         final int generation = ++checkGeneration;
         String requestUrl = appendCacheBuster(manifestUrl);
@@ -202,6 +216,7 @@ public final class LumaUpdaterController {
                 return;
             }
             checking = false;
+            checkCompletion = null;
             if (TextUtils.isEmpty(response)) {
                 lastError = LocaleController.getString(R.string.LumaUpdateCheckFailed);
             } else {
@@ -218,6 +233,7 @@ public final class LumaUpdaterController {
                     if (newVersionCode > getCurrentVersionCode()) {
                         boolean changed = newVersionCode != versionCode || !TextUtils.equals(newSha256, sha256);
                         if (changed) {
+                            cancelDownloadingUpdate();
                             deleteDownloadedFile();
                         }
                         version = newVersion;
@@ -284,7 +300,7 @@ public final class LumaUpdaterController {
             return;
         }
 
-        File directory = new File(ApplicationLoader.applicationContext.getFilesDir(), "cache");
+        File directory = updateDirectory();
         if (!directory.exists() && !directory.mkdirs()) {
             notifyDownloadFinished(null, LocaleController.getString(R.string.LumaUpdateDownloadFailed));
             return;
@@ -525,12 +541,15 @@ public final class LumaUpdaterController {
     private void deleteDownloadedFile() {
         if (!TextUtils.isEmpty(path)) {
             try {
-                //noinspection ResultOfMethodCallIgnored
-                new File(path).delete();
+                LumaUpdateFiles.delete(updateDirectory(), new File(path));
             } catch (Exception e) {
                 FileLog.e(e);
             }
         }
         path = null;
+    }
+
+    private File updateDirectory() {
+        return new File(ApplicationLoader.applicationContext.getFilesDir(), "cache");
     }
 }

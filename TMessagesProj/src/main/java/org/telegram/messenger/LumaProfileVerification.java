@@ -13,15 +13,15 @@ public final class LumaProfileVerification {
     private LumaProfileVerification() {
     }
 
-    private static SharedPreferences preferences() {
-        return MessagesController.getGlobalMainSettings();
+    private static SharedPreferences preferences(int account) {
+        return LumaAccountData.preferences(account);
     }
 
     public static boolean isEnabled(int account) {
-        return preferences().getBoolean(KEY_ENABLED + account, false);
+        return preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
-        preferences().edit().putBoolean(KEY_ENABLED + account, enabled).apply();
+        preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
 }
