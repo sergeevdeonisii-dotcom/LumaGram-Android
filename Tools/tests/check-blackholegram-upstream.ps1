@@ -19,7 +19,7 @@ foreach ($resource in @('LumaUpdateVersion','LumaUpdateSecureInfo','LumaUpdatesT
     Check ($standaloneLoader.Contains("org.telegram.messenger.R.string.$resource") -and $standaloneLoader -notmatch "(?<!\.)\bR\.string\.$resource\b") "Standalone updater uses the library resource namespace ($resource)"
 }
 Check ((Source 'gradle.properties') -match '(?m)^APP_PACKAGE=org\.luma\.liquid\r?$') 'Legacy Android package is unchanged'
-Check ((Source 'gradle.properties') -match '(?m)^APP_VERSION_NAME=12\.10\.6-bhg\.66\r?$') 'Version identifies the new upstream base'
+Check ((Source 'gradle.properties') -match '(?m)^APP_VERSION_NAME=12\.10\.6-bhg\.\d+\r?$') 'Version identifies the new upstream base'
 Check ((Source ($java + 'tgnet/TLRPC.java')) -match 'LAYER = 229;') 'Telegram layer 229 is present'
 foreach ($locale in @('values', 'values-ru')) {
     $xml = [xml](Source "TMessagesProj/src/main/res/$locale/strings.xml")
@@ -75,5 +75,7 @@ foreach ($iconResource in @('drawable/bhg_icon_blackhole_background.xml','drawab
     Check ($true) "Black Hole resource is valid XML ($iconResource)"
 }
 Check ((Source 'TMessagesProj/src/main/res/mipmap-anydpi-v26/bhg_icon_blackhole.xml').Contains('@drawable/bhg_icon_blackhole_monochrome')) 'Black Hole has a themed monochrome icon'
+Check ((Source 'TMessagesProj/src/main/res/drawable/bhg_icon_blackhole_foreground.xml').Contains('@drawable/bhg_icon_blackhole_photo') -and (Test-Path (Join-Path $repo 'TMessagesProj/src/main/res/drawable-nodpi/bhg_icon_blackhole_photo.png'))) 'Black Hole photo is wired into the adaptive and selector foreground'
+Check ((Source 'TMessagesProj/src/main/res/mipmap-anydpi/bhg_icon_blackhole.xml').Contains('@drawable/bhg_icon_blackhole_foreground')) 'Legacy launcher uses the same padded artwork'
 Check ((Source 'TMessagesProj/jni/voip/webrtc/common_video/h265/h265_bitstream_parser.cc').Contains('kMaxLongTermReferencePictures')) 'Upstream H.265 bounds checks are present'
 Write-Output 'Source integration checks passed. These are not Android UI or server-side presence tests.'
