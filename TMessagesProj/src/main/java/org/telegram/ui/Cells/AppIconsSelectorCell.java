@@ -294,6 +294,7 @@ public class AppIconsSelectorCell extends RecyclerListView implements Notificati
 
     public static class AdaptiveIconImageView extends ImageView {
         private Drawable foreground;
+        private boolean clipForegroundToShape;
         private Path path = new Path();
         private int outerPadding = AndroidUtilities.dp(5);
         private int backgroundOuterPadding = AndroidUtilities.dp(42);
@@ -304,6 +305,7 @@ public class AppIconsSelectorCell extends RecyclerListView implements Notificati
 
         public void setForeground(int res) {
             foreground = ContextCompat.getDrawable(getContext(), res);
+            clipForegroundToShape = res == R.drawable.bhg_icon_blackhole_foreground;
             invalidate();
         }
 
@@ -335,7 +337,15 @@ public class AppIconsSelectorCell extends RecyclerListView implements Notificati
 
             if (foreground != null) {
                 foreground.setBounds(-outerPadding, -outerPadding, getWidth() + outerPadding, getHeight() + outerPadding);
+                int foregroundSave = -1;
+                if (clipForegroundToShape) {
+                    foregroundSave = canvas.save();
+                    canvas.clipPath(path);
+                }
                 foreground.draw(canvas);
+                if (foregroundSave != -1) {
+                    canvas.restoreToCount(foregroundSave);
+                }
             }
         }
 
