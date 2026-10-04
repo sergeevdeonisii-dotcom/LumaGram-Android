@@ -26,3 +26,5 @@ Gift partial-failure handling and the chat lifecycle integration are additionall
 The local undo-send delay remains an in-process timer. Closing/swapping the chat no longer shortens it, but forcible process termination before the deadline is not a durable offline queue. The independent 20-second ghost sender schedules messages on Telegram's server.
 
 For the BlackHoleGram 12.10.6 migration, also run `./Tools/tests/check-blackholegram-upstream.ps1`. It checks the two top-level settings entries and retained child screens, brand strings, unchanged package, unique menu IDs, welcome-template exclusions and key custom/upstream integration points. These assertions inspect source and resources, not rendered Android UI.
+
+Before publishing version .66, run `./Tools/tests/verify-blackholegram-apk.ps1 -ApkPath <signed APK> -SdkPath <Android SDK> -JavaHome <JDK 17>`. It checks package/version/label, target SDK, arm64 native library version, the existing signing certificate, signature validity and ZIP alignment for 16 KiB pages. It does not replace device testing or check ELF segment alignment.
