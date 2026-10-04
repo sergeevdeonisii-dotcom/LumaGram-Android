@@ -22,6 +22,11 @@ foreach ($expected in @(
     if (!$badging.Contains($expected)) { throw "Missing APK metadata: $expected" }
     Write-Output "PASS: $expected"
 }
+$manifest = (& (Join-Path $buildTools 'aapt2.exe') dump xmltree --file AndroidManifest.xml $apk) -join "`n"
+if ($LASTEXITCODE -ne 0 -or !$manifest.Contains('org.telegram.messenger.BlackHoleIcon')) {
+    throw 'Black Hole launcher alias is missing from the final APK'
+}
+Write-Output 'PASS: Black Hole launcher alias in the packaged manifest'
 $signature = (& (Join-Path $JavaHome 'bin/java.exe') -jar (Join-Path $buildTools 'lib/apksigner.jar') verify --verbose --print-certs $apk) -join "`n"
 if ($LASTEXITCODE -ne 0) { throw 'APK signature validation failed' }
 if ($signature -notmatch 'Signer #1 certificate SHA-256 digest: 24a3777b3b0b2d353b0452aa166660f5ad39e0f50aa2124d95b85978880c7cd9') {

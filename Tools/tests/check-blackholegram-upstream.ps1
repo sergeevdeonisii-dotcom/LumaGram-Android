@@ -62,5 +62,18 @@ Check ($cell.Contains('ColoredImageSpan.ALIGN_CENTER') -and $cell.Contains('save
 Check ((Source ($java + 'ui/ActionBar/Theme.java')).Contains('themeInfo.assetName = "fullblack.attheme";') -and (Test-Path (Join-Path $repo 'TMessagesProj/src/main/assets/fullblack.attheme'))) 'FullBlack theme survives'
 Check ((Source ($java + 'ui/Components/blur3/drawable/color/impl/BlurredBackgroundProviderImpl.java')).Contains('LumaAdaptiveGlassPalette')) 'Adaptive Liquid Glass colors survive'
 Check ((Source ($java + 'messenger/voip/VoIPPreNotificationService.java')).Contains('VibrationAttributes.USAGE_RINGTONE')) 'Upstream background-call vibration fix is present'
+$launcher = Source ($java + 'ui/LauncherIconController.java')
+$manifest = [xml](Source 'TMessagesProj/src/main/AndroidManifest.xml')
+$blackHoleAliases = @($manifest.manifest.application.'activity-alias' | Where-Object { $_.GetAttribute('name', 'http://schemas.android.com/apk/res/android') -eq 'org.telegram.messenger.BlackHoleIcon' })
+Check ($blackHoleAliases.Count -eq 1 -and $blackHoleAliases[0].GetAttribute('enabled', 'http://schemas.android.com/apk/res/android') -eq 'false' -and $blackHoleAliases[0].GetAttribute('exported', 'http://schemas.android.com/apk/res/android') -eq 'true') 'Black Hole launcher alias is optional, unique and launchable'
+Check ($launcher.Contains('BLACK_HOLE("BlackHoleIcon", R.drawable.bhg_icon_blackhole_background, R.drawable.bhg_icon_blackhole_foreground, R.string.AppIconBlackHole)')) 'Black Hole appears in the non-premium icon selector'
+foreach ($oldIcon in @('LumaGraphiteIcon','LumaNavyIcon','LumaSilverIcon','LumaGarnetIcon','LumaVioletIcon')) {
+    Check ($launcher.Contains($oldIcon) -and @($manifest.manifest.application.'activity-alias' | Where-Object { $_.GetAttribute('name', 'http://schemas.android.com/apk/res/android') -eq "org.telegram.messenger.$oldIcon" }).Count -eq 1) "Existing icon remains available ($oldIcon)"
+}
+foreach ($iconResource in @('drawable/bhg_icon_blackhole_background.xml','drawable/bhg_icon_blackhole_foreground.xml','drawable/bhg_icon_blackhole_monochrome.xml','mipmap-anydpi/bhg_icon_blackhole.xml','mipmap-anydpi-v26/bhg_icon_blackhole.xml')) {
+    [xml](Source "TMessagesProj/src/main/res/$iconResource") | Out-Null
+    Check ($true) "Black Hole resource is valid XML ($iconResource)"
+}
+Check ((Source 'TMessagesProj/src/main/res/mipmap-anydpi-v26/bhg_icon_blackhole.xml').Contains('@drawable/bhg_icon_blackhole_monochrome')) 'Black Hole has a themed monochrome icon'
 Check ((Source 'TMessagesProj/jni/voip/webrtc/common_video/h265/h265_bitstream_parser.cc').Contains('kMaxLongTermReferencePictures')) 'Upstream H.265 bounds checks are present'
 Write-Output 'Source integration checks passed. These are not Android UI or server-side presence tests.'

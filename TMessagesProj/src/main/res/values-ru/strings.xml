@@ -452,4 +452,5 @@
     <string name="LumaEditHistoryCurrent">Текущая версия</string>
     <string name="LumaEditHistoryUnavailable">Предыдущие версии пока не сохранены на этом устройстве.</string>
     <string name="LumaEditHistoryEmpty">(без текста)</string>
+    <string name="AppIconBlackHole">Чёрная дыра</string>
 </resources>

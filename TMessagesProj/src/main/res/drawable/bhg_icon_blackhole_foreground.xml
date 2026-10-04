@@ -1,0 +1,24 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- All primary geometry is centered at (54, 54) inside the adaptive safe zone. -->
+    <path android:fillColor="#25F5B174" android:pathData="M54,30A24,24 0,1 1,54,78A24,24 0,1 1,54,30Z" />
+    <group android:rotation="-14" android:pivotX="54" android:pivotY="54">
+        <path android:fillColor="#00000000" android:strokeColor="#42F5AC6B" android:strokeWidth="4.5"
+            android:pathData="M24,54C24,46 37,42 54,42C71,42 84,46 84,54C84,62 71,66 54,66C37,66 24,62 24,54Z" />
+        <path android:fillColor="#00000000" android:strokeColor="#CB8F5A" android:strokeWidth="1.7"
+            android:pathData="M24,54C24,46 37,42 54,42C71,42 84,46 84,54C84,62 71,66 54,66C37,66 24,62 24,54Z" />
+    </group>
+    <path android:fillColor="#020409" android:strokeColor="#F3BD83" android:strokeWidth="2.5"
+        android:pathData="M54,35A19,19 0,1 1,54,73A19,19 0,1 1,54,35Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFF2D9" android:strokeWidth="1.4" android:strokeLineCap="round"
+        android:pathData="M37.55,44.5A19,19 0,0 1,70.45,44.5" />
+    <group android:rotation="-14" android:pivotX="54" android:pivotY="54">
+        <path android:fillColor="#00000000" android:strokeColor="#55FFD59A" android:strokeWidth="4.5" android:strokeLineCap="round"
+            android:pathData="M24,54C24,61 37,65 54,65C71,65 84,61 84,54" />
+        <path android:fillColor="#00000000" android:strokeColor="#FFD091" android:strokeWidth="2.5" android:strokeLineCap="round"
+            android:pathData="M24,54C24,61 37,65 54,65C71,65 84,61 84,54" />
+        <path android:fillColor="#00000000" android:strokeColor="#FFF1D8" android:strokeWidth="0.8" android:strokeLineCap="round"
+            android:pathData="M25,55C29,61 40,64 54,64C68,64 79,61 83,55" />
+    </group>
+</vector>
