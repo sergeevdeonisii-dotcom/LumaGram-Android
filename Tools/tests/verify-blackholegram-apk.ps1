@@ -2,7 +2,9 @@ param(
     [Parameter(Mandatory = $true)][string]$ApkPath,
     [Parameter(Mandatory = $true)][string]$SdkPath,
     [Parameter(Mandatory = $true)][string]$JavaHome,
-    [string]$NdkVersion = '27.2.12479018'
+    [string]$NdkVersion = '27.2.12479018',
+    [string]$VersionName = '12.10.6-bhg.67',
+    [int]$VersionCode = 71469
 )
 $ErrorActionPreference = 'Stop'
 $apk = (Resolve-Path -LiteralPath $ApkPath).Path
@@ -13,8 +15,8 @@ $badging = (& (Join-Path $buildTools 'aapt2.exe') dump badging $apk) -join "`n"
 if ($LASTEXITCODE -ne 0) { throw 'APK metadata inspection failed' }
 foreach ($expected in @(
     "name='org.luma.liquid.web'",
-    "versionCode='71459'",
-    "versionName='12.10.6-bhg.66'",
+    "versionCode='$VersionCode'",
+    "versionName='$VersionName'",
     "application-label:'BlackHoleGram'",
     "targetSdkVersion:'36'",
     "native-code: 'arm64-v8a'"
@@ -27,6 +29,11 @@ if ($LASTEXITCODE -ne 0 -or !$manifest.Contains('org.telegram.messenger.BlackHol
     throw 'Black Hole launcher alias is missing from the final APK'
 }
 Write-Output 'PASS: Black Hole launcher alias in the packaged manifest'
+$resources = (& (Join-Path $buildTools 'aapt2.exe') dump resources $apk) -join "`n"
+if ($LASTEXITCODE -ne 0 -or !$resources.Contains('drawable/bhg_icon_blackhole_photo')) {
+    throw 'The new Black Hole photo resource is missing from the final APK'
+}
+Write-Output 'PASS: new Black Hole photo resource in the packaged APK'
 $signature = (& (Join-Path $JavaHome 'bin/java.exe') -jar (Join-Path $buildTools 'lib/apksigner.jar') verify --verbose --print-certs $apk) -join "`n"
 if ($LASTEXITCODE -ne 0) { throw 'APK signature validation failed' }
 if ($signature -notmatch 'Signer #1 certificate SHA-256 digest: 24a3777b3b0b2d353b0452aa166660f5ad39e0f50aa2124d95b85978880c7cd9') {

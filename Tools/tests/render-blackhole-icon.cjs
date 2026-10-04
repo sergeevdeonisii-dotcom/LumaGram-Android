@@ -1,4 +1,4 @@
-// Render the actual vector paths for a visual mask/centering check, not an Android screenshot.
+// Render the actual vector/bitmap resources for a mask/centering check, not an Android screenshot.
 const fs = require('node:fs');
 const path = require('node:path');
 const [resources, output, modules] = process.argv.slice(2);
@@ -28,10 +28,22 @@ function vector(filename, tint) {
     return `<path d="${a.pathData}" fill="${tint || fill}" fill-opacity="${fillOpacity * Number(a.fillAlpha || 1)}" stroke="${tint || stroke}" stroke-opacity="${strokeOpacity * Number(a.strokeAlpha || 1)}" stroke-width="${a.strokeWidth || 0}" stroke-linecap="${a.strokeLineCap || 'butt'}" stroke-linejoin="${a.strokeLineJoin || 'miter'}"/>`;
   }).join('');
 }
-const foreground = vector('bhg_icon_blackhole_foreground.xml');
+const foregroundXml = fs.readFileSync(path.join(resources, 'drawable/bhg_icon_blackhole_foreground.xml'), 'utf8');
+let foreground;
+if (foregroundXml.includes('<inset')) {
+  const inset = attributes(foregroundXml.match(/<inset\b[^>]*>/)[0]);
+  const bitmap = attributes(foregroundXml.match(/<bitmap\b[^>]*>/)[0]);
+  if (!/^\d+dp$/.test(inset.inset) || !/^@drawable\/[a-z0-9_]+$/.test(bitmap.src) || bitmap.gravity !== 'fill') throw new Error('Unexpected bitmap wrapper');
+  const padding = Number(inset.inset.slice(0, -2));
+  const image = fs.readFileSync(path.join(resources, 'drawable-nodpi', bitmap.src.slice('@drawable/'.length) + '.png')).toString('base64');
+  foreground = `<image x="${padding}" y="${padding}" width="${108 - 2 * padding}" height="${108 - 2 * padding}" preserveAspectRatio="none" href="data:image/png;base64,${image}"/>`;
+} else {
+  foreground = vector('bhg_icon_blackhole_foreground.xml');
+}
 const monochrome = vector('bhg_icon_blackhole_monochrome.xml', '#1F3341');
-const background = attributes(fs.readFileSync(path.join(resources, 'drawable/bhg_icon_blackhole_background.xml'), 'utf8'));
-const [start] = color(background.startColor), [middle] = color(background.centerColor), [end] = color(background.endColor);
+const backgroundXml = fs.readFileSync(path.join(resources, 'drawable/bhg_icon_blackhole_background.xml'), 'utf8');
+const background = attributes(backgroundXml);
+const [start] = color(background.startColor || background.color), [middle] = color(background.centerColor || background.color), [end] = color(background.endColor || background.color);
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="218" viewBox="0 0 512 218">
 <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${start}"/><stop offset=".5" stop-color="${middle}"/><stop offset="1" stop-color="${end}"/></linearGradient>
 <clipPath id="square"><rect width="144" height="144" rx="34"/></clipPath><clipPath id="round"><circle cx="72" cy="72" r="72"/></clipPath></defs>
