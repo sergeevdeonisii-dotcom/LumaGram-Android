@@ -40,7 +40,10 @@ if (foregroundXml.includes('<inset')) {
 } else {
   foreground = vector('bhg_icon_blackhole_foreground.xml');
 }
-const monochrome = vector('bhg_icon_blackhole_monochrome.xml', '#1F3341');
+const adaptiveXml = fs.readFileSync(path.join(resources, 'mipmap-anydpi-v26/bhg_icon_blackhole.xml'), 'utf8');
+const supportsMonochrome = /<monochrome\b/.test(adaptiveXml);
+const thirdForeground = supportsMonochrome ? vector('bhg_icon_blackhole_monochrome.xml', '#1F3341') : foreground;
+const thirdBackground = supportsMonochrome ? '#B7C9D8' : 'url(#bg)';
 const backgroundXml = fs.readFileSync(path.join(resources, 'drawable/bhg_icon_blackhole_background.xml'), 'utf8');
 const background = attributes(backgroundXml);
 const [start] = color(background.startColor || background.color), [middle] = color(background.centerColor || background.color), [end] = color(background.endColor || background.color);
@@ -50,6 +53,6 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="218" vi
 <rect width="512" height="218" fill="#10131B"/>
 <g transform="translate(20 18)" clip-path="url(#square)"><rect width="144" height="144" fill="url(#bg)"/><g transform="scale(2) translate(-18 -18)">${foreground}</g></g>
 <g transform="translate(184 18)" clip-path="url(#round)"><rect width="144" height="144" fill="url(#bg)"/><g transform="scale(2) translate(-18 -18)">${foreground}</g></g>
-<g transform="translate(348 18)" clip-path="url(#square)"><rect width="144" height="144" fill="#B7C9D8"/><g transform="scale(2) translate(-18 -18)">${monochrome}</g></g>
-<g fill="#D9DEEA" font-family="Segoe UI, sans-serif" font-size="16" text-anchor="middle"><text x="92" y="193">Чёрная дыра</text><text x="256" y="193">Круглая</text><text x="420" y="193">Тематическая</text></g></svg>`;
+<g transform="translate(348 18)" clip-path="url(#square)"><rect width="144" height="144" fill="${thirdBackground}"/><g transform="scale(2) translate(-18 -18)">${thirdForeground}</g></g>
+<g fill="#D9DEEA" font-family="Segoe UI, sans-serif" font-size="16" text-anchor="middle"><text x="92" y="193">Чёрная дыра</text><text x="256" y="193">Круглая</text><text x="420" y="193">${supportsMonochrome ? 'Тематическая' : 'Исходные цвета'}</text></g></svg>`;
 sharp(Buffer.from(svg)).png().toFile(output).then(() => console.log(output)).catch(error => { console.error(error); process.exitCode = 1; });

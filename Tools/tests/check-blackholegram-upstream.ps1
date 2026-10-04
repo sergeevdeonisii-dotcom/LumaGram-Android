@@ -74,7 +74,8 @@ foreach ($iconResource in @('drawable/bhg_icon_blackhole_background.xml','drawab
     [xml](Source "TMessagesProj/src/main/res/$iconResource") | Out-Null
     Check ($true) "Black Hole resource is valid XML ($iconResource)"
 }
-Check ((Source 'TMessagesProj/src/main/res/mipmap-anydpi-v26/bhg_icon_blackhole.xml').Contains('@drawable/bhg_icon_blackhole_monochrome')) 'Black Hole has a themed monochrome icon'
+$blackHoleAdaptive = [xml](Source 'TMessagesProj/src/main/res/mipmap-anydpi-v26/bhg_icon_blackhole.xml')
+Check (@($blackHoleAdaptive.'adaptive-icon'.ChildNodes | Where-Object LocalName -eq 'monochrome').Count -eq 0 -and @($blackHoleAdaptive.'adaptive-icon'.ChildNodes | Where-Object LocalName -eq 'foreground').Count -eq 1 -and @($blackHoleAdaptive.'adaptive-icon'.ChildNodes | Where-Object LocalName -eq 'background').Count -eq 1) 'Black Hole supplies only full-color layers, not a palette monochrome layer'
 Check ((Source 'TMessagesProj/src/main/res/drawable/bhg_icon_blackhole_foreground.xml').Contains('@drawable/bhg_icon_blackhole_photo') -and (Test-Path (Join-Path $repo 'TMessagesProj/src/main/res/drawable-nodpi/bhg_icon_blackhole_photo.png'))) 'Black Hole photo is wired into the adaptive and selector foreground'
 Check ((Source 'TMessagesProj/src/main/res/mipmap-anydpi/bhg_icon_blackhole.xml').Contains('@drawable/bhg_icon_blackhole_foreground')) 'Legacy launcher uses the same padded artwork'
 Check ((Source ($java + 'ui/Cells/AppIconsSelectorCell.java')).Contains('clipForegroundToShape = res == R.drawable.bhg_icon_blackhole_foreground;') -and (Source ($java + 'ui/Cells/AppIconsSelectorCell.java')) -match '(?s)if \(clipForegroundToShape\) \{.*?canvas\.clipPath\(path\);.*?foreground\.draw\(canvas\);.*?canvas\.restoreToCount\(foregroundSave\);') 'Only the raster Black Hole preview clips its opaque corners to the selector circle'
