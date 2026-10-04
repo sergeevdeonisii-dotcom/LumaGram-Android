@@ -31,6 +31,7 @@ import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.TextCheckCell;
 import org.telegram.ui.Components.BulletinFactory;
+import org.telegram.ui.Components.IconBackgroundColors;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
@@ -40,6 +41,32 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 public class ExperimentalFeaturesActivity extends BaseFragment {
+
+    private enum Section {
+        ROOT(0, R.string.ExperimentalFeaturesTitle),
+        PRIVACY(101, R.string.BlackHoleAdvancedPrivacyTitle),
+        PROFILE(102, R.string.BlackHoleAdvancedProfileTitle),
+        TYPING(103, R.string.BlackHoleAdvancedTypingTitle),
+        SENDING(104, R.string.BlackHoleAdvancedSendingTitle),
+        CONNECTION(105, R.string.BlackHoleAdvancedConnectionTitle);
+
+        final int id;
+        final int titleRes;
+
+        Section(int id, int titleRes) {
+            this.id = id;
+            this.titleRes = titleRes;
+        }
+
+        static Section fromId(int id) {
+            for (Section section : values()) {
+                if (section != ROOT && section.id == id) {
+                    return section;
+                }
+            }
+            return null;
+        }
+    }
 
     private static final int ROW_ENABLED = 1;
     private static final int ROW_RESET = 2;
@@ -56,13 +83,22 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private static final int ROW_PROFILE_VERIFICATION_ENABLED = 13;
     private static final int ROW_GHOST_SCHEDULE_SEND_ENABLED = 14;
 
+    private final Section section;
     private UniversalRecyclerView listView;
+
+    public ExperimentalFeaturesActivity() {
+        this(Section.ROOT);
+    }
+
+    private ExperimentalFeaturesActivity(Section section) {
+        this.section = section;
+    }
 
     @Override
     public View createView(Context context) {
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
-        actionBar.setTitle(getString(R.string.ExperimentalFeaturesTitle));
+        actionBar.setTitle(getString(section.titleRes));
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
@@ -89,6 +125,52 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     }
 
     private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
+        switch (section) {
+            case ROOT:
+                fillSections(items);
+                break;
+            case PRIVACY:
+                fillPrivacyItems(items);
+                break;
+            case PROFILE:
+                fillProfileItems(items);
+                break;
+            case TYPING:
+                fillTypingItems(items);
+                break;
+            case SENDING:
+                fillSendingItems(items);
+                break;
+            case CONNECTION:
+                fillConnectionItems(items);
+                break;
+        }
+    }
+
+    private void fillSections(ArrayList<UItem> items) {
+        items.add(UItem.asHeader(getString(R.string.BlackHoleAdvancedAccountHeader)));
+        items.add(sectionItem(Section.PRIVACY, IconBackgroundColors.GREEN,
+                R.drawable.settings_privacy, R.string.BlackHoleAdvancedPrivacyInfo));
+        items.add(sectionItem(Section.PROFILE, IconBackgroundColors.BLUE,
+                R.drawable.settings_account, R.string.BlackHoleAdvancedProfileInfo));
+        items.add(UItem.asShadow(null));
+
+        items.add(UItem.asHeader(getString(R.string.BlackHoleAdvancedAppHeader)));
+        items.add(sectionItem(Section.TYPING, IconBackgroundColors.PURPLE,
+                R.drawable.settings_features, R.string.BlackHoleAdvancedTypingInfo));
+        items.add(sectionItem(Section.SENDING, IconBackgroundColors.ORANGE,
+                R.drawable.settings_chat, R.string.BlackHoleAdvancedSendingInfo));
+        items.add(sectionItem(Section.CONNECTION, IconBackgroundColors.CYAN,
+                R.drawable.settings_data, R.string.BlackHoleAdvancedConnectionInfo));
+        items.add(UItem.asShadow(getString(R.string.BlackHoleAdvancedSectionsInfo)));
+    }
+
+    private UItem sectionItem(Section section, IconBackgroundColors colors, int iconRes, int infoRes) {
+        return SettingsActivity.SettingCell.Factory.of(section.id, colors.top, colors.bottom,
+                iconRes, getString(section.titleRes), getString(infoRes));
+    }
+
+    private void fillTypingItems(ArrayList<UItem> items) {
         final boolean enabled = LumaTextAnimation.isEnabled();
 
         items.add(UItem.asHeader(getString(R.string.ExperimentalTypingHeader)));
@@ -130,7 +212,10 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         items.add(UItem.asShadow(getString(R.string.ExperimentalTypingSwipeInfo)));
 
         items.add(UItem.asButton(ROW_RESET, getString(R.string.ExperimentalTypingReset)));
+        items.add(UItem.asShadow(getString(R.string.ExperimentalFeaturesWarning)));
+    }
 
+    private void fillSendingItems(ArrayList<UItem> items) {
         final boolean delayedSendEnabled = LumaDelayedSend.isEnabled();
         items.add(UItem.asHeader(getString(R.string.ExperimentalDelayedSendHeader)));
         items.add(UItem.asCheck(ROW_DELAYED_SEND_ENABLED, getString(R.string.ExperimentalDelayedSendEnable))
@@ -144,7 +229,9 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             LumaDelayedSend::setDelayStep
         ).setEnabled(delayedSendEnabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalDelayedSendInfo)));
+    }
 
+    private void fillConnectionItems(ArrayList<UItem> items) {
         final boolean emergencyEnabled = LumaEmergencyMode.isEnabled(currentAccount);
         items.add(UItem.asHeader(getString(R.string.EmergencyConnectionHeader)));
         items.add(UItem.asCheck(ROW_EMERGENCY_ENABLED, getString(R.string.EmergencyConnectionEnable))
@@ -156,6 +243,16 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         ));
         items.add(UItem.asShadow(getString(R.string.EmergencyConnectionInfo)));
 
+        items.add(UItem.asHeader(tr("Данные аккаунта", "Account data")));
+        items.add(UItem.asButton(ROW_ACCOUNT_EXPORT,
+                tr("Экспорт аккаунта", "Account export"),
+                tr("HTML · чаты и медиа", "HTML · chats and media")));
+        items.add(UItem.asShadow(tr(
+                "Создаёт переносимую HTML-копию выбранных папок и типов чатов.",
+                "Creates a portable HTML copy of selected folders and chat types.")));
+    }
+
+    private void fillPrivacyItems(ArrayList<UItem> items) {
         final boolean ghostEnabled = LumaGhostMode.isEnabled(currentAccount);
         items.add(UItem.asHeader(getString(R.string.ExperimentalGhostHeader)));
         items.add(UItem.asCheck(ROW_GHOST_ENABLED, getString(R.string.ExperimentalGhostEnable))
@@ -167,9 +264,16 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         items.add(UItem.asShadow(LocaleController.formatString(
             R.string.ExperimentalGhostScheduledSendInfo,
             LumaGhostMode.SCHEDULE_SEND_DELAY_SECONDS
-        )));
-        items.add(UItem.asShadow(getString(R.string.ExperimentalGhostInfo)));
+        ) + "\n\n" + getString(R.string.ExperimentalGhostInfo)));
 
+        final boolean deletedMessagesEnabled = LumaDeletedMessages.isEnabled(currentAccount);
+        items.add(UItem.asHeader(getString(R.string.ExperimentalDeletedMessagesHeader)));
+        items.add(UItem.asCheck(ROW_DELETED_MESSAGES_ENABLED, getString(R.string.ExperimentalDeletedMessagesEnable))
+            .setChecked(deletedMessagesEnabled));
+        items.add(UItem.asShadow(getString(R.string.ExperimentalDeletedMessagesInfo)));
+    }
+
+    private void fillProfileItems(ArrayList<UItem> items) {
         final boolean starRatingEnabled = LumaStarRating.isEnabled(currentAccount);
         items.add(UItem.asHeader(getString(R.string.ExperimentalStarRatingHeader)));
         items.add(UItem.asCheck(ROW_STAR_RATING_ENABLED, getString(R.string.ExperimentalStarRatingEnable))
@@ -195,25 +299,18 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         items.add(UItem.asCheck(ROW_PROFILE_VERIFICATION_ENABLED, getString(R.string.ExperimentalProfileVerificationEnable))
             .setChecked(localVerificationEnabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalProfileVerificationInfo)));
-
-        final boolean deletedMessagesEnabled = LumaDeletedMessages.isEnabled(currentAccount);
-        items.add(UItem.asHeader(getString(R.string.ExperimentalDeletedMessagesHeader)));
-        items.add(UItem.asCheck(ROW_DELETED_MESSAGES_ENABLED, getString(R.string.ExperimentalDeletedMessagesEnable))
-            .setChecked(deletedMessagesEnabled));
-        items.add(UItem.asShadow(getString(R.string.ExperimentalDeletedMessagesInfo)));
-
-        items.add(UItem.asHeader(tr("Данные аккаунта", "Account data")));
-        items.add(UItem.asButton(ROW_ACCOUNT_EXPORT,
-                tr("Экспорт аккаунта", "Account export"),
-                tr("HTML · чаты и медиа", "HTML · chats and media")));
-        items.add(UItem.asShadow(tr(
-                "Создаёт переносимую HTML-копию выбранных папок и типов чатов.",
-                "Creates a portable HTML copy of selected folders and chat types.")));
-
-        items.add(UItem.asShadow(getString(R.string.ExperimentalFeaturesWarning)));
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {
+        if (section == Section.ROOT) {
+            Section destination = Section.fromId(item.id);
+            if (destination != null) {
+                ExperimentalFeaturesActivity screen = new ExperimentalFeaturesActivity(destination);
+                screen.setCurrentAccount(currentAccount);
+                presentFragment(screen);
+            }
+            return;
+        }
         if (item.id == ROW_ENABLED) {
             final boolean enabled = !LumaTextAnimation.isEnabled();
             LumaTextAnimation.setEnabled(enabled);
@@ -349,7 +446,9 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 getString(enabled ? R.string.ExperimentalDeletedMessagesEnabled : R.string.ExperimentalDeletedMessagesDisabled)
             ).show();
         } else if (item.id == ROW_ACCOUNT_EXPORT) {
-            presentFragment(new LumaAccountExportActivity());
+            LumaAccountExportActivity screen = new LumaAccountExportActivity();
+            screen.setCurrentAccount(currentAccount);
+            presentFragment(screen);
         }
     }
 

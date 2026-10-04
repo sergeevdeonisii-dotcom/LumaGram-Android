@@ -1,21 +1,16 @@
 package org.telegram.ui;
 
-import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.LocaleController.getString;
 
 import android.content.Context;
-import android.graphics.Color;
-import android.text.InputType;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BetaUpdate;
 import org.telegram.messenger.BuildVars;
-import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaUpdaterController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -31,14 +26,12 @@ import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalRecyclerView;
 
 import java.io.File;
-import java.net.URI;
 import java.util.ArrayList;
 
 public class LumaUpdateActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
 
     private static final int ROW_CHECK = 1;
     private static final int ROW_AUTO = 2;
-    private static final int ROW_SOURCE = 3;
     private static final int ROW_UPDATE = 4;
 
     private UniversalRecyclerView listView;
@@ -109,10 +102,6 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
         items.add(UItem.asHeader(getString(R.string.LumaUpdateAutomaticHeader)));
         items.add(UItem.asCheck(ROW_AUTO, getString(R.string.LumaUpdateAutomatic)).setChecked(controller.isAutoCheckEnabled()));
         items.add(UItem.asShadow(getString(R.string.LumaUpdateAutomaticInfo)));
-
-        items.add(UItem.asHeader(getString(R.string.LumaUpdateAdvancedHeader)));
-        items.add(UItem.asButton(ROW_SOURCE, getString(R.string.LumaUpdateSource), sourceLabel(controller.getManifestUrl())));
-        items.add(UItem.asShadow(getString(R.string.LumaUpdateSourceInfo)));
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {
@@ -123,14 +112,8 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
             if (view instanceof TextCheckCell) {
                 ((TextCheckCell) view).setChecked(enabled);
             }
-        } else if (item.id == ROW_SOURCE) {
-            showSourceDialog();
         } else if (item.id == ROW_CHECK) {
-            if (!controller.hasManifestUrl()) {
-                showSourceDialog();
-            } else {
-                checkNow();
-            }
+            checkNow();
         } else if (item.id == ROW_UPDATE) {
             BetaUpdate update = controller.getUpdate();
             if (update != null && !controller.isDownloading()) {
@@ -167,56 +150,6 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
             }
         });
         updateList();
-    }
-
-    private void showSourceDialog() {
-        Context context = getContext();
-        if (context == null) {
-            return;
-        }
-        LumaUpdaterController controller = LumaUpdaterController.getInstance();
-        EditText input = new EditText(context);
-        input.setSingleLine(true);
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        input.setText(controller.getManifestUrl());
-        input.setSelection(input.length());
-        input.setHint("https://…/latest.json");
-        input.setTextColor(Theme.getColor(Theme.key_dialogTextBlack, resourceProvider));
-        input.setHintTextColor(Theme.getColor(Theme.key_dialogTextHint, resourceProvider));
-        input.setBackground(Theme.createRoundRectDrawable(dp(10), Theme.getColor(Theme.key_dialogBackgroundGray, resourceProvider)));
-        input.setPadding(dp(12), 0, dp(12), 0);
-
-        FrameLayout container = new FrameLayout(context);
-        container.addView(input, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.FILL_HORIZONTAL, 4, 4, 4, 4));
-        new AlertDialog.Builder(context, resourceProvider)
-                .setTitle(getString(R.string.LumaUpdateSource))
-                .setMessage(getString(R.string.LumaUpdateSourceDialogInfo))
-                .setView(container, 56)
-                .setPositiveButton(getString(R.string.Save), (dialog, which) -> {
-                    if (!controller.setManifestUrl(input.getText().toString())) {
-                        new AlertDialog.Builder(context, resourceProvider)
-                                .setTitle(getString(R.string.LumaUpdatesTitle))
-                                .setMessage(getString(R.string.LumaUpdateSourceInvalid))
-                                .setPositiveButton(getString(R.string.OK), null)
-                                .show();
-                    }
-                    updateList();
-                })
-                .setNegativeButton(getString(R.string.Cancel), null)
-                .show();
-        input.requestFocus();
-    }
-
-    private static String sourceLabel(String url) {
-        if (TextUtils.isEmpty(url)) {
-            return LocaleController.getString(R.string.LumaUpdateNotConfigured);
-        }
-        try {
-            String host = new URI(url).getHost();
-            return TextUtils.isEmpty(host) ? url : host;
-        } catch (Exception ignore) {
-            return url;
-        }
     }
 
     private void updateList() {
