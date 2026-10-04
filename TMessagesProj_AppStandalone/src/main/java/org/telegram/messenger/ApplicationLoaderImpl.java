@@ -163,15 +163,15 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
         LumaUpdaterController controller = LumaUpdaterController.getInstance();
         File downloaded = controller.getDownloadedFile();
         StringBuilder message = new StringBuilder();
-        message.append(LocaleController.formatString(R.string.LumaUpdateVersion, update.version));
+        message.append(LocaleController.formatString(org.telegram.messenger.R.string.LumaUpdateVersion, update.version));
         if (!TextUtils.isEmpty(update.changelog)) {
             message.append("\n\n").append(update.changelog);
         }
-        message.append("\n\n").append(LocaleController.getString(R.string.LumaUpdateSecureInfo));
+        message.append("\n\n").append(LocaleController.getString(org.telegram.messenger.R.string.LumaUpdateSecureInfo));
         new AlertDialog.Builder(context)
-                .setTitle(LocaleController.getString(R.string.LumaUpdatesTitle))
+                .setTitle(LocaleController.getString(org.telegram.messenger.R.string.LumaUpdatesTitle))
                 .setMessage(message)
-                .setPositiveButton(LocaleController.getString(downloaded != null ? R.string.LumaUpdateInstall : R.string.LumaUpdateDownloadInstall), (dialog, which) -> {
+                .setPositiveButton(LocaleController.getString(downloaded != null ? org.telegram.messenger.R.string.LumaUpdateInstall : org.telegram.messenger.R.string.LumaUpdateDownloadInstall), (dialog, which) -> {
                     Activity activity = AndroidUtilities.findActivity(context);
                     if (downloaded != null) {
                         controller.install(activity);
@@ -179,7 +179,7 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
                         showLumaDownloadProgress(context, activity);
                     }
                 })
-                .setNegativeButton(LocaleController.getString(R.string.AppUpdateRemindMeLater), null)
+                .setNegativeButton(LocaleController.getString(org.telegram.messenger.R.string.AppUpdateRemindMeLater), null)
                 .show();
         return true;
     }
@@ -190,7 +190,7 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
         }
         LumaUpdaterController controller = LumaUpdaterController.getInstance();
         AlertDialog progressDialog = new AlertDialog(context, AlertDialog.ALERT_TYPE_LOADING);
-        progressDialog.setMessage(LocaleController.getString(R.string.LumaUpdateDownloading));
+        progressDialog.setMessage(LocaleController.getString(org.telegram.messenger.R.string.LumaUpdateDownloading));
         progressDialog.setProgress((int) (controller.getDownloadingProgress() * 100));
         final boolean[] cancelled = {false};
         final LumaUpdaterController.DownloadListener[] listener = new LumaUpdaterController.DownloadListener[1];
@@ -222,9 +222,9 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
                 } else if (!cancelled[0] && !TextUtils.isEmpty(error)) {
                     try {
                         new AlertDialog.Builder(activity)
-                                .setTitle(LocaleController.getString(R.string.LumaUpdatesTitle))
+                                .setTitle(LocaleController.getString(org.telegram.messenger.R.string.LumaUpdatesTitle))
                                 .setMessage(error)
-                                .setPositiveButton(LocaleController.getString(R.string.OK), null)
+                                .setPositiveButton(LocaleController.getString(org.telegram.messenger.R.string.OK), null)
                                 .show();
                     } catch (Exception e) {
                         FileLog.e(e);
@@ -232,7 +232,7 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
                 }
             }
         };
-        progressDialog.setButton(DialogInterface.BUTTON_NEGATIVE, LocaleController.getString(R.string.Cancel), (dialog, which) -> {
+        progressDialog.setButton(DialogInterface.BUTTON_NEGATIVE, LocaleController.getString(org.telegram.messenger.R.string.Cancel), (dialog, which) -> {
             cancelled[0] = true;
             controller.cancelDownloadingUpdate();
         });
@@ -286,7 +286,7 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
                         new AlertDialog.Builder(LaunchActivity.instance)
                                 .setTitle(LocaleController.getString(R.string.SmsNoSimTitle))
                                 .setMessage(AndroidUtilities.replaceTags(LocaleController.getString(R.string.SmsNoSimMessage)))
-                                .setPositiveButton(LocaleController.getString(R.string.OK), null)
+                                .setPositiveButton(LocaleController.getString(org.telegram.messenger.R.string.OK), null)
                                 .show();
                         return;
                     }
@@ -298,7 +298,7 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
                             new AlertDialog.Builder(LaunchActivity.instance)
                                     .setTitle(LocaleController.getString(R.string.SmsNoSimTitle))
                                     .setMessage(AndroidUtilities.replaceTags(LocaleController.getString(R.string.SmsNoSimMessage)))
-                                    .setPositiveButton(LocaleController.getString(R.string.OK), null)
+                                    .setPositiveButton(LocaleController.getString(org.telegram.messenger.R.string.OK), null)
                                     .show();
                             return;
                         }
@@ -306,7 +306,7 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
                             if (err != null) {
                                 BulletinFactory.showError(err);
                             } else if (res instanceof TLRPC.TL_boolFalse) {
-                                BulletinFactory.global().createErrorBulletin(LocaleController.getString(R.string.UnknownError)).show();
+                                BulletinFactory.global().createErrorBulletin(LocaleController.getString(org.telegram.messenger.R.string.UnknownError)).show();
                             } else {
                                 controller.setState(SMSJobController.STATE_JOINED);
                                 controller.loadStatus(true);

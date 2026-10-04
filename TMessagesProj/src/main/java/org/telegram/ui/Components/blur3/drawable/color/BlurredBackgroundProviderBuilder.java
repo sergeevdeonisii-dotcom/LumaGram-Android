@@ -47,6 +47,21 @@ public class BlurredBackgroundProviderBuilder implements BlurredBackgroundProvid
         return this;
     }
 
+    public BlurredBackgroundProviderBuilder setShadowColor(ColorProvider colorProvider) {
+        shadowColor = colorProvider;
+        return this;
+    }
+
+    public BlurredBackgroundProviderBuilder setStrokeColorTop(ColorProvider colorProvider) {
+        strokeColorTop = colorProvider;
+        return this;
+    }
+
+    public BlurredBackgroundProviderBuilder setStrokeColorBottom(ColorProvider colorProvider) {
+        strokeColorBottom = colorProvider;
+        return this;
+    }
+
     public BlurredBackgroundProviderBuilder setShadowLayer(float radius, float dx, float dy) {
         shadowRadius = radius;
         shadowDx = dx;
@@ -127,8 +142,8 @@ public class BlurredBackgroundProviderBuilder implements BlurredBackgroundProvid
     }
 
     private boolean isDark() {
-        return resourcesProvider instanceof DarkThemeResourceProvider ||
-            resourcesProvider != null ? resourcesProvider.isDark() : Theme.isCurrentThemeDark();
+        return (resourcesProvider instanceof DarkThemeResourceProvider) ||
+            (resourcesProvider != null ? resourcesProvider.isDark() : Theme.isCurrentThemeDark());
     }
 
     private static ColorProvider create(@ColorInt int colorInLightMode, @ColorInt int colorInDarkMode) {

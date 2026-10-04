@@ -1,9 +1,11 @@
-# LumaGram for Android
+# BlackHoleGram for Android
 
-LumaGram is an open-source Telegram client for Android based on the official
+BlackHoleGram (formerly LumaGram) is an open-source Telegram client for Android based on the official
 [Telegram Android source code](https://github.com/DrKLO/Telegram). It keeps Telegram's protocol and core behavior while adding Luma's visual features, including Liquid Glass, the FullBlack theme and interface refinements.
 
-This repository is public so anyone can inspect what the client does, build it independently and compare release hashes. LumaGram is an independent project and is not affiliated with Telegram FZ-LLC.
+This repository is public so anyone can inspect what the client does, build it independently and compare release hashes. BlackHoleGram is an independent project and is not affiliated with Telegram FZ-LLC. Its upstream base is Telegram 12.10.6 (`f2908b14133bbffbf7ab04f641ecb5bfaf533242`).
+
+The Android package (`org.luma.liquid.web`), signing certificate, updater URL and existing preference keys remain unchanged for seamless upgrades from LumaGram. The legacy repository and internal `Luma` identifiers are intentionally retained; the displayed application name is BlackHoleGram.
 
 ## Download safely
 
@@ -46,7 +48,8 @@ apksigner verify --verbose --print-certs .\LumaGram.apk
 Requirements:
 
 - JDK 17;
-- Android SDK 35 and NDK required by the Telegram project;
+- Android SDK / Build Tools 36, NDK 27.2.12479018 and CMake 3.22.1;
+- initialized pinned submodules (`git submodule update --init --recursive --depth=1`);
 - your own Telegram API ID and API hash from <https://my.telegram.org>.
 
 Create `local-luma.properties` in the repository root (it is ignored by Git):
@@ -59,7 +62,7 @@ API_HASH=your_api_hash
 Build the standalone arm64 APK:
 
 ```powershell
-.\gradlew.bat :TMessagesProj_AppStandalone:assembleAfatStandalone --console=plain
+java -classpath gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain :TMessagesProj_AppStandalone:assembleAfatStandalone --console=plain
 ```
 
 The APK is written under:
@@ -89,10 +92,10 @@ Never publish your `.jks` file or these passwords.
 
 ```powershell
 .\tools\make-update-manifest.ps1 `
-  -ApkPath .\LumaGram.apk `
-  -Version 12.9.0-luma.25 `
-  -VersionCode 69879 `
-  -ApkUrl https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.9.0-luma.25/LumaGram.apk `
+  -ApkPath .\BlackHoleGram.apk `
+  -Version 12.10.6-bhg.66 `
+  -VersionCode 71459 `
+  -ApkUrl https://github.com/sergeevdeonisii-dotcom/LumaGram-Android/releases/download/v12.10.6-bhg.66/app.apk `
   -Changelog "Bug fixes and visual improvements."
 ```
 

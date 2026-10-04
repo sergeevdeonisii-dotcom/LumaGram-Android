@@ -273,7 +273,7 @@ public final class LumaAccountExportManager {
     private void writeIndex(File target) throws Exception {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(target), StandardCharsets.UTF_8))) {
             writeDocumentHead(writer, localized("Экспортированные данные", "Exported Data"));
-            String accountName = TextUtils.isEmpty(config.accountName) ? "LumaGram" : config.accountName;
+            String accountName = TextUtils.isEmpty(config.accountName) ? "BlackHoleGram" : config.accountName;
             int color = (accountName.hashCode() & 0x7fffffff) % 8 + 1;
             writer.write("<body onload=\"CheckLocation();\"><div class=\"page_wrap\">");
             writer.write("<div class=\"page_header\"><div class=\"content\"><div class=\"text bold\">"
@@ -289,8 +289,8 @@ public final class LumaAccountExportManager {
                     + "<div class=\"counter details\">" + exported.size() + "</div><div class=\"label bold\">"
                     + html(localized("Чаты", "Chats")) + "</div></a></div>");
             writer.write("<div class=\"page_about details with_divider\">"
-                    + html(localized("Здесь находятся данные, экспортированные из LumaGram.",
-                    "Here are the data exported from LumaGram.")) + "</div></div></div>");
+                    + html(localized("Здесь находятся данные, экспортированные из BlackHoleGram.",
+                    "Here are the data exported from BlackHoleGram.")) + "</div></div></div>");
             writer.write("<iframe id=\"luma_export_view\" title=\"" + html(localized("Просмотр экспорта", "Export viewer"))
                     + "\" hidden></iframe><script>(function(){const pages={");
             writer.write(JSONObject.quote("lists/chats"));
@@ -409,7 +409,7 @@ public final class LumaAccountExportManager {
 
     private void writeManifest(File target) throws Exception {
         JSONObject root = new JSONObject();
-        root.put("about", "LumaGram account export");
+        root.put("about", "BlackHoleGram account export");
         root.put("account", config.accountName);
         root.put("exported_at", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(new Date()));
         root.put("chats", exported.size());

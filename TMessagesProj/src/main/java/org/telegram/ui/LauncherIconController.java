@@ -38,6 +38,7 @@ public class LauncherIconController {
 
     public enum LauncherIcon {
         DEFAULT("DefaultIcon", R.drawable.icon_background_sa, R.mipmap.icon_foreground_sa, R.string.AppIconDefault),
+        BLACK_HOLE("BlackHoleIcon", R.drawable.bhg_icon_blackhole_background, R.drawable.bhg_icon_blackhole_foreground, R.string.AppIconBlackHole),
         GRAPHITE("LumaGraphiteIcon", R.drawable.luma_icon_graphite_background, R.drawable.luma_icon_silver_foreground, R.string.AppIconLumaGraphite),
         NAVY("LumaNavyIcon", R.drawable.luma_icon_navy_background, R.drawable.luma_icon_silver_foreground, R.string.AppIconLumaNavy),
         SILVER("LumaSilverIcon", R.drawable.luma_icon_silver_background, R.drawable.luma_icon_silver_foreground, R.string.AppIconLumaSilver),

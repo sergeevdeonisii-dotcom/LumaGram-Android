@@ -208,6 +208,21 @@
 
         <activity-alias
             android:enabled="false"
+            android:name="org.telegram.messenger.BlackHoleIcon"
+            android:targetActivity="org.telegram.ui.LaunchActivity"
+            android:icon="@mipmap/bhg_icon_blackhole"
+            android:roundIcon="@mipmap/bhg_icon_blackhole"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:enabled="false"
             android:name="org.telegram.messenger.LumaGraphiteIcon"
             android:targetActivity="org.telegram.ui.LaunchActivity"
             android:icon="@mipmap/luma_icon_graphite"
