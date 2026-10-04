@@ -1,6 +1,6 @@
 # BlackHoleGram 12.10.6-bhg.66
 
-Work in progress; not a published update until the signed APK and manifest have been verified.
+The final signed arm64 APK is verified. Release assets and the updater manifest are being published separately; source changes alone do not deliver an Android update.
 
 - Upstream base: Telegram Android 12.10.6, commit `f2908b14133bbffbf7ab04f641ecb5bfaf533242` (30 September 2026), replacing 12.9.0 / `9bcf3d2769c6d3f07105a992e5d9493e33ac3348`.
 - Displayed brand is BlackHoleGram. Package, signing key, preference keys and update URL remain the same as LumaGram, allowing an in-place update.
@@ -13,7 +13,11 @@ Passed: local JVM regression tests (presence request state, account isolation, l
 
 Also corrected integration collisions introduced by the base upgrade: separate manual-read/new welcome-revert menu IDs, separate custom/new round-video settings row IDs, welcome-template exclusions in automatic scheduling and deleted-message retention, Windows path normalization for Media3 module configuration, and explicit library resource references in the standalone updater for the new non-transitive R classes. New settings navigation explicitly retains the originating account.
 
-The first signed arm64 candidate assembled successfully (332 tasks, 37m 47s) and passed package/version, release-certificate/signature, ZIP and native LOAD alignment checks. The user's additional Black Hole icon was added after that candidate, so final icon-inclusive APK assembly, artifact checks and updater publication are still pending. The artifact verifier now requires the new launcher alias in the packaged manifest and rejects the earlier icon-less candidate.
+The final icon-inclusive APK assembled successfully (332 tasks; 35 executed, 297 up-to-date; 23m 3s). It passed package/version, the Black Hole alias in the packaged manifest, existing release-certificate/signature, ZIP/native LOAD alignment and strict Telegram RELRO checks. The previously compiled native library was reused (`ninja: no work to do`). Final JVM/source/native-parser regressions and the production source's GitHub CodeQL checks passed. The artifact verifier rejects the earlier icon-less candidate.
+
+APK: `org.luma.liquid.web`, version `12.10.6-bhg.66`, code `71459`, arm64 only, target SDK 36. Size: 36,936,967 bytes. SHA-256: `df3bbce4470a72f35ade31a58332477370aab464ede9d082af927e5a5b88d6df`. The release certificate SHA-256 remains `24a3777b3b0b2d353b0452aa166660f5ad39e0f50aa2124d95b85978880c7cd9`.
+
+Production revision compiled: `8bdf219eff7a2918ce90622fcd1b3963883172d8`, merged into `main` via PR #62 (`b510f39e35374875b68f08dd14e192b79d700ad8`). Release metadata commits do not change application code.
 
 The upstream ML Kit language-identification library has a RELRO-end alignment warning, also present in the old .65 APK. Its LOAD segments pass the 16 KiB static check, but full runtime compatibility on a real 16 KiB device is not claimed; this unchanged vendor library is not patched.
 
