@@ -1,6 +1,6 @@
 # BlackHoleGram 12.10.6-bhg.66
 
-The final signed arm64 APK is verified. Release assets and the updater manifest are being published separately; source changes alone do not deliver an Android update.
+The final signed arm64 APK is verified, downloaded back from GitHub and published in release `v12.10.6-bhg.66`. The updater manifest points to this verified release artifact; source changes alone do not deliver an Android update.
 
 - Upstream base: Telegram Android 12.10.6, commit `f2908b14133bbffbf7ab04f641ecb5bfaf533242` (30 September 2026), replacing 12.9.0 / `9bcf3d2769c6d3f07105a992e5d9493e33ac3348`.
 - Displayed brand is BlackHoleGram. Package, signing key, preference keys and update URL remain the same as LumaGram, allowing an in-place update.
