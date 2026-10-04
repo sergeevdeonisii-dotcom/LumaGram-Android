@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">Luma</string>
-    <string name="AppNameBeta">Luma Beta</string>
+    <string name="AppName">BlackHoleGram</string>
+    <string name="AppNameBeta">BlackHoleGram Beta</string>
     <string name="LanguageName">Русский</string>
     <string name="English">Английский</string>
     <string name="LanguageNameInEnglish">Russian</string>
@@ -317,8 +317,10 @@
     <string name="LumaMessageStyleUnderline">Подчёркнутый</string>
     <string name="LumaMessageStyleStrikethrough">Зачёркнутый</string>
     <string name="LumaMessageStyleQuote">Цитирование</string>
-    <string name="ExperimentalFeaturesTitle">Экспериментальные функции</string>
-    <string name="ExperimentalFeaturesInfo">Тонкая настройка новых возможностей LumaGram</string>
+    <string name="ExperimentalFeaturesTitle">BlackHoleGram — расширенные</string>
+    <string name="ExperimentalFeaturesInfo">Призрак, локальные функции и тонкая настройка</string>
+    <string name="BlackHoleGramSettingsTitle">BlackHoleGram — настройки</string>
+    <string name="BlackHoleGramSettingsInfo">Стекло, ввод, оформление сообщений и обновления</string>
     <string name="ExperimentalFeaturesWarning">Эти параметры экспериментальные. Значения по умолчанию сохраняют первоначальную плавную анимацию ввода.</string>
     <string name="EmergencyConnectionHeader">Экстренная связь</string>
     <string name="EmergencyConnectionEnable">Использовать экстренную связь</string>
@@ -397,7 +399,7 @@
     <string name="ExperimentalDelayedSendInfo">Текстовое сообщение будет ожидать выбранное время перед отправкой. Нажмите круглый крестик над кнопкой-самолётиком, чтобы отменить отправку и вернуть текст в поле сообщения.</string>
     <string name="AccDescrCancelDelayedSend">Отменить отправку сообщения</string>
     <string name="LumaExportChat">Скачать чат</string>
-    <string name="LumaUpdatesTitle">Обновления Luma</string>
+    <string name="LumaUpdatesTitle">Обновления BlackHoleGram</string>
     <string name="LumaUpdatesInfo">Безопасная проверка и установка версий</string>
     <string name="LumaUpdateCurrentVersion">Текущая версия</string>
     <string name="LumaUpdateCheckNow">Проверить обновления</string>
@@ -405,20 +407,20 @@
     <string name="LumaUpdateVersion">Доступна версия %1$s.</string>
     <string name="LumaUpdateDownloadInstall">Скачать и установить</string>
     <string name="LumaUpdateInstall">Установить обновление</string>
-    <string name="LumaUpdateDownloading">Загружаем безопасное обновление Luma…</string>
+    <string name="LumaUpdateDownloading">Загружаем безопасное обновление BlackHoleGram…</string>
     <string name="LumaUpdateDownloadingShort">Загрузка обновления</string>
-    <string name="LumaUpdateSecureInfo">Перед установкой Luma проверяет SHA‑256 APK, имя пакета, версию и сертификат подписи.</string>
+    <string name="LumaUpdateSecureInfo">Перед установкой BlackHoleGram проверяет SHA‑256 APK, имя пакета, версию и сертификат подписи.</string>
     <string name="LumaUpdateAutomaticHeader">Автоматическая проверка</string>
     <string name="LumaUpdateAutomatic">Проверять автоматически</string>
-    <string name="LumaUpdateAutomaticInfo">Luma проверяет новую версию не чаще одного раза в шесть часов. APK никогда не устанавливается без твоего подтверждения.</string>
+    <string name="LumaUpdateAutomaticInfo">BlackHoleGram проверяет новую версию не чаще одного раза в шесть часов. APK никогда не устанавливается без твоего подтверждения.</string>
     <string name="LumaUpdateAdvancedHeader">Канал обновлений</string>
     <string name="LumaUpdateSource">Источник обновлений</string>
-    <string name="LumaUpdateSourceInfo">Постоянная HTTPS‑ссылка на latest.json, обычно из публичного репозитория LumaGram на GitHub.</string>
-    <string name="LumaUpdateSourceDialogInfo">Вставь постоянную HTTPS‑ссылку на манифест обновлений Luma (latest.json).</string>
+    <string name="LumaUpdateSourceInfo">Постоянная HTTPS‑ссылка на latest.json, обычно из публичного репозитория BlackHoleGram на GitHub.</string>
+    <string name="LumaUpdateSourceDialogInfo">Вставь постоянную HTTPS‑ссылку на манифест обновлений BlackHoleGram (latest.json).</string>
     <string name="LumaUpdateNotConfigured">Не настроен</string>
-    <string name="LumaUpdateSourceMissing">Источник обновлений Luma пока не настроен.</string>
+    <string name="LumaUpdateSourceMissing">Источник обновлений BlackHoleGram пока не настроен.</string>
     <string name="LumaUpdateSourceInvalid">Можно использовать только корректный HTTPS‑адрес.</string>
-    <string name="LumaUpdateCheckFailed">Не удалось подключиться к серверу обновлений Luma.</string>
+    <string name="LumaUpdateCheckFailed">Не удалось подключиться к серверу обновлений BlackHoleGram.</string>
     <string name="LumaUpdateManifestInvalid">В манифесте обновления нет обязательных данных безопасности либо у него неверный формат.</string>
     <string name="LumaUpdateDownloadFailed">Не удалось скачать обновление. Проверь подключение и попробуй снова.</string>
     <string name="LumaUpdateHashMismatch">Загруженный APK не прошёл проверку SHA‑256 и был удалён.</string>
@@ -427,7 +429,7 @@
     <string name="LumaUpdateVersionMismatch">Версия загруженного APK не совпала с манифестом обновления, поэтому файл удалён.</string>
     <string name="LumaUpdateVerificationFailed">Не удалось безопасно проверить загруженный APK, поэтому файл удалён.</string>
     <string name="LumaUpdateCancelled">Загрузка обновления отменена.</string>
-    <string name="LumaUpdateBannerTitle">Вышло обновление LumaGram!</string>
+    <string name="LumaUpdateBannerTitle">Вышло обновление BlackHoleGram!</string>
     <string name="LumaUpdateBannerSubtitle">Нажмите, чтобы узнать подробности и скачать.</string>
     <string name="LumaUpdateBannerDownloading">Безопасная загрузка — %1$d%%</string>
     <string name="LumaUpdateBannerReady">Обновление проверено. Нажмите, чтобы установить.</string>

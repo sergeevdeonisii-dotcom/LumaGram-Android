@@ -7,7 +7,7 @@ New-Item -ItemType Directory -Path (Join-Path $run 'classes') | Out-Null
 $sources = @((Get-ChildItem (Join-Path $PSScriptRoot 'fixtures') -Recurse -Filter '*.java').FullName)
 $sources += @((Get-ChildItem (Join-Path $PSScriptRoot 'org') -Recurse -Filter '*.java').FullName)
 $actual = @('LumaAccountData', 'LumaAnonymousNumber', 'LumaDeletedMessages', 'LumaStarRating',
-    'LumaDelayedSend', 'LumaUpdateFiles', 'LumaUpdaterController', 'LumaAccountExportManager', 'LumaPresenceRequestState')
+    'LumaDelayedSend', 'LumaUpdateFiles', 'LumaUpdaterController', 'LumaAccountExportManager', 'LumaPresenceRequestState', 'LumaGhostMode')
 foreach ($name in $actual) {
     $sources += Join-Path $repo ('TMessagesProj/src/main/java/org/telegram/messenger/' + $name + '.java')
 }
@@ -17,4 +17,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Regression test compilation failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Presence regressions failed.' }
 & (Join-Path $javaBin 'java.exe') -cp (Join-Path $run 'classes') org.telegram.messenger.LumaAuditFixesTest (Join-Path $run 'sandbox')
 if ($LASTEXITCODE -ne 0) { throw 'Audit regressions failed.' }
+& (Join-Path $javaBin 'java.exe') -cp (Join-Path $run 'classes') org.telegram.messenger.BlackHoleGramGhostTest (Join-Path $run 'ghost-sandbox')
+if ($LASTEXITCODE -ne 0) { throw 'Ghost scheduling regressions failed.' }
 Write-Output "Test artifacts: $run"

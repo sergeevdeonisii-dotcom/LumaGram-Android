@@ -714,7 +714,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
 
     private void buildJson(File target) throws Exception {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(target), StandardCharsets.UTF_8))) {
-            writer.write("{\n  \"about\": \"LumaGram chat export\",\n");
+            writer.write("{\n  \"about\": \"BlackHoleGram chat export\",\n");
             writer.write("  \"name\": " + JSONObject.quote(safeTitle()) + ",\n");
             writer.write("  \"dialog_id\": " + JSONObject.quote(String.valueOf(options.dialogId)) + ",\n");
             writer.write("  \"exported_at\": " + JSONObject.quote(formatDate((int) (System.currentTimeMillis() / 1000L))) + ",\n");

@@ -257,7 +257,7 @@ public final class LumaUpdaterController {
             }
         })).setHeader("Accept", "application/json")
                 .setHeader("Cache-Control", "no-cache")
-                .setHeader("User-Agent", "Luma-Android/" + BuildVars.BUILD_VERSION_STRING)
+                .setHeader("User-Agent", "BlackHoleGram-Android/" + BuildVars.BUILD_VERSION_STRING)
                 .execute(requestUrl);
     }
 
@@ -414,7 +414,7 @@ public final class LumaUpdaterController {
         if (!ApplicationLoader.applicationLoaderInstance.checkApkInstallPermissions(activity)) {
             return false;
         }
-        return AndroidUtilities.openForView(file, "Luma.apk", "application/vnd.android.package-archive", activity, null, false);
+        return AndroidUtilities.openForView(file, "BlackHoleGram.apk", "application/vnd.android.package-archive", activity, null, false);
     }
 
     private void notifyDownloadProgress() {
