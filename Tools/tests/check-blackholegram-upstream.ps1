@@ -14,6 +14,10 @@ $controller = Source ($java + 'messenger/MessagesController.java')
 $sender = Source ($java + 'messenger/SendMessagesHelper.java')
 $gifts = Source ($java + 'ui/Gifts/ProfileGiftsContainer.java')
 $cell = Source ($java + 'ui/Cells/ChatMessageCell.java')
+$standaloneLoader = Source 'TMessagesProj_AppStandalone/src/main/java/org/telegram/messenger/ApplicationLoaderImpl.java'
+foreach ($resource in @('LumaUpdateVersion','LumaUpdateSecureInfo','LumaUpdatesTitle','LumaUpdateInstall','LumaUpdateDownloadInstall','AppUpdateRemindMeLater','LumaUpdateDownloading','OK','Cancel')) {
+    Check ($standaloneLoader.Contains("org.telegram.messenger.R.string.$resource") -and $standaloneLoader -notmatch "(?<!\.)\bR\.string\.$resource\b") "Standalone updater uses the library resource namespace ($resource)"
+}
 Check ((Source 'gradle.properties') -match '(?m)^APP_PACKAGE=org\.luma\.liquid\r?$') 'Legacy Android package is unchanged'
 Check ((Source 'gradle.properties') -match '(?m)^APP_VERSION_NAME=12\.10\.6-bhg\.66\r?$') 'Version identifies the new upstream base'
 Check ((Source ($java + 'tgnet/TLRPC.java')) -match 'LAYER = 229;') 'Telegram layer 229 is present'
