@@ -4,7 +4,9 @@ param(
     [Parameter(Mandatory = $true)][string]$JavaHome,
     [string]$NdkVersion = '27.2.12479018',
     [string]$VersionName = '12.10.6-bhg.69',
-    [int]$VersionCode = 71489
+    [int]$VersionCode = 71489,
+    # Recheck signing only when its configuration, key or build variant changes.
+    [switch]$VerifySignature
 )
 $ErrorActionPreference = 'Stop'
 $apk = (Resolve-Path -LiteralPath $ApkPath).Path
@@ -50,18 +52,43 @@ foreach ($config in $blackHoleConfigs) {
     }
 }
 Write-Output 'PASS: final APK Black Hole retains adaptive color layers without a monochrome layer'
-$signature = (& (Join-Path $JavaHome 'bin/java.exe') -jar (Join-Path $buildTools 'lib/apksigner.jar') verify --verbose --print-certs $apk) -join "`n"
-if ($LASTEXITCODE -ne 0) { throw 'APK signature validation failed' }
-if ($signature -notmatch 'Signer #1 certificate SHA-256 digest: 24a3777b3b0b2d353b0452aa166660f5ad39e0f50aa2124d95b85978880c7cd9') {
-    throw 'APK is not signed with the existing LumaGram release certificate'
+if ($VerifySignature) {
+    $signature = (& (Join-Path $JavaHome 'bin/java.exe') -jar (Join-Path $buildTools 'lib/apksigner.jar') verify --verbose --print-certs $apk) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw 'APK signature validation failed' }
+    if ($signature -notmatch 'Signer #1 certificate SHA-256 digest: 24a3777b3b0b2d353b0452aa166660f5ad39e0f50aa2124d95b85978880c7cd9') {
+        throw 'APK is not signed with the existing LumaGram release certificate'
+    }
+    Write-Output 'PASS: existing release certificate and valid APK signature'
 }
-Write-Output 'PASS: existing release certificate and valid APK signature'
 & (Join-Path $buildTools 'zipalign.exe') -c -P 16 4 $apk
 if ($LASTEXITCODE -ne 0) { throw 'APK ZIP alignment validation failed' }
 Write-Output 'PASS: APK ZIP alignment for 16 KiB pages'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+. (Join-Path $PSScriptRoot 'apk-localization.ps1')
 $archive = [System.IO.Compression.ZipFile]::OpenRead($apk)
 try {
+    # New upstream stores strings in TL-encoded assets, not resources.arsc.
+    $labelIds = Get-BlackHoleGramStringIds -Archive $archive
+    $labels = @('BlackHoleAdvancedAccountHeader', 'BlackHoleAdvancedAppHeader',
+        'BlackHoleAdvancedPrivacyTitle', 'BlackHoleAdvancedPrivacyInfo',
+        'BlackHoleAdvancedProfileTitle', 'BlackHoleAdvancedProfileInfo',
+        'BlackHoleAdvancedTypingTitle', 'BlackHoleAdvancedTypingInfo',
+        'BlackHoleAdvancedSendingTitle', 'BlackHoleAdvancedSendingInfo',
+        'BlackHoleAdvancedConnectionTitle', 'BlackHoleAdvancedConnectionInfo', 'BlackHoleAdvancedSectionsInfo')
+    foreach ($locale in @(@{ Tag = 'en'; Values = 'values' }, @{ Tag = 'ru'; Values = 'values-ru' })) {
+        $localized = Get-BlackHoleGramLocalization -Archive $archive -Tag $locale.Tag
+        $sourcePath = Join-Path $PSScriptRoot "../../TMessagesProj/src/main/res/$($locale.Values)/strings.xml"
+        $xml = [xml][System.IO.File]::ReadAllText($sourcePath)
+        foreach ($label in $labels) {
+            $nameHash = Get-BlackHoleGramStringHash $label
+            $expected = @($xml.resources.string | Where-Object name -CEQ $label)
+            if (!$labelIds.ContainsKey($nameHash) -or !$localized.ContainsKey($nameHash) -or
+                $expected.Count -ne 1 -or $localized[$nameHash] -cne $expected[0].'#text') {
+                throw "The advanced-settings label or its localization is missing/stale: $label ($($locale.Tag))"
+            }
+            Write-Output "PASS: final APK mapped category label ($label / $($locale.Tag))"
+        }
+    }
     $nativeFiles = @($archive.Entries | Where-Object FullName -Like 'lib/*/*.so')
     if (@($nativeFiles | Where-Object FullName -EQ 'lib/arm64-v8a/libtmessages.49.so').Count -ne 1) {
         throw 'Expected Telegram native library is missing'

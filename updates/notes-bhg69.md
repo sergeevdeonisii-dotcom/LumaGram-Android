@@ -1,0 +1,15 @@
+# BlackHoleGram 12.10.6-bhg.69
+
+Advanced settings now opens a compact menu of five native Telegram-style category rows with colored icons and short descriptions, grouped under Your account and Chats and app. Privacy contains ghost mode, its server-side scheduled sending and deleted-message retention. Profile contains the local Stars rating, anonymous-number visual and verification visual. Typing appearance contains the original four animation sliders and reset action. Undo sending contains the local cancellation delay. Connection and data contains emergency mode and account export.
+
+Every original control and preference is retained; the root no longer mixes all switches and sliders into one long page. Child screens and account export explicitly retain the originating account. Ghost limitations and local-only explanations remain visible in their relevant sections. Main settings still has exactly two BlackHoleGram entries.
+
+Updates hides the source/channel card and URL editor. Manual checking, automatic checking, installation, saved/default manifest URLs and the existing integrity protections are unchanged. This is a user-interface change, not a Firebase configuration change or a change to Telegram presence rules. No phone is connected, so actual Samsung rendering and on-device behavior have not been tested.
+
+Version: `12.10.6-bhg.69`; code `71489`; package `org.luma.liquid.web`; ARM64 only. Signed assembly passed in 20m 47s (332 tasks: 38 executed, 294 up-to-date). Source settings/integration checks and JVM presence, scheduling, preference, updater and export regressions passed. CodeQL checks on compiled application revision `dbfe573026fa019ecae2568cc0cffe3276840522` passed.
+
+Final artifact checks passed: package/version/brand, actual English/Russian category strings and their resource-ID mapping inside the upstream TL-encoded localization assets, photographic icon and alias, absence of the icon's palette monochrome layer, existing release certificate and signature, ZIP/native LOAD alignment and strict Telegram RELRO checks. The unchanged ML Kit RELRO-end warning remains; this is not a claim of tested 16 KiB-device compatibility. The publication guard rejects the previous .68 APK's missing category labels even when its expected version is explicitly supplied.
+
+APK: 37,101,217 bytes; SHA-256: `eccdaf0a4554590d871195849775a7ba58b91e2af02749a502b9c6dd63b19e0b`. Application source is frozen at `dbfe573026fa019ecae2568cc0cffe3276840522`; later commits change only verification tools and release metadata. GitHub's independently reported asset digest matches the built APK before advancing the updater manifest.
+
+At the user's request, signing verification is now opt-in with `-VerifySignature`: do not repeatedly recheck unchanged signing for ordinary UI-only releases. Use it when the signing configuration/key or build variant changes. The .69 artifact's signature had already been verified before this preference was requested; no further signature runs were performed afterward.
