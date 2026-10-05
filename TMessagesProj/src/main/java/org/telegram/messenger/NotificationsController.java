@@ -1088,6 +1088,7 @@ public class NotificationsController extends BaseController implements Notificat
 
             for (int a = 0; a < messageObjects.size(); a++) {
                 MessageObject messageObject = messageObjects.get(a);
+                if (BlackHoleVault.contains(currentAccount, messageObject.getDialogId())) continue;
                 if (LumaEmergencyMode.isEnabled(currentAccount)
                         && !LumaEmergencyMode.isSelectedDialog(currentAccount, messageObject.getDialogId())) {
                     continue;
@@ -1386,6 +1387,7 @@ public class NotificationsController extends BaseController implements Notificat
     }
 
     private void appendMessage(MessageObject messageObject) {
+        if (BlackHoleVault.contains(currentAccount, messageObject.getDialogId())) return;
         for (int i = 0; i < pushMessages.size(); i++) {
             if (
                 pushMessages.get(i).getId() == messageObject.getId() &&
@@ -1400,6 +1402,19 @@ public class NotificationsController extends BaseController implements Notificat
 
     public int getTotalUnreadCount() {
         return total_unread_count;
+    }
+
+    private void recordJournalForDialog(long dialogId, String title) {
+        if (!BlackHoleNotificationJournal.isEnabled(currentAccount) || BlackHoleVault.contains(currentAccount, dialogId)) return;
+        ArrayList<BlackHoleNotificationJournal.Entry> batch = new ArrayList<>();
+        for (MessageObject message : pushMessages) {
+            if (message.getDialogId() != dialogId || message.isStoryPush || message.messageOwner == null) continue;
+            String text = getStringForMessage(message, false, new boolean[1], null);
+            if (text != null) batch.add(new BlackHoleNotificationJournal.Entry(dialogId, message.getId(),
+                    System.currentTimeMillis(), title, text));
+            if (batch.size() >= 20) break;
+        }
+        BlackHoleNotificationJournal.record(currentAccount, batch);
     }
 
     public void processDialogsUpdateRead(LongSparseIntArray dialogsToUpdate) {
@@ -4945,11 +4960,13 @@ public class NotificationsController extends BaseController implements Notificat
             }
 
             void call() {
+                if (BlackHoleVault.contains(currentAccount, dialogId)) return;
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.w("show dialog notification with id " + id + " " + dialogId +  " user=" + user + " chat=" + chat);
                 }
                 try {
                     notificationManager.notify(id, notification.build());
+                    if (!story) recordJournalForDialog(dialogId, name);
                 } catch (SecurityException e) {
                     FileLog.e(e);
                     resetNotificationSound(notification, dialogId, lastTopicId, chatName, vibrationPattern, ledColor, sound, importance, isDefault, isInApp, isSilent, chatType);

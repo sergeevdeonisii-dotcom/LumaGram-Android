@@ -702,6 +702,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
                     int n = res.messages.size();
                     for (int i = 0; i < n; i++) {
                         MessageObject messageObject = new MessageObject(currentAccount, res.messages.get(i), false, true);
+                        if (org.telegram.messenger.BlackHoleVault.contains(currentAccount, messageObject.getDialogId())) continue;
                         messageObject.setQuery(finalQuery);
                         messageObjects.add(messageObject);
                     }
@@ -954,6 +955,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
     }
 
     public void update() {
+        pruneVaultMessages();
         if (adapter != null) {
             adapter.notifyDataSetChanged();
         }
@@ -1588,6 +1590,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        pruneVaultMessages();
         NotificationCenter.getInstance(lastAccount = UserConfig.selectedAccount).addObserver(this, NotificationCenter.emojiLoaded);
     }
 
@@ -1595,6 +1598,18 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         NotificationCenter.getInstance(lastAccount).removeObserver(this, NotificationCenter.emojiLoaded);
+    }
+
+    public void pruneVaultMessages() {
+        boolean removed = messages.removeIf(m -> org.telegram.messenger.BlackHoleVault.contains(m.currentAccount, m.getDialogId()));
+        if (!removed) return;
+        messagesById.clear(); sections.clear(); sectionArrays.clear();
+        for (MessageObject message : messages) {
+            ArrayList<MessageObject> group = sectionArrays.get(message.monthKey);
+            if (group == null) { group = new ArrayList<>(); sectionArrays.put(message.monthKey, group); sections.add(message.monthKey); }
+            group.add(message); messagesById.put(message.getId(), message);
+        }
+        if (adapter != null) adapter.notifyDataSetChanged();
     }
 
     @Override

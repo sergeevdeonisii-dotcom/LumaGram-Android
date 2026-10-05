@@ -3,6 +3,7 @@ package org.telegram.messenger;
 import android.content.SharedPreferences;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -28,6 +29,10 @@ public final class LumaDeletedMessages {
         preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
 
+    public static boolean shouldRetain(int account, boolean forceLocalRemoval, boolean scheduled, boolean template) {
+        return !forceLocalRemoval && !scheduled && !template && isEnabled(account);
+    }
+
     private static String key(long dialogId, int messageId) {
         return dialogId + ":" + messageId;
     }
@@ -48,5 +53,16 @@ public final class LumaDeletedMessages {
             return false;
         }
         return preferences(account).getStringSet(KEY_IDS, new HashSet<>()).contains(key(dialogId, messageId));
+    }
+
+    /** Explicit local removal must not turn into another retained tombstone. */
+    public static synchronized void forgetDeleted(int account, long dialogId, List<Integer> messageIds) {
+        SharedPreferences prefs = preferences(account);
+        Set<String> saved = new HashSet<>(prefs.getStringSet(KEY_IDS, new HashSet<>()));
+        boolean changed = false;
+        for (Integer id : messageIds) {
+            if (id != null) changed |= saved.remove(key(dialogId, id));
+        }
+        if (changed) prefs.edit().putStringSet(KEY_IDS, saved).apply();
     }
 }

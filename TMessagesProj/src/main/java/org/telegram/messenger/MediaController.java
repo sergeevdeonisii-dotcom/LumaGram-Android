@@ -3622,6 +3622,11 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         if (messageObject == null) {
             return false;
         }
+        if (BlackHoleVault.blocks(messageObject.currentAccount, messageObject.getDialogId())) return false;
+        if (LumaGhostMode.shouldBlockEphemeralMedia(messageObject.currentAccount,
+                messageObject.getDialogId(), messageObject.isOut(), messageObject.isSecretMedia())) {
+            return false;
+        }
         isSilent = silent;
         checkVolumeBarUI();
         if ((audioPlayer != null || videoPlayer != null) && isSamePlayingMessage(messageObject)) {

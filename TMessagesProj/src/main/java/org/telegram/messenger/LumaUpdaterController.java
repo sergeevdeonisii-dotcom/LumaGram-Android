@@ -70,7 +70,7 @@ public final class LumaUpdaterController {
     private HttpGetFileTask downloadingTask;
     private int checkGeneration;
     private int downloadGeneration;
-    private Runnable checkCompletion;
+    private final ArrayList<Runnable> checkCompletions = new ArrayList<>();
 
     private LumaUpdaterController() {
         load();
@@ -125,7 +125,10 @@ public final class LumaUpdaterController {
     }
 
     public String getManifestUrl() {
-        return preferences().getString("manifest_url", BuildVars.LUMA_UPDATE_MANIFEST_URL);
+        String saved = preferences().getString("manifest_url", null);
+        // The source editor is no longer exposed. Recover old cleared/corrupt
+        // values without losing a valid custom HTTPS source.
+        return isHttps(saved) ? saved.trim() : BuildVars.LUMA_UPDATE_MANIFEST_URL;
     }
 
     public boolean setManifestUrl(String value) {
@@ -133,11 +136,13 @@ public final class LumaUpdaterController {
         if (!TextUtils.isEmpty(value) && !isHttps(value)) {
             return false;
         }
+        if (TextUtils.isEmpty(value)) {
+            value = BuildVars.LUMA_UPDATE_MANIFEST_URL;
+        }
         if (!TextUtils.equals(value, getManifestUrl())) {
             ++checkGeneration;
             checking = false;
-            Runnable completion = checkCompletion;
-            checkCompletion = null;
+            ArrayList<Runnable> completions = takeCheckCompletions();
             cancelDownloadingUpdate();
             preferences().edit().putString("manifest_url", value).apply();
             clearPendingUpdate(true);
@@ -146,10 +151,26 @@ public final class LumaUpdaterController {
             save();
             NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateAvailable);
             // Release any spinner owned by the invalidated request. Its late result is ignored.
-            if (completion != null) completion.run();
+            runCheckCompletions(completions);
             checkForUpdate(true, null);
         }
         return true;
+    }
+
+    private ArrayList<Runnable> takeCheckCompletions() {
+        ArrayList<Runnable> result = new ArrayList<>(checkCompletions);
+        checkCompletions.clear();
+        return result;
+    }
+
+    private static void runCheckCompletions(ArrayList<Runnable> completions) {
+        for (Runnable completion : completions) {
+            try {
+                completion.run();
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        }
     }
 
     public boolean hasManifestUrl() {
@@ -181,7 +202,7 @@ public final class LumaUpdaterController {
         }
         if (checking) {
             if (whenDone != null) {
-                whenDone.run();
+                checkCompletions.add(whenDone);
             }
             return;
         }
@@ -207,7 +228,7 @@ public final class LumaUpdaterController {
         }
 
         checking = true;
-        checkCompletion = whenDone;
+        if (whenDone != null) checkCompletions.add(whenDone);
         lastError = null;
         final int generation = ++checkGeneration;
         String requestUrl = appendCacheBuster(manifestUrl);
@@ -216,7 +237,9 @@ public final class LumaUpdaterController {
                 return;
             }
             checking = false;
-            checkCompletion = null;
+            // Drain before notifying observers: reentrant checks must own their
+            // own callbacks, not get completed by the previous request.
+            ArrayList<Runnable> completions = takeCheckCompletions();
             if (TextUtils.isEmpty(response)) {
                 lastError = LocaleController.getString(R.string.LumaUpdateCheckFailed);
             } else {
@@ -252,9 +275,7 @@ public final class LumaUpdaterController {
                 }
             }
             NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateAvailable);
-            if (whenDone != null) {
-                whenDone.run();
-            }
+            runCheckCompletions(completions);
         })).setHeader("Accept", "application/json")
                 .setHeader("Cache-Control", "no-cache")
                 .setHeader("User-Agent", "BlackHoleGram-Android/" + BuildVars.BUILD_VERSION_STRING)

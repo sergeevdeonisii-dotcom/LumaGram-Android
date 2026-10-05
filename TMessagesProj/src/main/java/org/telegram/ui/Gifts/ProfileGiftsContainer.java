@@ -60,6 +60,7 @@ import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.LumaAccountData;
+import org.telegram.messenger.LumaGiftVisibilityOperation;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
@@ -130,6 +131,8 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
     public final StarsController.GiftsCollections collections;
     private final Theme.ResourcesProvider resourcesProvider;
     private final HashSet<String> localPinnedGiftIds = new HashSet<>();
+    private LumaGiftVisibilityOperation visibilityOperation;
+    private AlertDialog visibilityProgress;
     private int backgroundColor;
 
     private final ViewPagerFixed viewPager;
@@ -1725,29 +1728,46 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
     }
 
     private void hideAllGifts() {
-        final AlertDialog progressDialog = new AlertDialog(getContext(), AlertDialog.ALERT_TYPE_SPINNER, resourcesProvider);
-        progressDialog.showDelayed(200);
-        loadVisibleGiftsForHiding("", new ArrayList<>(), progressDialog);
+        startGiftVisibilityChange(true);
     }
 
     private void showAllGifts() {
-        final AlertDialog progressDialog = new AlertDialog(getContext(), AlertDialog.ALERT_TYPE_SPINNER, resourcesProvider);
-        progressDialog.showDelayed(200);
-        loadHiddenGiftsForShowing("", new ArrayList<>(), progressDialog);
+        startGiftVisibilityChange(false);
     }
 
-    private void loadVisibleGiftsForHiding(String offset, ArrayList<TL_stars.InputSavedStarGift> gifts, AlertDialog progressDialog) {
+    private void startGiftVisibilityChange(boolean hide) {
+        if (!canFilterHidden() || visibilityOperation != null) return;
+        final LumaGiftVisibilityOperation operation = new LumaGiftVisibilityOperation(currentAccount);
+        if (!operation.isActive()) return;
+        visibilityOperation = operation;
+        visibilityProgress = new AlertDialog(getContext(), AlertDialog.ALERT_TYPE_SPINNER, resourcesProvider);
+        visibilityProgress.setOnCancelListener(dialog -> {
+            operation.cancel();
+            finishGiftVisibilityChange(operation, null, 0);
+        });
+        visibilityProgress.showDelayed(200);
+        loadGiftsForVisibilityChange(operation, hide, "", new ArrayList<>());
+    }
+
+    private void loadGiftsForVisibilityChange(LumaGiftVisibilityOperation operation, boolean hide, String offset, ArrayList<TL_stars.InputSavedStarGift> gifts) {
+        if (!operation.isActive()) {
+            finishGiftVisibilityChange(operation, null, 0);
+            return;
+        }
         final TL_stars.getSavedStarGifts req = new TL_stars.getSavedStarGifts();
-        req.exclude_unsaved = true;
+        req.exclude_unsaved = hide;
+        req.exclude_saved = !hide;
         req.peer = dialogId == 0 ? new TLRPC.TL_inputPeerSelf() : MessagesController.getInstance(currentAccount).getInputPeer(dialogId);
         req.offset = offset;
         req.limit = 100;
-        ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
+        operation.bindRequest(ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
+            operation.requestFinished();
+            if (!operation.isActive()) {
+                finishGiftVisibilityChange(operation, null, 0);
+                return;
+            }
             if (err != null || !(res instanceof TL_stars.TL_payments_savedStarGifts)) {
-                progressDialog.dismissUnless(200);
-                if (err != null) {
-                    BulletinFactory.of(fragment).showForError(err);
-                }
+                finishGiftVisibilityChange(operation, err, R.string.UnknownError);
                 return;
             }
             final TL_stars.TL_payments_savedStarGifts result = (TL_stars.TL_payments_savedStarGifts) res;
@@ -1758,96 +1778,62 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                 }
             }
             if (!TextUtils.isEmpty(result.next_offset)) {
-                loadVisibleGiftsForHiding(result.next_offset, gifts, progressDialog);
+                if (TextUtils.equals(offset, result.next_offset)) {
+                    finishGiftVisibilityChange(operation, null, R.string.UnknownError);
+                    return;
+                }
+                loadGiftsForVisibilityChange(operation, hide, result.next_offset, gifts);
             } else if (gifts.isEmpty()) {
-                progressDialog.dismissUnless(200);
-                BulletinFactory.of(fragment)
-                    .createSimpleBulletin(R.raw.done, getString(R.string.LumaHideAllGiftsEmpty))
-                    .show();
+                finishGiftVisibilityChange(operation, null, hide ? R.string.LumaHideAllGiftsEmpty : R.string.LumaShowAllGiftsEmpty);
             } else {
-                hideGiftAt(gifts, 0, progressDialog);
+                changeGiftVisibilityAt(operation, hide, gifts, 0);
             }
-        }));
+        })));
     }
 
-    private void loadHiddenGiftsForShowing(String offset, ArrayList<TL_stars.InputSavedStarGift> gifts, AlertDialog progressDialog) {
-        final TL_stars.getSavedStarGifts req = new TL_stars.getSavedStarGifts();
-        req.exclude_saved = true;
-        req.peer = dialogId == 0 ? new TLRPC.TL_inputPeerSelf() : MessagesController.getInstance(currentAccount).getInputPeer(dialogId);
-        req.offset = offset;
-        req.limit = 100;
-        ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
-            if (err != null || !(res instanceof TL_stars.TL_payments_savedStarGifts)) {
-                progressDialog.dismissUnless(200);
-                if (err != null) {
-                    BulletinFactory.of(fragment).showForError(err);
-                }
+    private void changeGiftVisibilityAt(LumaGiftVisibilityOperation operation, boolean hide, ArrayList<TL_stars.InputSavedStarGift> gifts, int index) {
+        if (!operation.isActive()) {
+            finishGiftVisibilityChange(operation, null, 0);
+            return;
+        }
+        if (index >= gifts.size()) {
+            finishGiftVisibilityChange(operation, null, hide ? R.string.LumaHideAllGiftsDone : R.string.LumaShowAllGiftsDone);
+            return;
+        }
+        final TL_stars.saveStarGift req = new TL_stars.saveStarGift();
+        req.stargift = gifts.get(index);
+        req.unsave = hide;
+        operation.bindRequest(ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
+            operation.requestFinished();
+            if (!operation.isActive()) {
+                finishGiftVisibilityChange(operation, null, 0);
                 return;
             }
-            final TL_stars.TL_payments_savedStarGifts result = (TL_stars.TL_payments_savedStarGifts) res;
-            for (TL_stars.SavedStarGift gift : result.gifts) {
-                final TL_stars.InputSavedStarGift input = list.getInput(gift);
-                if (input != null) {
-                    gifts.add(input);
-                }
-            }
-            if (!TextUtils.isEmpty(result.next_offset)) {
-                loadHiddenGiftsForShowing(result.next_offset, gifts, progressDialog);
-            } else if (gifts.isEmpty()) {
-                progressDialog.dismissUnless(200);
-                BulletinFactory.of(fragment)
-                    .createSimpleBulletin(R.raw.done, getString(R.string.LumaShowAllGiftsEmpty))
-                    .show();
+            if (err != null || !(res instanceof TLRPC.TL_boolTrue)) {
+                finishGiftVisibilityChange(operation, err, R.string.UnknownError);
             } else {
-                showGiftAt(gifts, 0, progressDialog);
+                changeGiftVisibilityAt(operation, hide, gifts, index + 1);
             }
-        }));
+        }), ConnectionsManager.RequestFlagInvokeAfter));
     }
 
-    private void hideGiftAt(ArrayList<TL_stars.InputSavedStarGift> gifts, int index, AlertDialog progressDialog) {
-        if (index >= gifts.size()) {
-            progressDialog.dismissUnless(200);
-            StarsController.getInstance(currentAccount).invalidateProfileGifts(dialogId);
-            BulletinFactory.of(fragment)
-                .createSimpleBulletin(R.raw.done, getString(R.string.LumaHideAllGiftsDone))
-                .show();
-            return;
+    private void finishGiftVisibilityChange(LumaGiftVisibilityOperation operation, TLRPC.TL_error error, int messageRes) {
+        if (visibilityOperation != operation) return;
+        operation.complete();
+        visibilityOperation = null;
+        if (visibilityProgress != null) {
+            visibilityProgress.dismissUnless(200);
+            visibilityProgress = null;
         }
-        final TL_stars.saveStarGift req = new TL_stars.saveStarGift();
-        req.stargift = gifts.get(index);
-        req.unsave = true;
-        ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
-            if (err != null) {
-                progressDialog.dismissUnless(200);
-                StarsController.getInstance(currentAccount).invalidateProfileGifts(dialogId);
-                BulletinFactory.of(fragment).showForError(err);
-            } else {
-                hideGiftAt(gifts, index + 1, progressDialog);
-            }
-        }), ConnectionsManager.RequestFlagInvokeAfter);
-    }
-
-    private void showGiftAt(ArrayList<TL_stars.InputSavedStarGift> gifts, int index, AlertDialog progressDialog) {
-        if (index >= gifts.size()) {
-            progressDialog.dismissUnless(200);
+        // Cancellation is not a rollback: refresh any already-applied changes.
+        if (operation.isCurrentOwner()) {
             StarsController.getInstance(currentAccount).invalidateProfileGifts(dialogId);
-            BulletinFactory.of(fragment)
-                .createSimpleBulletin(R.raw.done, getString(R.string.LumaShowAllGiftsDone))
-                .show();
-            return;
         }
-        final TL_stars.saveStarGift req = new TL_stars.saveStarGift();
-        req.stargift = gifts.get(index);
-        req.unsave = false;
-        ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
-            if (err != null) {
-                progressDialog.dismissUnless(200);
-                StarsController.getInstance(currentAccount).invalidateProfileGifts(dialogId);
-                BulletinFactory.of(fragment).showForError(err);
-            } else {
-                showGiftAt(gifts, index + 1, progressDialog);
-            }
-        }), ConnectionsManager.RequestFlagInvokeAfter);
+        if (!operation.isCurrentOwner() || fragment.isFinished || !isAttachedToWindow()) return;
+        if (error != null) BulletinFactory.of(fragment).showForError(error);
+        else if (messageRes != 0) BulletinFactory.of(fragment)
+                .createSimpleBulletin(messageRes == R.string.UnknownError ? R.raw.chats_infotip : R.raw.done, getString(messageRes))
+                .show();
     }
 
     public boolean canReorder() {
@@ -1916,6 +1902,11 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
 
     @Override
     protected void onDetachedFromWindow() {
+        if (visibilityOperation != null) {
+            LumaGiftVisibilityOperation operation = visibilityOperation;
+            operation.cancel();
+            finishGiftVisibilityChange(operation, null, 0);
+        }
         final Page currentPage = getCurrentPage();
         resetReordering();
         if (currentPage != null) {

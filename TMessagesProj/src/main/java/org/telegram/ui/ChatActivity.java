@@ -2873,6 +2873,16 @@ public class ChatActivity extends BaseFragment implements
         final long chatId = arguments.getLong("chat_id", 0);
         final long userId = arguments.getLong("user_id", 0);
         final int encId = arguments.getInt("enc_id", 0);
+        final long vaultDialog = encId != 0 ? DialogObject.makeEncryptedDialogId(encId) : userId != 0 ? userId : -chatId;
+        if (org.telegram.messenger.BlackHoleVault.blocks(currentAccount, vaultDialog)) {
+            AndroidUtilities.runOnUIThread(() -> {
+                if (LaunchActivity.instance == null || LaunchActivity.instance.getActionBarLayout() == null) return;
+                BlackHoleToolsActivity vault = new BlackHoleToolsActivity(BlackHoleToolsActivity.VAULT, vaultDialog);
+                vault.setCurrentAccount(currentAccount);
+                LaunchActivity.instance.getActionBarLayout().presentFragment(vault);
+            });
+            return false;
+        }
         dialogFolderId = arguments.getInt("dialog_folder_id", 0);
         dialogFilterId = arguments.getInt("dialog_filter_id", 0);
         chatMode = arguments.getInt("chatMode", 0);
@@ -3882,6 +3892,11 @@ public class ChatActivity extends BaseFragment implements
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(final int id) {
+                if (id == 97101 || id == 97102) {
+                    BlackHoleToolsActivity tools = new BlackHoleToolsActivity(id == 97101 ? BlackHoleToolsActivity.NOTES : BlackHoleToolsActivity.VAULT,
+                            id == 97101 ? dialog_id : 0);
+                    tools.setCurrentAccount(currentAccount); presentFragment(tools); return;
+                }
                 if (id == -1) {
                     if (isInPollAddOptionMode()) {
                         pollAddOptionModeClose();
@@ -4510,6 +4525,8 @@ public class ChatActivity extends BaseFragment implements
             });
             otherIcon.addView(headerItem.getIconView());
             headerItem.setContentDescription(LocaleController.getString(R.string.AccDescrMoreOptions));
+            headerItem.lazilyAddSubItem(97101, R.drawable.msg_edit, getString(R.string.BHGNotes));
+            headerItem.lazilyAddSubItem(97102, R.drawable.msg_secret, getString(R.string.BHGVault));
 
             if (currentUser != null && currentUser.self && chatMode != MODE_SAVED) {
                 savedChatsItem = headerItem.lazilyAddSubItem(view_as_topics, R.drawable.msg_topics, LocaleController.getString(R.string.SavedViewAsChats));
@@ -15850,10 +15867,21 @@ public class ChatActivity extends BaseFragment implements
         }
     }
 
+    private boolean blockEphemeralMediaInGhostMode(MessageObject message) {
+        if (message == null || !LumaGhostMode.shouldBlockEphemeralMedia(currentAccount,
+                message.getDialogId(), message.isOut(), message.isSecretMedia())) {
+            return false;
+        }
+        BulletinFactory.of(this).createSimpleBulletin(R.raw.chats_infotip,
+                getString(R.string.GhostEphemeralMediaBlocked)).show();
+        return true;
+    }
+
     private Runnable sendSecretMessageRead(MessageObject messageObject, boolean readNow) {
         if (messageObject == null || messageObject.isOut() || !messageObject.isSecretMedia() || messageObject.messageOwner.destroyTime != 0 || messageObject.messageOwner.ttl <= 0) {
             return null;
         }
+        if (blockEphemeralMediaInGhostMode(messageObject)) return null;
         if (readNow) {
             final boolean delete = messageObject.messageOwner.ttl != 0x7FFFFFFF;
             final int ttl = messageObject.messageOwner.ttl == 0x7FFFFFFF ? 0 : messageObject.messageOwner.ttl;
@@ -22573,6 +22601,7 @@ public class ChatActivity extends BaseFragment implements
             int scheduledMessageId = args.length > 5 ? (int) args[5] : 0;
             ArrayList<Integer> sentMessages = null;
             if (args.length > 6) sentMessages = (ArrayList<Integer>) args[6];
+            final boolean forceLocalRemoval = args.length > 7 && Boolean.TRUE.equals(args[7]);
             boolean movedToScheduled = args.length > 4 && (boolean) args[4] || sentMessages != null && !sentMessages.isEmpty();
             final ArrayList<MessageObject> messages = new ArrayList<>();
             MessageObject conversionMessage = null;
@@ -22597,7 +22626,7 @@ public class ChatActivity extends BaseFragment implements
                 scheduleNowDialog.dismiss();
                 scheduleNowDialog = null;
             }
-            processDeletedMessages(markAsDeletedMessages, channelId, sent, !movedToScheduled);
+            processDeletedMessages(markAsDeletedMessages, channelId, sent, !movedToScheduled, forceLocalRemoval);
             if (movedToScheduled && chatMode != ChatActivity.MODE_SCHEDULED && !ghostAutoScheduled) {
                 getMessagesController().forceNoReload(dialog_id, ChatActivity.MODE_SCHEDULED);
                 openScheduledMessages(scheduledMessageId, true);
@@ -23120,6 +23149,10 @@ public class ChatActivity extends BaseFragment implements
             MessageObject messageObject = (MessageObject) args[0];
             MessageObject oldPlayingObject = (MessageObject) args[1];
             if (messageObject.eventId != 0) {
+                return;
+            }
+            if (blockEphemeralMediaInGhostMode(messageObject)) {
+                MediaController.getInstance().cleanupPlayer(true, true);
                 return;
             }
             sendSecretMessageRead(messageObject, true);
@@ -26566,6 +26599,10 @@ public class ChatActivity extends BaseFragment implements
         processDeletedMessages(markAsDeletedMessages, channelId, sent, true);
     }
     private void processDeletedMessages(ArrayList<Integer> markAsDeletedMessages, long channelId, boolean sent, boolean thanos) {
+        processDeletedMessages(markAsDeletedMessages, channelId, sent, thanos, false);
+    }
+
+    private void processDeletedMessages(ArrayList<Integer> markAsDeletedMessages, long channelId, boolean sent, boolean thanos, boolean forceLocalRemoval) {
         ArrayList<Integer> removedIndexes = new ArrayList<>();
         ArrayList<Integer> changedIndexes = new ArrayList<>();
         ArrayList<Integer> thanosMessagesIndexes = new ArrayList<>();
@@ -26640,7 +26677,7 @@ public class ChatActivity extends BaseFragment implements
                 updateReplyMessageOwners(mid, null);
             }
             if (obj != null) {
-                if (obj.messageOwner.reply_to != null && !(obj.messageOwner.action instanceof TLRPC.TL_messageActionPinMessage)) {
+                if (!obj.lumaRetainedDeleted && obj.messageOwner.reply_to != null && !(obj.messageOwner.action instanceof TLRPC.TL_messageActionPinMessage)) {
                     int replyId = obj.getReplyAnyMsgId();
                     if (threadMessageObject != null && threadMessageObject.getId() == replyId) {
                         if (!hasChatInBack && threadMessageObject.hasReplies()) {
@@ -26659,14 +26696,17 @@ public class ChatActivity extends BaseFragment implements
                     }
                 }
                 obj.deleted = true;
+                if (forceLocalRemoval) obj.lumaRetainedDeleted = false;
                 if (obj.scheduled && sent) {
                     obj.scheduledSent = true;
                 }
                 if (editingMessageObject == obj) {
                     hideFieldPanel(true);
                 }
-                if (LumaDeletedMessages.isEnabled(currentAccount) && !obj.scheduled && chatMode != MODE_SCHEDULED && chatMode != MODE_QUICK_REPLIES && chatMode != MODE_WELCOME_MESSAGES) {
+                if (LumaDeletedMessages.shouldRetain(currentAccount, forceLocalRemoval,
+                        obj.scheduled || chatMode == MODE_SCHEDULED, chatMode == MODE_QUICK_REPLIES || chatMode == MODE_WELCOME_MESSAGES)) {
                     LumaDeletedMessages.rememberDeleted(currentAccount, obj.getDialogId(), obj.getId());
+                    obj.lumaRetainedDeleted = true;
                     int changedIndex = chatAdapter != null && chatAdapter.isFiltered && filteredMessagesDict != null
                         ? chatAdapter.filteredMessages.indexOf(filteredMessagesDict.get(mid))
                         : messages.indexOf(obj);
@@ -30116,6 +30156,14 @@ public class ChatActivity extends BaseFragment implements
     @Override
     public void onResume() {
         super.onResume();
+        if (org.telegram.messenger.BlackHoleVault.blocks(currentAccount, dialog_id)) {
+            if (fragmentView != null) fragmentView.setVisibility(View.INVISIBLE);
+            BlackHoleToolsActivity vault = new BlackHoleToolsActivity(BlackHoleToolsActivity.VAULT, dialog_id);
+            vault.setCurrentAccount(currentAccount);
+            AndroidUtilities.runOnUIThread(() -> { if (!isFinished && getParentLayout() != null) presentFragment(vault, true); });
+            return;
+        }
+        if (fragmentView != null) fragmentView.setVisibility(View.VISIBLE);
         updateLiquidGlassMode();
         checkShowBlur(false);
         activityResumeTime = System.currentTimeMillis();
@@ -30329,6 +30377,8 @@ public class ChatActivity extends BaseFragment implements
     @Override
     public void onPause() {
         super.onPause();
+        if (org.telegram.messenger.BlackHoleVault.contains(currentAccount, dialog_id) && fragmentView != null)
+            fragmentView.setVisibility(View.INVISIBLE);
         scrolling = false;
         if (scrimPopupWindow != null) {
             scrimPopupWindow.setPauseNotifications(false);
@@ -37048,6 +37098,7 @@ public class ChatActivity extends BaseFragment implements
     }
 
     void openPhotoViewerForMessage(ChatMessageCell cell, MessageObject message) {
+        if (blockEphemeralMediaInGhostMode(message)) return;
         if (cell == null) {
             int count = chatListView.getChildCount();
             for (int a = 0; a < count; a++) {
@@ -39751,6 +39802,7 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public boolean needPlayMessage(ChatMessageCell cell, MessageObject messageObject, boolean muted) {
+            if (blockEphemeralMediaInGhostMode(messageObject)) return false;
             if (messageObject.isVoiceOnce() || messageObject.isRoundOnce()) {
                 if (secretVoicePlayer != null && secretVoicePlayer.isShown()) return false;
                 try {
@@ -41464,6 +41516,10 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void didStartVideoStream(MessageObject message) {
+            if (blockEphemeralMediaInGhostMode(message)) {
+                MediaController.getInstance().cleanupPlayer(true, true);
+                return;
+            }
             if (message.isVideo()) {
                 sendSecretMessageRead(message, true);
             }
@@ -41771,6 +41827,7 @@ public class ChatActivity extends BaseFragment implements
         @Override
         public void didPressImage(ChatMessageCell cell, float x, float y, boolean fullPreview) {
             MessageObject message = cell.getMessageObject();
+            if (blockEphemeralMediaInGhostMode(message)) return;
             if (message.type == MessageObject.TYPE_STORY) {
                 if (message.messageOwner.media.storyItem != null && !(message.messageOwner.media.storyItem instanceof TL_stories.TL_storyItemDeleted)) {
                     TL_stories.StoryItem storyItem = message.messageOwner.media.storyItem;

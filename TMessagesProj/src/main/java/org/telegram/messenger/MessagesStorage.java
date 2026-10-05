@@ -14515,6 +14515,10 @@ public class MessagesStorage extends BaseController {
     }
 
     private ArrayList<Long> markMessagesAsDeletedInternal(long dialogId, ArrayList<Integer> messages, boolean deleteFiles, int mode, int threadMessageId) {
+        return markMessagesAsDeletedInternal(dialogId, messages, deleteFiles, mode, threadMessageId, false);
+    }
+
+    private ArrayList<Long> markMessagesAsDeletedInternal(long dialogId, ArrayList<Integer> messages, boolean deleteFiles, int mode, int threadMessageId, boolean forceLocalRemoval) {
         SQLiteCursor cursor = null;
         SQLitePreparedStatement state = null;
         try {
@@ -14525,7 +14529,7 @@ public class MessagesStorage extends BaseController {
             final boolean scheduled = mode == ChatActivity.MODE_SCHEDULED;
             final boolean quickReplies = mode == ChatActivity.MODE_QUICK_REPLIES;
             final boolean welcomeMessages = mode == ChatActivity.MODE_WELCOME_MESSAGES;
-            final boolean keepDeletedMessages = LumaDeletedMessages.isEnabled(currentAccount) && !scheduled && !quickReplies && !welcomeMessages;
+            final boolean keepDeletedMessages = LumaDeletedMessages.shouldRetain(currentAccount, forceLocalRemoval, scheduled, quickReplies || welcomeMessages);
             if (welcomeMessages) {
                 String ids = TextUtils.join(",", messages);
                 database.executeFast(String.format(Locale.US, "DELETE FROM welcome_messages WHERE mid IN(%s) AND dialog_id = %d", ids, dialogId)).stepThis().dispose();
@@ -14619,7 +14623,7 @@ public class MessagesStorage extends BaseController {
                         if (keepDeletedMessages) {
                             LumaDeletedMessages.rememberDeleted(currentAccount, did, mid);
                         }
-                        if (did != currentUser) {
+                        if (did != currentUser && !(forceLocalRemoval && LumaDeletedMessages.isDeleted(currentAccount, did, mid))) {
                             int read_state = cursor.intValue(2);
                             if (cursor.intValue(3) == 0) {
                                 Integer[] unread_count = dialogsToUpdate.get(did);
@@ -14702,7 +14706,7 @@ public class MessagesStorage extends BaseController {
                             }
                             topicId = MessageObject.getTopicId(currentAccount, message, getForumTypeFlags(did));
                         }
-                        if (topicId != 0) {
+                        if (topicId != 0 && !(forceLocalRemoval && LumaDeletedMessages.isDeleted(currentAccount, did, mid))) {
                             TopicKey topicKey = TopicKey.of(did, topicId);
 
                             int read_state = cursor.intValue(2);
@@ -14868,6 +14872,9 @@ public class MessagesStorage extends BaseController {
                     long did = messagesByDialogs.keyAt(a);
                     ArrayList<Integer> mids = messagesByDialogs.valueAt(a);
                     String idsStr = TextUtils.join(",", mids);
+                    if (forceLocalRemoval) {
+                        LumaDeletedMessages.forgetDeleted(currentAccount, did, mids);
+                    }
                     if (!keepDeletedMessages) {
                     if (!DialogObject.isEncryptedDialog(did)) {
                         if (DialogObject.isChatDialog(did)) {
@@ -15330,13 +15337,17 @@ public class MessagesStorage extends BaseController {
     }
 
     public ArrayList<Long> markMessagesAsDeleted(long dialogId, ArrayList<Integer> messages, boolean useQueue, boolean deleteFiles, int mode, int topicId) {
+        return markMessagesAsDeleted(dialogId, messages, useQueue, deleteFiles, mode, topicId, false);
+    }
+
+    public ArrayList<Long> markMessagesAsDeleted(long dialogId, ArrayList<Integer> messages, boolean useQueue, boolean deleteFiles, int mode, int topicId, boolean forceLocalRemoval) {
         if (messages.isEmpty()) {
             return null;
         }
         if (useQueue) {
-            storageQueue.postRunnable(() -> markMessagesAsDeletedInternal(dialogId, messages, deleteFiles, mode, topicId));
+            storageQueue.postRunnable(() -> markMessagesAsDeletedInternal(dialogId, messages, deleteFiles, mode, topicId, forceLocalRemoval));
         } else {
-            return markMessagesAsDeletedInternal(dialogId, messages, deleteFiles, mode, topicId);
+            return markMessagesAsDeletedInternal(dialogId, messages, deleteFiles, mode, topicId, forceLocalRemoval);
         }
         return null;
     }

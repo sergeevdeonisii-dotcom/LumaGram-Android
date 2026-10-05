@@ -34,6 +34,7 @@ public final class LumaAccountData {
     }
 
     public static void clearOnLogout(int account, long userId) {
+        BlackHoleVault.lockAll();
         if (userId > 0) {
             ApplicationLoader.applicationContext.getSharedPreferences("luma_user_" + userId, Context.MODE_PRIVATE)
                     .edit().clear().apply();

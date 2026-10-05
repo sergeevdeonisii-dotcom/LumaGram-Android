@@ -42,6 +42,7 @@ public class WearReplyReceiver extends BroadcastReceiver {
             return;
         }
         AccountInstance accountInstance = AccountInstance.getInstance(currentAccount);
+        if (BlackHoleVault.blocks(currentAccount, dialogId)) return;
         if (DialogObject.isUserDialog(dialogId)) {
             TLRPC.User user = accountInstance.getMessagesController().getUser(dialogId);
             if (user == null) {
@@ -71,6 +72,7 @@ public class WearReplyReceiver extends BroadcastReceiver {
     }
 
     private void sendMessage(AccountInstance accountInstance, CharSequence text, long dialog_id, long topicId, int max_id, int[] voiceMsgIds) {
+        if (BlackHoleVault.blocks(accountInstance.getCurrentAccount(), dialog_id)) return;
         MessageObject replyToMsgId = null;
         MessageObject replyToTopMsgId = null;
         if (max_id != 0) {

@@ -1,5 +1,22 @@
 # Luma regression tests
 
+The .71 tools model tests cover local search, strict portable-settings validation,
+preset/custom profiles, identity-bound vault sessions with stale authentication rejection,
+real AES-GCM encryption/tamper/AAD tests, note limits, and notification history limits/deduplication.
+`check-blackholegram-tools71.ps1` checks navigation, document picker and privacy source wiring.
+JSONObject/JSONArray and private storage are controlled JVM adapters, not real JSON parsing
+or Android Keystore tests. The crypto codec uses real JDK cryptography. Native PIN/fingerprint,
+Keystore and UI behaviour still need device testing. The vault is a UI privacy lock, not
+an encryption layer for Telegram's existing message database.
+
+The .71 bot-height regressions compile the production draft measurement controller
+against isolated view/message adapters. They cover draft shrinking, final ID/group
+replacement, reply-keyboard viewport changes, long final answers, ordinary messages,
+disabled selection, and detached views. The cell's content-height cache invalidation
+is source-checked; these tests are not rendered Android UI tests and do not establish
+that every bot's arbitrary trailing whitespace or animation issue is eliminated.
+Run `run-bot-layout-regressions.ps1` separately or via the main runner below.
+
 Run from the repository root with JDK 17:
 
 ```powershell
@@ -20,6 +37,8 @@ Coverage:
 - Late child completion after export cancellation, cleanup of the late archive, one terminal callback, and successful normal account export.
 
 Fixtures deliberately control asynchronous ordering and manifest fields. They are not substitutes for real JSON parsing, APK-signature validation, Android lifecycle/UI tests, Firebase registration, or a server-side presence/push check.
+
+The .70 audit regressions additionally compile the real `LumaMessageFormatting` and `LumaGiftVisibilityOperation`. They cover explicit local deletion decisions and tombstone removal, ephemeral-cloud-media ghost policy (without bypassing view-once/TTL semantics), cancellation and stale-owner handling for gift operations, preservation of manual collapsed quotes, joining concurrent update checks, and recovery of cleared/invalid update sources. Run `./Tools/tests/check-blackholegram-audit70.ps1` for the storage/UI propagation, album drawing, opening-entry guards, lifecycle cancellation and updater-screen integration checks. Those assertions inspect source; album rendering, actual SQLite deletion, real Telegram gift requests and media-viewing behavior still need device tests.
 
 Gift partial-failure handling and the chat lifecycle integration are additionally checked by source review and Android compilation; the JVM tests exercise the detached sender, not the actual chat screen.
 

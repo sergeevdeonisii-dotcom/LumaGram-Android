@@ -1224,6 +1224,10 @@ public class DialogsAdapter extends RecyclerListView.SelectionAdapter implements
             toDialog.pinnedNum = oldNum;
         }
         Collections.swap(dialogs, fromIndex, toIndex);
+        if (org.telegram.messenger.BlackHoleVault.hasDialogs(currentAccount)) {
+            // The visible list is a copy; persist its new pin ranks in the original lists as well.
+            MessagesController.getInstance(currentAccount).sortDialogs(null);
+        }
         updateList(null);
     }
 

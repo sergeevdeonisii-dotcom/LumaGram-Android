@@ -797,6 +797,10 @@ public class SearchViewPager extends ViewPagerFixed implements FilteredSearchVie
     }
 
     public void onResume() {
+        if (noMediaFiltersSearchView != null) noMediaFiltersSearchView.pruneVaultMessages();
+        for (int n = 0; n < getChildCount(); n++)
+            if (getChildAt(n) instanceof FilteredSearchView) ((FilteredSearchView) getChildAt(n)).pruneVaultMessages();
+        selectedFiles.entrySet().removeIf(e -> org.telegram.messenger.BlackHoleVault.contains(e.getValue().currentAccount, e.getValue().getDialogId()));
         if (dialogsSearchAdapter != null) {
             dialogsSearchAdapter.notifyDataSetChanged();
         }

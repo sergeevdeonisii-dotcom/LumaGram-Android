@@ -41,7 +41,7 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
         this(false);
     }
 
-    private LiquidGlassSettingsActivity(boolean advancedMode) {
+    public LiquidGlassSettingsActivity(boolean advancedMode) {
         this.advancedMode = advancedMode;
     }
 

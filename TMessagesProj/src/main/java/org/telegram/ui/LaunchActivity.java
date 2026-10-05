@@ -6729,6 +6729,18 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     @Override
     protected void onPause() {
         super.onPause();
+        boolean privateVaultSession = false;
+        for (int slot = 0; slot < UserConfig.MAX_ACCOUNT_COUNT; slot++)
+            privateVaultSession |= org.telegram.messenger.BlackHoleVault.isUnlocked(slot) && org.telegram.messenger.BlackHoleVault.hasDialogs(slot);
+        org.telegram.messenger.BlackHoleVault.lockAll();
+        if (privateVaultSession) {
+            if (PhotoViewer.hasInstance() && PhotoViewer.getInstance().isVisible()) PhotoViewer.getInstance().closePhoto(false, true);
+            if (SecretMediaViewer.hasInstance() && SecretMediaViewer.getInstance().isVisible()) SecretMediaViewer.getInstance().closePhoto(false, false);
+            if (ArticleViewer.hasInstance() && ArticleViewer.getInstance().isVisible()) ArticleViewer.getInstance().close(false, true);
+        }
+        MessageObject vaultPlaying = MediaController.getInstance().getPlayingMessageObject();
+        if (vaultPlaying != null && org.telegram.messenger.BlackHoleVault.blocks(vaultPlaying.currentAccount, vaultPlaying.getDialogId()))
+            MediaController.getInstance().cleanupPlayer(true, true);
         isResumed = false;
         pipActivityHandler.onPause();
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 4096);
@@ -6964,6 +6976,11 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     @Override
     protected void onResume() {
+        for (int slot = 0; slot < UserConfig.MAX_ACCOUNT_COUNT; slot++) {
+            if (UserConfig.getInstance(slot).isClientActivated() && org.telegram.messenger.BlackHoleVault.hasDialogs(slot)) {
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE); break;
+            }
+        }
         super.onResume();
         AndroidUtilities.setPreferredMaxRefreshRate(getWindow());
         isResumed = true;

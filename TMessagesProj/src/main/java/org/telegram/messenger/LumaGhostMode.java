@@ -42,6 +42,11 @@ public final class LumaGhostMode {
         return isEnabled(account) && isScheduledSendEnabled(account);
     }
 
+    /** Viewing ephemeral cloud media requires a server receipt. Do not bypass its TTL. */
+    public static boolean shouldBlockEphemeralMedia(int account, long dialogId, boolean outgoing, boolean ephemeral) {
+        return ephemeral && !outgoing && dialogId > 0 && !DialogObject.isEncryptedDialog(dialogId) && isEnabled(account);
+    }
+
     public static int getAutomaticScheduleDate(int account, long dialogId, int requestedScheduleDate) {
         if (requestedScheduleDate != 0 || !isAutomaticScheduledSendEnabled(account) || DialogObject.isEncryptedDialog(dialogId)) {
             return requestedScheduleDate;
