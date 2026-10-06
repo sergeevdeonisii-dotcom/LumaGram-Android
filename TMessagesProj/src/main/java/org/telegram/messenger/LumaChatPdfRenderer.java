@@ -159,7 +159,7 @@ public final class LumaChatPdfRenderer {
             }
             linePaint.setColor(0xffddd9e6);
             canvas.drawLine(PAGE_MARGIN, 818f, PAGE_WIDTH - PAGE_MARGIN, 818f, linePaint);
-            String footer = "BlackHoleGram - " + localized("экспорт переписки", "chat export");
+            String footer = "Lunagram - " + localized("экспорт переписки", "chat export");
             canvas.drawText(footer, PAGE_MARGIN, 832f, footerPaint);
             String number = String.valueOf(pageNumber);
             canvas.drawText(number, PAGE_WIDTH - PAGE_MARGIN - footerPaint.measureText(number), 832f, footerPaint);

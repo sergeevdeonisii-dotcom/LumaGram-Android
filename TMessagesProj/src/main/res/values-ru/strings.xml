@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">BlackHoleGram</string>
-    <string name="AppNameBeta">BlackHoleGram Beta</string>
+    <string name="AppName">Lunagram</string>
+    <string name="AppNameBeta">Lunagram Beta</string>
     <string name="LanguageName">Русский</string>
     <string name="English">Английский</string>
     <string name="LanguageNameInEnglish">Russian</string>
@@ -317,7 +317,7 @@
     <string name="LumaMessageStyleUnderline">Подчёркнутый</string>
     <string name="LumaMessageStyleStrikethrough">Зачёркнутый</string>
     <string name="LumaMessageStyleQuote">Цитирование</string>
-    <string name="ExperimentalFeaturesTitle">BlackHoleGram — расширенные</string>
+    <string name="ExperimentalFeaturesTitle">Lunagram — расширенные</string>
     <string name="ExperimentalFeaturesInfo">Призрак, локальные функции и тонкая настройка</string>
     <string name="BlackHoleAdvancedAccountHeader">Ваш аккаунт</string>
     <string name="BlackHoleAdvancedAppHeader">Чаты и приложение</string>
@@ -332,7 +332,7 @@
     <string name="BlackHoleAdvancedConnectionTitle">Связь и данные</string>
     <string name="BlackHoleAdvancedConnectionInfo">Экстренный режим и экспорт</string>
     <string name="BlackHoleAdvancedSectionsInfo">Выберите раздел для настройки функций. Ваши прежние настройки сохранены.</string>
-    <string name="BlackHoleGramSettingsTitle">BlackHoleGram — настройки</string>
+    <string name="BlackHoleGramSettingsTitle">Lunagram — настройки</string>
     <string name="BlackHoleGramSettingsInfo">Стекло, ввод, оформление сообщений и обновления</string>
     <string name="ExperimentalFeaturesWarning">Эти параметры экспериментальные. Значения по умолчанию сохраняют первоначальную плавную анимацию ввода.</string>
     <string name="EmergencyConnectionHeader">Экстренная связь</string>
@@ -413,7 +413,7 @@
     <string name="ExperimentalDelayedSendInfo">Текстовое сообщение будет ожидать выбранное время перед отправкой. Нажмите круглый крестик над кнопкой-самолётиком, чтобы отменить отправку и вернуть текст в поле сообщения.</string>
     <string name="AccDescrCancelDelayedSend">Отменить отправку сообщения</string>
     <string name="LumaExportChat">Скачать чат</string>
-    <string name="LumaUpdatesTitle">Обновления BlackHoleGram</string>
+    <string name="LumaUpdatesTitle">Обновления Lunagram</string>
     <string name="LumaUpdatesInfo">Безопасная проверка и установка версий</string>
     <string name="LumaUpdateCurrentVersion">Текущая версия</string>
     <string name="LumaUpdateCheckNow">Проверить обновления</string>
@@ -421,20 +421,20 @@
     <string name="LumaUpdateVersion">Доступна версия %1$s.</string>
     <string name="LumaUpdateDownloadInstall">Скачать и установить</string>
     <string name="LumaUpdateInstall">Установить обновление</string>
-    <string name="LumaUpdateDownloading">Загружаем безопасное обновление BlackHoleGram…</string>
+    <string name="LumaUpdateDownloading">Загружаем безопасное обновление Lunagram…</string>
     <string name="LumaUpdateDownloadingShort">Загрузка обновления</string>
-    <string name="LumaUpdateSecureInfo">Перед установкой BlackHoleGram проверяет SHA‑256 APK, имя пакета, версию и сертификат подписи.</string>
+    <string name="LumaUpdateSecureInfo">Перед установкой Lunagram проверяет SHA‑256 APK, имя пакета, версию и сертификат подписи.</string>
     <string name="LumaUpdateAutomaticHeader">Автоматическая проверка</string>
     <string name="LumaUpdateAutomatic">Проверять автоматически</string>
-    <string name="LumaUpdateAutomaticInfo">BlackHoleGram проверяет новую версию при возвращении в приложение, не чаще одного раза в 15 минут. APK никогда не устанавливается без твоего подтверждения.</string>
+    <string name="LumaUpdateAutomaticInfo">Lunagram проверяет новую версию при возвращении в приложение, не чаще одного раза в 15 минут. APK никогда не устанавливается без твоего подтверждения.</string>
     <string name="LumaUpdateAdvancedHeader">Канал обновлений</string>
     <string name="LumaUpdateSource">Источник обновлений</string>
-    <string name="LumaUpdateSourceInfo">Постоянная HTTPS‑ссылка на latest.json, обычно из публичного репозитория BlackHoleGram на GitHub.</string>
-    <string name="LumaUpdateSourceDialogInfo">Вставь постоянную HTTPS‑ссылку на манифест обновлений BlackHoleGram (latest.json).</string>
+    <string name="LumaUpdateSourceInfo">Постоянная HTTPS‑ссылка на latest.json, обычно из публичного репозитория Lunagram на GitHub.</string>
+    <string name="LumaUpdateSourceDialogInfo">Вставь постоянную HTTPS‑ссылку на манифест обновлений Lunagram (latest.json).</string>
     <string name="LumaUpdateNotConfigured">Не настроен</string>
-    <string name="LumaUpdateSourceMissing">Источник обновлений BlackHoleGram пока не настроен.</string>
+    <string name="LumaUpdateSourceMissing">Источник обновлений Lunagram пока не настроен.</string>
     <string name="LumaUpdateSourceInvalid">Можно использовать только корректный HTTPS‑адрес.</string>
-    <string name="LumaUpdateCheckFailed">Не удалось подключиться к серверу обновлений BlackHoleGram.</string>
+    <string name="LumaUpdateCheckFailed">Не удалось подключиться к серверу обновлений Lunagram.</string>
     <string name="LumaUpdateManifestInvalid">В манифесте обновления нет обязательных данных безопасности либо у него неверный формат.</string>
     <string name="LumaUpdateDownloadFailed">Не удалось скачать обновление. Проверь подключение и попробуй снова.</string>
     <string name="LumaUpdateHashMismatch">Загруженный APK не прошёл проверку SHA‑256 и был удалён.</string>
@@ -443,7 +443,7 @@
     <string name="LumaUpdateVersionMismatch">Версия загруженного APK не совпала с манифестом обновления, поэтому файл удалён.</string>
     <string name="LumaUpdateVerificationFailed">Не удалось безопасно проверить загруженный APK, поэтому файл удалён.</string>
     <string name="LumaUpdateCancelled">Загрузка обновления отменена.</string>
-    <string name="LumaUpdateBannerTitle">Вышло обновление BlackHoleGram!</string>
+    <string name="LumaUpdateBannerTitle">Вышло обновление Lunagram!</string>
     <string name="LumaUpdateBannerSubtitle">Нажмите, чтобы узнать подробности и скачать.</string>
     <string name="LumaUpdateBannerDownloading">Безопасная загрузка — %1$d%%</string>
     <string name="LumaUpdateBannerReady">Обновление проверено. Нажмите, чтобы установить.</string>
@@ -467,7 +467,7 @@
     <string name="LumaEditHistoryUnavailable">Предыдущие версии пока не сохранены на этом устройстве.</string>
     <string name="LumaEditHistoryEmpty">(без текста)</string>
     <string name="AppIconBlackHole">Чёрная дыра</string>
-    <string name="BHGSettingsSearch">Поиск по настройкам BlackHoleGram</string>
+    <string name="BHGSettingsSearch">Поиск по настройкам Lunagram</string>
     <string name="BHGSearchEmpty">Настройки не найдены</string>
     <string name="BHGAppearanceHeader">Оформление и сообщения</string>
     <string name="BHGToolsHeader">Локальные инструменты</string>
@@ -485,7 +485,7 @@
     <string name="BHGNotesEmpty">Заметок пока нет. Их также можно открыть через меню чата.</string>
     <string name="BHGJournal">Журнал уведомлений</string>
     <string name="BHGJournalEnable">Сохранять историю уведомлений</string>
-    <string name="BHGJournalInfo">По умолчанию выключено. Локально сохраняет до 200 уведомлений BlackHoleGram за 30 дней в зашифрованном виде. Повторные обновления не дублируются. Скрытые чаты и текст, скрытый настройками предпросмотра, не раскрываются. Не восстанавливает push-сообщения, которые приложение не получило.</string>
+    <string name="BHGJournalInfo">По умолчанию выключено. Локально сохраняет до 200 уведомлений Lunagram за 30 дней в зашифрованном виде. Повторные обновления не дублируются. Скрытые чаты и текст, скрытый настройками предпросмотра, не раскрываются. Не восстанавливает push-сообщения, которые приложение не получило.</string>
     <string name="BHGJournalEmpty">Сохранённых уведомлений нет</string>
     <string name="BHGJournalClear">Очистить журнал уведомлений</string>
     <string name="BHGTransfer">Перенос настроек</string>

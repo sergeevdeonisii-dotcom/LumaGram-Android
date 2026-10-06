@@ -19,11 +19,11 @@ foreach ($resource in @('LumaUpdateVersion','LumaUpdateSecureInfo','LumaUpdatesT
     Check ($standaloneLoader.Contains("org.telegram.messenger.R.string.$resource") -and $standaloneLoader -notmatch "(?<!\.)\bR\.string\.$resource\b") "Standalone updater uses the library resource namespace ($resource)"
 }
 Check ((Source 'gradle.properties') -match '(?m)^APP_PACKAGE=org\.luma\.liquid\r?$') 'Legacy Android package is unchanged'
-Check ((Source 'gradle.properties') -match '(?m)^APP_VERSION_NAME=12\.10\.6-bhg\.\d+\r?$') 'Version identifies the new upstream base'
+Check ((Source 'gradle.properties') -match '(?m)^APP_VERSION_NAME=12\.10\.6-lunagram\.\d+\r?$') 'Version identifies the retained upstream base and Lunagram brand'
 Check ((Source ($java + 'tgnet/TLRPC.java')) -match 'LAYER = 229;') 'Telegram layer 229 is present'
 foreach ($locale in @('values', 'values-ru')) {
     $xml = [xml](Source "TMessagesProj/src/main/res/$locale/strings.xml")
-    Check (($xml.resources.string | Where-Object name -CEQ 'AppName').'#text' -eq 'BlackHoleGram') "Displayed application name ($locale)"
+    Check (($xml.resources.string | Where-Object name -CEQ 'AppName').'#text' -eq 'Lunagram') "Displayed application name ($locale)"
     Check (@($xml.resources.string | Group-Object -CaseSensitive name | Where-Object Count -gt 1).Count -eq 0) "No duplicated string names ($locale)"
     foreach ($name in @('BlackHoleGramSettingsTitle','BlackHoleGramSettingsInfo','ExperimentalFeaturesTitle')) {
         Check (@($xml.resources.string | Where-Object name -CEQ $name).Count -eq 1) "Settings label $name ($locale)"
@@ -35,7 +35,7 @@ Get-ChildItem (Join-Path $repo 'TMessagesProj/src/main/res') -Directory -Filter 
         $xml = [xml][System.IO.File]::ReadAllText($stringsPath)
         $appNames = @($xml.resources.string | Where-Object name -CEQ 'AppName')
         if ($appNames.Count -gt 0) {
-            Check ($appNames.Count -eq 1 -and $appNames[0].'#text' -eq 'BlackHoleGram') "Consistent app brand ($($_.Name))"
+            Check ($appNames.Count -eq 1 -and $appNames[0].'#text' -eq 'Lunagram') "Consistent app brand ($($_.Name))"
         }
     }
 }

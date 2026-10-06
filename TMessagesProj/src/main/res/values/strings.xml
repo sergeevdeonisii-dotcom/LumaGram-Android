@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">BlackHoleGram</string>
-    <string name="AppNameBeta">BlackHoleGram Beta</string>
+    <string name="AppName">Lunagram</string>
+    <string name="AppNameBeta">Lunagram Beta</string>
     <string name="LanguageName">English</string>
     <string name="English">English</string>
     <string name="LanguageNameInEnglish">English</string>
@@ -5777,11 +5777,11 @@
     <string name="AppIconPremium">Premium</string>
     <string name="AppIconTurbo">Turbo</string>
     <string name="AppIconNox">Nox</string>
-    <string name="AppIconLumaGraphite">BlackHoleGram Graphite</string>
-    <string name="AppIconLumaNavy">BlackHoleGram Navy</string>
-    <string name="AppIconLumaSilver">BlackHoleGram Silver</string>
-    <string name="AppIconLumaGarnet">BlackHoleGram Garnet</string>
-    <string name="AppIconLumaViolet">BlackHoleGram Violet</string>
+    <string name="AppIconLumaGraphite">Lunagram Graphite</string>
+    <string name="AppIconLumaNavy">Lunagram Navy</string>
+    <string name="AppIconLumaSilver">Lunagram Silver</string>
+    <string name="AppIconLumaGarnet">Lunagram Garnet</string>
+    <string name="AppIconLumaViolet">Lunagram Violet</string>
     <string name="AppIconChangedTo">App icon has been changed to %1$s</string>
     <string name="FileTooLarge">File Too Large</string>
     <string name="PremiumPreviewAppIcon">Premium App Icon</string>
@@ -11260,7 +11260,7 @@
     <string name="LumaMessageStyleUnderline">Underline</string>
     <string name="LumaMessageStyleStrikethrough">Strikethrough</string>
     <string name="LumaMessageStyleQuote">Quote</string>
-    <string name="ExperimentalFeaturesTitle">BlackHoleGram — Advanced</string>
+    <string name="ExperimentalFeaturesTitle">Lunagram — Advanced</string>
     <string name="ExperimentalFeaturesInfo">Ghost mode, local features and advanced controls</string>
     <string name="BlackHoleAdvancedAccountHeader">Your account</string>
     <string name="BlackHoleAdvancedAppHeader">Chats and app</string>
@@ -11275,7 +11275,7 @@
     <string name="BlackHoleAdvancedConnectionTitle">Connection and data</string>
     <string name="BlackHoleAdvancedConnectionInfo">Emergency mode and export</string>
     <string name="BlackHoleAdvancedSectionsInfo">Choose a section to adjust its features. Existing settings are preserved.</string>
-    <string name="BlackHoleGramSettingsTitle">BlackHoleGram — Settings</string>
+    <string name="BlackHoleGramSettingsTitle">Lunagram — Settings</string>
     <string name="BlackHoleGramSettingsInfo">Glass, input, message formatting and updates</string>
     <string name="ExperimentalFeaturesWarning">These controls are experimental. Defaults preserve the original smooth typing animation.</string>
     <string name="EmergencyConnectionHeader">Emergency connection</string>
@@ -11356,7 +11356,7 @@
     <string name="ExperimentalDelayedSendInfo">Text messages wait for the selected time before being sent. Tap the round × above the send button to cancel and return the text to the message field.</string>
     <string name="AccDescrCancelDelayedSend">Cancel message sending</string>
     <string name="LumaExportChat">Export chat</string>
-    <string name="LumaUpdatesTitle">BlackHoleGram Updates</string>
+    <string name="LumaUpdatesTitle">Lunagram Updates</string>
     <string name="LumaUpdatesInfo">Secure updates and version checks</string>
     <string name="LumaUpdateCurrentVersion">Current version</string>
     <string name="LumaUpdateCheckNow">Check for updates</string>
@@ -11364,20 +11364,20 @@
     <string name="LumaUpdateVersion">Version %1$s is available.</string>
     <string name="LumaUpdateDownloadInstall">Download and install</string>
     <string name="LumaUpdateInstall">Install update</string>
-    <string name="LumaUpdateDownloading">Downloading the secure BlackHoleGram update…</string>
+    <string name="LumaUpdateDownloading">Downloading the secure Lunagram update…</string>
     <string name="LumaUpdateDownloadingShort">Downloading update</string>
-    <string name="LumaUpdateSecureInfo">Before installation, BlackHoleGram verifies the APK SHA-256, package name, version and signing certificate.</string>
+    <string name="LumaUpdateSecureInfo">Before installation, Lunagram verifies the APK SHA-256, package name, version and signing certificate.</string>
     <string name="LumaUpdateAutomaticHeader">Automatic checks</string>
     <string name="LumaUpdateAutomatic">Check automatically</string>
-    <string name="LumaUpdateAutomaticInfo">BlackHoleGram checks for a new version when you return to the app, no more than once every 15 minutes. The APK is never installed without your confirmation.</string>
+    <string name="LumaUpdateAutomaticInfo">Lunagram checks for a new version when you return to the app, no more than once every 15 minutes. The APK is never installed without your confirmation.</string>
     <string name="LumaUpdateAdvancedHeader">Update channel</string>
     <string name="LumaUpdateSource">Update source</string>
-    <string name="LumaUpdateSourceInfo">A permanent HTTPS link to latest.json, usually hosted in the public BlackHoleGram GitHub repository.</string>
-    <string name="LumaUpdateSourceDialogInfo">Paste the permanent HTTPS link to the BlackHoleGram update manifest (latest.json).</string>
+    <string name="LumaUpdateSourceInfo">A permanent HTTPS link to latest.json, usually hosted in the public Lunagram GitHub repository.</string>
+    <string name="LumaUpdateSourceDialogInfo">Paste the permanent HTTPS link to the Lunagram update manifest (latest.json).</string>
     <string name="LumaUpdateNotConfigured">Not configured</string>
-    <string name="LumaUpdateSourceMissing">The BlackHoleGram update source is not configured yet.</string>
+    <string name="LumaUpdateSourceMissing">The Lunagram update source is not configured yet.</string>
     <string name="LumaUpdateSourceInvalid">Only a valid HTTPS address is allowed.</string>
-    <string name="LumaUpdateCheckFailed">Could not connect to the BlackHoleGram update server.</string>
+    <string name="LumaUpdateCheckFailed">Could not connect to the Lunagram update server.</string>
     <string name="LumaUpdateManifestInvalid">The update manifest is missing required security information or has an invalid format.</string>
     <string name="LumaUpdateDownloadFailed">The update could not be downloaded. Check your connection and try again.</string>
     <string name="LumaUpdateHashMismatch">The downloaded APK failed its SHA-256 check and was deleted.</string>
@@ -11386,7 +11386,7 @@
     <string name="LumaUpdateVersionMismatch">The downloaded APK version does not match the update manifest and was deleted.</string>
     <string name="LumaUpdateVerificationFailed">The downloaded APK could not be verified and was deleted.</string>
     <string name="LumaUpdateCancelled">Update download cancelled.</string>
-    <string name="LumaUpdateBannerTitle">A BlackHoleGram update is available!</string>
+    <string name="LumaUpdateBannerTitle">A Lunagram update is available!</string>
     <string name="LumaUpdateBannerSubtitle">Tap to see what’s new and download it.</string>
     <string name="LumaUpdateBannerDownloading">Downloading securely — %1$d%%</string>
     <string name="LumaUpdateBannerReady">The update is verified. Tap to install.</string>
@@ -11444,7 +11444,7 @@
     <string name="RoundVideoComposition">Composition</string>
     <string name="RoundVideoCompositionEnabled">Round video styling</string>
     <string name="RoundVideoCompositionInfo">Disable styling to record a plain square without outside-circle blur, dimming or Telegram overlays.</string>
-    <string name="BHGSettingsSearch">Search BlackHoleGram settings</string>
+    <string name="BHGSettingsSearch">Search Lunagram settings</string>
     <string name="BHGSearchEmpty">No settings found</string>
     <string name="BHGAppearanceHeader">Appearance and messages</string>
     <string name="BHGToolsHeader">Local tools</string>
@@ -11462,7 +11462,7 @@
     <string name="BHGNotesEmpty">No notes yet. You can also open notes from the chat menu.</string>
     <string name="BHGJournal">Notification history</string>
     <string name="BHGJournalEnable">Keep notification history</string>
-    <string name="BHGJournalInfo">Off by default. Saves up to 200 notifications posted by BlackHoleGram, for 30 days, encrypted locally. Repeated updates are not duplicated. Hidden chats and notification content hidden by your preview settings are not revealed. This does not recover push messages the app never received.</string>
+    <string name="BHGJournalInfo">Off by default. Saves up to 200 notifications posted by Lunagram, for 30 days, encrypted locally. Repeated updates are not duplicated. Hidden chats and notification content hidden by your preview settings are not revealed. This does not recover push messages the app never received.</string>
     <string name="BHGJournalEmpty">No saved notifications</string>
     <string name="BHGJournalClear">Clear notification history</string>
     <string name="BHGTransfer">Transfer settings</string>

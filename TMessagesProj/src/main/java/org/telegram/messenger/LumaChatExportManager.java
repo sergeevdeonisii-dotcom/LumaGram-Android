@@ -654,7 +654,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
             buildHtml(html);
             ensureNotCancelled();
             String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(new Date());
-            archive = uniqueFile(outputDir, "LumaGram_" + sanitizeFileName(options.title) + "_" + timestamp + ".zip");
+            archive = uniqueFile(outputDir, "Lunagram_" + sanitizeFileName(options.title) + "_" + timestamp + ".zip");
             activeArchive = archive;
             try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(archive)))) {
                 addToZip(zip, json, "result.json");
@@ -696,7 +696,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         File pdf = null;
         try {
             String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(new Date());
-            pdf = uniqueFile(outputDir, "LumaGram_" + sanitizeFileName(options.title) + "_" + timestamp + ".pdf");
+            pdf = uniqueFile(outputDir, "Lunagram_" + sanitizeFileName(options.title) + "_" + timestamp + ".pdf");
             activeArchive = pdf;
             LumaChatPdfRenderer.render(pdf, safeTitle(), pageFiles, sessionDir, this::ensureNotCancelled);
             ensureNotCancelled();
@@ -714,7 +714,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
 
     private void buildJson(File target) throws Exception {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(target), StandardCharsets.UTF_8))) {
-            writer.write("{\n  \"about\": \"BlackHoleGram chat export\",\n");
+            writer.write("{\n  \"about\": \"Lunagram chat export\",\n");
             writer.write("  \"name\": " + JSONObject.quote(safeTitle()) + ",\n");
             writer.write("  \"dialog_id\": " + JSONObject.quote(String.valueOf(options.dialogId)) + ",\n");
             writer.write("  \"exported_at\": " + JSONObject.quote(formatDate((int) (System.currentTimeMillis() / 1000L))) + ",\n");
