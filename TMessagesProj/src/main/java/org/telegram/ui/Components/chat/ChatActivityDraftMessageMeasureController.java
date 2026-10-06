@@ -12,45 +12,25 @@ public class ChatActivityDraftMessageMeasureController {
     private RecyclerView recyclerView;
     private int messageIdToOverride;
     private long groupIdToOverride;
-    private int previousMessageHeight;
     private boolean hasAdditionalHeight;
 
     public int getOverrideMeasureHeight(MessageObject messageObject, int measuredHeight) {
+        // BlackHoleGram keeps live drafts AND pending outgoing messages compact.
+        // Filling the viewport here leaves a large gap below "Thinking" and
+        // makes an outgoing row jump up, then collapse on server acknowledgement.
+        hasAdditionalHeight = false;
         if (!filter(messageObject)) {
             return measuredHeight;
         }
 
-        // The extra row space only stabilizes an in-flight bot response. A final
-        // message must return to its content height, even after a draft ID/group
-        // has been rebound to the server message or the reply keyboard changes.
         if (!messageObject.isBotPendingDraft && !(messageObject.getId() < 0 && messageObject.isOutOwner())) {
             setMessageIdToOverride(0, 0);
-            return measuredHeight;
         }
-        if (recyclerView == null) {
-            return measuredHeight;
-        }
-
-        final int availHeight = recyclerView.getHeight()
-                - recyclerView.getPaddingTop()
-                - recyclerView.getPaddingBottom()
-                - previousMessageHeight;
-
-        final int additionalHeight = Math.max(0, availHeight - measuredHeight);
-        hasAdditionalHeight = additionalHeight > 0;
-        if (messageIdToOverride > 0 && !hasAdditionalHeight) {
-            setMessageIdToOverride(0, 0);
-        }
-
-        return measuredHeight + additionalHeight;
+        return measuredHeight;
     }
 
     public void setRecyclerView(RecyclerView recyclerView) {
         this.recyclerView = recyclerView;
-    }
-
-    public void setPreviousMessageHeight(int previousMessageHeight) {
-        this.previousMessageHeight = previousMessageHeight;
     }
 
     public boolean hasAdditionalHeight() {
