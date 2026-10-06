@@ -24842,7 +24842,6 @@ public class ChatActivity extends BaseFragment implements
             if (getTopicId() != arg.botTopicId) return;
 
             saveScrollPosition2();
-            final int startRow = chatAdapter.messagesStartRow;
             final ArrayList<MessageObject> arr = new ArrayList<>(1);
             arr.add(arg.messageObject);
             replaceMessageObjects(arr, 0, true, true);
@@ -24854,8 +24853,6 @@ public class ChatActivity extends BaseFragment implements
                 }
                 BotForumHelper.getInstance(currentAccount).saveIsStreamingTopic(getDialogId(), getTopicId(), true);
 
-                final int firstMessageGroupHeight = calculateHeightUntilOutOwner(startRow);
-                botDraftHeightController.setPreviousMessageHeight(firstMessageGroupHeight);
                 processNewMessages(arr);
             }
             botDraftHeightController.setMessageIdToOverride(arg.messageObject.getId(), arg.messageObject.getGroupId());
@@ -24926,56 +24923,6 @@ public class ChatActivity extends BaseFragment implements
 
             if (msgGroupId == 0) {
                 break;
-            }
-
-            a++;
-        }
-
-        return Math.max(0, b - t);
-    }
-
-    private int calculateHeightUntilOutOwner(int startRow) {
-        int t = chatListView.getHeight();
-        int b = 0;
-
-        int a = startRow;
-        long groupId = 0;
-        while (true) {
-            final View view = chatListView.findViewByPosition(a);
-            if (view == null) {
-                break;
-            }
-
-            final MessageObject messageObject;
-            final int padding;
-            if (view instanceof ChatMessageCell) {
-                messageObject = ((ChatMessageCell) view).getMessageObject();
-                padding = ((ChatMessageCell) view).getAdditionalPaddingHeight();
-            } else if (view instanceof ChatActionCell) {
-                messageObject = ((ChatActionCell) view).getMessageObject();
-                padding = 0;
-            } else {
-                continue;
-            }
-            if (messageObject == null) {
-                continue;
-            }
-
-            final long msgGroupId = messageObject.getGroupId();
-            final boolean isOut = messageObject.isOut();
-
-            if (groupId != 0 && groupId != msgGroupId) {
-                break;
-            }
-
-            t = Math.min(t, view.getTop());
-            b = Math.max(b, view.getBottom() - padding);
-
-            if (isOut) {
-                if (msgGroupId == 0) {
-                    break;
-                }
-                groupId = msgGroupId;
             }
 
             a++;
@@ -25656,7 +25603,6 @@ public class ChatActivity extends BaseFragment implements
             final boolean isOutButWithHeight = !message.isBotPendingDraft && !message.isOutOwner()
                 && !BotForumHelper.getInstance(currentAccount).hasBotForumDrafts(getDialogId(), (int) getTopicId());
             if (message.getId() < 0 && message.isOutOwner() || isOutButWithHeight) {
-                botDraftHeightController.setPreviousMessageHeight(isOutButWithHeight ? calculateHeightUntilOutOwner(chatAdapter.messagesStartRow) : 0);
                 botDraftHeightController.setMessageIdToOverride(message.getId(), message.getGroupId());
             }
         }

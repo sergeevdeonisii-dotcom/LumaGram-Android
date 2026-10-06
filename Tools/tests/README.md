@@ -9,10 +9,13 @@ or Android Keystore tests. The crypto codec uses real JDK cryptography. Native P
 Keystore and UI behaviour still need device testing. The vault is a UI privacy lock, not
 an encryption layer for Telegram's existing message database.
 
-The .71 bot-height regressions compile the production draft measurement controller
+The .72 bot-height regressions compile the production draft measurement controller
 against isolated view/message adapters. They cover draft shrinking, final ID/group
 replacement, reply-keyboard viewport changes, long final answers, ordinary messages,
-disabled selection, and detached views. The cell's content-height cache invalidation
+disabled selection, and detached views. They require compact live "Thinking" drafts
+and pending outgoing rows, including the outgoing server-ID acknowledgement, so the
+old viewport filler cannot recreate the large bottom gap or up/down sending bounce.
+The cell's content-height cache invalidation
 is source-checked; these tests are not rendered Android UI tests and do not establish
 that every bot's arbitrary trailing whitespace or animation issue is eliminated.
 Run `run-bot-layout-regressions.ps1` separately or via the main runner below.
