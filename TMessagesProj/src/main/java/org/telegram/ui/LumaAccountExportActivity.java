@@ -419,8 +419,8 @@ public class LumaAccountExportActivity extends BaseFragment {
         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), resourceProvider);
         builder.setTitle(tr("Начать экспорт?", "Start export?"));
         builder.setMessage(tr(
-                "Будет экспортировано чатов: " + chats.size() + ". Не закрывайте BlackHoleGram; для большого аккаунта это может занять долгое время и потребовать много памяти.",
-                "Chats to export: " + chats.size() + ". Keep BlackHoleGram open; a large account may take a long time and substantial storage."));
+                "Будет экспортировано чатов: " + chats.size() + ". Не закрывайте Lunagram; для большого аккаунта это может занять долгое время и потребовать много памяти.",
+                "Chats to export: " + chats.size() + ". Keep Lunagram open; a large account may take a long time and substantial storage."));
         builder.setPositiveButton(tr("Начать", "Start"), (dialog, which) -> startExport(chats));
         builder.setNegativeButton(tr("Отмена", "Cancel"), null);
         showDialog(builder.create());

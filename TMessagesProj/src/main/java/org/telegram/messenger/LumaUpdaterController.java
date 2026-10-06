@@ -278,7 +278,7 @@ public final class LumaUpdaterController {
             runCheckCompletions(completions);
         })).setHeader("Accept", "application/json")
                 .setHeader("Cache-Control", "no-cache")
-                .setHeader("User-Agent", "BlackHoleGram-Android/" + BuildVars.BUILD_VERSION_STRING)
+                .setHeader("User-Agent", "Lunagram-Android/" + BuildVars.BUILD_VERSION_STRING)
                 .execute(requestUrl);
     }
 
@@ -435,7 +435,7 @@ public final class LumaUpdaterController {
         if (!ApplicationLoader.applicationLoaderInstance.checkApkInstallPermissions(activity)) {
             return false;
         }
-        return AndroidUtilities.openForView(file, "BlackHoleGram.apk", "application/vnd.android.package-archive", activity, null, false);
+        return AndroidUtilities.openForView(file, "Lunagram.apk", "application/vnd.android.package-archive", activity, null, false);
     }
 
     private void notifyDownloadProgress() {

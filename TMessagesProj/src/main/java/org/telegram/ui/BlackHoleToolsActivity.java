@@ -270,7 +270,7 @@ public final class BlackHoleToolsActivity extends BaseFragment {
         try {
             exportText = BlackHoleSettings.encode(BlackHoleSettings.capture(currentAccount));
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE)
-                    .putExtra(Intent.EXTRA_TITLE, "BlackHoleGram-settings.json");
+                    .putExtra(Intent.EXTRA_TITLE, "Lunagram-settings.json");
             startActivityForResult(intent, CREATE_FILE);
         } catch (Exception e) { exportText = null; error(e); }
     }

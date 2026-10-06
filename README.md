@@ -1,11 +1,11 @@
-# BlackHoleGram for Android
+# Lunagram for Android
 
-BlackHoleGram (formerly LumaGram) is an open-source Telegram client for Android based on the official
+Lunagram (formerly BlackHoleGram and LumaGram) is an open-source Telegram client for Android based on the official
 [Telegram Android source code](https://github.com/DrKLO/Telegram). It keeps Telegram's protocol and core behavior while adding Luma's visual features, including Liquid Glass, the FullBlack theme and interface refinements.
 
-This repository is public so anyone can inspect what the client does, build it independently and compare release hashes. BlackHoleGram is an independent project and is not affiliated with Telegram FZ-LLC. Its upstream base is Telegram 12.10.6 (`f2908b14133bbffbf7ab04f641ecb5bfaf533242`).
+This repository is public so anyone can inspect what the client does, build it independently and compare release hashes. Lunagram is an independent project and is not affiliated with Telegram FZ-LLC. Its upstream base is Telegram 12.10.6 (`f2908b14133bbffbf7ab04f641ecb5bfaf533242`).
 
-The Android package (`org.luma.liquid.web`), signing certificate, updater URL and existing preference keys remain unchanged for seamless upgrades from LumaGram. The legacy repository and internal `Luma` identifiers are intentionally retained; the displayed application name is BlackHoleGram.
+The Android package (`org.luma.liquid.web`), signing certificate, updater URL and existing preference keys remain unchanged for seamless upgrades from earlier versions. The legacy repository and internal `Luma`/`BlackHole` identifiers and settings-transfer format are intentionally retained; the displayed application name is Lunagram. This rename does not reset accounts, ghost mode, notes, pins, or other saved settings.
 
 ## Download safely
 
