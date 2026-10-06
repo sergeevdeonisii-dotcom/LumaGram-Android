@@ -5,8 +5,8 @@ function Check([bool]$condition, [string]$description) {
     if (!$condition) { throw $description }
     Write-Output "PASS: $description"
 }
-function Method([string]$source, [string]$name) {
-    $match = [regex]::Match($source, "(?s)    private (?:void|UItem) $name\([^)]*\) \{\r?\n(.*?)\r?\n    \}")
+function Method([string]$source, [string]$name, [string]$access = 'private') {
+    $match = [regex]::Match($source, "(?s)    $access (?:void|UItem|String) $name\([^)]*\) \{\r?\n(.*?)\r?\n    \}")
     if (!$match.Success) { throw "Missing method: $name" }
     return $match.Groups[1].Value
 }
@@ -55,7 +55,7 @@ foreach ($warning in @('ExperimentalStarRatingInfo', 'ExperimentalAnonymousNumbe
 }
 Check ($updates -notmatch 'ROW_SOURCE|showSourceDialog|sourceLabel|R\.string\.LumaUpdate(?:AdvancedHeader|Source)') 'Update source card and URL editor are absent from the user interface'
 Check ($updates.Contains('controller.checkForUpdate(true,') -and $updates.Contains('controller.setAutoCheckEnabled(enabled);') -and $updates.Contains('showCustomUpdateAppPopup')) 'Manual checks, automatic checks and update installation remain available'
-Check ($updater.Contains('getString("manifest_url", BuildVars.LUMA_UPDATE_MANIFEST_URL)')) 'Saved and default update sources are still respected by the updater'
+Check ((Method $updater 'getManifestUrl' 'public').Contains('getString("manifest_url", null)') -and (Method $updater 'getManifestUrl' 'public').Contains('isHttps(saved) ? saved.trim() : BuildVars.LUMA_UPDATE_MANIFEST_URL')) 'Valid saved sources remain respected; empty/corrupt sources recover the built-in URL'
 Check ($updater.Contains('LumaUpdateFiles') -and $updater.Contains('sha256')) 'Updater integrity validation is not removed'
 foreach ($locale in @('values', 'values-ru')) {
     $xml = [xml](Source "TMessagesProj/src/main/res/$locale/strings.xml")

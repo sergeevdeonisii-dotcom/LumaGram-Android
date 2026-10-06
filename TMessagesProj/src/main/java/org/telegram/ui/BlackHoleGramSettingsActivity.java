@@ -23,6 +23,7 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
     private static final int ROW_GLASS = 1;
     private static final int ROW_MESSAGES = 2;
     private static final int ROW_UPDATES = 3;
+    private static final int ROW_SEARCH = 4;
 
     @Override
     public View createView(Context context) {
@@ -46,10 +47,20 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
     }
 
     private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
+        items.add(UItem.asButton(ROW_SEARCH, R.drawable.outline_header_search, getString(R.string.BHGSettingsSearch)));
+        items.add(UItem.asShadow(null));
+        items.add(UItem.asHeader(getString(R.string.BHGAppearanceHeader)));
         items.add(UItem.asButton(ROW_GLASS, R.drawable.msg2_animations, getString(R.string.LiquidGlassSettingsTitle)));
         items.add(UItem.asShadow(getString(R.string.LiquidGlassSettingsInfo)));
         items.add(UItem.asButton(ROW_MESSAGES, R.drawable.msg_photo_curve, getString(R.string.TextAnimationSettingsTitle)));
         items.add(UItem.asShadow(getString(R.string.TextAnimationSettingsInfo)));
+        items.add(UItem.asHeader(getString(R.string.BHGToolsHeader)));
+        items.add(UItem.asButton(101, R.drawable.msg_customize, getString(R.string.BHGProfiles)));
+        items.add(UItem.asButton(102, R.drawable.msg_edit, getString(R.string.BHGNotes)));
+        items.add(UItem.asButton(103, R.drawable.msg_notifications, getString(R.string.BHGJournal)));
+        items.add(UItem.asButton(104, R.drawable.msg_saved, getString(R.string.BHGTransfer)));
+        items.add(UItem.asButton(105, R.drawable.msg_secret, getString(R.string.BHGVault)));
+        items.add(UItem.asShadow(getString(R.string.BHGToolsInfo)));
         items.add(UItem.asButton(ROW_UPDATES, R.drawable.settings_features, getString(R.string.LumaUpdatesTitle)));
         items.add(UItem.asShadow(getString(R.string.LumaUpdatesInfo)));
     }
@@ -61,6 +72,10 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
             openSettings(new TextAnimationSettingsActivity());
         } else if (item.id == ROW_UPDATES) {
             openSettings(new LumaUpdateActivity());
+        } else if (item.id == ROW_SEARCH) {
+            openSettings(new BlackHoleSearchActivity());
+        } else if (item.id >= 101 && item.id <= 105) {
+            openSettings(new BlackHoleToolsActivity(item.id - 100));
         }
     }
 

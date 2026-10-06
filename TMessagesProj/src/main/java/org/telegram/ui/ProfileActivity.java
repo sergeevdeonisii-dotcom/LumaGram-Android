@@ -2095,6 +2095,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     public boolean onFragmentCreate() {
         userId = arguments.getLong("user_id", 0);
         chatId = arguments.getLong("chat_id", 0);
+        if (org.telegram.messenger.BlackHoleVault.blocks(currentAccount, userId != 0 ? userId : -chatId)) return false;
         topicId = arguments.getLong("topic_id", 0);
         saved = arguments.getBoolean("saved", false);
         openSimilar = arguments.getBoolean("similar", false);
@@ -9573,6 +9574,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void onResume() {
         super.onResume();
+        if (org.telegram.messenger.BlackHoleVault.blocks(currentAccount, userId != 0 ? userId : -chatId)) {
+            if (fragmentView != null) fragmentView.setVisibility(View.INVISIBLE);
+            AndroidUtilities.runOnUIThread(() -> { if (!isFinished) finishFragment(false); });
+            return;
+        }
+        if (fragmentView != null) fragmentView.setVisibility(View.VISIBLE);
         if (sharedMediaLayout != null) {
             sharedMediaLayout.onResume();
         }
@@ -9622,6 +9629,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void onPause() {
         super.onPause();
+        if (org.telegram.messenger.BlackHoleVault.contains(currentAccount, userId != 0 ? userId : -chatId) && fragmentView != null)
+            fragmentView.setVisibility(View.INVISIBLE);
         if (undoView != null) {
             undoView.hide(true, 0);
         }

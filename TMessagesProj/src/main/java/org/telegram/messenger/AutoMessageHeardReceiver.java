@@ -26,12 +26,14 @@ public class AutoMessageHeardReceiver extends BroadcastReceiver {
             return;
         }
         AccountInstance accountInstance = AccountInstance.getInstance(currentAccount);
+        if (BlackHoleVault.blocks(currentAccount, dialogId)) return;
         if (DialogObject.isUserDialog(dialogId)) {
             TLRPC.User user = accountInstance.getMessagesController().getUser(dialogId);
             if (user == null) {
                 Utilities.globalQueue.postRunnable(() -> {
                     TLRPC.User user1 = accountInstance.getMessagesStorage().getUserSync(dialogId);
                     AndroidUtilities.runOnUIThread(() -> {
+                        if (BlackHoleVault.blocks(currentAccount, dialogId)) return;
                         accountInstance.getMessagesController().putUser(user1, true);
                         MessagesController.getInstance(currentAccount).markDialogAsRead(dialogId, maxId, maxId, 0, false, 0, 0, true, 0);
                         MessagesController.getInstance(currentAccount).markReactionsAsRead(dialogId, 0);
@@ -45,6 +47,7 @@ public class AutoMessageHeardReceiver extends BroadcastReceiver {
                 Utilities.globalQueue.postRunnable(() -> {
                     TLRPC.Chat chat1 = accountInstance.getMessagesStorage().getChatSync(-dialogId);
                     AndroidUtilities.runOnUIThread(() -> {
+                        if (BlackHoleVault.blocks(currentAccount, dialogId)) return;
                         accountInstance.getMessagesController().putChat(chat1, true);
                         MessagesController.getInstance(currentAccount).markDialogAsRead(dialogId, maxId, maxId, 0, false, 0, 0, true, 0);
                         MessagesController.getInstance(currentAccount).markReactionsAsRead(dialogId, 0);

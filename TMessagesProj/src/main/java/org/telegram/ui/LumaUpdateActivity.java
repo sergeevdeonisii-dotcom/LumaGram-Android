@@ -96,7 +96,8 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
             }
             items.add(UItem.asButton(ROW_UPDATE, title, value).accent());
         }
-        items.add(UItem.asButton(ROW_CHECK, getString(controller.isChecking() ? R.string.LumaUpdateChecking : R.string.LumaUpdateCheckNow)).accent());
+        items.add(UItem.asButton(ROW_CHECK, getString(controller.isChecking() ? R.string.LumaUpdateChecking : R.string.LumaUpdateCheckNow))
+                .accent().setEnabled(!controller.isChecking()));
         items.add(UItem.asShadow(getString(R.string.LumaUpdateSecureInfo)));
 
         items.add(UItem.asHeader(getString(R.string.LumaUpdateAutomaticHeader)));
@@ -132,6 +133,7 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
                 progressDialog.dismiss();
             } catch (Exception ignore) {
             }
+            if (isFinished || getContext() == null || getParentActivity() == null) return;
             updateList();
             if (!TextUtils.equals(checkedSource, controller.getManifestUrl())) return;
             if (!TextUtils.isEmpty(controller.getLastError())) {

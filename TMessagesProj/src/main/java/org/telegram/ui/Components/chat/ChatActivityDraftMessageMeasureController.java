@@ -19,7 +19,18 @@ public class ChatActivityDraftMessageMeasureController {
         if (!filter(messageObject)) {
             return measuredHeight;
         }
-        
+
+        // The extra row space only stabilizes an in-flight bot response. A final
+        // message must return to its content height, even after a draft ID/group
+        // has been rebound to the server message or the reply keyboard changes.
+        if (!messageObject.isBotPendingDraft && !(messageObject.getId() < 0 && messageObject.isOutOwner())) {
+            setMessageIdToOverride(0, 0);
+            return measuredHeight;
+        }
+        if (recyclerView == null) {
+            return measuredHeight;
+        }
+
         final int availHeight = recyclerView.getHeight()
                 - recyclerView.getPaddingTop()
                 - recyclerView.getPaddingBottom()
@@ -66,7 +77,7 @@ public class ChatActivityDraftMessageMeasureController {
     }
 
     public void onScroll() {
-        if (messageIdToOverride <= 0) {
+        if (messageIdToOverride <= 0 || recyclerView == null) {
             return;
         }
 
@@ -83,7 +94,7 @@ public class ChatActivityDraftMessageMeasureController {
     }
 
     public void onRequestLayout() {
-        if (messageIdToOverride == 0) {
+        if (messageIdToOverride == 0 || recyclerView == null) {
             return;
         }
 
@@ -103,6 +114,6 @@ public class ChatActivityDraftMessageMeasureController {
     }
 
     public boolean filter(MessageObject messageObject) {
-        return messageObject != null && (messageObject.getId() == messageIdToOverride || groupIdToOverride != 0 && messageObject.getGroupId() == groupIdToOverride);
+        return messageIdToOverride != 0 && messageObject != null && (messageObject.getId() == messageIdToOverride || groupIdToOverride != 0 && messageObject.getGroupId() == groupIdToOverride);
     }
 }

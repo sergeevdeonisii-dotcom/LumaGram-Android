@@ -94,6 +94,11 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         this.section = section;
     }
 
+    public static ExperimentalFeaturesActivity forSection(int id) {
+        Section section = Section.fromId(id);
+        return new ExperimentalFeaturesActivity(section == null ? Section.ROOT : section);
+    }
+
     @Override
     public View createView(Context context) {
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);

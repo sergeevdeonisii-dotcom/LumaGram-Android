@@ -25,6 +25,7 @@ public class NotificationCallbackReceiver extends BroadcastReceiver {
             return;
         }
         long did = intent.getLongExtra("did", 777000);
+        if (BlackHoleVault.blocks(currentAccount, did)) return;
         byte[] data = intent.getByteArrayExtra("data");
         int mid = intent.getIntExtra("mid", 0);
         SendMessagesHelper.getInstance(currentAccount).sendNotificationCallback(did, mid, data);

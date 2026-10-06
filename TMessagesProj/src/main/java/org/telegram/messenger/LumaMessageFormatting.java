@@ -68,11 +68,12 @@ public final class LumaMessageFormatting {
         final Iterator<TLRPC.MessageEntity> iterator = result.iterator();
         while (iterator.hasNext()) {
             final TLRPC.MessageEntity entity = iterator.next();
-            if (matchesStyle(entity, style)) {
+            if (matchesStyle(entity, style) && style != STYLE_QUOTE) {
                 iterator.remove();
             } else if (style == STYLE_MONOSPACE
                 || entity instanceof TLRPC.TL_messageEntityCode
-                || entity instanceof TLRPC.TL_messageEntityPre) {
+                || entity instanceof TLRPC.TL_messageEntityPre
+                || style == STYLE_QUOTE && entity instanceof TLRPC.TL_messageEntityBlockquote) {
                 final int start = Math.max(0, Math.min(text.length(), entity.offset));
                 final int end = Math.max(start, Math.min(text.length(), entity.offset + entity.length));
                 if (end > start) {

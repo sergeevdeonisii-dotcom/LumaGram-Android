@@ -11019,6 +11019,16 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     @NonNull
     public ArrayList<TLRPC.Dialog> getDialogsArray(int currentAccount, int dialogsType, int folderId, boolean frozen) {
+        ArrayList<TLRPC.Dialog> source = getDialogsArrayIncludingVault(currentAccount, dialogsType, folderId, frozen);
+        if (!org.telegram.messenger.BlackHoleVault.hasDialogs(currentAccount)) return source;
+        ArrayList<TLRPC.Dialog> visible = new ArrayList<>(source.size());
+        for (TLRPC.Dialog dialog : source) {
+            if (!org.telegram.messenger.BlackHoleVault.contains(currentAccount, dialog.id)) visible.add(dialog);
+        }
+        return visible;
+    }
+
+    private ArrayList<TLRPC.Dialog> getDialogsArrayIncludingVault(int currentAccount, int dialogsType, int folderId, boolean frozen) {
         if (frozen && frozenDialogsList != null) {
             return frozenDialogsList;
         }
@@ -13715,6 +13725,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     R.raw.info,
                     getString(enabled ? R.string.ExperimentalGhostEnabled : R.string.ExperimentalGhostDisabled)
             ).show();
+        });
+        io.add(R.drawable.msg_customize, getString(R.string.BHGProfiles), () -> BlackHoleToolsActivity.showProfiles(this));
+        io.add(R.drawable.msg_secret, getString(R.string.BHGVault), () -> {
+            BlackHoleToolsActivity screen = new BlackHoleToolsActivity(BlackHoleToolsActivity.VAULT);
+            screen.setCurrentAccount(currentAccount); presentFragment(screen);
         });
         io.addGap();
 

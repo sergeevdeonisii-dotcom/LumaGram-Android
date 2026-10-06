@@ -9349,14 +9349,10 @@ public class MessagesController extends BaseController implements NotificationCe
             } else if (welcomeMessages) {
                 getMessagesStorage().markMessagesAsDeleted(dialogId, messages, true, false, ChatActivity.MODE_WELCOME_MESSAGES, topicId);
             } else {
-                if (LumaDeletedMessages.isEnabled(currentAccount)) {
-                    for (int a = 0; a < messages.size(); a++) {
-                        Integer id = messages.get(a);
-                        if (id != null) {
-                            LumaDeletedMessages.rememberDeleted(currentAccount, dialogId, id);
-                        }
-                    }
-                }
+                // This API removes messages locally by explicit action (including
+                // cancel/reschedule). Remote deletions use the storage update path.
+                // Storage clears old tombstones after accounting for them, so a
+                // retained unread message is not subtracted from counters twice.
                 if (channelId == 0) {
                     for (int a = 0; a < messages.size(); a++) {
                         Integer id = messages.get(a);
@@ -9368,10 +9364,10 @@ public class MessagesController extends BaseController implements NotificationCe
                 } else {
                     markDialogMessageAsDeleted(dialogId, messages);
                 }
-                getMessagesStorage().markMessagesAsDeleted(dialogId, messages, true, forAll, 0, topicId);
+                getMessagesStorage().markMessagesAsDeleted(dialogId, messages, true, forAll, 0, topicId, true);
                 getMessagesStorage().updateDialogsWithDeletedMessages(dialogId, channelId, messages, null);
             }
-            getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, messages, channelId, scheduled, false, movedToScheduled, movedToScheduledMessageId);
+            getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, messages, channelId, scheduled, false, movedToScheduled, movedToScheduledMessageId, null, true);
         } else {
             if (taskRequest instanceof TLRPC.TL_channels_deleteMessages) {
                 channelId = ((TLRPC.TL_channels_deleteMessages) taskRequest).channel.channel_id;

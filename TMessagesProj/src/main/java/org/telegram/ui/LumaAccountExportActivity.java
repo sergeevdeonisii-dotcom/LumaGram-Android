@@ -431,7 +431,8 @@ public class LumaAccountExportActivity extends BaseFragment {
         AccountInstance account = AccountInstance.getInstance(currentAccount);
         for (TLRPC.Dialog dialog : scannedDialogs) {
             if (dialog == null || DialogObject.isFolderDialogId(dialog.id)
-                    || DialogObject.isEncryptedDialog(dialog.id)) continue;
+                    || DialogObject.isEncryptedDialog(dialog.id)
+                    || org.telegram.messenger.BlackHoleVault.contains(currentAccount, dialog.id)) continue;
             String type;
             String title;
             boolean protectedContent = false;

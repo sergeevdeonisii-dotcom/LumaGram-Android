@@ -251,7 +251,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
         public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
             HintDialogCell cell = (HintDialogCell) holder.itemView;
 
-            TLRPC.TL_topPeer peer = MediaDataController.getInstance(currentAccount).hints.get(position);
+            TLRPC.TL_topPeer peer = visibleHints(currentAccount).get(position);
             TLRPC.Dialog dialog = new TLRPC.TL_dialog();
             TLRPC.Chat chat = null;
             TLRPC.User user = null;
@@ -278,11 +278,12 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
 
         @Override
         public int getItemCount() {
-            return MediaDataController.getInstance(currentAccount).hints.size();
+            return visibleHints(currentAccount).size();
         }
     }
 
     private boolean filter(Object obj) {
+        if (vaultObject(obj)) return false;
         if (dialogsType != DialogsActivity.DIALOGS_TYPE_START_ATTACH_BOT) {
             return true;
         }
@@ -1338,6 +1339,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
 
     @Override
     public int getItemCount() {
+        pruneVaultResults();
         if (waitingResponseCount == 3) {
             return 0;
         }
@@ -1410,6 +1412,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
     }
 
     public Object getItem(int i) {
+        pruneVaultResults();
         if (!publicPosts.isEmpty()) {
             if (i > 0 && i - 1 < publicPosts.size()) {
                 return publicPosts.get(i - 1);
@@ -1705,7 +1708,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
     }
 
     private boolean hasHints() {
-        return !searchWas && !MediaDataController.getInstance(currentAccount).hints.isEmpty() && (dialogsType != DialogsActivity.DIALOGS_TYPE_START_ATTACH_BOT || dialogsActivity.allowUsers);
+        return !searchWas && !visibleHints(currentAccount).isEmpty() && (dialogsType != DialogsActivity.DIALOGS_TYPE_START_ATTACH_BOT || dialogsActivity.allowUsers);
     }
 
     private int messagesSectionPosition = -1;
@@ -2367,6 +2370,41 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 break;
             }
         }
+    }
+
+    private static ArrayList<TLRPC.TL_topPeer> visibleHints(int currentAccount) {
+        ArrayList<TLRPC.TL_topPeer> visible = new ArrayList<>();
+        for (TLRPC.TL_topPeer peer : MediaDataController.getInstance(currentAccount).hints) {
+            if (!org.telegram.messenger.BlackHoleVault.contains(currentAccount, DialogObject.getPeerDialogId(peer.peer))) visible.add(peer);
+        }
+        return visible;
+    }
+
+    private boolean vaultObject(Object object) {
+        long did = 0;
+        if (object instanceof MessageObject) did = ((MessageObject) object).getDialogId();
+        else if (object instanceof TLRPC.User) did = ((TLRPC.User) object).id;
+        else if (object instanceof TLRPC.Chat) did = -((TLRPC.Chat) object).id;
+        else if (object instanceof TLRPC.EncryptedChat) did = DialogObject.makeEncryptedDialogId(((TLRPC.EncryptedChat) object).id);
+        else if (object instanceof TLRPC.TL_sponsoredPeer) did = DialogObject.getPeerDialogId(((TLRPC.TL_sponsoredPeer) object).peer);
+        return org.telegram.messenger.BlackHoleVault.contains(currentAccount, did);
+    }
+
+    private void pruneVaultResults() {
+        if (!org.telegram.messenger.BlackHoleVault.hasDialogs(currentAccount)) return;
+        for (int n = searchResult.size() - 1; n >= 0; n--) {
+            if (vaultObject(searchResult.get(n))) { searchResult.remove(n); if (n < searchResultNames.size()) searchResultNames.remove(n); }
+        }
+        searchResultMessages.removeIf(this::vaultObject);
+        searchForumResultMessages.removeIf(this::vaultObject);
+        publicPosts.removeIf(this::vaultObject);
+        searchContacts.removeIf(this::vaultObject);
+        sponsoredPeers.removeIf(this::vaultObject);
+        filteredRecentSearchObjects.removeIf(e -> org.telegram.messenger.BlackHoleVault.contains(currentAccount, e.did));
+        filtered2RecentSearchObjects.removeIf(e -> org.telegram.messenger.BlackHoleVault.contains(currentAccount, e.did));
+        searchAdapterHelper.getGlobalSearch().removeIf(this::vaultObject);
+        searchAdapterHelper.getLocalServerSearch().removeIf(this::vaultObject);
+        searchAdapterHelper.getPhoneSearch().removeIf(this::vaultObject);
     }
 
     private boolean wordStartsWith(String loweredTitle, String loweredQuery) {

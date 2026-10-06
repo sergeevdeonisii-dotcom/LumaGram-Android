@@ -13767,9 +13767,12 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             return;
         }
         int currentSize = getMeasuredHeight() + (getMeasuredWidth() << 16);
-        if (lastSize != currentSize || !wasLayout || forcedLayout) {
+        // Streaming rows can keep the same measured size while their scroll-only
+        // padding changes. Do not reuse the old bubble/time geometry in that case.
+        final int currentLayoutHeight = getMeasuredHeight() - substractBackgroundHeight - getPaddingTop() - getPaddingBottom() - additionalPaddingHeight;
+        if (lastSize != currentSize || layoutHeight != currentLayoutHeight || !wasLayout || forcedLayout) {
             layoutWidth = getMeasuredWidth();
-            layoutHeight = getMeasuredHeight() - substractBackgroundHeight - getPaddingTop() - getPaddingBottom() - additionalPaddingHeight;
+            layoutHeight = currentLayoutHeight;
             if (timeTextWidth < 0) {
                 timeTextWidth = dp(10);
             }
@@ -21250,7 +21253,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             Choreographer60FpsContent.getInstance().removeFrameCallback(invalidateOutboundsRunnable);
         }
 
-        if ((currentNameStatusDrawable != null || currentNameEmojiStatusDrawable != null || topicButton != null && (drawTopic || transitionParams.animateDrawTopic)) && drawNameLayout && nameLayout != null && (currentPosition == null || currentPosition.minX == 0 && currentPosition.minY == 0) && !(currentMessageObject.deleted && !drawingToBitmap && currentMessagesGroup != null && currentMessagesGroup.messages.size() >= 1)) {
+        if ((currentNameStatusDrawable != null || currentNameEmojiStatusDrawable != null || topicButton != null && (drawTopic || transitionParams.animateDrawTopic)) && drawNameLayout && nameLayout != null && (currentPosition == null || currentPosition.minX == 0 && currentPosition.minY == 0) && !(currentMessageObject.deleted && (!currentMessageObject.lumaRetainedDeleted || currentMessageObject.deletedByThanos) && !drawingToBitmap && currentMessagesGroup != null && currentMessagesGroup.messages.size() >= 1)) {
             int color;
             float nameX, nameY;
             if (currentMessageObject.shouldDrawWithoutBackground()) {
@@ -22010,7 +22013,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         }
         lastNamesAnimationTime = newAnimationTime;
 
-        if (currentMessageObject.deleted && !drawingToBitmap && currentMessagesGroup != null && currentMessagesGroup.messages.size() >= 1) {
+        if (currentMessageObject.deleted && (!currentMessageObject.lumaRetainedDeleted || currentMessageObject.deletedByThanos) && !drawingToBitmap && currentMessagesGroup != null && currentMessagesGroup.messages.size() >= 1) {
             return;
         }
 
@@ -23628,7 +23631,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         }
         drawCommentLayout(canvas, alpha);
 
-        if (captionLayout == null || selectionOnly && links.isEmpty() || (currentMessageObject.deleted && !drawingToBitmap && currentPosition != null) || alpha == 0) {
+        if (captionLayout == null || selectionOnly && links.isEmpty() || (currentMessageObject.deleted && (!currentMessageObject.lumaRetainedDeleted || currentMessageObject.deletedByThanos) && !drawingToBitmap && currentPosition != null) || alpha == 0) {
             return;
         }
         setupTextColors();
