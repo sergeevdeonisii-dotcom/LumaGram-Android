@@ -76,7 +76,12 @@ public final class BlackHoleGramTools71Test {
   expectFailure(()->BlackHoleSealedData.open(key,"71002:note_42",sealed));
   expectFailure(()->BlackHoleSealedData.open(key,"71001:note_43",sealed));
   byte[] corrupted=sealed.clone();corrupted[corrupted.length-1]^=1;expectFailure(()->BlackHoleSealedData.open(key,"71001:note_42",corrupted));
-  expectFailure(()->BlackHoleSealedData.open(key,"71001:note_42",new byte[2]));
+  // Malformed records are rejected before cipher initialization. Derive them
+  // from a real random-nonce envelope so static analysis does not mistake a
+  // zero-filled negative-test buffer for an encryption IV used by the app.
+  byte[] truncated=java.util.Arrays.copyOf(sealed,2);expectFailure(()->BlackHoleSealedData.open(key,"71001:note_42",truncated));
+  byte[] badVersion=sealed.clone();badVersion[0]=2;expectFailure(()->BlackHoleSealedData.open(key,"71001:note_42",badVersion));
+  byte[] badIvLength=sealed.clone();badIvLength[1]=11;expectFailure(()->BlackHoleSealedData.open(key,"71001:note_42",badIvLength));
  }
  private static void notesAndJournal() throws Exception {
   BlackHoleNotes.save(0,42,"Заметка");check(BlackHoleNotes.get(0,42).equals("Заметка"),"notes model round trip");
