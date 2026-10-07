@@ -35,6 +35,7 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
     private static final int ROW_UPDATE = 4;
 
     private UniversalRecyclerView listView;
+    private AlertDialog checkProgressDialog;
 
     @Override
     public boolean onFragmentCreate() {
@@ -45,6 +46,11 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
 
     @Override
     public void onFragmentDestroy() {
+        if (checkProgressDialog != null) {
+            AlertDialog dialog = checkProgressDialog;
+            checkProgressDialog = null;
+            dialog.dismiss();
+        }
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.appUpdateAvailable);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.appUpdateLoading);
         super.onFragmentDestroy();
@@ -124,16 +130,26 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
     }
 
     private void checkNow() {
+        if (checkProgressDialog != null || getContext() == null || getParentActivity() == null) return;
         LumaUpdaterController controller = LumaUpdaterController.getInstance();
         AlertDialog progressDialog = new AlertDialog(getContext(), AlertDialog.ALERT_TYPE_SPINNER);
         final String checkedSource = controller.getManifestUrl();
-        progressDialog.show();
+        checkProgressDialog = progressDialog;
+        if (showDialog(progressDialog, dismissed -> {
+            if (checkProgressDialog == progressDialog) checkProgressDialog = null;
+        }) == null) {
+            checkProgressDialog = null;
+            return;
+        }
         controller.checkForUpdate(true, () -> {
+            // Cancel, pause and destroy only dismiss this screen's UI, not a shared check.
+            boolean showResult = checkProgressDialog == progressDialog;
+            if (showResult) checkProgressDialog = null;
             try {
                 progressDialog.dismiss();
             } catch (Exception ignore) {
             }
-            if (isFinished || getContext() == null || getParentActivity() == null) return;
+            if (!showResult || isFinished || isPaused() || getContext() == null || getParentActivity() == null) return;
             updateList();
             if (!TextUtils.equals(checkedSource, controller.getManifestUrl())) return;
             if (!TextUtils.isEmpty(controller.getLastError())) {

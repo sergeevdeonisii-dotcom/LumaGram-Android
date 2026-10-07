@@ -27,17 +27,32 @@ public final class BlackHolePrivateData {
     public static String read(int account, String name, String fallback) throws Exception {
         long owner = UserConfig.getInstance(account).getClientUserId();
         String value = LumaAccountData.preferences(account).getString(name, null);
+        if (owner != UserConfig.getInstance(account).getClientUserId()) throw new IllegalStateException("account changed");
         if (value == null) return fallback;
-        return BlackHoleSealedData.open(key(owner), owner + ":" + name, Base64.decode(value, Base64.NO_WRAP));
+        String text = BlackHoleSealedData.open(key(owner), owner + ":" + name, Base64.decode(value, Base64.NO_WRAP));
+        requireOwner(account, owner);
+        return text;
     }
     public static void write(int account, String name, String text) throws Exception {
-        long owner = UserConfig.getInstance(account).getClientUserId();
+        write(account, UserConfig.getInstance(account).getClientUserId(), name, text);
+    }
+    public static void write(int account, long owner, String name, String text) throws Exception {
+        requireOwner(account, owner);
         android.content.SharedPreferences target = LumaAccountData.preferences(account);
-        if (UserConfig.getInstance(account).getClientUserId() != owner) throw new IllegalStateException("account changed");
+        requireOwner(account, owner);
         byte[] value = BlackHoleSealedData.seal(key(owner), owner + ":" + name, text);
-        if (UserConfig.getInstance(account).getClientUserId() != owner) throw new IllegalStateException("account changed");
+        requireOwner(account, owner);
         target.edit().putString(name, Base64.encodeToString(value, Base64.NO_WRAP)).apply();
     }
     public static void remove(int account, String name) { LumaAccountData.preferences(account).edit().remove(name).apply(); }
+    public static void remove(int account, long owner, String name) {
+        requireOwner(account, owner);
+        android.content.SharedPreferences target = LumaAccountData.preferences(account);
+        requireOwner(account, owner);
+        target.edit().remove(name).apply();
+    }
+    private static void requireOwner(int account, long owner) {
+        if (owner <= 0 || owner != UserConfig.getInstance(account).getClientUserId()) throw new IllegalStateException("account changed");
+    }
     public static boolean isAvailable() { return Build.VERSION.SDK_INT >= 23; }
 }

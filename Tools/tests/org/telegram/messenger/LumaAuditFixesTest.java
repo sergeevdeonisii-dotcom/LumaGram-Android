@@ -165,6 +165,7 @@ public final class LumaAuditFixesTest {
     }
 
     private static void exportCancellationAndSuccess() throws Exception {
+        UserConfig.ids[0] = 100003;
         AtomicInteger cancellations = new AtomicInteger();
         LumaAccountExportManager manager = new LumaAccountExportManager(exportConfig(), listener(cancellations, null));
         manager.start();

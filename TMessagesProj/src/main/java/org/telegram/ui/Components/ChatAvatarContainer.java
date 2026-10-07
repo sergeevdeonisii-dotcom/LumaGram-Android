@@ -18,9 +18,11 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
+import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
@@ -690,9 +692,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         final int width = MeasureSpec.getSize(widthMeasureSpec);
-        final int availableWidth = externalAvatarMode
-            ? dp(174)
-            : width - dp((avatarImageView.getVisibility() == VISIBLE ? 54 : 0) + 16);
+        final int availableWidth = getAvailableTextWidth(width);
         final int textWidthMode = externalAvatarMode ? MeasureSpec.EXACTLY : MeasureSpec.AT_MOST;
         avatarImageView.measure(MeasureSpec.makeMeasureSpec(dp(avatarSizeInDp) - 2, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(dp(avatarSizeInDp) - 2, MeasureSpec.EXACTLY));
         titleTextView.measure(MeasureSpec.makeMeasureSpec(availableWidth, textWidthMode), MeasureSpec.makeMeasureSpec(dp(24 + 8), MeasureSpec.AT_MOST));
@@ -719,9 +719,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         }
         SimpleTextView titleTextLargerCopyView = this.titleTextLargerCopyView.get();
         if (titleTextLargerCopyView != null) {
-            int largerAvailableWidth = externalAvatarMode
-                ? dp(174)
-                : largerWidth - dp((avatarImageView.getVisibility() == VISIBLE ? 54 : 0) + 16);
+            int largerAvailableWidth = getAvailableTextWidth(largerWidth);
             titleTextLargerCopyView.measure(
                 MeasureSpec.makeMeasureSpec(largerAvailableWidth, externalAvatarMode ? MeasureSpec.EXACTLY : MeasureSpec.AT_MOST),
                 MeasureSpec.makeMeasureSpec(dp(24), MeasureSpec.AT_MOST));
@@ -729,16 +727,32 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         SimpleTextView subtitleTextLargerCopyView = this.subtitleTextLargerCopyView.get();
         if (subtitleTextLargerCopyView != null) {
             subtitleTextLargerCopyView.measure(
-                MeasureSpec.makeMeasureSpec(externalAvatarMode ? dp(174) : availableWidth, externalAvatarMode ? MeasureSpec.EXACTLY : MeasureSpec.AT_MOST),
+                MeasureSpec.makeMeasureSpec(availableWidth, externalAvatarMode ? MeasureSpec.EXACTLY : MeasureSpec.AT_MOST),
                 MeasureSpec.makeMeasureSpec(dp(20), MeasureSpec.AT_MOST));
         }
         lastWidth = width;
+    }
+
+    private int getTextLeft() {
+        return externalAvatarMode
+            ? leftPadding + dp(6)
+            : leftPadding + (avatarImageView.getVisibility() == VISIBLE ? dp(glassMode ? 49.66f : 55) : dp(glassMode ? 13 : 1)) + rightAvatarPadding;
+    }
+
+    private int getAvailableTextWidth(int width) {
+        final int preferredWidth = externalAvatarMode
+            ? dp(174)
+            : width - dp((avatarImageView.getVisibility() == VISIBLE ? 54 : 0) + 16);
+        // A narrow split-screen/action bar must not measure a negative width or
+        // let the fixed centered label extend beyond its actual container.
+        return Math.max(0, Math.min(preferredWidth, width - getTextLeft() - dp(6)));
     }
 
     private void fadeOutToLessWidth(int largerWidth) {
         this.largerWidth = largerWidth;
         SimpleTextView titleTextLargerCopyView = this.titleTextLargerCopyView.get();
         if (titleTextLargerCopyView != null) {
+            titleTextLargerCopyView.animate().cancel();
             removeView(titleTextLargerCopyView);
         }
         titleTextLargerCopyView = new SimpleTextView(getContext());
@@ -748,22 +762,26 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         titleTextLargerCopyView.setGravity(externalAvatarMode ? Gravity.CENTER_HORIZONTAL : Gravity.LEFT);
         titleTextLargerCopyView.setTypeface(AndroidUtilities.bold());
         titleTextLargerCopyView.setLeftDrawableTopPadding(-dp(1.3f));
-        titleTextLargerCopyView.setRightDrawable(titleTextView.getRightDrawable());
-        titleTextLargerCopyView.setRightDrawable2(titleTextView.getRightDrawable2());
+        titleTextLargerCopyView.setRightDrawable(snapshotDrawable(titleTextView.getRightDrawable()));
+        titleTextLargerCopyView.setRightDrawable2(snapshotDrawable(titleTextView.getRightDrawable2()));
         titleTextLargerCopyView.setRightDrawableOutside(titleTextView.getRightDrawableOutside());
-        titleTextLargerCopyView.setLeftDrawable(titleTextView.getLeftDrawable());
+        titleTextLargerCopyView.setLeftDrawable(snapshotDrawable(titleTextView.getLeftDrawable()));
         titleTextLargerCopyView.setText(titleTextView.getText());
+        final SimpleTextView titleCopy = titleTextLargerCopyView;
         titleTextLargerCopyView.animate().alpha(0).setDuration(350).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).withEndAction(() -> {
-            SimpleTextView titleTextLargerCopyView2 = this.titleTextLargerCopyView.get();
-            if (titleTextLargerCopyView2 != null) {
-                removeView(titleTextLargerCopyView2);
+            if (this.titleTextLargerCopyView.get() == titleCopy) {
+                removeView(titleCopy);
                 this.titleTextLargerCopyView.set(null);
+                if (!allowDrawStories && this.subtitleTextLargerCopyView.get() == null) {
+                    setClipChildren(true);
+                }
             }
         }).start();
         addView(titleTextLargerCopyView);
 
         SimpleTextView subtitleTextLargerCopyView = this.subtitleTextLargerCopyView.get();
         if (subtitleTextLargerCopyView != null) {
+            subtitleTextLargerCopyView.animate().cancel();
             removeView(subtitleTextLargerCopyView);
         }
         subtitleTextLargerCopyView = new SimpleTextView(getContext());
@@ -774,16 +792,23 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         subtitleTextLargerCopyView.setGravity(externalAvatarMode ? Gravity.CENTER_HORIZONTAL : Gravity.LEFT);
         subtitleTextLargerCopyView.setPadding(0, 0, externalAvatarMode ? 0 : dp(10), 0);
         if (subtitleTextView != null) {
+            if (currentTypingDrawable != null) {
+                // A live StatusDrawable has a single callback. Sharing it with
+                // this fading view would stop invalidating the real subtitle;
+                // copying only its text would expose the **oo** placeholder.
+                setTypingDrawable(subtitleTextLargerCopyView, snapshotTypingDrawable(),
+                    externalAvatarMode || currentTypingDrawable == statusDrawables[5]);
+            }
             subtitleTextLargerCopyView.setText(subtitleTextView.getText());
         } else if (animatedSubtitleTextView != null) {
             subtitleTextLargerCopyView.setText(animatedSubtitleTextView.getText());
         }
+        final SimpleTextView subtitleCopy = subtitleTextLargerCopyView;
         subtitleTextLargerCopyView.animate().alpha(0).setDuration(350).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).withEndAction(() -> {
-            SimpleTextView subtitleTextLargerCopyView2 = this.subtitleTextLargerCopyView.get();
-            if (subtitleTextLargerCopyView2 != null) {
-                removeView(subtitleTextLargerCopyView2);
+            if (this.subtitleTextLargerCopyView.get() == subtitleCopy) {
+                removeView(subtitleCopy);
                 this.subtitleTextLargerCopyView.set(null);
-                if (!allowDrawStories) {
+                if (!allowDrawStories && this.titleTextLargerCopyView.get() == null) {
                     setClipChildren(true);
                 }
             }
@@ -811,9 +836,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         final int subtitleTop = viewTop + dp(glassMode ? 23.66f : 24);
 
         avatarImageView.layout(1 + leftPadding, 1 + viewTop, 1 + leftPadding + avatarImageView.getMeasuredWidth(), 1 + viewTop + avatarImageView.getMeasuredHeight());
-        int l = externalAvatarMode
-            ? leftPadding + dp(6)
-            : leftPadding + (avatarImageView.getVisibility() == VISIBLE ? dp(glassMode ? 49.66f : 55) : dp(glassMode ? 13 : 1)) + rightAvatarPadding;
+        int l = getTextLeft();
         SimpleTextView titleTextLargerCopyView = this.titleTextLargerCopyView.get();
         if (getSubtitleTextView().getVisibility() != GONE) {
             titleTextView.layout(l, viewTop + dp(1.66f) - titleTextView.getPaddingTop(), l + titleTextView.getMeasuredWidth(), viewTop + titleTextView.getTextHeight() + dp(1.66f) - titleTextView.getPaddingTop() + titleTextView.getPaddingBottom());
@@ -874,6 +897,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         if (externalAvatarMode == enabled) {
             return;
         }
+        clearWidthFadeCopies();
         externalAvatarMode = enabled;
         avatarImageView.setVisibility(enabled || avatarImageIsHidden ? GONE : VISIBLE);
         titleTextView.setGravity(enabled ? Gravity.CENTER_HORIZONTAL : Gravity.LEFT);
@@ -900,6 +924,9 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                 starFgItem.setVisibility(INVISIBLE);
             }
         }
+        // The subtitle's inline slot and drawable ownership depend on this
+        // mode too, not just its gravity. Rebuild active typing immediately.
+        updateSubtitle(false);
         requestLayout();
         checkActionBar(false);
     }
@@ -1073,6 +1100,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
 
 
     public void setSubtitle(CharSequence value) {
+        setTypingAnimation(false);
         if (lastSubtitle == null) {
             if (subtitleTextView != null) {
                 subtitleTextView.setText(value);
@@ -1115,22 +1143,36 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
 
     private void setTypingAnimation(boolean start) {
         if (subtitleTextView == null) return;
+        final SimpleTextView fadingCopy = subtitleTextLargerCopyView.get();
+        if (fadingCopy != null) {
+            // Its snapshot belongs to the previous status/mode. Do not mirror
+            // a new inline placeholder into a copy with an old drawable slot.
+            fadingCopy.animate().cancel();
+            removeView(fadingCopy);
+            subtitleTextLargerCopyView.set(null);
+            if (!allowDrawStories && titleTextLargerCopyView.get() == null) {
+                setClipChildren(true);
+            }
+        }
         if (start) {
             try {
-                int type = subtitleIsThinkingBot ? 0 : MessagesController.getInstance(currentAccount).getPrintingStringType(parentFragment.getDialogId(), parentFragment.getThreadId());
-                if (type < 0 || type >= statusDrawables.length || statusDrawables[type] == null) return;
+                Integer type = subtitleIsThinkingBot ? Integer.valueOf(0) : MessagesController.getInstance(currentAccount).getPrintingStringType(parentFragment.getDialogId(), parentFragment.getThreadId());
+                if (type == null || type < 0 || type >= statusDrawables.length || statusDrawables[type] == null) {
+                    // Printing text and its type may disappear between updates.
+                    // Do not leave the previous recording/typing icon running.
+                    setTypingAnimation(false);
+                    return;
+                }
                 if (type == 5 || externalAvatarMode) {
                     // In the centered Liquid Glass header the drawable must be part
                     // of the text layout. A separate left drawable stays at the
                     // edge of the full-width view and visually splits the animation
                     // from labels such as "recording voice".
-                    subtitleTextView.replaceTextWithDrawable(statusDrawables[type], TYPING_DRAWABLE_PLACEHOLDER);
                     statusDrawables[type].setColor(getThemedColor(Theme.key_chat_status));
-                    subtitleTextView.setLeftDrawable(null);
+                    setTypingDrawable(subtitleTextView, statusDrawables[type], true);
                 } else {
-                    subtitleTextView.replaceTextWithDrawable(null, null);
                     statusDrawables[type].setColor(getThemedColor(Theme.key_chat_status));
-                    subtitleTextView.setLeftDrawable(statusDrawables[type]);
+                    setTypingDrawable(subtitleTextView, statusDrawables[type], false);
                 }
                 currentTypingDrawable = statusDrawables[type];
                 for (int a = 0; a < statusDrawables.length; a++) {
@@ -1146,13 +1188,63 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             }
         } else {
             currentTypingDrawable = null;
-            subtitleTextView.setLeftDrawable(null);
-            subtitleTextView.replaceTextWithDrawable(null, null);
+            setTypingDrawable(subtitleTextView, null, false);
             for (int a = 0; a < statusDrawables.length; a++) {
                 if (statusDrawables[a] != null) {
                     statusDrawables[a].stop();
                 }
             }
+        }
+    }
+
+    private static void setTypingDrawable(SimpleTextView target, Drawable drawable, boolean inline) {
+        // Detach the old slot before attaching the new one: both SimpleTextView
+        // setters clear their old drawable's callback, including the same icon
+        // being moved from one slot to the other.
+        if (inline) {
+            target.setLeftDrawable(null);
+            target.replaceTextWithDrawable(drawable, TYPING_DRAWABLE_PLACEHOLDER);
+        } else {
+            target.replaceTextWithDrawable(null, null);
+            target.setLeftDrawable(drawable);
+        }
+    }
+
+    private Drawable snapshotTypingDrawable() {
+        return snapshotDrawable(currentTypingDrawable);
+    }
+
+    private Drawable snapshotDrawable(Drawable drawable) {
+        if (drawable == null) return null;
+        final Rect previousBounds = new Rect(drawable.getBounds());
+        final Bitmap bitmap = Bitmap.createBitmap(
+            Math.max(1, drawable.getIntrinsicWidth()),
+            Math.max(1, drawable.getIntrinsicHeight()), Bitmap.Config.ARGB_8888);
+        // Intrinsic sizes above are already physical pixels for this density.
+        // A resource BitmapDrawable must not scale the snapshot a second time.
+        bitmap.setDensity(Bitmap.DENSITY_NONE);
+        try {
+            drawable.setBounds(0, 0, bitmap.getWidth(), bitmap.getHeight());
+            drawable.draw(new Canvas(bitmap));
+        } finally {
+            drawable.setBounds(previousBounds);
+        }
+        return new BitmapDrawable(getResources(), bitmap);
+    }
+
+    private void clearWidthFadeCopies() {
+        final SimpleTextView titleCopy = titleTextLargerCopyView.getAndSet(null);
+        if (titleCopy != null) {
+            titleCopy.animate().cancel();
+            removeView(titleCopy);
+        }
+        final SimpleTextView subtitleCopy = subtitleTextLargerCopyView.getAndSet(null);
+        if (subtitleCopy != null) {
+            subtitleCopy.animate().cancel();
+            removeView(subtitleCopy);
+        }
+        if (!allowDrawStories) {
+            setClipChildren(true);
         }
     }
 
@@ -1181,6 +1273,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             (showingSavedMessagesHint || (MessagesController.getGlobalMainSettings().getInt("savedmsgschatshint", 0) < 3))
         );
         if ((UserObject.isUserSelf(user) && !showSavedMessagesHint || UserObject.isReplyUser(user) || user != null && user.id == UserObject.VERIFY || parentFragment.getChatMode() != 0 && parentFragment.getChatMode() != ChatActivity.MODE_SUGGESTIONS) && parentFragment.getChatMode() != ChatActivity.MODE_SAVED) {
+            setTypingAnimation(false);
             if (getSubtitleTextView().getVisibility() != GONE) {
                 getSubtitleTextView().setVisibility(GONE);
             }
@@ -1212,6 +1305,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         CharSequence newSubtitle;
         boolean useOnlineColor = false;
         if (printString == null || printString.length() == 0 || ChatObject.isChannel(chat) && !chat.megagroup) {
+            setTypingAnimation(false);
             if (parentFragment.isThreadChat() && !parentFragment.isTopic) {
                 if (titleTextView.getTag() != null) {
                     return;
@@ -1250,7 +1344,6 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                 }
                 return;
             }
-            setTypingAnimation(false);
             if (parentFragment.getChatMode() == ChatActivity.MODE_SUGGESTIONS) {
                 if (parentFragment.isSubscriberSuggestions) {
                     newSubtitle = getString(R.string.ChatMessageSuggestions);
@@ -1364,7 +1457,9 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                 newSubtitle = TYPING_DRAWABLE_PLACEHOLDER + " " + newSubtitle;
             }
             useOnlineColor = true;
-            setTypingAnimation(true);
+            // A network/connection label temporarily owns the subtitle. Keep
+            // updating the cached text, but do not prepend its recording icon.
+            setTypingAnimation(lastSubtitle == null);
         }
         lastSubtitleColorKey = useOnlineColor ? Theme.key_chat_status : Theme.key_actionBarDefaultSubtitle;
         if (lastSubtitle == null) {
@@ -1619,6 +1714,9 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                 NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.savedMessagesDialogsUpdate);
             }
             currentConnectionState = ConnectionsManager.getInstance(currentAccount).getConnectionState();
+            // Reattachment may follow a stopped drawable or an expired server
+            // typing status; rebuild it instead of resuming the stale frame.
+            updateSubtitle(false);
             updateCurrentConnectionState();
         }
         if (emojiStatusDrawable != null) {
@@ -1632,6 +1730,8 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        setTypingAnimation(false);
+        clearWidthFadeCopies();
         if (parentFragment != null) {
             NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.didUpdateConnectionState);
             NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);
@@ -1700,8 +1800,12 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                         animatedSubtitleTextView.setTag(lastSubtitleColorKey);
                     }
                 }
+                // Restore drawable ownership as well as the text. A cached
+                // inline placeholder alone would expose **oo** on reconnect.
+                updateSubtitle(false);
             }
         } else {
+            setTypingAnimation(false);
             if (subtitleTextView != null) {
                 if (lastSubtitle == null) {
                     lastSubtitle = subtitleTextView.getText();

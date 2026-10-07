@@ -16,6 +16,7 @@ import org.telegram.ui.web.HttpGetTask;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.URL;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -93,6 +94,8 @@ public final class LumaUpdaterController {
         if (versionCode <= installedVersion || !TextUtils.isEmpty(path) && !new File(path).exists()) {
             clearPendingUpdate(true);
         }
+        // Cleanup must finish before another attempt can create a staging file.
+        LumaUpdateFiles.cleanupAbandonedDownloads(updateDirectory());
         Utilities.globalQueue.postRunnable(() -> LumaUpdateFiles.cleanupInstalled(updateDirectory(), installedVersion));
     }
 
@@ -143,12 +146,13 @@ public final class LumaUpdaterController {
             ++checkGeneration;
             checking = false;
             ArrayList<Runnable> completions = takeCheckCompletions();
-            cancelDownloadingUpdate();
             preferences().edit().putString("manifest_url", value).apply();
             clearPendingUpdate(true);
             lastCheck = 0L;
             lastError = null;
             save();
+            // Observers/listeners may reenter. They must already see the new source/state.
+            cancelDownloadingUpdate();
             NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateAvailable);
             // Release any spinner owned by the invalidated request. Its late result is ignored.
             runCheckCompletions(completions);
@@ -256,7 +260,6 @@ public final class LumaUpdaterController {
                     if (newVersionCode > getCurrentVersionCode()) {
                         boolean changed = newVersionCode != versionCode || !TextUtils.equals(newSha256, sha256);
                         if (changed) {
-                            cancelDownloadingUpdate();
                             deleteDownloadedFile();
                         }
                         version = newVersion;
@@ -264,8 +267,10 @@ public final class LumaUpdaterController {
                         fileUrl = newFileUrl;
                         sha256 = newSha256;
                         changelog = newChangelog;
+                        if (changed) cancelDownloadingUpdate();
                     } else {
                         clearPendingUpdate(true);
+                        cancelDownloadingUpdate();
                     }
                     lastCheck = System.currentTimeMillis();
                     save();
@@ -312,7 +317,11 @@ public final class LumaUpdaterController {
         }
         if (downloading) {
             if (listener != null) {
-                listener.onProgress(downloadingProgress);
+                try {
+                    listener.onProgress(downloadingProgress);
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
             }
             return;
         }
@@ -326,10 +335,18 @@ public final class LumaUpdaterController {
             notifyDownloadFinished(null, LocaleController.getString(R.string.LumaUpdateDownloadFailed));
             return;
         }
-        File destination = new File(directory, "luma-update-" + versionCode + ".apk");
-        if (destination.exists() && (destination.length() <= 0L || destination.length() > MAX_APK_SIZE)) {
-            //noinspection ResultOfMethodCallIgnored
-            destination.delete();
+        final int expectedVersion = versionCode;
+        final String expectedSha256 = sha256;
+        final String downloadUrl = fileUrl;
+        final File destination;
+        try {
+            // AsyncTask.cancel(false) can leave its worker alive until the next read.
+            // Never allow that old worker to write/delete a retry's APK.
+            destination = File.createTempFile("luma-update-" + expectedVersion + "-", ".apk.part", directory);
+        } catch (IOException e) {
+            FileLog.e(e);
+            notifyDownloadFinished(null, LocaleController.getString(R.string.LumaUpdateDownloadFailed));
+            return;
         }
 
         downloading = true;
@@ -338,37 +355,43 @@ public final class LumaUpdaterController {
         lastProgressNotificationTime = 0L;
         lastError = null;
         final int generation = ++downloadGeneration;
-        notifyDownloadProgress();
-        downloadingTask = new HttpGetFileTask(downloadedFile -> {
+        HttpGetFileTask task = new HttpGetFileTask(downloadedFile -> {
             if (generation != downloadGeneration) {
+                // This callback means the old transport is done; no active worker owns its staging file.
+                LumaUpdateFiles.deleteStaging(directory, destination);
                 return;
             }
             if (downloadedFile == null) {
                 downloading = false;
                 downloadingTask = null;
+                LumaUpdateFiles.deleteStaging(directory, destination);
                 lastError = LocaleController.getString(R.string.LumaUpdateDownloadFailed);
                 notifyDownloadFinished(null, lastError);
                 NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateAvailable);
                 return;
             }
             Utilities.globalQueue.postRunnable(() -> {
-                String verificationError = verifyDownloadedApk(downloadedFile);
+                String verificationError = verifyDownloadedApk(downloadedFile, expectedSha256, expectedVersion);
                 AndroidUtilities.runOnUIThread(() -> {
                     if (generation != downloadGeneration) {
+                        LumaUpdateFiles.deleteStaging(directory, destination);
                         return;
                     }
                     downloading = false;
                     downloadingTask = null;
-                    if (verificationError == null) {
-                        path = downloadedFile.getAbsolutePath();
+                    File verifiedFile = new File(directory, "luma-update-" + expectedVersion + ".apk");
+                    if (verificationError == null && (!verifiedFile.exists() || LumaUpdateFiles.delete(directory, verifiedFile))
+                            && downloadedFile.renameTo(verifiedFile)) {
+                        path = verifiedFile.getAbsolutePath();
                         downloadingProgress = 1f;
                         save();
-                        notifyDownloadFinished(downloadedFile, null);
+                        notifyDownloadFinished(verifiedFile, null);
                     } else {
                         //noinspection ResultOfMethodCallIgnored
-                        downloadedFile.delete();
-                        lastError = verificationError;
-                        notifyDownloadFinished(null, verificationError);
+                        LumaUpdateFiles.deleteStaging(directory, destination);
+                        lastError = verificationError != null ? verificationError
+                                : LocaleController.getString(R.string.LumaUpdateDownloadFailed);
+                        notifyDownloadFinished(null, lastError);
                     }
                     NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateAvailable);
                 });
@@ -388,7 +411,14 @@ public final class LumaUpdaterController {
                 .setMaxSize(MAX_APK_SIZE)
                 .setOverrideExtension("apk")
                 .setAllowedHosts("github.com", "githubusercontent.com");
-        downloadingTask.execute(fileUrl);
+        downloadingTask = task;
+        notifyDownloadProgress();
+        // A listener can cancel/replace this attempt from the initial progress callback.
+        if (generation == downloadGeneration && downloading && downloadingTask == task) {
+            task.execute(downloadUrl);
+        } else {
+            LumaUpdateFiles.deleteStaging(directory, destination);
+        }
     }
 
     public void cancelDownloadingUpdate() {
@@ -439,9 +469,16 @@ public final class LumaUpdaterController {
     }
 
     private void notifyDownloadProgress() {
+        final int generation = downloadGeneration;
+        final float progress = downloadingProgress;
         ArrayList<DownloadListener> snapshot = new ArrayList<>(downloadListeners);
         for (DownloadListener listener : snapshot) {
-            listener.onProgress(downloadingProgress);
+            if (generation != downloadGeneration || !downloading) return;
+            try {
+                listener.onProgress(progress);
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
         }
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateLoading);
     }
@@ -450,13 +487,17 @@ public final class LumaUpdaterController {
         ArrayList<DownloadListener> snapshot = new ArrayList<>(downloadListeners);
         downloadListeners.clear();
         for (DownloadListener listener : snapshot) {
-            listener.onFinished(file, error);
+            try {
+                listener.onFinished(file, error);
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
         }
     }
 
-    private String verifyDownloadedApk(File file) {
+    private String verifyDownloadedApk(File file, String expectedSha256, int expectedVersion) {
         try {
-            if (!TextUtils.equals(sha256, calculateSha256(file))) {
+            if (!TextUtils.equals(expectedSha256, calculateSha256(file))) {
                 return LocaleController.getString(R.string.LumaUpdateHashMismatch);
             }
             PackageManager packageManager = ApplicationLoader.applicationContext.getPackageManager();
@@ -467,7 +508,7 @@ public final class LumaUpdaterController {
                 return LocaleController.getString(R.string.LumaUpdatePackageMismatch);
             }
             long archiveVersion = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? archive.getLongVersionCode() : archive.versionCode;
-            if (archiveVersion != versionCode || archiveVersion <= getCurrentVersionCode()) {
+            if (archiveVersion != expectedVersion || archiveVersion <= getCurrentVersionCode()) {
                 return LocaleController.getString(R.string.LumaUpdateVersionMismatch);
             }
             Set<String> archiveSignatures = signatureDigests(archive);

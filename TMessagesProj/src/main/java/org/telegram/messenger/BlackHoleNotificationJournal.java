@@ -23,50 +23,74 @@ public final class BlackHoleNotificationJournal {
     }
     private BlackHoleNotificationJournal() {}
     public static boolean isEnabled(int account) { return LumaAccountData.preferences(account).getBoolean(ENABLED, false); }
-    public static void setEnabled(int account, boolean enabled) {
+    public static synchronized void setEnabled(int account, boolean enabled) {
         LumaAccountData.preferences(account).edit().putBoolean(ENABLED, enabled).apply();
     }
     private static String limit(String text, int max) { return text == null ? "" : text.substring(0, Math.min(max, text.length())); }
     public static synchronized ArrayList<Entry> entries(int account) throws Exception {
-        JSONArray data = new JSONArray(BlackHolePrivateData.read(account, DATA, "[]"));
+        long owner = UserConfig.getInstance(account).getClientUserId();
         ArrayList<Entry> result = new ArrayList<>();
+        if (owner <= 0) return result;
+        // A decryption failure remains an error; it must never be mistaken for an
+        // empty journal and overwritten. Only malformed authenticated JSON recovers.
+        String text = BlackHolePrivateData.read(account, DATA, "[]");
+        JSONArray data;
+        try {
+            data = new JSONArray(text);
+        } catch (Exception e) {
+            requireOwner(account, owner);
+            // JSONObject errors can include the decrypted value in their message.
+            FileLog.e(new IllegalStateException("Invalid local notification journal data"));
+            return result;
+        }
         long oldest = System.currentTimeMillis() - RETENTION_MS;
         for (int n = 0; n < data.length() && result.size() < MAX_ENTRIES; n++) {
-            JSONObject e = data.getJSONObject(n);
-            long dialogId = e.getLong("dialog"), date = e.getLong("date");
-            if (date >= oldest && !BlackHoleVault.contains(account, dialogId))
-                result.add(new Entry(dialogId, e.getInt("message"), date, e.getString("title"), e.getString("text")));
+            try {
+                JSONObject e = data.getJSONObject(n);
+                long dialogId = e.getLong("dialog"), date = e.getLong("date");
+                int messageId = e.getInt("message");
+                if (dialogId != 0 && messageId != 0 && date >= oldest && !BlackHoleVault.contains(account, dialogId))
+                    result.add(new Entry(dialogId, messageId, date, e.getString("title"), e.getString("text")));
+            } catch (Exception e) {
+                FileLog.e(new IllegalStateException("Invalid local notification journal entry"));
+            }
         }
-        if (result.size() != data.length()) write(account, result);
+        requireOwner(account, owner);
+        if (result.size() != data.length()) write(account, owner, result);
         return result;
     }
     public static synchronized void record(int account, ArrayList<Entry> batch) {
-        if (!isEnabled(account) || !BlackHolePrivateData.isAvailable() || batch.isEmpty()) return;
         long owner = UserConfig.getInstance(account).getClientUserId();
+        if (owner <= 0 || !isEnabled(account) || !BlackHolePrivateData.isAvailable() || batch == null || batch.isEmpty()
+                || owner != UserConfig.getInstance(account).getClientUserId()) return;
         try {
             ArrayList<Entry> old = entries(account), merged = new ArrayList<>(); HashSet<String> keys = new HashSet<>();
             long oldest = System.currentTimeMillis() - RETENTION_MS;
             for (Entry e : old) keys.add(e.key());
             for (Entry e : batch) {
-                if (e.date >= oldest && !BlackHoleVault.contains(account, e.dialogId) && keys.add(e.key())) merged.add(e);
+                if (e != null && e.dialogId != 0 && e.messageId != 0 && e.date >= oldest && !BlackHoleVault.contains(account, e.dialogId) && keys.add(e.key())) merged.add(e);
             }
             if (merged.isEmpty()) return; // Repeated notify/update does not rewrite or duplicate history.
             merged.addAll(old); merged.sort((a, b) -> Long.compare(b.date, a.date));
             if (owner <= 0 || owner != UserConfig.getInstance(account).getClientUserId()) return;
-            write(account, merged);
+            write(account, owner, merged);
         } catch (Exception e) { FileLog.e(e); } // Keystore errors never produce plaintext copies.
     }
-    private static void write(int account, ArrayList<Entry> entries) throws Exception {
+    private static void write(int account, long owner, ArrayList<Entry> entries) throws Exception {
         JSONArray data = new JSONArray();
         for (int n = 0; n < entries.size() && n < MAX_ENTRIES; n++) {
             Entry e = entries.get(n);
             data.put(new JSONObject().put("dialog", e.dialogId).put("message", e.messageId).put("date", e.date)
                     .put("title", e.title).put("text", e.text));
         }
-        BlackHolePrivateData.write(account, DATA, data.toString());
+        BlackHolePrivateData.write(account, owner, DATA, data.toString());
     }
     public static synchronized void removeDialog(int account, long dialogId) throws Exception {
-        ArrayList<Entry> values = entries(account); values.removeIf(e -> e.dialogId == dialogId); write(account, values);
+        long owner = UserConfig.getInstance(account).getClientUserId();
+        ArrayList<Entry> values = entries(account); values.removeIf(e -> e.dialogId == dialogId); write(account, owner, values);
     }
     public static synchronized void clear(int account) { BlackHolePrivateData.remove(account, DATA); }
+    private static void requireOwner(int account, long owner) {
+        if (owner <= 0 || owner != UserConfig.getInstance(account).getClientUserId()) throw new IllegalStateException("account changed");
+    }
 }

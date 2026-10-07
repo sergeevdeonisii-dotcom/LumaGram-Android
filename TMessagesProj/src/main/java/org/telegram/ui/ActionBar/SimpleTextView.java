@@ -617,20 +617,22 @@ public class SimpleTextView extends View implements Drawable.Callback {
     }
 
     public void replaceTextWithDrawable(Drawable drawable, String replacedText) {
-        if (replacedDrawable == drawable) {
+        if (replacedDrawable == drawable && TextUtils.equals(this.replacedText, replacedText)) {
             return;
         }
-        if (replacedDrawable != null) {
+        if (replacedDrawable != null && replacedDrawable != drawable) {
             replacedDrawable.setCallback(null);
         }
         replacedDrawable = drawable;
+        // createLayout reads the placeholder immediately on an already laid-out
+        // view. Publish it together with the drawable, not after rebuilding.
+        this.replacedText = replacedText;
         if (drawable != null) {
             drawable.setCallback(this);
         }
         if (!recreateLayoutMaybe()) {
             invalidate();
         }
-        this.replacedText = replacedText;
     }
 
     public void setMinusWidth(int value) {

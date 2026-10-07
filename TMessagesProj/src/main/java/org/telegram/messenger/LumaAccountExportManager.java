@@ -15,6 +15,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
+import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -101,6 +102,7 @@ public final class LumaAccountExportManager {
     }
 
     private final Config config;
+    private final LumaExportSession session;
     private final Listener listener;
     private final AtomicBoolean cancelled = new AtomicBoolean(false);
     private final AtomicBoolean terminal = new AtomicBoolean(false);
@@ -122,27 +124,50 @@ public final class LumaAccountExportManager {
     private File activeArchive;
 
     public LumaAccountExportManager(@NonNull Config config, @NonNull Listener listener) {
-        this.config = config;
+        // A mutable UI selection must not redirect an in-flight export to another
+        // account or add new dialogs after the user's confirmation.
+        this.config = new Config();
+        this.config.account = config.account;
+        this.config.accountName = config.accountName;
+        this.config.includePhotos = config.includePhotos;
+        this.config.includeVideos = config.includeVideos;
+        this.config.includeFiles = config.includeFiles;
+        this.config.chats.addAll(config.chats);
+        session = new LumaExportSession(this.config.account);
         this.listener = listener;
     }
 
     public void start() {
+        if (!session.startOnce(cancelled, terminal)) return;
+        if (!session.hasOwner()) {
+            fail(localized("Для экспорта необходимо войти в аккаунт.", "Sign in before exporting an account."), null);
+            return;
+        }
+        if (!ownsAccount()) {
+            cancel();
+            return;
+        }
         if (config.chats.isEmpty()) {
             fail(localized("Нет выбранных чатов для экспорта.", "No chats were selected for export."), null);
             return;
         }
         try {
-            File privateCache = ApplicationLoader.applicationContext.getCacheDir();
-            File exportCache = ApplicationLoader.applicationContext.getExternalCacheDir();
-            if (exportCache == null) exportCache = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE);
-            if (privateCache == null || exportCache == null) throw new IllegalStateException("No cache directory");
-            outputDir = new File(exportCache, "luma_account_exports");
-            if (!outputDir.exists() && !outputDir.mkdirs()) throw new IllegalStateException("Could not create output directory");
-            File sessionRoot = new File(privateCache, "luma_account_export_sessions");
-            if (!sessionRoot.exists() && !sessionRoot.mkdirs()) throw new IllegalStateException("Could not create session root");
-            sessionDir = new File(sessionRoot, ".session_" + System.currentTimeMillis());
-            chatsDir = new File(sessionDir, "chats");
-            if (!chatsDir.mkdirs()) throw new IllegalStateException("Could not create session directory");
+            synchronized (worker) {
+                // Cancellation cleanup is queued under the same lock. It must not
+                // finish before a concurrently starting export creates its session.
+                if (terminal.get() || cancelled.get()) return;
+                File privateCache = ApplicationLoader.applicationContext.getCacheDir();
+                File exportCache = ApplicationLoader.applicationContext.getExternalCacheDir();
+                if (exportCache == null) exportCache = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE);
+                if (privateCache == null || exportCache == null) throw new IllegalStateException("No cache directory");
+                outputDir = new File(exportCache, "luma_account_exports");
+                if (!outputDir.exists() && !outputDir.mkdirs() && !outputDir.isDirectory()) throw new IllegalStateException("Could not create output directory");
+                File sessionRoot = new File(privateCache, "luma_account_export_sessions");
+                if (!sessionRoot.exists() && !sessionRoot.mkdirs() && !sessionRoot.isDirectory()) throw new IllegalStateException("Could not create session root");
+                sessionDir = LumaExportSession.createDirectory(sessionRoot);
+                chatsDir = new File(sessionDir, "chats");
+                if (!chatsDir.mkdirs()) throw new IllegalStateException("Could not create session directory");
+            }
         } catch (Throwable e) {
             fail(localized("Не удалось подготовить папку экспорта.", "Could not prepare the export folder."), e);
             return;
@@ -151,7 +176,7 @@ public final class LumaAccountExportManager {
     }
 
     public void cancel() {
-        if (!cancelled.compareAndSet(false, true)) return;
+        if (terminal.get() || !cancelled.compareAndSet(false, true)) return;
         LumaChatExportManager manager = activeManager;
         if (manager != null) manager.cancel();
         finishCancelled();
@@ -159,6 +184,10 @@ public final class LumaAccountExportManager {
 
     private void exportNext() {
         if (cancelled.get() || terminal.get()) return;
+        if (!ownsAccount()) {
+            cancel();
+            return;
+        }
         if (chatIndex >= config.chats.size()) {
             notifyProgress(new Progress(chatIndex, config.chats.size(), "", 100, totalMessages, true));
             executeIfActive(this::buildArchive);
@@ -193,6 +222,10 @@ public final class LumaAccountExportManager {
             @Override
             public void onError(String message, Throwable error) {
                 if (terminal.get() || cancelled.get()) return;
+                if (!ownsAccount()) {
+                    cancel();
+                    return;
+                }
                 if (error != null) FileLog.e(error);
                 activeManager = null;
                 skippedChats++;
@@ -254,6 +287,7 @@ public final class LumaAccountExportManager {
             File result = activeArchive;
             deleteRecursively(sessionDir);
             synchronized (worker) {
+                checkCancelled();
                 if (!terminal.compareAndSet(false, true)) {
                     result.delete();
                     return;
@@ -261,8 +295,15 @@ public final class LumaAccountExportManager {
                 activeArchive = null;
                 worker.shutdown();
             }
-            AndroidUtilities.runOnUIThread(() -> listener.onComplete(result, exported.size(), skippedChats,
-                    totalMessages, totalMedia));
+            AndroidUtilities.runOnUIThread(() -> {
+                // The UI callback may be queued across a logout/login in the same slot.
+                if (!ownsAccount()) {
+                    result.delete();
+                    listener.onCancelled();
+                } else {
+                    listener.onComplete(result, exported.size(), skippedChats, totalMessages, totalMedia);
+                }
+            });
         } catch (CancelledException e) {
             finishCancelled();
         } catch (Throwable e) {
@@ -473,7 +514,10 @@ public final class LumaAccountExportManager {
 
     private void notifyProgress(Progress progress) {
         AndroidUtilities.runOnUIThread(() -> {
-            if (!terminal.get()) listener.onProgress(progress);
+            if (!terminal.get()) {
+                if (!ownsAccount()) cancel();
+                else listener.onProgress(progress);
+            }
         });
     }
 
@@ -504,15 +548,18 @@ public final class LumaAccountExportManager {
     }
 
     private boolean executeIfActive(Runnable task) {
-        synchronized (worker) {
-            if (terminal.get() || cancelled.get()) return false;
-            worker.execute(task);
-            return true;
-        }
+        boolean accepted = session.executeIfActive(worker, cancelled, terminal, task);
+        if (!accepted && !ownsAccount()) cancel();
+        return accepted;
     }
 
     private void checkCancelled() throws CancelledException {
+        if (!ownsAccount()) cancel();
         if (cancelled.get()) throw new CancelledException();
+    }
+
+    private boolean ownsAccount() {
+        return session.isCurrent();
     }
 
     private static String initial(String title) {
@@ -526,17 +573,8 @@ public final class LumaAccountExportManager {
                 .replace("\"", "&quot;").replace("'", "&#39;");
     }
 
-    private static File uniqueFile(File directory, String name) {
-        File result = new File(directory, name);
-        if (!result.exists()) return result;
-        int dot = name.lastIndexOf('.');
-        String base = dot > 0 ? name.substring(0, dot) : name;
-        String extension = dot > 0 ? name.substring(dot) : "";
-        for (int i = 2; i < 10_000; i++) {
-            result = new File(directory, base + " (" + i + ")" + extension);
-            if (!result.exists()) return result;
-        }
-        return new File(directory, base + "_" + System.currentTimeMillis() + extension);
+    private static File uniqueFile(File directory, String name) throws IOException {
+        return LumaExportSession.reserveFile(directory, name);
     }
 
     private static void deleteRecursively(File file) {
