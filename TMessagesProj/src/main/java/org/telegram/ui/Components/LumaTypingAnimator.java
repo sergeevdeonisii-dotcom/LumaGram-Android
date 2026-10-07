@@ -12,6 +12,8 @@ import android.text.TextPaint;
 import android.text.TextWatcher;
 import android.text.style.CharacterStyle;
 import android.text.style.ReplacementSpan;
+import android.text.style.SuggestionSpan;
+import android.text.style.UnderlineSpan;
 import android.text.style.UpdateAppearance;
 import android.view.Gravity;
 
@@ -527,12 +529,25 @@ final class LumaTypingAnimator implements TextWatcher {
         final CharacterStyle[] spans = editable.getSpans(start, end, CharacterStyle.class);
         if (spans != null) {
             for (CharacterStyle span : spans) {
-                if (!(span instanceof HiddenTypingSpan)) {
+                if (!(span instanceof HiddenTypingSpan) && !isImeDecoration(editable, span)) {
                     return false;
                 }
             }
         }
         return true;
+    }
+
+    private static boolean isImeDecoration(Editable editable, CharacterStyle span) {
+        // Android adds composing underlines and suggestion spans to ordinary
+        // keyboard input (including Samsung's full-word replacements). These
+        // editor decorations do not change glyph metrics or shaping. Rejecting
+        // every CharacterStyle disables the animation for normal typing.
+        // Leave the IME spans intact; genuine user formatting still uses the
+        // native renderer, even when it carries the composing flag.
+        final CharacterStyle underlying = span.getUnderlying();
+        return underlying instanceof SuggestionSpan
+            || (underlying instanceof UnderlineSpan
+                && (editable.getSpanFlags(span) & Spanned.SPAN_COMPOSING) != 0);
     }
 
     private static boolean isPlainLetterOrSymbol(int codePoint) {

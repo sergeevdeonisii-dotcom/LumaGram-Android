@@ -62,3 +62,47 @@ Still required before calling visual QA complete: build the APK, then check Sams
 IME/Gboard with fast Cyrillic typing, paste/replacement, selection, long multiline
 scrolling, emoji+combining input, swipe commits, styling, close/reopen, orientation,
 and a bot chat with Menu/Open alongside the composer. No claim of zero bugs is made.
+
+IME .75 compatibility follow-up (2026-10-07)
+-------------------------------------------
+The 27-case figures above are historical pre-publish .74 audit results. The baseline
+for this follow-up is the released .74 production code at
+263d93c8b1df2ad9fc1673b381f61e0153da03c4, not the older pre-fix HEAD.
+
+Released .74 baseline, exact runner result:
+RESULT 33 cases, 11373 assertions, 5 failures.
+
+Current .75 candidate with the narrow IME-decoration allowlist, exact runner result:
+RESULT 33 cases, 11468 assertions, 0 failures.
+
+Six added cases cover:
+ - composing UnderlineSpan present before afterTextChanged, for Latin and Cyrillic;
+ - composing underline arriving after the watcher, before the first draw;
+ - ordinary SuggestionSpan on pure committed words, with plain/easy/autocorrect flags;
+ - late spelling SuggestionSpan on an already animated word;
+ - CharacterStyle.wrap(composing underline), where the SPAN_COMPOSING flag belongs
+   to the wrapper but the decoration type comes from getUnderlying();
+ - explicit non-composing underline, wrapped explicit underline, composing rich
+   StyleSpan/wrapped StyleSpan and ReplacementSpan still rendered natively.
+
+Five animation-preservation cases fail on released .74 and pass on the candidate;
+the negative rich/user-style protection case passes on both. This is five failing
+test cases, not a claim of five independent bugs. The regression arose because .74
+treated every CharacterStyle as user formatting, including ordinary IME decoration.
+
+The added tests drive production watcher and draw methods with the spans present at
+the relevant callback boundary. They also check that decoration bounds/flags remain
+unchanged and animation transparency is removed after expiry/clear and skipped in
+model draft copies. No keyboard features or spans are deleted to force animation.
+
+Additional primary references for the IME contracts:
+https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/android/view/inputmethod/BaseInputConnection.java
+https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/android/text/style/SuggestionSpan.java
+https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/android/text/style/UnderlineSpan.java
+
+Proof limits remain unchanged: the added SuggestionSpan/UnderlineSpan/wrapper classes
+model their type, flags and underlying identity, not Android's underline rendering,
+candidate selection UI, real Parcel round-trip or Samsung/Gboard InputConnection.
+Passing these tests proves the narrow production classification/lifecycle fix under
+the platform model. It does not prove the animation visually works on the owner's
+phone, or that every Android keyboard uses these exact decoration spans.
