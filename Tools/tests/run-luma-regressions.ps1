@@ -1,8 +1,9 @@
-param([string]$JavaHome = $env:JAVA_HOME)
+param([string]$JavaHome = $env:JAVA_HOME, [string]$OutputRoot)
 $ErrorActionPreference = 'Stop'
 $repo = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $javaBin = Join-Path $JavaHome 'bin'
-$run = Join-Path $PSScriptRoot ('.runs/' + [guid]::NewGuid().ToString())
+if (-not $OutputRoot) { $OutputRoot = Join-Path $PSScriptRoot '.runs' }
+$run = Join-Path $OutputRoot ([guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path (Join-Path $run 'classes') | Out-Null
 $sources = @((Get-ChildItem (Join-Path $PSScriptRoot 'fixtures') -Recurse -Filter '*.java').FullName)
 $sources += @((Get-ChildItem (Join-Path $PSScriptRoot 'org') -Recurse -Filter '*.java').FullName)
@@ -32,4 +33,4 @@ if ($LASTEXITCODE -ne 0) { throw '.74 notification merge regressions failed.' }
 if ($LASTEXITCODE -ne 0) { throw '.74 local data regressions failed.' }
 & (Join-Path $javaBin 'java.exe') -cp (Join-Path $run 'classes') org.telegram.messenger.LumaExportSessionTest (Join-Path $run 'export74-sandbox') $repo
 if ($LASTEXITCODE -ne 0) { throw '.74 export session regressions failed.' }
-& (Join-Path $PSScriptRoot 'run-bot-layout-regressions.ps1') -JavaHome $JavaHome
+& (Join-Path $PSScriptRoot 'run-bot-layout-regressions.ps1') -JavaHome $JavaHome -OutputRoot $OutputRoot

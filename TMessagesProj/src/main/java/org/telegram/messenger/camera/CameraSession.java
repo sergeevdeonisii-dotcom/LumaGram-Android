@@ -25,6 +25,7 @@ import android.view.WindowManager;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.LumaRoundVideoQuality;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -53,6 +54,8 @@ public class CameraSession {
     private boolean useTorch;
     private boolean isRound;
     private boolean destroyed;
+    private int requestedRecordingFrameRate;
+    private volatile int recordingFrameRate = LumaRoundVideoQuality.FRAME_RATE;
 
     public ArrayList<String> availableFlashModes = new ArrayList<>();
 
@@ -71,11 +74,16 @@ public class CameraSession {
     private int displayOrientation;
 
     public CameraSession(CameraInfo info, Size preview, Size picture, int format, boolean round) {
+        this(info, preview, picture, format, round, 0);
+    }
+
+    public CameraSession(CameraInfo info, Size preview, Size picture, int format, boolean round, int frameRate) {
         previewSize = preview;
         pictureSize = picture;
         pictureFormat = format;
         cameraInfo = info;
         isRound = round;
+        requestedRecordingFrameRate = round ? frameRate : 0;
 
         SharedPreferences sharedPreferences = ApplicationLoader.applicationContext.getSharedPreferences("camera", Activity.MODE_PRIVATE);
         currentFlashMode = sharedPreferences.getString(cameraInfo.frontCamera != 0 ? "flashMode_front" : "flashMode", Camera.Parameters.FLASH_MODE_OFF);
@@ -248,6 +256,9 @@ public class CameraSession {
                     params.setPictureSize(pictureSize.getWidth(), pictureSize.getHeight());
                     params.setPictureFormat(pictureFormat);
                     params.setRecordingHint(true);
+                    int[] requestedFpsRange = requestedRecordingFrameRate > 0
+                        ? LumaRoundVideoQuality.chooseFpsRange(params.getSupportedPreviewFpsRange(), requestedRecordingFrameRate, 1000) : null;
+                    if (requestedFpsRange != null) params.setPreviewFpsRange(requestedFpsRange[0], requestedFpsRange[1]);
                     maxZoom = params.getMaxZoom();
 
                     String desiredMode = Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO;
@@ -283,8 +294,21 @@ public class CameraSession {
                     try {
                         camera.setParameters(params);
                     } catch (Exception e) {
-                        throw new RuntimeException(e);
-                        //
+                        if (requestedRecordingFrameRate != LumaRoundVideoQuality.HIGH_FRAME_RATE) throw new RuntimeException(e);
+                        // Some legacy drivers advertise 60 but reject it at this
+                        // preview size. Retry a legal normal range before init.
+                        requestedRecordingFrameRate = LumaRoundVideoQuality.FRAME_RATE;
+                        int[] fallback = LumaRoundVideoQuality.chooseFpsRange(params.getSupportedPreviewFpsRange(), requestedRecordingFrameRate, 1000);
+                        if (fallback == null) throw new RuntimeException(e);
+                        params.setPreviewFpsRange(fallback[0], fallback[1]);
+                        camera.setParameters(params);
+                    }
+                    if (requestedRecordingFrameRate > 0) {
+                        int[] accepted = new int[2];
+                        camera.getParameters().getPreviewFpsRange(accepted);
+                        recordingFrameRate = requestedRecordingFrameRate == LumaRoundVideoQuality.HIGH_FRAME_RATE
+                            && accepted[0] >= 30_000 && accepted[1] == 60_000
+                            ? LumaRoundVideoQuality.HIGH_FRAME_RATE : LumaRoundVideoQuality.FRAME_RATE;
                     }
 
                     if (params.getMaxNumMeteringAreas() > 0) {
@@ -297,6 +321,16 @@ public class CameraSession {
             return false;
         }
         return true;
+    }
+
+    public int getRecordingFrameRate() {
+        return recordingFrameRate;
+    }
+
+    public void setRecordingFrameRate(int frameRate) {
+        if (!isRound || requestedRecordingFrameRate == 0 || destroyed) return;
+        requestedRecordingFrameRate = frameRate;
+        if (initied) configureRoundCamera(false);
     }
 
     public void updateRotation() {

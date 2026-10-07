@@ -1,4 +1,4 @@
-param([string]$JavaHome = $env:JAVA_HOME, [switch]$Baseline)
+param([string]$JavaHome = $env:JAVA_HOME, [switch]$Baseline, [string]$OutputRoot)
 $ErrorActionPreference = 'Stop'
 $repo = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 function Read-Source([string]$path) {
@@ -275,7 +275,8 @@ if ($Baseline) {
     $harness = [regex]::Replace($harness, '(?s)// EXTENDED_TESTS_START.*?// EXTENDED_TESTS_END', '')
 }
 $harness = $harness.Replace('// PRODUCTION_SIMPLE_METHODS', $simpleMethods).Replace('// PRODUCTION_METHODS', $methods)
-$run = Join-Path $PSScriptRoot ('.runs/' + [guid]::NewGuid().ToString() + '/chat-header')
+if (-not $OutputRoot) { $OutputRoot = Join-Path $PSScriptRoot '.runs' }
+$run = Join-Path $OutputRoot ([guid]::NewGuid().ToString() + '/chat-header')
 New-Item -ItemType Directory -Path (Join-Path $run 'classes') | Out-Null
 $sourceFile = Join-Path $run 'ChatHeaderRegressionTest.java'
 [System.IO.File]::WriteAllText($sourceFile, $harness, [System.Text.UTF8Encoding]::new($false))

@@ -1,8 +1,9 @@
-param([string]$JavaHome = $env:JAVA_HOME)
+param([string]$JavaHome = $env:JAVA_HOME, [string]$OutputRoot)
 $ErrorActionPreference = 'Stop'
 $repo = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $javaBin = Join-Path $JavaHome 'bin'
-$run = Join-Path $PSScriptRoot ('.runs/updater73-' + [guid]::NewGuid().ToString())
+if (-not $OutputRoot) { $OutputRoot = Join-Path $PSScriptRoot '.runs' }
+$run = Join-Path $OutputRoot ('updater73-' + [guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path (Join-Path $run 'classes') | Out-Null
 # Existing fixtures are read-only and selected explicitly; overrides live in a separate tree.
 $fixtureNames = @('android/app/Activity.java', 'android/content/Context.java', 'android/content/SharedPreferences.java',

@@ -1,4 +1,4 @@
-param([string]$JavaHome = $env:JAVA_HOME)
+param([string]$JavaHome = $env:JAVA_HOME, [string]$OutputRoot)
 $ErrorActionPreference = 'Stop'
 if (-not $JavaHome -or -not (Test-Path -LiteralPath (Join-Path $JavaHome 'bin/javac.exe'))) {
     throw 'Pass -JavaHome pointing to an installed JDK 17 (not a JRE).'
@@ -7,7 +7,7 @@ foreach ($script in @('run-luma-regressions.ps1', 'run-chat-header-regressions.p
         'run-simple-text-slot-regressions.ps1', 'run-typing-regressions.ps1',
         'run-updater-audit73-regressions.ps1')) {
     Write-Output "Running $script"
-    & (Join-Path $PSScriptRoot $script) -JavaHome $JavaHome
+    & (Join-Path $PSScriptRoot $script) -JavaHome $JavaHome -OutputRoot $OutputRoot
     if ($LASTEXITCODE -ne 0) { throw "$script failed." }
 }
 foreach ($script in @('check-blackholegram-audit70.ps1', 'check-blackholegram-tools71.ps1',

@@ -33,6 +33,7 @@ import androidx.annotation.RequiresApi;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
@@ -50,9 +51,9 @@ import java.util.List;
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class Camera2Session {
 
-    private boolean isError;
-    private boolean isSuccess;
-    private boolean isClosed;
+    private volatile boolean isError;
+    private volatile boolean isSuccess;
+    private volatile boolean isClosed;
 
     private final CameraManager cameraManager;
     private final boolean isFront;
@@ -77,16 +78,37 @@ public class Camera2Session {
     private final Size previewSize;
 
     private ImageReader imageReader;
+    private final boolean roundRecording;
+    private int requestedRecordingFrameRate;
+    private volatile int recordingFrameRate = LumaRoundVideoQuality.FRAME_RATE;
+    private Runnable errorCallback;
 
     private long lastTime;
 
     public static Camera2Session create(boolean front, int viewWidth, int viewHeight) {
+        return create(front, viewWidth, viewHeight, 0);
+    }
+
+    public static Camera2Session create(boolean front, int viewWidth, int viewHeight, int frameRate) {
+        CameraChoice choice = chooseCamera(front, viewWidth, viewHeight, frameRate);
+        return choice == null ? null : new Camera2Session(ApplicationLoader.applicationContext, front,
+            choice.id, choice.size, frameRate);
+    }
+
+    private static final class CameraChoice {
+        String id;
+        Size size;
+        CameraCharacteristics characteristics;
+    }
+
+    private static CameraChoice chooseCamera(boolean front, int viewWidth, int viewHeight, int frameRate) {
         final Context context = ApplicationLoader.applicationContext;
         final CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
         float bestAspectRatio = 0;
         Size bestSize = null;
         String cameraId = null;
+        CameraCharacteristics bestCharacteristics = null;
         try {
             String[] cameraIds = cameraManager.getCameraIdList();
             for (int i = 0; i < cameraIds.length; ++i) {
@@ -104,11 +126,24 @@ public class Camera2Session {
                 }
                 if (bestAspectRatio <= 0 || Math.abs((float) viewWidth / viewHeight - bestAspectRatio) > Math.abs((float) viewWidth / viewHeight - cameraAspectRatio)) {
                     if (confMap != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        Size size = chooseOptimalSize(confMap.getOutputSizes(SurfaceTexture.class), viewWidth, viewHeight, false);
+                        Size[] previews = confMap.getOutputSizes(SurfaceTexture.class);
+                        Size size = previews == null || previews.length == 0 ? null : chooseOptimalSize(previews, viewWidth, viewHeight, false);
+                        if (frameRate == LumaRoundVideoQuality.HIGH_FRAME_RATE && previews != null) {
+                            Size fastSize = null;
+                            for (Size candidate : previews) {
+                                if (candidate.getWidth() >= viewWidth && candidate.getHeight() >= viewHeight
+                                    && chooseRecordingFpsRange(characteristics, candidate, frameRate) != null
+                                    && (fastSize == null || (long) candidate.getWidth() * candidate.getHeight() < (long) fastSize.getWidth() * fastSize.getHeight())) {
+                                    fastSize = candidate;
+                                }
+                            }
+                            if (fastSize != null) size = fastSize;
+                        }
                         if (size != null) {
                             bestAspectRatio = cameraAspectRatio;
                             cameraId = id;
                             bestSize = size;
+                            bestCharacteristics = characteristics;
                         }
                     }
                 } else {
@@ -122,10 +157,50 @@ public class Camera2Session {
         if (cameraId == null || bestSize == null) {
             return null;
         }
-        return new Camera2Session(context, front, cameraId, bestSize);
+        CameraChoice choice = new CameraChoice();
+        choice.id = cameraId;
+        choice.size = bestSize;
+        choice.characteristics = bestCharacteristics;
+        return choice;
     }
 
-    private Camera2Session(Context context, boolean isFront, String cameraId, Size size) {
+    public static boolean supportsRoundFrameRate(boolean front, int width, int height, int frameRate) {
+        try {
+            CameraChoice choice = chooseCamera(front, width, height, frameRate);
+            if (choice == null || choice.size.getWidth() < width || choice.size.getHeight() < height) return false;
+            Range<Integer> range = chooseRecordingFpsRange(choice.characteristics, choice.size, frameRate);
+            return range != null && range.getLower() >= Math.min(frameRate, LumaRoundVideoQuality.FRAME_RATE)
+                && range.getUpper() == frameRate;
+        } catch (Exception e) {
+            FileLog.e(e);
+            return false;
+        }
+    }
+
+    private static Range<Integer> chooseRecordingFpsRange(CameraCharacteristics characteristics, Size size, int target) {
+        if (characteristics == null) return null;
+        Range<Integer>[] supported = characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
+        ArrayList<int[]> ranges = new ArrayList<>();
+        if (supported != null) {
+            for (Range<Integer> range : supported) {
+                if (range != null) ranges.add(new int[] {range.getLower(), range.getUpper()});
+            }
+        }
+        int[] selected = LumaRoundVideoQuality.chooseFpsRange(ranges, target, 1);
+        if (target == LumaRoundVideoQuality.HIGH_FRAME_RATE) {
+            if (!LumaRoundVideoQuality.supportsTargetFrameRate(ranges, target, 1)) return null;
+            StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+            // Round sessions configure only SurfaceTexture, never a slow JPEG
+            // stream. High-speed-only modes do not qualify as normal sessions.
+            long duration = map == null ? 0 : map.getOutputMinFrameDuration(SurfaceTexture.class, size);
+            if (!LumaRoundVideoQuality.supportsFrameDuration(duration, target)) return null;
+        }
+        return selected == null ? null : new Range<>(selected[0], selected[1]);
+    }
+
+    private Camera2Session(Context context, boolean isFront, String cameraId, Size size, int frameRate) {
+        roundRecording = frameRate > 0;
+        requestedRecordingFrameRate = frameRate;
         thread = new HandlerThread("tg_camera2");
         thread.start();
         handler = new Handler(thread.getLooper());
@@ -143,15 +218,14 @@ public class Camera2Session {
             public void onDisconnected(@NonNull CameraDevice camera) {
                 Camera2Session.this.cameraDevice = camera;
                 FileLog.d("Camera2Session camera #" + cameraId + " disconnected");
+                publishError();
             }
 
             @Override
             public void onError(@NonNull CameraDevice camera, int error) {
                 Camera2Session.this.cameraDevice = camera;
                 FileLog.e("Camera2Session camera #" + cameraId + " received " + error + " error");
-                AndroidUtilities.runOnUIThread(() -> {
-                    isError = true;
-                });
+                publishError();
             }
         };
 
@@ -162,7 +236,10 @@ public class Camera2Session {
                 FileLog.e("Camera2Session camera #" + cameraId + " capture session configured");
                 Camera2Session.this.lastTime = System.currentTimeMillis();
                 try {
-                    updateCaptureRequest();
+                    if (!updateCaptureRequest()) {
+                        publishError();
+                        return;
+                    }
                     AndroidUtilities.runOnUIThread(() -> {
                         isSuccess = true;
                         if (doneCallback != null) {
@@ -172,6 +249,7 @@ public class Camera2Session {
                     });
                 } catch (Exception e) {
                     FileLog.e(e);
+                    publishError();
                 }
             }
 
@@ -179,9 +257,7 @@ public class Camera2Session {
             public void onConfigureFailed(@NonNull CameraCaptureSession session) {
                 captureSession = session;
                 FileLog.e("Camera2Session camera #" + cameraId + " capture session failed to configure");
-                AndroidUtilities.runOnUIThread(() -> {
-                    isError = true;
-                });
+                publishError();
             }
         };
 
@@ -189,7 +265,9 @@ public class Camera2Session {
         this.cameraId = cameraId;
         this.previewSize = size;
         this.lastTime = System.currentTimeMillis();
-        this.imageReader = ImageReader.newInstance(size.getWidth(), size.getHeight(), ImageFormat.JPEG, 1);
+        // A JPEG output can limit a normal capture session to 30fps even
+        // when only the preview surface is used by the repeating request.
+        this.imageReader = roundRecording ? null : ImageReader.newInstance(size.getWidth(), size.getHeight(), ImageFormat.JPEG, 1);
         cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
         try {
             cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId);
@@ -199,10 +277,31 @@ public class Camera2Session {
             cameraManager.openCamera(cameraId, cameraStateCallback, handler);
         } catch (Exception e) {
             FileLog.e(e);
-            AndroidUtilities.runOnUIThread(() -> {
-                isError = true;
-            });
+            publishError();
         }
+    }
+
+    private void publishError() {
+        AndroidUtilities.runOnUIThread(() -> {
+            if (isClosed) return;
+            isError = true;
+            Runnable callback = errorCallback;
+            errorCallback = null;
+            if (callback != null) callback.run();
+        });
+    }
+
+    public void whenError(Runnable callback) {
+        if (isError && !isClosed) callback.run();
+        else errorCallback = callback;
+    }
+
+    public int getRecordingFrameRate() { return recordingFrameRate; }
+
+    public void setRecordingFrameRate(int frameRate) {
+        if (!roundRecording || isClosed) return;
+        requestedRecordingFrameRate = frameRate;
+        if (isInitiated()) updateCaptureRequest();
     }
 
     private Runnable doneCallback;
@@ -236,13 +335,11 @@ public class Camera2Session {
         try {
             ArrayList<Surface> surfaces = new ArrayList<>();
             surfaces.add(surface);
-            surfaces.add(imageReader.getSurface());
+            if (imageReader != null) surfaces.add(imageReader.getSurface());
             cameraDevice.createCaptureSession(surfaces, captureStateCallback, null);
         } catch (Exception e) {
             FileLog.e(e);
-            AndroidUtilities.runOnUIThread(() -> {
-                isError = true;
-            });
+            publishError();
         }
     }
 
@@ -468,54 +565,69 @@ public class Camera2Session {
         }
     }
 
-    private void updateCaptureRequest() {
-        if (cameraDevice == null || surface == null || captureSession == null) return;
-        try {
-            int template;
-            if (recordingVideo) {
-                template = CameraDevice.TEMPLATE_RECORD;
-            } else if (scanningBarcode) {
-                template = CameraDevice.TEMPLATE_STILL_CAPTURE;
-            } else {
-                template = CameraDevice.TEMPLATE_PREVIEW;
+    private boolean updateCaptureRequest() {
+        if (cameraDevice == null || surface == null || captureSession == null) return false;
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                int template;
+                if (recordingVideo) {
+                    template = CameraDevice.TEMPLATE_RECORD;
+                } else if (scanningBarcode) {
+                    template = CameraDevice.TEMPLATE_STILL_CAPTURE;
+                } else {
+                    template = CameraDevice.TEMPLATE_PREVIEW;
+                }
+                captureRequestBuilder = cameraDevice.createCaptureRequest(template);
+
+                if (scanningBarcode) {
+                    captureRequestBuilder.set(CaptureRequest.CONTROL_SCENE_MODE, CameraMetadata.CONTROL_SCENE_MODE_BARCODE);
+                } else if (nightMode) {
+                    captureRequestBuilder.set(CaptureRequest.CONTROL_SCENE_MODE, isFront ? CameraMetadata.CONTROL_SCENE_MODE_NIGHT_PORTRAIT : CameraMetadata.CONTROL_SCENE_MODE_NIGHT);
+                }
+
+                captureRequestBuilder.set(CaptureRequest.FLASH_MODE, flashing ? (recordingVideo ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_SINGLE) : CaptureRequest.FLASH_MODE_OFF);
+
+                if (recordingVideo) {
+                    Range<Integer> fps = roundRecording
+                    ? chooseRecordingFpsRange(cameraCharacteristics, previewSize, requestedRecordingFrameRate)
+                    : new Range<Integer>(30, 60);
+                    if (roundRecording && fps == null && requestedRecordingFrameRate == LumaRoundVideoQuality.HIGH_FRAME_RATE) {
+                        requestedRecordingFrameRate = LumaRoundVideoQuality.FRAME_RATE;
+                        fps = chooseRecordingFpsRange(cameraCharacteristics, previewSize, requestedRecordingFrameRate);
+                    }
+                    if (fps != null) captureRequestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fps);
+                    captureRequestBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_VIDEO_RECORD);
+                }
+
+                if (sensorSize != null && Math.abs(currentZoom - 1f) >= 0.01f) {
+                    final int centerX = sensorSize.width() / 2;
+                    final int centerY = sensorSize.height() / 2;
+                    final int deltaX = (int) ((0.5f * sensorSize.width()) / currentZoom);
+                    final int deltaY = (int) ((0.5f * sensorSize.height()) / currentZoom);
+                    cropRegion.set(
+                    centerX - deltaX,
+                    centerY - deltaY,
+                    centerX + deltaX,
+                    centerY + deltaY
+                    );
+                    captureRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, cropRegion);
+                }
+
+                captureRequestBuilder.addTarget(surface);
+                captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, handler);
+                if (roundRecording) recordingFrameRate = requestedRecordingFrameRate;
+                return true;
+            } catch (Exception e) {
+                FileLog.e("Camera2Sessions setRepeatingRequest error in updateCaptureRequest", e);
+                if (!roundRecording || requestedRecordingFrameRate != LumaRoundVideoQuality.HIGH_FRAME_RATE || attempt != 0) return false;
+                requestedRecordingFrameRate = LumaRoundVideoQuality.FRAME_RATE;
             }
-            captureRequestBuilder = cameraDevice.createCaptureRequest(template);
-
-            if (scanningBarcode) {
-                captureRequestBuilder.set(CaptureRequest.CONTROL_SCENE_MODE, CameraMetadata.CONTROL_SCENE_MODE_BARCODE);
-            } else if (nightMode) {
-                captureRequestBuilder.set(CaptureRequest.CONTROL_SCENE_MODE, isFront ? CameraMetadata.CONTROL_SCENE_MODE_NIGHT_PORTRAIT : CameraMetadata.CONTROL_SCENE_MODE_NIGHT);
-            }
-
-            captureRequestBuilder.set(CaptureRequest.FLASH_MODE, flashing ? (recordingVideo ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_SINGLE) : CaptureRequest.FLASH_MODE_OFF);
-
-            if (recordingVideo) {
-                captureRequestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, new Range<Integer>(30, 60));
-                captureRequestBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_VIDEO_RECORD);
-            }
-
-            if (sensorSize != null && Math.abs(currentZoom - 1f) >= 0.01f) {
-                final int centerX = sensorSize.width() / 2;
-                final int centerY = sensorSize.height() / 2;
-                final int deltaX = (int) ((0.5f * sensorSize.width()) / currentZoom);
-                final int deltaY = (int) ((0.5f * sensorSize.height()) / currentZoom);
-                cropRegion.set(
-                        centerX - deltaX,
-                        centerY - deltaY,
-                        centerX + deltaX,
-                        centerY + deltaY
-                );
-                captureRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, cropRegion);
-            }
-
-            captureRequestBuilder.addTarget(surface);
-            captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, handler);
-        } catch (Exception e) {
-            FileLog.e("Camera2Sessions setRepeatingRequest error in updateCaptureRequest", e);
         }
+        return false;
     }
 
     public boolean takePicture(final File file, Utilities.Callback<Integer> whenDone) {
+        if (imageReader == null) return false;
         if (cameraDevice == null || captureSession == null) return false;
         try {
             CaptureRequest.Builder captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);

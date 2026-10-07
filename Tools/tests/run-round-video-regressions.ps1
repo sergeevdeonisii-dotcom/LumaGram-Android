@@ -53,7 +53,7 @@ public final class RoundVideoRegressionTest {
         }
         static final class VideoCapabilities {
             int getWidthAlignment(){return 16;}int getHeightAlignment(){return 16;}
-            boolean areSizeAndRateSupported(int w,int h,double f){return MediaCodec.sizeSupported&&w==640&&h==640&&f==30;}
+            boolean areSizeAndRateSupported(int w,int h,double f){return MediaCodec.sizeSupported&&w==640&&h==640&&(f==30&&MediaCodec.rate30Supported||f==60&&MediaCodec.rate60Supported);}
             Range getBitrateRange(){return new Range(100_000,MediaCodec.videoMaximum);}
         }
         static final class AudioCapabilities {
@@ -64,7 +64,8 @@ public final class RoundVideoRegressionTest {
     }
     static final class MediaCodec {
         static final int CONFIGURE_FLAG_ENCODE=1;
-        static boolean surfaceSupported=true,sizeSupported=true;
+        static boolean surfaceSupported=true,sizeSupported=true,rate30Supported=true,rate60Supported=true;
+        static int fail60Configure,fail60Start;
         static int videoMaximum=8_000_000,audioMaximum=256_000,failHighVideo,failHighAudio,failHighStart,created,released;
         static final ArrayList<MediaFormat> formats=new ArrayList<>();
         boolean video,started,wasReleased;MediaFormat format;
@@ -72,13 +73,14 @@ public final class RoundVideoRegressionTest {
         MediaCodecInfo getCodecInfo(){return new MediaCodecInfo();}
         void configure(MediaFormat f,Object a,Object b,int mode){
             format=f;formats.add(f);
+            if(video&&f.integer("fps")==60&&fail60Configure-->0)throw new IllegalArgumentException("60fps configure rejected");
             if(video&&f.integer("width")==640&&failHighVideo-->0)throw new IllegalArgumentException("640 configure rejected");
             if(!video&&f.integer("bitrate")==128000&&failHighAudio-->0)throw new IllegalArgumentException("128k configure rejected");
         }
         Surface createInputSurface(){return new Surface();}
-        void start(){if(video&&format.integer("width")==640&&failHighStart-->0)throw new IllegalStateException("640 start rejected");started=true;}
+        void start(){if(video&&format.integer("fps")==60&&fail60Start-->0)throw new IllegalStateException("60fps start rejected");if(video&&format.integer("width")==640&&failHighStart-->0)throw new IllegalStateException("640 start rejected");started=true;}
         void release(){if(wasReleased)throw new IllegalStateException("double codec release");released++;wasReleased=true;started=false;}
-        static void reset(){surfaceSupported=sizeSupported=true;videoMaximum=8_000_000;audioMaximum=256_000;failHighVideo=failHighAudio=failHighStart=created=released=0;formats.clear();}
+        static void reset(){surfaceSupported=sizeSupported=rate30Supported=rate60Supported=true;videoMaximum=8_000_000;audioMaximum=256_000;failHighVideo=failHighAudio=failHighStart=fail60Configure=fail60Start=created=released=0;formats.clear();}
     }
     static final class AudioBufferInfo {static final int MAX_SAMPLES=10;}
     static final String VIDEO_MIME_TYPE="video/avc",AUDIO_MIME_TYPE="audio/mp4a-latm";
@@ -87,11 +89,31 @@ public final class RoundVideoRegressionTest {
     MediaCodec videoEncoder,audioEncoder;Surface surface;
     LumaRoundVideoQuality.Profile encodingProfile,baselineEncodingProfile,recordingQualityProfile;
     LumaRoundVideoQuality.Profile getRecordingQualityProfile(){return recordingQualityProfile;}
+    final ArrayList<Integer> cameraFpsRequests=new ArrayList<>();void applyCameraRecordingFrameRate(int fps){cameraFpsRequests.add(fps);}
     RoundVideoRegressionTest(){baselineEncodingProfile=LumaRoundVideoQuality.baseline(384,1000,64);encodingProfile=LumaRoundVideoQuality.forCamera(baselineEncodingProfile,true);recordingQualityProfile=encodingProfile;}
     // PRODUCTION_METHODS
     static ArrayList<Size> sizes(int... dimensions){ArrayList<Size> list=new ArrayList<>();for(int i=0;i<dimensions.length;i+=2)list.add(new Size(dimensions[i],dimensions[i+1]));return list;}
     static void defaults(){MessagesController.values.clear();MediaCodec.reset();Build.MANUFACTURER="Generic";}
+    static RoundVideoRegressionTest sixty(){RoundVideoRegressionTest h=new RoundVideoRegressionTest();h.encodingProfile=h.recordingQualityProfile=LumaRoundVideoQuality.forCamera(h.baselineEncodingProfile,true,true);return h;}
     public static void main(String[] args)throws Exception{
+        defaults();MediaCodec.videoMaximum=20_000_000;RoundVideoRegressionTest sixty=sixty();sixty.prepareRecordingCodecs(false);
+        check(sixty.encodingProfile.frameRate==60&&sixty.videoWidth==640&&sixty.videoBitrate==12_000_000,"actual production codecs configure target640/60/12Mbps");
+        check(sixty.videoEncoder.format.integer("fps")==60&&sixty.audioEncoder.format.integer("bitrate")==128000,"video60 and unchanged128k audio requested");sixty.releaseRecordingCodecs();
+        for(int cause=0;cause<4;cause++){
+            defaults();MediaCodec.videoMaximum=20_000_000;sixty=sixty();
+            if(cause==0)MediaCodec.rate60Supported=false;if(cause==1)MediaCodec.videoMaximum=8_000_000;if(cause==2)MediaCodec.fail60Configure=1;if(cause==3)MediaCodec.fail60Start=1;
+            sixty.prepareRecordingCodecs(false);
+            check(sixty.encodingProfile.highQuality&&sixty.encodingProfile.frameRate==30&&sixty.videoWidth==640&&sixty.videoBitrate==6_000_000,"60 rejection keeps640 HD30 before any muxer or AudioRecord, cause="+cause);
+            check(sixty.cameraFpsRequests.equals(Arrays.asList(30)),"codec60 fallback requests actualcamera30");
+            check(MediaCodec.created==4&&MediaCodec.released==2,"failed60 pair released before30 retry");sixty.releaseRecordingCodecs();
+        }
+        defaults();MediaCodec.rate60Supported=MediaCodec.rate30Supported=false;sixty=sixty();sixty.prepareRecordingCodecs(false);
+        check(!sixty.encodingProfile.highQuality&&sixty.videoWidth==384&&sixty.encodingProfile.frameRate==30,"unsupported60 andHD30 reach captured baseline");
+        check(MediaCodec.created==6&&MediaCodec.released==4,"both rejectedHD pairs released beforebaseline retry");sixty.releaseRecordingCodecs();
+        defaults();MediaCodec.videoMaximum=20_000_000;sixty=sixty();sixty.prepareRecordingCodecs(false);MediaCodec.rate60Supported=false;
+        try{sixty.prepareRecordingCodecs(true);throw new AssertionError("60fps resume must never downgrade");}catch(IOException expected){}
+        check(sixty.encodingProfile.frameRate==60&&sixty.encodingProfile.size==640,"failed60resume keeps originalimmutabletrack profile");
+        check(sixty.cameraFpsRequests.isEmpty()&&sixty.videoEncoder==null&&sixty.audioEncoder==null,"failed60resume releases codecs and neverchangescapturetarget");
         defaults();check(LumaRoundVideoQuality.isEnabled(),"owner-requested HQ defaults enabled");
         LumaRoundVideoQuality.Profile base=LumaRoundVideoQuality.baseline(384,1000,64),hd=LumaRoundVideoQuality.forCamera(base,true);
         check(hd.highQuality&&hd.size==640&&hd.frameRate==30&&hd.videoBitrate==6_000_000&&hd.audioBitrate==128_000,"640/30/6Mbps/128k profile");
@@ -150,7 +172,7 @@ public final class RoundVideoRegressionTest {
         check(h.findHighQualityCamera1Size(sizes(1280,720),sizes(1280,720))!=null,"generic supported 1280 preview supplies HD crop");
         Build.MANUFACTURER="Samsung";check(h.findHighQualityCamera1Size(sizes(1280,720),sizes(1280,720))==null,"Samsung legacy 1200 GL cap preserved");
         check(h.findHighQualityCamera1Size(sizes(960,720),sizes(960,720))!=null,"Samsung legacy supported smaller capture keeps HD");
-        h.recordingQualityProfile=base;check(h.isCameraReadyForHighQualityRecording(),"baseline startup lifecycle is unchanged");
+        h.recordingQualityProfile=base;check(!h.isCameraReadyForHighQualityRecording(),"baseline startup also waits for configured camera so its deadline cannot disappear prematurely");
         h.recordingQualityProfile=hd;check(!h.isCameraReadyForHighQualityRecording(),"HD does not start before Camera1 session exists");
         h.cameraSession=new CameraSession();check(!h.isCameraReadyForHighQualityRecording(),"HD waits for Camera1 driver-size callback, not the first premature preview frame");
         h.cameraSession.initied=true;check(h.isCameraReadyForHighQualityRecording(),"Camera1 driver-size callback unblocks encoder startup");
@@ -182,7 +204,7 @@ if($instant -match 'videoEditedInfo\.framerate = 25|videoEditedInfo\.resultWidth
 if(([regex]::Matches($instant,'LumaRoundVideoQuality.applyMetadata\(videoEditedInfo, encodingProfile\)')).Count -ne 4){throw 'All preview/send/trim metadata paths must use the captured encoder profile.'}
 if(([regex]::Matches($instant,'Camera2Session.create\([^\r\n]*getRecordingQualityProfile\(\).size')).Count -ne 3){throw 'Camera2 open/dual/flip must use the captured profile.'}
 $draw=Method $instant 'private void onDraw(Integer cameraId, boolean updateTexImage1, boolean updateTexImage2)'
-if(-not $draw.Contains('if (!recording && (videoEncoder != null && videoEncoder.started || isCameraReadyForHighQualityRecording()))')){throw 'Initialization must gate only initial encoder startup, not all preview rendering or resumed recordings.'}
+if(-not $draw.Contains('if (!recording && isCameraReadyForHighQualityRecording())')){throw 'Each new/resumed camera must be configured before starting the segment; preview drawing itself remains ungated.'}
 if($draw.IndexOf('isCameraReadyForHighQualityRecording()') -gt $draw.IndexOf('videoEncoder.startRecording(')){throw 'HD camera readiness must be checked before encoder startup.'}
 $createCamera=Method $instant 'private void createCamera(final int index, final SurfaceTexture surfaceTexture)'
 if(-not $createCamera.Contains('session.whenDone(() ->') -or -not $createCamera.Contains('cameraThread.requestRender(!dual || index == 0, dual && index == 1)')){throw 'Camera2 success callbacks must wake the HD encoder-start gate.'}
