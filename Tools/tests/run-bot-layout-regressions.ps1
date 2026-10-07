@@ -1,7 +1,8 @@
-param([string]$JavaHome = $env:JAVA_HOME)
+param([string]$JavaHome = $env:JAVA_HOME, [string]$OutputRoot)
 $ErrorActionPreference = 'Stop'
 $repo = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$run = Join-Path $PSScriptRoot ('.runs/' + [guid]::NewGuid().ToString() + '/bot-layout')
+if (-not $OutputRoot) { $OutputRoot = Join-Path $PSScriptRoot '.runs' }
+$run = Join-Path $OutputRoot ([guid]::NewGuid().ToString() + '/bot-layout')
 New-Item -ItemType Directory -Path (Join-Path $run 'classes') | Out-Null
 $sources = @((Get-ChildItem (Join-Path $PSScriptRoot 'bot-layout-fixtures') -Recurse -Filter '*.java').FullName)
 $sources += Join-Path $PSScriptRoot 'bot-layout/ChatActivityDraftMessageMeasureControllerTest.java'

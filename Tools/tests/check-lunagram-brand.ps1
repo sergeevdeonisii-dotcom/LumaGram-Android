@@ -16,7 +16,7 @@ foreach ($directory in Get-ChildItem (Join-Path $repo 'TMessagesProj/src/main/re
 }
 $properties = Source 'gradle.properties'
 Check ($properties -match '(?m)^APP_PACKAGE=org\.luma\.liquid\r?$') 'Android upgrade package is unchanged'
-Check ($properties -match '(?m)^APP_VERSION_NAME=12\.10\.6-lunagram\.76\r?$') 'Lunagram release keeps Telegram 12.10.6 base'
+Check ($properties -match '(?m)^APP_VERSION_NAME=12\.10\.6-lunagram\.77\r?$') 'Lunagram release keeps Telegram 12.10.6 base'
 $updater = Source 'TMessagesProj/src/main/java/org/telegram/messenger/LumaUpdaterController.java'
 Check ($updater.Contains('"Lunagram-Android/"') -and $updater.Contains('"Lunagram.apk"')) 'Download metadata uses Lunagram'
 Check ((Source 'TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java').Contains('https://raw.githubusercontent.com/sergeevdeonisii-dotcom/LumaGram-Android/main/updates/latest.json')) 'Existing installed update source is unchanged'

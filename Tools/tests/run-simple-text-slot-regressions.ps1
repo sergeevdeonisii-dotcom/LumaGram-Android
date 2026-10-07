@@ -1,4 +1,4 @@
-param([string]$JavaHome = $env:JAVA_HOME, [switch]$Baseline)
+param([string]$JavaHome = $env:JAVA_HOME, [switch]$Baseline, [string]$OutputRoot)
 $ErrorActionPreference = 'Stop'
 $repo = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $path = 'TMessagesProj/src/main/java/org/telegram/ui/ActionBar/SimpleTextView.java'
@@ -55,7 +55,8 @@ public final class SimpleTextSlotRegressionTest {
 }
 '@
 $harness = $harness.Replace('// PRODUCTION_METHOD', $method)
-$run = Join-Path $PSScriptRoot ('.runs/' + [guid]::NewGuid().ToString() + '/simple-text-slot')
+if (-not $OutputRoot) { $OutputRoot = Join-Path $PSScriptRoot '.runs' }
+$run = Join-Path $OutputRoot ([guid]::NewGuid().ToString() + '/simple-text-slot')
 New-Item -ItemType Directory -Path (Join-Path $run 'classes') | Out-Null
 $sourceFile = Join-Path $run 'SimpleTextSlotRegressionTest.java'
 [System.IO.File]::WriteAllText($sourceFile, $harness, [System.Text.UTF8Encoding]::new($false))

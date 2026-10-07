@@ -22,6 +22,7 @@ public class CameraInfo {
     protected Camera camera;
     protected ArrayList<Size> pictureSizes = new ArrayList<>();
     protected ArrayList<Size> previewSizes = new ArrayList<>();
+    private final ArrayList<int[]> previewFpsRanges = new ArrayList<>();
     public final int frontCamera;
 
     protected CameraDevice cameraDevice;
@@ -48,6 +49,22 @@ public class CameraInfo {
 
     public ArrayList<Size> getPictureSizes() {
         return pictureSizes;
+    }
+
+    public ArrayList<int[]> getPreviewFpsRanges() {
+        ArrayList<int[]> result = new ArrayList<>();
+        for (int[] range : previewFpsRanges) result.add(range.clone());
+        return result;
+    }
+
+    void setPreviewFpsRanges(java.util.List<int[]> ranges) {
+        previewFpsRanges.clear();
+        if (ranges == null) return;
+        for (int[] range : ranges) {
+            if (range != null && range.length >= 2 && range[0] > 0 && range[0] <= range[1]) {
+                previewFpsRanges.add(new int[] {range[0], range[1]});
+            }
+        }
     }
 
     public boolean isFrontface() {

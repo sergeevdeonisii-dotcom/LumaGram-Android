@@ -11384,7 +11384,7 @@
     <string name="LumaUpdateSourceNoNewVersion">No newer version was found in this update source.</string>
     <string name="LumaRoundVideoQualityTitle">Video messages</string>
     <string name="LumaRoundVideoQualityEnable">High-quality recording</string>
-    <string name="LumaRoundVideoQualityInfo">Sharper HD video messages on supported cameras and encoders. Files are larger and uploads may take longer. Unedited recordings are sent without re-encoding; trimming still requires processing. Unsupported devices use standard recording quality.</string>
+    <string name="LumaRoundVideoQualityInfo">Sharper HD video messages with a target of 60 frames per second on supported cameras and encoders. Files are larger and uploads may take longer. Low light may reduce the camera frame rate. If 60 FPS is not supported, recording falls back to 30 FPS or standard quality. Unedited recordings are sent without re-encoding; trimming still requires processing.</string>
     <string name="LumaUpdateManifestInvalid">The update manifest is missing required security information or has an invalid format.</string>
     <string name="LumaUpdateDownloadFailed">The update could not be downloaded. Check your connection and try again.</string>
     <string name="LumaUpdateHashMismatch">The downloaded APK failed its SHA-256 check and was deleted.</string>

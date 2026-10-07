@@ -120,7 +120,9 @@ public class CameraController implements MediaRecorder.OnInfoListener {
             try {
                 if (cameraInfos == null) {
                     SharedPreferences preferences = MessagesController.getGlobalMainSettings();
-                    String cache = preferences.getString("cameraCache", null);
+                    // A new schema must re-enumerate the old size-only cache once.
+                    // Never parse extra FPS fields out of a .76 cache.
+                    String cache = preferences.getString("cameraCacheRoundFps77", null);
                     Comparator<Size> comparator = (o1, o2) -> {
                         if (o1.mWidth < o2.mWidth) {
                             return 1;
@@ -137,25 +139,47 @@ public class CameraController implements MediaRecorder.OnInfoListener {
                     };
                     ArrayList<CameraInfo> result = new ArrayList<>();
                     if (cache != null) {
-                        SerializedData serializedData = new SerializedData(Base64.decode(cache, Base64.DEFAULT));
-                        int count = serializedData.readInt32(false);
-                        for (int a = 0; a < count; a++) {
-                            CameraInfo cameraInfo = new CameraInfo(serializedData.readInt32(false), serializedData.readInt32(false));
-                            int pCount = serializedData.readInt32(false);
-                            for (int b = 0; b < pCount; b++) {
-                                cameraInfo.previewSizes.add(new Size(serializedData.readInt32(false), serializedData.readInt32(false)));
-                            }
-                            pCount = serializedData.readInt32(false);
-                            for (int b = 0; b < pCount; b++) {
-                                cameraInfo.pictureSizes.add(new Size(serializedData.readInt32(false), serializedData.readInt32(false)));
-                            }
-                            result.add(cameraInfo);
+                        try {
+                            SerializedData serializedData = new SerializedData(Base64.decode(cache, Base64.DEFAULT));
+                            int count = serializedData.readInt32(false);
+                            if (count <= 0 || count > 32) throw new IllegalArgumentException("Invalid camera cache count");
+                            for (int a = 0; a < count; a++) {
+                                CameraInfo cameraInfo = new CameraInfo(serializedData.readInt32(false), serializedData.readInt32(false));
+                                int pCount = serializedData.readInt32(false);
+                                if (pCount <= 0 || pCount > 512) throw new IllegalArgumentException("Invalid camera preview cache");
+                                for (int b = 0; b < pCount; b++) {
+                                    cameraInfo.previewSizes.add(new Size(serializedData.readInt32(false), serializedData.readInt32(false)));
+                                }
+                                pCount = serializedData.readInt32(false);
+                                if (pCount <= 0 || pCount > 512) throw new IllegalArgumentException("Invalid camera picture cache");
+                                for (int b = 0; b < pCount; b++) {
+                                    cameraInfo.pictureSizes.add(new Size(serializedData.readInt32(false), serializedData.readInt32(false)));
+                                }
+                                int fpsCount = serializedData.readInt32(false);
+                                if (fpsCount < 0 || fpsCount > 256) throw new IllegalArgumentException("Invalid camera FPS cache");
+                                if ((long) fpsCount * 8 > serializedData.remaining()) throw new IllegalArgumentException("Truncated camera FPS cache");
+                                ArrayList<int[]> fpsRanges = new ArrayList<>();
+                                for (int b = 0; b < fpsCount; b++) {
+                                    int low = serializedData.readInt32(false), high = serializedData.readInt32(false);
+                                    if (low <= 0 || high < low) throw new IllegalArgumentException("Invalid cached camera FPS range");
+                                    fpsRanges.add(new int[] {low, high});
+                                }
+                                cameraInfo.setPreviewFpsRanges(fpsRanges);
+                                result.add(cameraInfo);
 
-                            Collections.sort(cameraInfo.previewSizes, comparator);
-                            Collections.sort(cameraInfo.pictureSizes, comparator);
+                                Collections.sort(cameraInfo.previewSizes, comparator);
+                                Collections.sort(cameraInfo.pictureSizes, comparator);
+                            }
+                            if (serializedData.remaining() != 0) throw new IllegalArgumentException("Invalid camera FPS cache tail");
+                            serializedData.cleanup();
+                        } catch (Exception e) {
+                            FileLog.e(e);
+                            preferences.edit().remove("cameraCacheRoundFps77").apply();
+                            result.clear();
+                            cache = null;
                         }
-                        serializedData.cleanup();
-                    } else {
+                    }
+                    if (cache == null) {
                         int count = Camera.getNumberOfCameras();
                         Camera.CameraInfo info = new Camera.CameraInfo();
 
@@ -169,6 +193,12 @@ public class CameraController implements MediaRecorder.OnInfoListener {
                             }
                             Camera camera = Camera.open(cameraInfo.getCameraId());
                             Camera.Parameters params = camera.getParameters();
+                            try {
+                                cameraInfo.setPreviewFpsRanges(params.getSupportedPreviewFpsRange());
+                            } catch (Exception e) {
+                                FileLog.e(e);
+                                cameraInfo.setPreviewFpsRanges(null);
+                            }
 
                             List<Camera.Size> list = params.getSupportedPreviewSizes();
                             for (int a = 0; a < list.size(); a++) {
@@ -204,7 +234,7 @@ public class CameraController implements MediaRecorder.OnInfoListener {
                             Collections.sort(cameraInfo.previewSizes, comparator);
                             Collections.sort(cameraInfo.pictureSizes, comparator);
 
-                            bufferSize += 4 + 4 + 8 * (cameraInfo.previewSizes.size() + cameraInfo.pictureSizes.size());
+                            bufferSize += 4 + 4 + 4 + 4 + 4 + 8 * (cameraInfo.previewSizes.size() + cameraInfo.pictureSizes.size() + cameraInfo.getPreviewFpsRanges().size());
                         }
 
                         SerializedData serializedData = new SerializedData(bufferSize);
@@ -228,8 +258,14 @@ public class CameraController implements MediaRecorder.OnInfoListener {
                                 serializedData.writeInt32(size.mWidth);
                                 serializedData.writeInt32(size.mHeight);
                             }
+                            ArrayList<int[]> fpsRanges = cameraInfo.getPreviewFpsRanges();
+                            serializedData.writeInt32(fpsRanges.size());
+                            for (int[] range : fpsRanges) {
+                                serializedData.writeInt32(range[0]);
+                                serializedData.writeInt32(range[1]);
+                            }
                         }
-                        preferences.edit().putString("cameraCache", Base64.encodeToString(serializedData.toByteArray(), Base64.DEFAULT)).commit();
+                        preferences.edit().putString("cameraCacheRoundFps77", Base64.encodeToString(serializedData.toByteArray(), Base64.DEFAULT)).commit();
                         serializedData.cleanup();
                     }
                     cameraInfos = result;

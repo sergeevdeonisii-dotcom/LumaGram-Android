@@ -6,6 +6,8 @@ public final class LumaRoundVideoQuality {
     public static final int HIGH_QUALITY_SIZE = 640;
     public static final int HIGH_QUALITY_VIDEO_BITRATE = 6_000_000;
     public static final int HIGH_QUALITY_AUDIO_BITRATE = 128_000;
+    public static final int HIGH_FRAME_RATE = 60;
+    public static final int HIGH_FRAME_RATE_VIDEO_BITRATE = 12_000_000;
     public static final int FRAME_RATE = 30;
     public static final long MAX_DURATION_MS = 60_000L;
 
@@ -28,10 +30,14 @@ public final class LumaRoundVideoQuality {
         public final boolean highQuality;
 
         private Profile(int size, int videoBitrate, int audioBitrate, boolean highQuality) {
+            this(size, videoBitrate, audioBitrate, FRAME_RATE, highQuality);
+        }
+
+        private Profile(int size, int videoBitrate, int audioBitrate, int frameRate, boolean highQuality) {
             this.size = size;
             this.videoBitrate = videoBitrate;
             this.audioBitrate = audioBitrate;
-            this.frameRate = FRAME_RATE;
+            this.frameRate = frameRate;
             this.highQuality = highQuality;
         }
     }
@@ -42,9 +48,76 @@ public final class LumaRoundVideoQuality {
     }
 
     public static Profile forCamera(Profile baseline, boolean commonCameraSupport) {
+        return forCamera(baseline, commonCameraSupport, false);
+    }
+
+    public static Profile forCamera(Profile baseline, boolean commonCameraSupport, boolean common60Support) {
         return isEnabled() && commonCameraSupport
+            ? new Profile(HIGH_QUALITY_SIZE,
+                common60Support ? HIGH_FRAME_RATE_VIDEO_BITRATE : HIGH_QUALITY_VIDEO_BITRATE,
+                HIGH_QUALITY_AUDIO_BITRATE, common60Support ? HIGH_FRAME_RATE : FRAME_RATE, true)
+            : baseline;
+    }
+
+    public static Profile fallback(Profile profile, Profile baseline) {
+        return profile.highQuality && profile.frameRate == HIGH_FRAME_RATE
             ? new Profile(HIGH_QUALITY_SIZE, HIGH_QUALITY_VIDEO_BITRATE, HIGH_QUALITY_AUDIO_BITRATE, true)
             : baseline;
+    }
+
+    /** Return only a range the camera advertised, never synthesize (30,60). */
+    public static int[] chooseFpsRange(java.util.List<int[]> ranges, int targetFps, int units) {
+        if (ranges == null || targetFps <= 0 || units <= 0) return null;
+        long target = (long) targetFps * units;
+        int[] best = null;
+        for (int[] range : ranges) {
+            if (range == null || range.length < 2 || range[0] <= 0 || range[0] > range[1]) continue;
+            if (range[0] <= target && range[1] >= target
+                && (best == null || range[1] < best[1] || range[1] == best[1] && range[0] > best[0])) best = range;
+        }
+        if (best == null && targetFps <= FRAME_RATE) {
+            for (int[] range : ranges) {
+                if (range == null || range.length < 2 || range[0] <= 0 || range[0] > range[1] || range[1] > target) continue;
+                if (best == null || range[1] > best[1] || range[1] == best[1] && range[0] > best[0]) best = range;
+            }
+        }
+        return best == null ? null : new int[] {best[0], best[1]};
+    }
+
+    public static boolean hasFixedFrameRate(java.util.List<int[]> ranges, int fps, int units) {
+        int[] range = chooseFpsRange(ranges, fps, units);
+        return range != null && (long) fps * units == range[0] && range[0] == range[1];
+    }
+
+    public static boolean supportsTargetFrameRate(java.util.List<int[]> ranges, int fps, int units) {
+        int[] range = chooseFpsRange(ranges, fps, units);
+        return range != null && (long) fps * units == range[1]
+            && range[0] >= (long) Math.min(fps, FRAME_RATE) * units;
+    }
+
+    /** Unknown stream timing cannot prove normal-session 60fps support. */
+    public static boolean supportsFrameDuration(long durationNanos, int fps) {
+        return fps > 0 && durationNanos > 0 && durationNanos <= (1_000_000_000L + fps - 1L) / fps;
+    }
+
+    /** Upper-rate gate only: retain real timestamps, never invent missing frames. */
+    public static final class FrameGate {
+        private final long minimumInterval;
+        private long lastTimestamp = Long.MIN_VALUE;
+        private Integer lastCamera;
+        public FrameGate(int fps) { minimumInterval = 1_000_000_000L / Math.max(1, fps); }
+        public boolean accept(long timestamp, Integer camera) {
+            if (timestamp <= 0) return false;
+            boolean changed = lastCamera == null ? camera != null : !lastCamera.equals(camera);
+            if (lastTimestamp == Long.MIN_VALUE || changed || timestamp < lastTimestamp) {
+                lastCamera = camera;
+                lastTimestamp = timestamp;
+                return true;
+            }
+            if (timestamp <= lastTimestamp || timestamp - lastTimestamp < minimumInterval - 500_000L) return false;
+            lastTimestamp = timestamp;
+            return true;
+        }
     }
 
     private static int fromKilobits(int value, int fallback) {
