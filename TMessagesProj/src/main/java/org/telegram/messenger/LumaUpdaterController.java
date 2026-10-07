@@ -38,6 +38,8 @@ public final class LumaUpdaterController {
     // LaunchActivity calls us whenever Luma returns to the foreground. A short throttle keeps
     // those checks invisible and inexpensive while still surfacing releases quickly.
     private static final long CHECK_INTERVAL = 15L * 60L * 1000L;
+    private static final long CHECK_TIMEOUT = 30_000L;
+    private static final String OFFICIAL_API_MANIFEST = "https://api.github.com/repos/sergeevdeonisii-dotcom/LumaGram-Android/contents/updates/latest.json?ref=main";
     private static final long MAX_APK_SIZE = 1024L * 1024L * 1024L;
     private static volatile LumaUpdaterController instance;
 
@@ -70,6 +72,9 @@ public final class LumaUpdaterController {
     private String lastError;
     private HttpGetFileTask downloadingTask;
     private int checkGeneration;
+    private int checkRequestId;
+    private HttpGetTask checkingTask;
+    private Runnable checkTimeout;
     private int downloadGeneration;
     private final ArrayList<Runnable> checkCompletions = new ArrayList<>();
 
@@ -145,6 +150,7 @@ public final class LumaUpdaterController {
         if (!TextUtils.equals(value, getManifestUrl())) {
             ++checkGeneration;
             checking = false;
+            cancelCheckingRequest();
             ArrayList<Runnable> completions = takeCheckCompletions();
             preferences().edit().putString("manifest_url", value).apply();
             clearPendingUpdate(true);
@@ -235,56 +241,109 @@ public final class LumaUpdaterController {
         if (whenDone != null) checkCompletions.add(whenDone);
         lastError = null;
         final int generation = ++checkGeneration;
-        String requestUrl = appendCacheBuster(manifestUrl);
-        new HttpGetTask(response -> AndroidUtilities.runOnUIThread(() -> {
-            if (generation != checkGeneration) {
-                return;
-            }
+        checkTimeout = () -> {
+            if (generation != checkGeneration || !checking) return;
+            ++checkGeneration;
             checking = false;
-            // Drain before notifying observers: reentrant checks must own their
-            // own callbacks, not get completed by the previous request.
+            cancelCheckingRequest();
             ArrayList<Runnable> completions = takeCheckCompletions();
-            if (TextUtils.isEmpty(response)) {
-                lastError = LocaleController.getString(R.string.LumaUpdateCheckFailed);
-            } else {
-                try {
-                    JSONObject json = new JSONObject(response);
-                    String newVersion = json.getString("version").trim();
-                    int newVersionCode = json.getInt("version_code");
-                    String newFileUrl = resolveUrl(manifestUrl, json.getString("file_url"));
-                    String newSha256 = json.getString("sha256").trim().toLowerCase(Locale.US);
-                    String newChangelog = json.optString("changelog", null);
-                    if (TextUtils.isEmpty(newVersion) || newVersionCode <= 0 || !isHttps(newFileUrl) || !newSha256.matches("[0-9a-f]{64}")) {
-                        throw new IllegalArgumentException("Invalid update manifest");
-                    }
-                    if (newVersionCode > getCurrentVersionCode()) {
-                        boolean changed = newVersionCode != versionCode || !TextUtils.equals(newSha256, sha256);
-                        if (changed) {
-                            deleteDownloadedFile();
-                        }
-                        version = newVersion;
-                        versionCode = newVersionCode;
-                        fileUrl = newFileUrl;
-                        sha256 = newSha256;
-                        changelog = newChangelog;
-                        if (changed) cancelDownloadingUpdate();
-                    } else {
-                        clearPendingUpdate(true);
-                        cancelDownloadingUpdate();
-                    }
-                    lastCheck = System.currentTimeMillis();
-                    save();
-                } catch (Exception e) {
-                    FileLog.e("Invalid Luma update manifest at " + manifestUrl, e);
-                    lastError = LocaleController.getString(R.string.LumaUpdateManifestInvalid);
-                }
-            }
+            lastError = LocaleController.getString(R.string.LumaUpdateCheckFailed);
             NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateAvailable);
             runCheckCompletions(completions);
-        })).setHeader("Accept", "application/json")
+        };
+        AndroidUtilities.runOnUIThread(checkTimeout, CHECK_TIMEOUT);
+        requestManifest(generation, manifestUrl, false);
+    }
+
+    private void cancelCheckingRequest() {
+        ++checkRequestId;
+        HttpGetTask task = checkingTask;
+        checkingTask = null;
+        if (checkTimeout != null) {
+            AndroidUtilities.cancelRunOnUIThread(checkTimeout);
+            checkTimeout = null;
+        }
+        if (task != null) task.cancelRequest();
+    }
+
+    private void requestManifest(int generation, String manifestUrl, boolean fallback) {
+        if (generation != checkGeneration || !checking) return;
+        final boolean official = TextUtils.equals(manifestUrl, BuildVars.LUMA_UPDATE_MANIFEST_URL);
+        final boolean useApi = official && !fallback;
+        final int requestId = ++checkRequestId;
+        HttpGetTask task = new HttpGetTask(response -> AndroidUtilities.runOnUIThread(() ->
+                onManifestResponse(generation, requestId, manifestUrl, fallback, response)))
+                .setTimeouts(5000, 10000).setMaxResponseBytes(65536).setStrictResponse(true)
+                .setHeader("Accept", useApi ? "application/vnd.github.raw+json" : "application/json")
                 .setHeader("Cache-Control", "no-cache")
-                .setHeader("User-Agent", "Lunagram-Android/" + BuildVars.BUILD_VERSION_STRING)
-                .execute(requestUrl);
+                .setHeader("User-Agent", "Lunagram-Android/" + BuildVars.BUILD_VERSION_STRING);
+        checkingTask = task;
+        try {
+            task.executeParallel(appendCacheBuster(useApi ? OFFICIAL_API_MANIFEST : manifestUrl));
+        } catch (Exception e) {
+            onManifestResponse(generation, requestId, manifestUrl, fallback, null);
+        }
+    }
+
+    private void onManifestResponse(int generation, int requestId, String manifestUrl, boolean fallback, String response) {
+        if (generation != checkGeneration || requestId != checkRequestId || !checking) return;
+        String newVersion = null, newFileUrl = null, newSha256 = null, newChangelog = null;
+        int newVersionCode = 0;
+        boolean valid = false;
+        if (!TextUtils.isEmpty(response)) {
+            try {
+                JSONObject json = new JSONObject(response);
+                newVersion = json.getString("version").trim();
+                newVersionCode = json.getInt("version_code");
+                // A fallback is only a transport change. Relative APK links
+                // retain the original source base, never the GitHub API path.
+                newFileUrl = resolveUrl(manifestUrl, json.getString("file_url"));
+                newSha256 = json.getString("sha256").trim().toLowerCase(Locale.US);
+                newChangelog = json.optString("changelog", null);
+                valid = !TextUtils.isEmpty(newVersion) && newVersionCode > 0 && isHttps(newFileUrl)
+                        && newSha256.matches("[0-9a-f]{64}");
+            } catch (Exception e) {
+                FileLog.e("Invalid Lunagram update manifest", e);
+            }
+        }
+        if (!valid && !fallback && TextUtils.equals(manifestUrl, BuildVars.LUMA_UPDATE_MANIFEST_URL)) {
+            requestManifest(generation, manifestUrl, true);
+            return;
+        }
+        checking = false;
+        checkingTask = null;
+        if (checkTimeout != null) {
+            AndroidUtilities.cancelRunOnUIThread(checkTimeout);
+            checkTimeout = null;
+        }
+        // Drain before notifying observers: reentrant checks own their callbacks.
+        ArrayList<Runnable> completions = takeCheckCompletions();
+        if (!valid) {
+            lastError = LocaleController.getString(TextUtils.isEmpty(response)
+                    ? R.string.LumaUpdateCheckFailed : R.string.LumaUpdateManifestInvalid);
+        } else {
+            boolean cancelDownload;
+            if (newVersionCode > getCurrentVersionCode()) {
+                boolean changed = newVersionCode != versionCode || !TextUtils.equals(newSha256, sha256);
+                if (changed) deleteDownloadedFile();
+                version = newVersion;
+                versionCode = newVersionCode;
+                fileUrl = newFileUrl;
+                sha256 = newSha256;
+                changelog = newChangelog;
+                cancelDownload = changed;
+            } else {
+                clearPendingUpdate(true);
+                cancelDownload = true;
+            }
+            lastCheck = System.currentTimeMillis();
+            save();
+            // Download listeners can change the source or start another check.
+            // Commit all state before invoking them, just like setManifestUrl.
+            if (cancelDownload) cancelDownloadingUpdate();
+        }
+        NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateAvailable);
+        runCheckCompletions(completions);
     }
 
     public BetaUpdate getUpdate() {

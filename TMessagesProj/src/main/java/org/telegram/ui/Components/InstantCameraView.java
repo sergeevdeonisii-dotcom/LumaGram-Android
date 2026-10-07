@@ -31,6 +31,9 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioRecord;
@@ -79,6 +82,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
@@ -175,6 +179,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     private boolean recording;
     private long recordedTime;
     private boolean cancelled;
+    private volatile LumaRoundVideoQuality.Profile recordingQualityProfile;
 
     private CameraGLThread cameraThread;
     private Size[] previewSize = new Size[2];
@@ -615,7 +620,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         rect.set(x - dp(8), y - dp(8), x + cameraContainer.getMeasuredWidth() + dp(8), y + cameraContainer.getMeasuredHeight() + dp(8));
         if (recording) {
             recordedTime = System.currentTimeMillis() - recordStartTime + recordPlusTime;
-            progress = Math.min(1f, recordedTime / 60000.0f);
+            progress = Math.min(1f, recordedTime / (float) LumaRoundVideoQuality.MAX_DURATION_MS);
             invalidate();
         }
 
@@ -744,6 +749,11 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         iv = null;
         needDrawFlickerStub = true;
 
+        if (!fromPaused || recordingQualityProfile == null) {
+            recordingQualityProfile = LumaRoundVideoQuality.forCamera(
+                getBaselineRecordingProfile(), supportsCommonHighQualityCamera());
+        }
+
         if (!initCamera()) {
             return;
         }
@@ -779,7 +789,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             if (bothCameras) {
                 for (int a = 0; a < 2; ++a) {
                     if (camera2Sessions[a] == null) {
-                        camera2Sessions[a] = Camera2Session.create(a == 0, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize);
+                        camera2Sessions[a] = Camera2Session.create(a == 0, getRecordingQualityProfile().size, getRecordingQualityProfile().size);
                         if (camera2Sessions[a] != null) {
                             camera2Sessions[a].setRecordingVideo(true);
                             previewSize[a] = new Size(camera2Sessions[a].getPreviewWidth(), camera2Sessions[a].getPreviewHeight());
@@ -793,7 +803,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 }
                 if (camera2SessionCurrent == null) return;
             } else {
-                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize);
+                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, getRecordingQualityProfile().size, getRecordingQualityProfile().size);
                 if (camera2SessionCurrent == null) return;
                 camera2SessionCurrent.setRecordingVideo(true);
                 previewSize[0] = new Size(camera2SessionCurrent.getPreviewWidth(), camera2SessionCurrent.getPreviewHeight());
@@ -992,7 +1002,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 long endTime = videoEditedInfo.endTime >= 0 ? videoEditedInfo.endTime : videoEditedInfo.estimatedDuration;
                 videoEditedInfo.estimatedDuration = endTime - startTime;
                 videoEditedInfo.estimatedSize = Math.max(1, (long) (size * (videoEditedInfo.estimatedDuration / totalDuration)));
-                videoEditedInfo.bitrate = 1000000;
+                LumaRoundVideoQuality.applyMetadata(videoEditedInfo, getRecordingQualityProfile());
                 if (videoEditedInfo.startTime > 0) {
                     videoEditedInfo.startTime *= 1000;
                 }
@@ -1152,7 +1162,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     camera2SessionCurrent = null;
                     camera2Sessions[isFrontface ? 1 : 0] = null;
                 }
-                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize);
+                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, getRecordingQualityProfile().size, getRecordingQualityProfile().size);
                 if (camera2SessionCurrent == null) return;
                 camera2SessionCurrent.setRecordingVideo(true);
                 previewSize[0] = new Size(camera2SessionCurrent.getPreviewWidth(), camera2SessionCurrent.getPreviewHeight());
@@ -1168,6 +1178,105 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         initCamera();
         cameraReady = false;
         cameraThread.reinitForNewCamera();
+    }
+
+    private LumaRoundVideoQuality.Profile getBaselineRecordingProfile() {
+        final MessagesController controller = MessagesController.getInstance(currentAccount);
+        return LumaRoundVideoQuality.baseline(controller.roundVideoSize,
+            controller.roundVideoBitrate, controller.roundAudioBitrate);
+    }
+
+    private LumaRoundVideoQuality.Profile getRecordingQualityProfile() {
+        return recordingQualityProfile != null ? recordingQualityProfile : getBaselineRecordingProfile();
+    }
+
+    private static boolean hasHighQualityPreview(Size size) {
+        return size != null && LumaRoundVideoQuality.hasSourceSize(size.mWidth, size.mHeight,
+            LumaRoundVideoQuality.HIGH_QUALITY_SIZE);
+    }
+
+    private boolean isCameraReadyForHighQualityRecording() {
+        if (!getRecordingQualityProfile().highQuality) return true;
+        if (!useCamera2) return cameraSession != null && cameraSession.isInitied();
+        if (bothCameras) {
+            return camera2Sessions[0] != null && camera2Sessions[0].isInitiated()
+                && camera2Sessions[1] != null && camera2Sessions[1].isInitiated();
+        }
+        return camera2SessionCurrent != null && camera2SessionCurrent.isInitiated();
+    }
+
+    private boolean supportsCommonHighQualityCamera() {
+        if (!LumaRoundVideoQuality.isEnabled()) return false;
+        if (useCamera2) {
+            // Query characteristics only; constructing Camera2Session opens the
+            // camera. Both sides must support one fixed profile before a flip.
+            return supportsHighQualityCamera2(true) && supportsHighQualityCamera2(false);
+        }
+        if (!allowBigSizeCamera()) return false;
+        final ArrayList<CameraInfo> cameras = CameraController.getInstance().getCameras();
+        if (cameras == null) return false;
+        CameraInfo front = null, back = null;
+        for (CameraInfo info : cameras) {
+            if (info.isFrontface() && front == null) front = info;
+            if (!info.isFrontface() && back == null) back = info;
+        }
+        return front != null && back != null
+            && findHighQualityCamera1Size(front.getPreviewSizes(), front.getPictureSizes()) != null
+            && findHighQualityCamera1Size(back.getPreviewSizes(), back.getPictureSizes()) != null;
+    }
+
+    private boolean supportsHighQualityCamera2(boolean front) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
+        try {
+            final CameraManager manager = (CameraManager) getContext().getSystemService(Context.CAMERA_SERVICE);
+            if (manager == null) return false;
+            float bestAspectRatio = 0;
+            android.util.Size bestSize = null;
+            for (String id : manager.getCameraIdList()) {
+                final CameraCharacteristics characteristics = manager.getCameraCharacteristics(id);
+                final Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                if (facing == null || facing != (front ? CameraCharacteristics.LENS_FACING_FRONT : CameraCharacteristics.LENS_FACING_BACK)) continue;
+                final android.util.Size pixels = characteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
+                float aspect = pixels == null ? 0 : pixels.getWidth() / (float) pixels.getHeight();
+                if (aspect < 1f) aspect = 1f / aspect;
+                // Match Camera2Session.create's camera selection, not merely any
+                // advertised lens which might never be used by that session.
+                if (bestAspectRatio > 0 && Math.abs(1f - bestAspectRatio) <= Math.abs(1f - aspect)) continue;
+                final StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                final android.util.Size[] sizes = map == null ? null : map.getOutputSizes(SurfaceTexture.class);
+                if (sizes == null || sizes.length == 0) continue;
+                final android.util.Size size = Camera2Session.chooseOptimalSize(sizes,
+                    LumaRoundVideoQuality.HIGH_QUALITY_SIZE, LumaRoundVideoQuality.HIGH_QUALITY_SIZE, false);
+                if (size != null) {
+                    bestAspectRatio = aspect;
+                    bestSize = size;
+                }
+            }
+            return bestSize != null && LumaRoundVideoQuality.hasSourceSize(bestSize.getWidth(),
+                bestSize.getHeight(), LumaRoundVideoQuality.HIGH_QUALITY_SIZE);
+        } catch (Exception e) {
+            FileLog.e(e);
+            return false;
+        }
+    }
+
+    private Size findHighQualityCamera1Size(ArrayList<Size> previews, ArrayList<Size> pictures) {
+        if (previews == null || pictures == null) return null;
+        // Keep the existing legacy Samsung GL safety cap (notably the S9).
+        final int maxSide = Build.MANUFACTURER.equalsIgnoreCase("Samsung") ? 1200 : (allowBigSizeCamera() ? 1440 : 1200);
+        Size best = null;
+        for (Size preview : previews) {
+            if (!LumaRoundVideoQuality.hasSourceSize(preview.mWidth, preview.mHeight,
+                LumaRoundVideoQuality.HIGH_QUALITY_SIZE) || Math.max(preview.mWidth, preview.mHeight) > maxSide) continue;
+            for (Size picture : pictures) {
+                if (preview.mWidth == picture.mWidth && preview.mHeight == picture.mHeight
+                    && (best == null || (long) preview.mWidth * preview.mHeight < (long) best.mWidth * best.mHeight)) {
+                    best = preview;
+                    break;
+                }
+            }
+        }
+        return best;
     }
 
     // Old Camera1 API
@@ -1202,9 +1311,16 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
 
         ArrayList<Size> previewSizes = selectedCamera.getPreviewSizes();
         ArrayList<Size> pictureSizes = selectedCamera.getPictureSizes();
-        previewSize[0] = chooseOptimalSize(previewSizes);
-        pictureSize = chooseOptimalSize(pictureSizes);
-        if (previewSize[0].mWidth != pictureSize.mWidth) {
+        final Size highQualitySize = getRecordingQualityProfile().highQuality
+            ? findHighQualityCamera1Size(previewSizes, pictureSizes) : null;
+        if (highQualitySize != null) {
+            previewSize[0] = pictureSize = highQualitySize;
+        } else {
+            if (getRecordingQualityProfile().highQuality) recordingQualityProfile = getBaselineRecordingProfile();
+            previewSize[0] = chooseOptimalSize(previewSizes);
+            pictureSize = chooseOptimalSize(pictureSizes);
+        }
+        if (!getRecordingQualityProfile().highQuality && previewSize[0].mWidth != pictureSize.mWidth) {
             boolean found = false;
             for (int a = previewSizes.size() - 1; a >= 0; a--) {
                 Size preview = previewSizes.get(a);
@@ -1333,6 +1449,18 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
 
             if (useCamera2) {
+                if (getRecordingQualityProfile().highQuality) {
+                    final boolean dual = bothCameras;
+                    final Camera2Session session = dual ? camera2Sessions[index] : index == 0 ? camera2SessionCurrent : null;
+                    if (session != null) {
+                        session.whenDone(() -> {
+                            if (cameraThread != null && !cancelled
+                                && session == (dual ? camera2Sessions[index] : camera2SessionCurrent)) {
+                                cameraThread.requestRender(!dual || index == 0, dual && index == 1);
+                            }
+                        });
+                    }
+                }
                 if (bothCameras) {
                     if (camera2Sessions[index] != null) {
                         camera2Sessions[index].open(surfaceTexture);
@@ -1377,9 +1505,13 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                             FileLog.d("InstantCamera camera initied");
                         }
                         cameraSession.setInitied();
-                        if (updateScale) {
-                            if (cameraThread != null) {
+                        if (cameraThread != null) {
+                            if (updateScale) {
                                 cameraThread.reinitForNewCamera();
+                            } else {
+                                // startPreview may render its first frame before
+                                // this callback publishes the driver's real size.
+                                cameraThread.requestRender(true, false);
                             }
                         }
                     }
@@ -1796,7 +1928,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
 
             boolean captureFirstFrameThumb = false;
-            if (!recording) {
+            if (!recording && (videoEncoder != null && videoEncoder.started || isCameraReadyForHighQualityRecording())) {
                 if (videoEncoder == null) {
                     videoEncoder = new VideoRecorder();
                 }
@@ -2125,6 +2257,8 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         private int videoWidth;
         private int videoHeight;
         private int videoBitrate;
+        private LumaRoundVideoQuality.Profile encodingProfile;
+        private LumaRoundVideoQuality.Profile baselineEncodingProfile;
         private boolean videoConvertFirstWrite = true;
         private boolean blendEnabled;
 
@@ -2319,17 +2453,22 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 handler.sendMessage(handler.obtainMessage(MSG_START_RECORDING, 1, 0));
             }
 
+            if (!started) {
+                baselineEncodingProfile = getBaselineRecordingProfile();
+                encodingProfile = getRecordingQualityProfile();
+                if (encodingProfile.highQuality && (!hasHighQualityPreview(previewSize[0])
+                    || bothCameras && !hasHighQualityPreview(previewSize[1]))) {
+                    encodingProfile = recordingQualityProfile = baselineEncodingProfile;
+                }
+            }
             started = true;
-            int resolution = MessagesController.getInstance(currentAccount).roundVideoSize;
-            int bitrate = MessagesController.getInstance(currentAccount).roundVideoBitrate * 1024;
             AndroidUtilities.runOnUIThread(() -> {
                 NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 512);
             });
 
             videoFile = outputFile;
-            videoWidth = resolution;
-            videoHeight = resolution;
-            videoBitrate = bitrate;
+            videoWidth = videoHeight = encodingProfile.size;
+            videoBitrate = encodingProfile.videoBitrate;
             sharedEglContext = sharedContext;
 
             synchronized (sync) {
@@ -2499,9 +2638,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                         for (int a = input.lastWroteBuffer; a <= input.results; a++) {
                             if (a < input.results) {
                                 long totalTime = input.offset[a] - audioStartTime;
-                                if (!running && (input.offset[a] >= videoLast - desyncTime || totalTime >= 60_000000)) {
+                                if (!running && (input.offset[a] >= videoLast - desyncTime || totalTime >= LumaRoundVideoQuality.MAX_DURATION_MS * 1000L)) {
                                     if (BuildVars.LOGS_ENABLED) {
-                                        if (totalTime >= 60_000000) {
+                                        if (totalTime >= LumaRoundVideoQuality.MAX_DURATION_MS * 1000L) {
                                             FileLog.d("InstantCamera stop audio encoding because recorded time more than 60s");
                                         } else {
                                             FileLog.d("InstantCamera stop audio encoding because of stoped video recording at " + input.offset[a] + " last video " + videoLast);
@@ -2799,9 +2938,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 videoEditedInfo.key = key;
                 videoEditedInfo.iv = iv;
                 videoEditedInfo.estimatedSize = Math.max(1, size);
-                videoEditedInfo.framerate = 25;
-                videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = 360;
-                videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = 360;
+                LumaRoundVideoQuality.applyMetadata(videoEditedInfo, encodingProfile);
                 videoEditedInfo.originalPath = previewFile.getAbsolutePath();
                 setupVideoPlayer(previewFile);
                 videoEditedInfo.estimatedDuration = recordedTime;
@@ -2895,9 +3032,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                         videoEditedInfo.encryptedFile = encryptedFile;
                         videoEditedInfo.key = key;
                         videoEditedInfo.iv = iv;
-                        videoEditedInfo.framerate = 25;
-                        videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = 360;
-                        videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = 360;
+                        LumaRoundVideoQuality.applyMetadata(videoEditedInfo, encodingProfile);
                         videoEditedInfo.originalPath = videoFile.getAbsolutePath();
                         videoEditedInfo.notReadyYet = true;
                         videoEditedInfo.thumb = firstFrameThumb;
@@ -3031,7 +3166,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                             long endTime = videoEditedInfo.endTime >= 0 ? videoEditedInfo.endTime : videoEditedInfo.estimatedDuration;
                             videoEditedInfo.estimatedDuration = endTime - startTime;
                             videoEditedInfo.estimatedSize = Math.max(1, (long) (size * (videoEditedInfo.estimatedDuration / totalDuration)));
-                            videoEditedInfo.bitrate = 1000000;
+                            LumaRoundVideoQuality.applyMetadata(videoEditedInfo, encodingProfile);
                             if (videoEditedInfo.startTime > 0) {
                                 videoEditedInfo.startTime *= 1000;
                             }
@@ -3047,9 +3182,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                         videoEditedInfo.encryptedFile = encryptedFile;
                         videoEditedInfo.key = key;
                         videoEditedInfo.iv = iv;
-                        videoEditedInfo.framerate = 25;
-                        videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = 360;
-                        videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = 360;
+                        LumaRoundVideoQuality.applyMetadata(videoEditedInfo, encodingProfile);
                         videoEditedInfo.originalPath = videoFile.getAbsolutePath();
                         final VideoEditedInfo info = videoEditedInfo;
                         if (send == ENCODER_SEND_SEND) {
@@ -3144,10 +3277,100 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
         }
 
+        private boolean supportsHighQualityCodecs() {
+            try {
+                final MediaCodecInfo.CodecCapabilities capabilities = videoEncoder.getCodecInfo().getCapabilitiesForType(VIDEO_MIME_TYPE);
+                final MediaCodecInfo.VideoCapabilities video = capabilities.getVideoCapabilities();
+                boolean surfaceInput = false;
+                for (int color : capabilities.colorFormats) {
+                    if (color == MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) surfaceInput = true;
+                }
+                if (video == null || !LumaRoundVideoQuality.supportsVideo(encodingProfile, surfaceInput,
+                    video.getWidthAlignment(), video.getHeightAlignment(),
+                    video.areSizeAndRateSupported(encodingProfile.size, encodingProfile.size, encodingProfile.frameRate),
+                    video.getBitrateRange().getLower(), video.getBitrateRange().getUpper())) return false;
+                final MediaCodecInfo.AudioCapabilities audio = audioEncoder.getCodecInfo()
+                    .getCapabilitiesForType(AUDIO_MIME_TYPE).getAudioCapabilities();
+                return audio != null && audio.isSampleRateSupported(audioSampleRate)
+                    && audio.getMaxInputChannelCount() >= 1
+                    && audio.getBitrateRange().contains(encodingProfile.audioBitrate);
+            } catch (Exception e) {
+                FileLog.e(e);
+                return false;
+            }
+        }
+
+        private void releaseRecordingCodecs() {
+            if (surface != null) {
+                try { surface.release(); } catch (Exception e) { FileLog.e(e); }
+                surface = null;
+            }
+            if (videoEncoder != null) {
+                try { videoEncoder.release(); } catch (Exception e) { FileLog.e(e); }
+                videoEncoder = null;
+            }
+            if (audioEncoder != null) {
+                try { audioEncoder.release(); } catch (Exception e) { FileLog.e(e); }
+                audioEncoder = null;
+            }
+        }
+
+        private void prepareRecordingCodecs(boolean fromPause) throws IOException {
+            // Complete capability/configure fallback before AudioRecord starts
+            // and before a muxer receives any samples. A resumed recording must
+            // keep its existing track dimensions; never splice in a new size.
+            // Pause drains the old codecs but deliberately retains them while
+            // the preview is open. Release those before replacing their refs.
+            if (fromPause) releaseRecordingCodecs();
+            for (int attempt = 0; attempt < 2; attempt++) {
+                try {
+                    videoEncoder = MediaCodec.createEncoderByType(VIDEO_MIME_TYPE);
+                    audioEncoder = MediaCodec.createEncoderByType(AUDIO_MIME_TYPE);
+                    if (encodingProfile.highQuality && !supportsHighQualityCodecs()) {
+                        throw new IOException("Round video high-quality profile is not supported by the selected codecs");
+                    }
+                    videoWidth = videoHeight = encodingProfile.size;
+                    videoBitrate = encodingProfile.videoBitrate;
+                    final MediaFormat audioFormat = new MediaFormat();
+                    audioFormat.setString(MediaFormat.KEY_MIME, AUDIO_MIME_TYPE);
+                    audioFormat.setInteger(MediaFormat.KEY_SAMPLE_RATE, audioSampleRate);
+                    audioFormat.setInteger(MediaFormat.KEY_CHANNEL_COUNT, 1);
+                    audioFormat.setInteger(MediaFormat.KEY_BIT_RATE, encodingProfile.audioBitrate);
+                    audioFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 2048 * AudioBufferInfo.MAX_SAMPLES);
+                    audioEncoder.configure(audioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                    audioEncoder.start();
+
+                    final MediaFormat format = MediaFormat.createVideoFormat(VIDEO_MIME_TYPE, videoWidth, videoHeight);
+                    format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
+                    format.setInteger(MediaFormat.KEY_BIT_RATE, videoBitrate);
+                    format.setInteger(MediaFormat.KEY_FRAME_RATE, encodingProfile.frameRate);
+                    format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
+                    videoEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                    surface = videoEncoder.createInputSurface();
+                    videoEncoder.start();
+                    recordingQualityProfile = encodingProfile;
+                    return;
+                } catch (Exception e) {
+                    releaseRecordingCodecs();
+                    if (!fromPause && attempt == 0 && encodingProfile.highQuality) {
+                        FileLog.e(e);
+                        encodingProfile = baselineEncodingProfile;
+                        recordingQualityProfile = encodingProfile;
+                    } else if (e instanceof IOException) {
+                        throw (IOException) e;
+                    } else {
+                        throw new IOException("Unable to prepare round video codecs", e);
+                    }
+                }
+            }
+        }
+
         private void prepareEncoder(boolean fromPause) {
             setBluetoothScoOn(true);
 
             try {
+                prepareRecordingCodecs(fromPause);
+                firstEncode = true;
                 int recordBufferSize = AudioRecord.getMinBufferSize(audioSampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
                 if (recordBufferSize <= 0) {
                     recordBufferSize = 3584;
@@ -3194,31 +3417,6 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
 
                 audioBufferInfo = new MediaCodec.BufferInfo();
                 videoBufferInfo = new MediaCodec.BufferInfo();
-
-                MediaFormat audioFormat = new MediaFormat();
-                audioFormat.setString(MediaFormat.KEY_MIME, AUDIO_MIME_TYPE);
-                audioFormat.setInteger(MediaFormat.KEY_SAMPLE_RATE, audioSampleRate);
-                audioFormat.setInteger(MediaFormat.KEY_CHANNEL_COUNT, 1);
-                audioFormat.setInteger(MediaFormat.KEY_BIT_RATE, MessagesController.getInstance(currentAccount).roundAudioBitrate * 1024);
-                audioFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 2048 * AudioBufferInfo.MAX_SAMPLES);
-
-                audioEncoder = MediaCodec.createEncoderByType(AUDIO_MIME_TYPE);
-                audioEncoder.configure(audioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-                audioEncoder.start();
-
-                videoEncoder = MediaCodec.createEncoderByType(VIDEO_MIME_TYPE);
-                firstEncode = true;
-
-                MediaFormat format = MediaFormat.createVideoFormat(VIDEO_MIME_TYPE, videoWidth, videoHeight);
-
-                format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-                format.setInteger(MediaFormat.KEY_BIT_RATE, videoBitrate);
-                format.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
-                format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
-
-                videoEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-                surface = videoEncoder.createInputSurface();
-                videoEncoder.start();
 
                 if (!fromPause) {
                     boolean isSdCard = ImageLoader.isSdCardPath(videoFile);
@@ -3587,7 +3785,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     }
 
     private String createFragmentShader(Size previewSize) {
-        if (SharedConfig.deviceIsLow() || !allowBigSizeCamera() || previewSize != null && Math.max(previewSize.getHeight(), previewSize.getWidth()) * 0.7f < MessagesController.getInstance(currentAccount).roundVideoSize) {
+        if (SharedConfig.deviceIsLow() || !allowBigSizeCamera() || previewSize != null && Math.max(previewSize.getHeight(), previewSize.getWidth()) * 0.7f < getRecordingQualityProfile().size) {
             return "#extension GL_OES_EGL_image_external : require\n" +
                     "precision highp float;\n" +
                     "varying vec2 vTextureCoord;\n" +
@@ -3643,7 +3841,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     }
 
     private String createFragmentShaderV2(Size previewSize) {
-        if (SharedConfig.deviceIsLow() || !allowBigSizeCamera() || previewSize != null && Math.max(previewSize.getHeight(), previewSize.getWidth()) * 0.7f < MessagesController.getInstance(currentAccount).roundVideoSize) {
+        if (SharedConfig.deviceIsLow() || !allowBigSizeCamera() || previewSize != null && Math.max(previewSize.getHeight(), previewSize.getWidth()) * 0.7f < getRecordingQualityProfile().size) {
             return "#extension GL_OES_EGL_image_external : require\n" +
                     "precision highp float;\n" +
                     "varying vec2 vTextureCoord;\n" +

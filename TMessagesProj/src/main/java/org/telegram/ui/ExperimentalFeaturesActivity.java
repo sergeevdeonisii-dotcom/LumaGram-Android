@@ -20,6 +20,7 @@ import org.telegram.messenger.LumaAnonymousNumber;
 import org.telegram.messenger.LumaProfileVerification;
 import org.telegram.messenger.LumaStarRating;
 import org.telegram.messenger.LumaTextAnimation;
+import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
@@ -82,6 +83,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private static final int ROW_ANONYMOUS_NUMBER = 12;
     private static final int ROW_PROFILE_VERIFICATION_ENABLED = 13;
     private static final int ROW_GHOST_SCHEDULE_SEND_ENABLED = 14;
+    private static final int ROW_ROUND_VIDEO_QUALITY = 15;
 
     private final Section section;
     private UniversalRecyclerView listView;
@@ -221,6 +223,10 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     }
 
     private void fillSendingItems(ArrayList<UItem> items) {
+        items.add(UItem.asHeader(getString(R.string.LumaRoundVideoQualityTitle)));
+        items.add(UItem.asCheck(ROW_ROUND_VIDEO_QUALITY, getString(R.string.LumaRoundVideoQualityEnable))
+                .setChecked(LumaRoundVideoQuality.isEnabled()));
+        items.add(UItem.asShadow(getString(R.string.LumaRoundVideoQualityInfo)));
         final boolean delayedSendEnabled = LumaDelayedSend.isEnabled();
         items.add(UItem.asHeader(getString(R.string.ExperimentalDelayedSendHeader)));
         items.add(UItem.asCheck(ROW_DELAYED_SEND_ENABLED, getString(R.string.ExperimentalDelayedSendEnable))
@@ -334,6 +340,11 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 R.raw.info,
                 getString(R.string.ExperimentalTypingResetDone)
             ).show();
+        } else if (item.id == ROW_ROUND_VIDEO_QUALITY) {
+            final boolean enabled = !LumaRoundVideoQuality.isEnabled();
+            LumaRoundVideoQuality.setEnabled(enabled);
+            if (view instanceof TextCheckCell) ((TextCheckCell) view).setChecked(enabled);
+            if (listView != null && listView.adapter != null) listView.adapter.update(false);
         } else if (item.id == ROW_DELAYED_SEND_ENABLED) {
             final boolean enabled = !LumaDelayedSend.isEnabled();
             LumaDelayedSend.setEnabled(enabled);

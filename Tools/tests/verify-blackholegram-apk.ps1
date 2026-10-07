@@ -3,8 +3,9 @@ param(
     [Parameter(Mandatory = $true)][string]$SdkPath,
     [Parameter(Mandatory = $true)][string]$JavaHome,
     [string]$NdkVersion = '27.2.12479018',
-    [string]$VersionName = '12.10.6-lunagram.75',
-    [int]$VersionCode = 71549,
+    [string]$VersionName = '12.10.6-lunagram.76',
+    [int]$VersionCode = 71559,
+    [string]$ScratchRoot,
     # Recheck signing only when its configuration, key or build variant changes.
     [switch]$VerifySignature
 )
@@ -74,7 +75,9 @@ try {
         'BlackHoleAdvancedProfileTitle', 'BlackHoleAdvancedProfileInfo',
         'BlackHoleAdvancedTypingTitle', 'BlackHoleAdvancedTypingInfo',
         'BlackHoleAdvancedSendingTitle', 'BlackHoleAdvancedSendingInfo',
-        'BlackHoleAdvancedConnectionTitle', 'BlackHoleAdvancedConnectionInfo', 'BlackHoleAdvancedSectionsInfo')
+        'BlackHoleAdvancedConnectionTitle', 'BlackHoleAdvancedConnectionInfo', 'BlackHoleAdvancedSectionsInfo',
+        'LumaRoundVideoQualityTitle', 'LumaRoundVideoQualityEnable', 'LumaRoundVideoQualityInfo',
+        'LumaUpdateRepairSource', 'LumaUpdateRepairSourceInfo', 'LumaUpdateRestoreAction', 'LumaUpdateSourceNoNewVersion')
     foreach ($locale in @(@{ Tag = 'en'; Values = 'values' }, @{ Tag = 'ru'; Values = 'values-ru' })) {
         $localized = Get-BlackHoleGramLocalization -Archive $archive -Tag $locale.Tag
         $sourcePath = Join-Path $PSScriptRoot "../../TMessagesProj/src/main/res/$($locale.Values)/strings.xml"
@@ -84,9 +87,9 @@ try {
             $expected = @($xml.resources.string | Where-Object name -CEQ $label)
             if (!$labelIds.ContainsKey($nameHash) -or !$localized.ContainsKey($nameHash) -or
                 $expected.Count -ne 1 -or $localized[$nameHash] -cne $expected[0].'#text') {
-                throw "The advanced-settings label or its localization is missing/stale: $label ($($locale.Tag))"
+                throw "The settings label or its localization is missing/stale: $label ($($locale.Tag))"
             }
-            Write-Output "PASS: final APK mapped category label ($label / $($locale.Tag))"
+            Write-Output "PASS: final APK mapped settings label ($label / $($locale.Tag))"
         }
     }
     $nativeFiles = @($archive.Entries | Where-Object FullName -Like 'lib/*/*.so')
@@ -97,7 +100,8 @@ try {
         throw 'Unexpected ABI or stale Telegram native library'
     }
     Write-Output 'PASS: expected native library, arm64 only, no unexpected tmessages versions'
-    $nativeCheckDir = Join-Path $PSScriptRoot ('.runs/' + [guid]::NewGuid().ToString() + '/apk-native')
+    if (!$ScratchRoot) { $ScratchRoot = Join-Path $PSScriptRoot '.runs' }
+    $nativeCheckDir = Join-Path $ScratchRoot ([guid]::NewGuid().ToString() + '/apk-native')
     New-Item -ItemType Directory -Path $nativeCheckDir | Out-Null
     foreach ($entry in $nativeFiles) {
         if ($entry.FullName -cnotmatch '^lib/arm64-v8a/[A-Za-z0-9_.-]+\.so$') {

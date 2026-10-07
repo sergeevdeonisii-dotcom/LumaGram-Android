@@ -24,6 +24,7 @@ public final class BlackHoleSettings {
         v.put("format.style", LumaMessageFormatting.getAutomaticStyle());
         v.put("send.delayed", LumaDelayedSend.isEnabled());
         v.put("send.step", LumaDelayedSend.getDelayStep());
+        v.put("send.roundHighQuality", LumaRoundVideoQuality.isEnabled());
         v.put("glass.enabled", LiteMode.getLiquidGlassEnabled());
         v.put("glass.powerSaver", LiteMode.getLiquidGlassKeepInPowerSaver());
         v.put("glass.opacity", LiteMode.getLiquidGlassOpacityLevel());
@@ -46,7 +47,7 @@ public final class BlackHoleSettings {
     }
 
     public static void validate(Map<String, Object> values) {
-        if (values.isEmpty() || values.size() > 26) throw new IllegalArgumentException("settings count");
+        if (values.isEmpty() || values.size() > 27) throw new IllegalArgumentException("settings count");
         for (Map.Entry<String, Object> e : values.entrySet()) {
             String k = e.getKey(); Object v = e.getValue();
             switch (k) {
@@ -54,7 +55,7 @@ public final class BlackHoleSettings {
                 case "glass.powerSaver": case "glass.adaptive": case "glass.wallpaper":
                 case "glass.separate": case "ghost.enabled": case "ghost.schedule":
                 case "deleted.keep": case "rating.enabled": case "number.enabled":
-                case "verification.enabled":
+                case "verification.enabled": case "send.roundHighQuality":
                     if (!(v instanceof Boolean)) throw new IllegalArgumentException(k);
                     break;
                 case "typing.speed": case "typing.blur": case "typing.height": case "typing.swipe":
@@ -108,6 +109,7 @@ public final class BlackHoleSettings {
         LumaAnonymousNumber.setDigits(account, (String) v.get("number.digits"));
         LumaAnonymousNumber.setEnabled(account, b(v, "number.enabled"));
         LumaProfileVerification.setEnabled(account, b(v, "verification.enabled"));
+        LumaRoundVideoQuality.setEnabled(b(v, "send.roundHighQuality"));
     }
 
     private static boolean b(Map<String, Object> v, String k) { return (Boolean) v.get(k); }
