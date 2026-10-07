@@ -18,6 +18,7 @@ public final class ModelEditable implements Editable {
     public void removeSpan(Object value){spans.removeIf(span->span.value==value);}
     public int getSpanStart(Object value){for(Span span:spans)if(span.value==value)return span.start;return -1;}
     public int getSpanEnd(Object value){for(Span span:spans)if(span.value==value)return span.end;return -1;}
+    public int getSpanFlags(Object value){for(Span span:spans)if(span.value==value)return span.flags;return 0;}
     @SuppressWarnings("unchecked")public <T>T[] getSpans(int start,int end,Class<T> type){
         ArrayList<T> found=new ArrayList<>();
         for(Span span:spans)if(type.isInstance(span.value)&&span.start<end&&span.end>start)found.add((T)span.value);
