@@ -1,0 +1,225 @@
+package org.telegram.messenger;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+/** Actual helper and source-extracted recorder timestamp arithmetic, not an Android codec/GPU. */
+public final class RoundCadence78RegressionTest {
+    private static int cases, assertions;
+    private static final long SECOND = 1_000_000_000L;
+    private interface Body { void run(); }
+    private static void test(String label, Body body) {
+        cases++;
+        body.run();
+        System.out.println("PASS: " + label);
+    }
+    private static void check(boolean value, String label) {
+        assertions++;
+        if (!value) throw new AssertionError(label);
+    }
+    private static long[] alternating(int fps, int frames, long jitter) {
+        long[] result = new long[frames];
+        result[0] = SECOND;
+        for (int i = 1; i < frames; i++) {
+            long nominal = (long) i * SECOND / fps - (long) (i - 1) * SECOND / fps;
+            result[i] = result[i - 1] + nominal + ((i & 1) == 1 ? -jitter : jitter);
+        }
+        return result;
+    }
+    private static long[] random(int fps, int frames, long jitter, long seed) {
+        long[] result = new long[frames];
+        Random random = new Random(seed);
+        result[0] = SECOND;
+        for (int i = 1; i < frames; i++) {
+            long nominal = (long) i * SECOND / fps - (long) (i - 1) * SECOND / fps;
+            result[i] = result[i - 1] + nominal + (long) ((random.nextDouble() * 2 - 1) * jitter);
+        }
+        return result;
+    }
+    private static List<Integer> accepted(int fps, long[] timestamps) {
+        LumaRoundVideoQuality.FrameGate gate = new LumaRoundVideoQuality.FrameGate(fps);
+        List<Integer> result = new ArrayList<>();
+        for (int i = 0; i < timestamps.length; i++) {
+            if (gate.accept(timestamps[i], 0)) result.add(i);
+            check(!gate.accept(timestamps[i], 0), "Repeating even a discarded timestamp cannot grant phase credit");
+        }
+        return result;
+    }
+    private static void allRealFrames(int fps, long[] timestamps) {
+        List<Integer> result = accepted(fps, timestamps);
+        check(result.size() == timestamps.length, "Every real source frame retained");
+        for (int i = 0; i < result.size(); i++) check(result.get(i) == i, "No fabricated or substituted frame IDs");
+    }
+    private static void averageCap(int fps, long[] timestamps, List<Integer> result, boolean fasterSource) {
+        long elapsed = timestamps[timestamps.length - 1] - timestamps[0];
+        long interval = SECOND / fps;
+        long upper = 1 + (elapsed + interval - 1) / interval;
+        check(result.size() <= upper, "Early tolerance does not accumulate an over-rate output stream");
+        if (fasterSource) check(result.size() >= elapsed / interval - 1, "Phase downsampling does not drift far below target cadence");
+    }
+    private static final class BuildVars { static final boolean LOGS_ENABLED = false; }
+    private static final class FileLog { static void d(String ignored) {} }
+    private static final class RecorderPrefix {
+        final LumaRoundVideoQuality.FrameGate gate;
+        Integer lastCameraId = 0;
+        long prevVideoLast = -1, videoDiff = -1, currentTimestamp, lastTimestamp = -1;
+        boolean firstVideoFrameSincePause, skippedFirst;
+        long lastCommitedFrameTime, skippedTime, videoFirst = -1, videoLast, videoLastDt;
+        final List<Long> presentationTimes = new ArrayList<>();
+        final List<Long> sourceTimes = new ArrayList<>();
+        final List<Integer> frames = new ArrayList<>();
+        RecorderPrefix(int fps) { gate = new LumaRoundVideoQuality.FrameGate(fps); }
+        void handle(long timestampNanos, Integer cameraId, int frame) {
+            if (!gate.accept(timestampNanos, cameraId)) return;
+            long originalSensorTimestamp = timestampNanos;
+            // Verbatim timestamp prefix from current InstantCameraView. Drain/GPU are excluded.
+@@PRODUCTION_PTS_PREFIX@@
+            presentationTimes.add(currentTimestamp);
+            sourceTimes.add(originalSensorTimestamp);
+            frames.add(frame);
+        }
+    }
+    private static void sourcePts(int profileFps, long[] timestamps, boolean retainEveryFrame) {
+        RecorderPrefix recorder = new RecorderPrefix(profileFps);
+        for (int i = 0; i < timestamps.length; i++) recorder.handle(timestamps[i], 0, i);
+        check(recorder.frames.size() > 100, "Recorder warmup still leaves a useful real-frame sequence");
+        int previousFrame = recorder.frames.get(0);
+        for (int i = 1; i < recorder.frames.size(); i++) {
+            int frame = recorder.frames.get(i);
+            long sensorDelta = timestamps[frame] - timestamps[previousFrame];
+            long actualPtsDelta = recorder.presentationTimes.get(i) - recorder.presentationTimes.get(i - 1);
+            check(actualPtsDelta == sensorDelta && actualPtsDelta > 0, "Original sensor PTS differences preserved, never synthetic CFR");
+            check(recorder.sourceTimes.get(i) == timestamps[frame], "Encoded PTS belongs to a supplied real source frame");
+            if (retainEveryFrame) check(frame == previousFrame + 1, "After initial recorder warmup no real60 frame is lost");
+            previousFrame = frame;
+        }
+        System.out.println("  PTS prefix: target=" + profileFps + ", supplied=" + timestamps.length
+            + ", writtenAfter200msWarmup=" + recorder.frames.size());
+    }
+    /** Exact .77 single-camera timing predicate: a negative control, not the implementation under test. */
+    private static int old77Accepted(long[] timestamps) {
+        long last = Long.MIN_VALUE;
+        int count = 0;
+        for (long timestamp : timestamps) {
+            if (last == Long.MIN_VALUE || timestamp - last >= SECOND / 60 - 500_000L) {
+                last = timestamp;
+                count++;
+            }
+        }
+        return count;
+    }
+    public static void main(String[] args) {
+        for (long jitter : new long[] {0, 1_000_000L, 2_000_000L}) {
+            test("Every real60 frame survives alternating interval jitter=" + jitter, () -> allRealFrames(60, alternating(60, 600, jitter)));
+            test("Verbatim encoder PTS preserves60 jitter=" + jitter, () -> sourcePts(60, alternating(60, 600, jitter), true));
+        }
+        test("Random real60 intervals plus/minus2ms are not throttled", () -> allRealFrames(60, random(60, 3600, 2_000_000L, 49778)));
+        test("Random real60 PTS remain original", () -> sourcePts(60, random(60, 600, 2_000_000L, 49777), true));
+        test("Absolute timestamp jitter plus/minus2ms survives", () -> {
+            long[] timestamps = alternating(60, 600, 0);
+            for (int i = 1; i < timestamps.length; i++) timestamps[i] += (i % 2 == 0 ? 2_000_000L : -2_000_000L);
+            allRealFrames(60, timestamps);
+        });
+        test("Negative control proves the regression suite detects original77 half-cadence bug", () -> {
+            for (long jitter : new long[] {1_000_000L, 2_000_000L}) {
+                long[] timestamps = alternating(60, 600, jitter);
+                check(old77Accepted(timestamps) == 300, "Original77 predicate loses every other real frame");
+                check(accepted(60, timestamps).size() == 600, "Actual helper fixes precisely that counterexample");
+            }
+        });
+        for (long jitter : new long[] {1_000_000L, 2_000_000L, 5_000_000L, 8_000_000L}) {
+            test("Nominal30 does not halve with alternating jitter=" + jitter, () -> allRealFrames(30, alternating(30, 600, jitter)));
+        }
+        test("Nominal30 random jitter plus/minus8ms does not halve", () -> {
+            long[] timestamps = random(30, 1200, 8_000_000L, 3078);
+            List<Integer> frames = accepted(30, timestamps);
+            check(frames.size() > 1100, "Most supplied nominal30 frames retained, not15fps");
+            averageCap(30, timestamps, frames, false);
+        });
+        test("Target30 preserves phase debt rather than accepting31.17fps forever", () -> {
+            long[] timestamps = new long[1200];
+            timestamps[0] = SECOND;
+            for (int i = 1; i < timestamps.length; i++) timestamps[i] = timestamps[i - 1] + SECOND / 30 - ((i & 1) == 1 ? 2_500_000L : 0);
+            List<Integer> frames = accepted(30, timestamps);
+            check(frames.size() < 1170, "Per-frame grace cannot erase carried timing debt");
+            averageCap(30, timestamps, frames, true);
+        });
+        for (long jitter : new long[] {0, 1_000_000L, 2_000_000L, 8_000_000L}) {
+            test("True60 downsampling to30 retains average phase with jitter=" + jitter, () -> {
+                long[] timestamps = alternating(60, 600, jitter);
+                List<Integer> frames = accepted(30, timestamps);
+                check(frames.size() >= 299 && frames.size() <= 301, "Approximately300 real frames over600 source frames");
+                averageCap(30, timestamps, frames, true);
+                for (int i = 1; i < frames.size(); i++) check(frames.get(i) > frames.get(i - 1), "Only strictly advancing real frame IDs");
+                sourcePts(30, timestamps, false);
+            });
+        }
+        test("Random60-to30 phase does not develop last-accepted drift", () -> {
+            long[] timestamps = random(60, 3600, 2_000_000L, 603078);
+            List<Integer> frames = accepted(30, timestamps);
+            averageCap(30, timestamps, frames, true);
+            for (int i = 1; i < frames.size(); i++) {
+                long gap = timestamps[frames.get(i)] - timestamps[frames.get(i - 1)];
+                check(gap > 0 && gap < 60_000_000L, "Jitter produces bounded real gaps, not accumulating cadence drift");
+            }
+        });
+        test("Slow input is never upsampled into invented30 or60 frames", () -> {
+            long[] timestamps = alternating(15, 600, 0);
+            allRealFrames(30, timestamps);
+            allRealFrames(60, timestamps);
+        });
+        test("Long pause grants one supplied frame but no catch-up burst", () -> {
+            for (int fps : new int[] {1, 30}) {
+                LumaRoundVideoQuality.FrameGate gate = new LumaRoundVideoQuality.FrameGate(fps);
+                check(gate.accept(SECOND, 0), "Initial real frame");
+                check(gate.accept(100 * SECOND, 0), "Exactly one real frame after pause");
+                for (int i = 0; i < 1000; i++) check(!gate.accept(100 * SECOND + i, 0), "Tiny callbacks after pause do not catch up missing periods");
+                check(gate.accept(100 * SECOND + SECOND / fps, 0), "Ordinary cadence resumes");
+            }
+        });
+        test("Sub-two-period gaps cannot spend late phase on1ns catch-up frames", () -> {
+            for (long gap : new long[] {49_999_999L, 50_000_000L, 62_000_000L, 66_666_665L}) {
+                LumaRoundVideoQuality.FrameGate gate = new LumaRoundVideoQuality.FrameGate(30);
+                check(gate.accept(SECOND, 0), "Initial real frame");
+                check(gate.accept(SECOND + gap, 0), "Real late frame still accepted");
+                check(!gate.accept(SECOND + gap + 1, 0), "Fractional phase never grants near-identical PTS");
+                check(!gate.accept(SECOND + gap + 1, 0), "Discarded-frame duplicate adds no credit");
+                check(gate.accept(SECOND + gap + SECOND / 30, 0), "Normal next real frame remains unblocked");
+            }
+        });
+        test("Camera value/null changes and source rollback reset phase, not invalid timestamps", () -> {
+            LumaRoundVideoQuality.FrameGate gate = new LumaRoundVideoQuality.FrameGate(30);
+            check(gate.accept(2 * SECOND, Integer.valueOf(300)), "Initial value camera");
+            check(!gate.accept(2 * SECOND + 1, Integer.valueOf(300)), "Equal camera value cannot grant an extra frame");
+            check(!gate.accept(0, null), "Invalid timestamp must not change source identity");
+            check(!gate.accept(2 * SECOND + 2, Integer.valueOf(300)), "Invalid camera transition had no side effect");
+            check(gate.accept(2 * SECOND + 2, null), "Real camera/null transition can share timestamp");
+            check(!gate.accept(2 * SECOND + 2, null), "Null duplicate rejected");
+            check(gate.accept(SECOND, null), "Backward clock resets source epoch and phase");
+            check(!gate.accept(SECOND + 1, null), "Reset has no stale phase-credit burst");
+            check(gate.accept(SECOND + SECOND / 30, null), "Phase continues after rollback");
+        });
+        test("Huge timestamps, invalid FPS, and high integer FPS cannot overflow gate arithmetic", () -> {
+            for (int fps : new int[] {0, -60, Integer.MIN_VALUE}) {
+                LumaRoundVideoQuality.FrameGate gate = new LumaRoundVideoQuality.FrameGate(fps);
+                check(gate.accept(1, 0), "Invalid rate still accepts first actual frame");
+                check(!gate.accept(SECOND / 2 + 1, 0), "Invalid rate is safe1fps without extra grace");
+                check(gate.accept(SECOND + 1, 0), "Invalid rate progresses at1fps");
+                check(gate.accept(Long.MAX_VALUE - 2, 0), "Huge genuine source gap remains valid");
+                check(!gate.accept(Long.MAX_VALUE - 1, 0), "Huge gap does not leave overflow or catch-up credit");
+                check(!gate.accept(Long.MAX_VALUE, 0), "Positive final boundary remains gated");
+            }
+            LumaRoundVideoQuality.FrameGate thirty = new LumaRoundVideoQuality.FrameGate(30);
+            check(thirty.accept(1, 0), "First positive boundary");
+            check(thirty.accept(Long.MAX_VALUE - SECOND, 0), "Positive elapsed subtraction cannot overflow");
+            check(thirty.accept(Long.MAX_VALUE - SECOND + SECOND / 30, 0), "Cadence works near long maximum");
+            LumaRoundVideoQuality.FrameGate sixty = new LumaRoundVideoQuality.FrameGate(60);
+            check(!sixty.accept(Long.MIN_VALUE, 0), "Negative malformed timestamps remain rejected");
+            check(sixty.accept(Long.MAX_VALUE - 1, 0) && sixty.accept(Long.MAX_VALUE, 0), "Distinct real60 timestamps near maximum are retained");
+            LumaRoundVideoQuality.FrameGate hugeRate = new LumaRoundVideoQuality.FrameGate(Integer.MAX_VALUE);
+            check(hugeRate.accept(1, 0) && hugeRate.accept(2, 0) && !hugeRate.accept(2, 0), "Bounded minimum1ns interval without division by zero");
+        });
+        System.out.println("Round cadence .78: " + cases + " cases, " + assertions + " assertions,0 failures.");
+    }
+}

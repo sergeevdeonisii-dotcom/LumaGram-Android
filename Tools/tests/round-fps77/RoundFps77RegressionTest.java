@@ -263,12 +263,12 @@ public final class RoundFps77RegressionTest {
             for (int i = 0; i < 300; i++) if (gate.accept(1_000_000_000L + i * 1_000_000_000L / 30, 0)) accepted++;
             check(accepted == 300, "One accepted frame per actual callback, not invented 600");
         });
-        test("Repeated timestamps and rapid callback bursts are rejected", () -> {
+        test("60-frame profile rejects repeats but retains every unique real sensor frame", () -> {
             LumaRoundVideoQuality.FrameGate gate = new LumaRoundVideoQuality.FrameGate(60);
             check(gate.accept(1_000_000_000L, 0), "First actual frame");
             check(!gate.accept(1_000_000_000L, 0), "Duplicate camera timestamp");
-            check(!gate.accept(1_001_000_000L, 0), "Too-fast burst");
-            check(!gate.accept(1_015_000_000L, 0), "Too-fast near cadence");
+            check(gate.accept(1_001_000_000L, 0), "Unique sensor frame is not pruned by an elapsed-time threshold");
+            check(gate.accept(1_015_000_000L, 0), "Early real frame is preserved");
             check(gate.accept(1_016_666_667L, 0), "Next camera frame retains original timestamp");
         });
         test("Real cadence jitter tolerance does not stall every other frame", () -> {

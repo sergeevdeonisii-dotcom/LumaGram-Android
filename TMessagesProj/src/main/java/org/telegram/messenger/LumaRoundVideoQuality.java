@@ -100,22 +100,56 @@ public final class LumaRoundVideoQuality {
         return fps > 0 && durationNanos > 0 && durationNanos <= (1_000_000_000L + fps - 1L) / fps;
     }
 
-    /** Upper-rate gate only: retain real timestamps, never invent missing frames. */
+    /** Retain real timestamps; a validated 60fps source must not lose frames to sensor jitter. */
     public static final class FrameGate {
         private final long minimumInterval;
+        private final long jitterAllowance;
+        private final boolean fullCameraCadence;
         private long lastTimestamp = Long.MIN_VALUE;
+        private long lastAcceptedTimestamp;
         private Integer lastCamera;
-        public FrameGate(int fps) { minimumInterval = 1_000_000_000L / Math.max(1, fps); }
+        private long phaseCredit;
+        public FrameGate(int fps) {
+            int target = Math.max(1, fps);
+            minimumInterval = Math.max(1L, 1_000_000_000L / target);
+            // Stay strictly inside the half-period window: an exact midpoint
+            // in a regular 60-to-30 stream belongs to the next real frame.
+            jitterAllowance = fps > 0 ? Math.max(0L, minimumInterval / 2L - 1L) : 0;
+            fullCameraCadence = target == HIGH_FRAME_RATE;
+        }
         public boolean accept(long timestamp, Integer camera) {
             if (timestamp <= 0) return false;
             boolean changed = lastCamera == null ? camera != null : !lastCamera.equals(camera);
             if (lastTimestamp == Long.MIN_VALUE || changed || timestamp < lastTimestamp) {
                 lastCamera = camera;
                 lastTimestamp = timestamp;
+                lastAcceptedTimestamp = timestamp;
+                phaseCredit = 0;
                 return true;
             }
-            if (timestamp <= lastTimestamp || timestamp - lastTimestamp < minimumInterval - 500_000L) return false;
+            if (timestamp == lastTimestamp) return false;
+            long elapsed = timestamp - lastTimestamp;
             lastTimestamp = timestamp;
+            if (fullCameraCadence) return true;
+
+            // Accumulate from every source frame, not from the last accepted frame.
+            // Select a real frame near each target phase, carrying early-frame
+            // debt and late-frame overshoot. Normal 30fps jitter must not reset
+            // that phase. Only a whole missing source period rebases the clock.
+            if (elapsed >= 2L * minimumInterval) {
+                phaseCredit = minimumInterval;
+            } else {
+                phaseCredit += elapsed; // bounded below 4 * minimumInterval
+            }
+            // This half-period spacing floor only prevents catch-up bursts. It
+            // never replaces accumulated phase, and rejected frames keep credit.
+            if (timestamp - lastAcceptedTimestamp < minimumInterval - jitterAllowance) return false;
+            if (phaseCredit < minimumInterval - jitterAllowance) return false;
+            phaseCredit -= minimumInterval;
+            // Discard unserved whole periods instead of catching up with bursts;
+            // the fractional phase still belongs to the original sensor clock.
+            if (phaseCredit >= minimumInterval) phaseCredit %= minimumInterval;
+            lastAcceptedTimestamp = timestamp;
             return true;
         }
     }
