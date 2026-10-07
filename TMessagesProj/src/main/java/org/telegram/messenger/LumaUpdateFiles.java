@@ -17,9 +17,25 @@ public final class LumaUpdateFiles {
         }
     }
 
+    /** Run once before starting any downloads after process startup. */
+    public static void cleanupAbandonedDownloads(File directory) {
+        File[] files = directory.listFiles();
+        if (files == null) return;
+        for (File file : files) deleteStaging(directory, file);
+    }
+
+    public static boolean deleteStaging(File directory, File file) {
+        return file != null && file.getName().matches("luma-update-[0-9]+-[0-9]+\\.apk\\.part")
+                && deleteOwnedFile(directory, file);
+    }
+
     public static boolean delete(File directory, File file) {
+        return file != null && version(file) > 0 && deleteOwnedFile(directory, file);
+    }
+
+    private static boolean deleteOwnedFile(File directory, File file) {
         try {
-            if (version(file) > 0 && file.isFile()
+            if (file.isFile()
                     && directory.getCanonicalFile().equals(file.getCanonicalFile().getParentFile())) {
                 return file.delete();
             }

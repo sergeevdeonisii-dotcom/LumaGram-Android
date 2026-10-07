@@ -146,9 +146,21 @@ public class NotificationsController extends BaseController implements Notificat
 
     private Runnable notificationDelayRunnable;
     private PowerManager.WakeLock notificationDelayWakelock;
-    private boolean notificationUpdateScheduled;
-    private boolean notificationUpdateNotifyAboutLast;
-    private long lastNotificationUpdateTime;
+    private boolean releaseDelayWakeLockAfterUpdate;
+    private final LumaNotificationUpdateState notificationUpdateState = new LumaNotificationUpdateState();
+    private final Runnable notificationUpdateRunnable = () -> {
+        Boolean notify = notificationUpdateState.take(SystemClock.elapsedRealtime());
+        try {
+            if (notify != null) {
+                showOrUpdateNotificationInternal(notify);
+            }
+        } finally {
+            if (releaseDelayWakeLockAfterUpdate) {
+                releaseDelayWakeLockAfterUpdate = false;
+                releaseNotificationDelayWakeLock();
+            }
+        }
+    };
 
     private long lastSoundPlay;
     private long lastSoundOutPlay;
@@ -239,15 +251,13 @@ public class NotificationsController extends BaseController implements Notificat
                 FileLog.d("delay reached");
             }
             if (!delayedPushMessages.isEmpty()) {
+                // Keep the delivery wake lock until the coalesced task has
+                // actually posted, not merely until it has been enqueued.
+                releaseDelayWakeLockAfterUpdate = true;
                 showOrUpdateNotification(true);
                 delayedPushMessages.clear();
-            }
-            try {
-                if (notificationDelayWakelock.isHeld()) {
-                    notificationDelayWakelock.release();
-                }
-            } catch (Exception e) {
-                FileLog.e(e);
+            } else {
+                releaseNotificationDelayWakeLock();
             }
         };
 
@@ -397,8 +407,10 @@ public class NotificationsController extends BaseController implements Notificat
             openedInBubbleDialogs.clear();
             delayedPushMessages.clear();
             notifyCheck = false;
-            notificationUpdateScheduled = false;
-            notificationUpdateNotifyAboutLast = false;
+            notificationsQueue.cancelRunnable(notificationUpdateRunnable);
+            notificationsQueue.cancelRunnable(notificationDelayRunnable);
+            notificationUpdateState.clear();
+            releaseDelayWakeLockAfterUpdate = false;
             lastBadgeCount = 0;
             try {
                 if (notificationDelayWakelock.isHeld()) {
@@ -1037,11 +1049,26 @@ public class NotificationsController extends BaseController implements Notificat
             FileLog.d("NotificationsController: processNewMessages msgs.size()=" + (messageObjects == null ? "null" : messageObjects.size()) + " isLast=" + isLast + " isFcm=" + isFcm + ")");
         }
 
+        if (messageObjects == null || messageObjects.isEmpty()) {
+            if (countDownLatch != null) {
+                countDownLatch.countDown();
+            }
+            return;
+        }
+
         if (messageObjects != null) {
             for (int i = 0; i < messageObjects.size(); ++i) {
                 final MessageObject messageObject = messageObjects.get(i);
-                if (messageObject != null && LumaEmergencyMode.isEnabled(currentAccount)
+                // Apply privacy filtering before conference-call notifications, not
+                // only later when ordinary messages enter the notification queue.
+                if (messageObject == null || BlackHoleVault.contains(currentAccount, messageObject.getDialogId())
+                        || LumaEmergencyMode.isEnabled(currentAccount)
                         && !LumaEmergencyMode.isSelectedDialog(currentAccount, messageObject.getDialogId())) {
+                    if (messageObject != null && messageObject.messageOwner != null
+                            && messageObject.messageOwner.action instanceof TLRPC.TL_messageActionConferenceCall) {
+                        VoIPGroupNotification.hide(ApplicationLoader.applicationContext, currentAccount, messageObject.getId());
+                    }
+                    messageObjects.remove(i--);
                     continue;
                 }
                 if (messageObject != null && messageObject.messageOwner != null&& !messageObject.isOutOwner() && messageObject.messageOwner.action instanceof TLRPC.TL_messageActionConferenceCall) {
@@ -3410,6 +3437,7 @@ public class NotificationsController extends BaseController implements Notificat
     }
 
     private void scheduleNotificationDelay(boolean onlineReason) {
+        releaseDelayWakeLockAfterUpdate = false;
         try {
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("delay notification start, onlineReason = " + onlineReason);
@@ -4136,6 +4164,12 @@ public class NotificationsController extends BaseController implements Notificat
     }
 
     private void showOrUpdateNotification(boolean notifyAboutLast) {
+        // Edits, deletions, story refreshes and media loads must share the same
+        // limiter as new-message/read updates; otherwise they bypass coalescing.
+        requestNotificationUpdate(notifyAboutLast);
+    }
+
+    private void showOrUpdateNotificationInternal(boolean notifyAboutLast) {
         if (!getUserConfig().isClientActivated() || pushMessages.isEmpty() && storyPushMessages.isEmpty() || !SharedConfig.showNotificationsForAllAccounts && currentAccount != UserConfig.selectedAccount) {
             dismissNotification();
             return;
@@ -4820,20 +4854,20 @@ public class NotificationsController extends BaseController implements Notificat
 
     /** Coalesce bursts of FCM/read updates into one Android notification post. */
     private void requestNotificationUpdate(boolean notifyAboutLast) {
-        notificationUpdateNotifyAboutLast |= notifyAboutLast;
-        if (notificationUpdateScheduled) {
-            return;
+        long delay = notificationUpdateState.request(notifyAboutLast, SystemClock.elapsedRealtime());
+        if (delay >= 0) {
+            notificationsQueue.postRunnable(notificationUpdateRunnable, delay);
         }
-        notificationUpdateScheduled = true;
-        long elapsed = SystemClock.elapsedRealtime() - lastNotificationUpdateTime;
-        long delay = Math.max(0, 250 - elapsed);
-        notificationsQueue.postRunnable(() -> {
-            boolean notify = notificationUpdateNotifyAboutLast;
-            notificationUpdateNotifyAboutLast = false;
-            notificationUpdateScheduled = false;
-            lastNotificationUpdateTime = SystemClock.elapsedRealtime();
-            showOrUpdateNotification(notify);
-        }, delay);
+    }
+
+    private void releaseNotificationDelayWakeLock() {
+        try {
+            if (notificationDelayWakelock != null && notificationDelayWakelock.isHeld()) {
+                notificationDelayWakelock.release();
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
     }
 
     @SuppressLint("NewApi")

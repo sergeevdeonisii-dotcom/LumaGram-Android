@@ -3,8 +3,8 @@ param(
     [Parameter(Mandatory = $true)][string]$SdkPath,
     [Parameter(Mandatory = $true)][string]$JavaHome,
     [string]$NdkVersion = '27.2.12479018',
-    [string]$VersionName = '12.10.6-lunagram.73',
-    [int]$VersionCode = 71529,
+    [string]$VersionName = '12.10.6-lunagram.74',
+    [int]$VersionCode = 71539,
     # Recheck signing only when its configuration, key or build variant changes.
     [switch]$VerifySignature
 )

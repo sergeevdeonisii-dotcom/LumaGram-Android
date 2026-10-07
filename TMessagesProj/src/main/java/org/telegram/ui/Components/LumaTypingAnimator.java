@@ -6,12 +6,13 @@ import android.graphics.Paint;
 import android.os.SystemClock;
 import android.text.Editable;
 import android.text.Layout;
+import android.text.NoCopySpan;
 import android.text.Spanned;
 import android.text.TextPaint;
 import android.text.TextWatcher;
-import android.text.method.PasswordTransformationMethod;
-import android.text.style.ForegroundColorSpan;
+import android.text.style.CharacterStyle;
 import android.text.style.ReplacementSpan;
+import android.text.style.UpdateAppearance;
 import android.view.Gravity;
 
 import org.telegram.messenger.AndroidUtilities;
@@ -39,6 +40,7 @@ final class LumaTypingAnimator implements TextWatcher {
     private final TextPaint animationPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
 
     private EditTextBoldCursor view;
+    private Editable glyphText;
     private boolean watcherAttached;
     private boolean target;
     private int pendingStart;
@@ -49,9 +51,12 @@ final class LumaTypingAnimator implements TextWatcher {
     private int imeInputKind = INPUT_UNKNOWN;
 
     void setTarget(EditTextBoldCursor view, boolean target) {
-        if (this.view != null && this.view != view && watcherAttached) {
-            this.view.removeTextChangedListener(this);
-            watcherAttached = false;
+        if (this.view != null && this.view != view) {
+            clear(this.view);
+            if (watcherAttached) {
+                this.view.removeTextChangedListener(this);
+                watcherAttached = false;
+            }
         }
         this.view = view;
         this.target = target;
@@ -71,8 +76,10 @@ final class LumaTypingAnimator implements TextWatcher {
     void beforeDraw(EditTextBoldCursor view) {
         final Editable editable = view.getText();
         if (editable == null) {
+            clearGlyphs(null);
             return;
         }
+        bindGlyphText(editable);
         if (!canAnimate(view)) {
             clearGlyphs(editable);
             return;
@@ -91,8 +98,9 @@ final class LumaTypingAnimator implements TextWatcher {
         }
 
         final long now = SystemClock.uptimeMillis();
-        final int paddingLeft = view.getPaddingLeft();
+        final int paddingLeft = view.getCompoundPaddingLeft();
         final int scrollX = view.getScrollX();
+        final int scrollY = view.getScrollY();
         final float verticalOffset = getVerticalOffset(view);
         // View.draw() has already translated this canvas by -scrollY before
         // EditTextBoldCursor.onDraw(). Subtracting it here again makes letters
@@ -103,12 +111,16 @@ final class LumaTypingAnimator implements TextWatcher {
         final int originalAlpha = animationPaint.getAlpha();
 
         canvas.save();
-        canvas.clipRect(0, 0, view.getWidth(), view.getHeight());
+        // The onDraw canvas is in scroll-content coordinates, just like the
+        // native TextView layout. Both the clip and visibility test must use
+        // that coordinate space, otherwise later lines disappear when scrolled.
+        canvas.clipRect(scrollX, scrollY, scrollX + view.getWidth(), scrollY + view.getHeight());
         for (int i = 0; i < glyphs.size(); i++) {
             final Glyph glyph = glyphs.get(i);
             final int start = editable.getSpanStart(glyph.hiddenSpan);
             final int end = editable.getSpanEnd(glyph.hiddenSpan);
-            if (!isValidGlyph(editable, glyph, start, end) || now < glyph.startTime) {
+            if (!isValidGlyph(editable, glyph, start, end)
+                || !isLayoutReady(layout, start, end) || now < glyph.startTime) {
                 continue;
             }
 
@@ -122,7 +134,7 @@ final class LumaTypingAnimator implements TextWatcher {
             if (blurAlpha > 4) {
                 animationPaint.setAlpha(blurAlpha);
                 animationPaint.setMaskFilter(getBlurFilter(blur, glyph.blurLevel));
-                drawGlyphRuns(canvas, layout, view, glyph, start, end, paddingLeft, scrollX, textTop, lift);
+                drawGlyphRuns(canvas, layout, view, glyph, start, end, paddingLeft, textTop, lift);
             }
 
             final float sharp = eased > BLUR_TEXT_DELAY
@@ -132,7 +144,7 @@ final class LumaTypingAnimator implements TextWatcher {
             final int sharpAlpha = (int) (originalAlpha * sharp);
             if (sharpAlpha > 0) {
                 animationPaint.setAlpha(sharpAlpha);
-                drawGlyphRuns(canvas, layout, view, glyph, start, end, paddingLeft, scrollX, textTop, lift);
+                drawGlyphRuns(canvas, layout, view, glyph, start, end, paddingLeft, textTop, lift);
             }
         }
         canvas.restore();
@@ -145,7 +157,7 @@ final class LumaTypingAnimator implements TextWatcher {
     }
 
     private void drawGlyphRuns(Canvas canvas, Layout layout, EditTextBoldCursor view, Glyph glyph,
-                               int start, int end, int paddingLeft, int scrollX,
+                               int start, int end, int paddingLeft,
                                float textTop, float lift) {
         int runStart = start;
         while (runStart < end) {
@@ -155,8 +167,10 @@ final class LumaTypingAnimator implements TextWatcher {
                 runEnd = Math.min(end, runStart + 1);
             }
             final float baseline = textTop + layout.getLineBaseline(line) - lift;
-            if (baseline >= -view.getTextSize() && baseline <= view.getHeight() + view.getTextSize()) {
-                final float x = paddingLeft + layout.getPrimaryHorizontal(runStart) - scrollX;
+            if (baseline >= view.getScrollY() - view.getTextSize()
+                && baseline <= view.getScrollY() + view.getHeight() + view.getTextSize()) {
+                // View's canvas has already applied -scrollX as well as -scrollY.
+                final float x = paddingLeft + layout.getPrimaryHorizontal(runStart);
                 canvas.drawText(glyph.text, runStart - start, runEnd - start, x, baseline, animationPaint);
             }
             runStart = runEnd;
@@ -165,11 +179,9 @@ final class LumaTypingAnimator implements TextWatcher {
 
     void clear(EditTextBoldCursor view) {
         final Editable editable = view.getText();
-        if (editable != null) {
-            clearGlyphs(editable);
-        } else {
-            glyphs.clear();
-        }
+        clearGlyphs(editable);
+        resetPendingChange();
+        imeInputKind = INPUT_UNKNOWN;
         view.invalidate();
     }
 
@@ -209,13 +221,16 @@ final class LumaTypingAnimator implements TextWatcher {
         final String oldSegment = pendingOldSegment;
         final boolean syntheticChange = pendingSyntheticChange;
         resetPendingChange();
+        bindGlyphText(editable);
 
         if (!canAnimate(targetView)) {
             clearGlyphs(editable);
             return;
         }
         if (syntheticChange) {
-            pruneInvalidGlyphs(editable);
+            // Reentrant/programmatic watchers can invalidate the reported edit
+            // range. Reveal native text rather than retain guessed hidden ranges.
+            clearGlyphs(editable);
             return;
         }
         trackTextChange(
@@ -243,7 +258,8 @@ final class LumaTypingAnimator implements TextWatcher {
 
     private boolean canAnimate(EditTextBoldCursor view) {
         return target && LumaTextAnimation.isEnabled()
-            && !(view.getTransformationMethod() instanceof PasswordTransformationMethod);
+            && view.isAttachedToWindow() && view.isShown()
+            && view.getTransformationMethod() == null;
     }
 
     private void resetPendingChange() {
@@ -256,6 +272,7 @@ final class LumaTypingAnimator implements TextWatcher {
 
     private void trackTextChange(Editable editable, int start, int count,
                                  String oldSegment, int inputKind, long now) {
+        bindGlyphText(editable);
         pruneInvalidGlyphs(editable);
         if (count <= 0 || editable.length() == 0) {
             return;
@@ -338,7 +355,8 @@ final class LumaTypingAnimator implements TextWatcher {
         }
 
         candidates.clear();
-        if (committedWord && swipeMode == LumaTextAnimation.SWIPE_WHOLE_WORD) {
+        if (committedWord && swipeMode == LumaTextAnimation.SWIPE_WHOLE_WORD
+            && canDrawRange(editable, groupedStart, groupedEnd)) {
             candidates.add(new Candidate(
                 groupedStart,
                 groupedEnd,
@@ -352,7 +370,8 @@ final class LumaTypingAnimator implements TextWatcher {
                 final int length = Character.charCount(codePoint);
                 final int end = Math.min(animationEnd, offset + length);
                 if (!isWhitespace(editable, offset, end)
-                    && !isEmojiLike(editable, offset, end, codePoint)) {
+                    && !isEmojiLike(editable, offset, end, codePoint)
+                    && canDrawRange(editable, offset, end)) {
                     if (candidates.size() == MAX_GLYPHS_PER_CHANGE) {
                         candidates.remove(0);
                     }
@@ -375,7 +394,7 @@ final class LumaTypingAnimator implements TextWatcher {
             if (candidate.start < 0 || candidate.end > editable.length() || candidate.end <= candidate.start) {
                 continue;
             }
-            final ForegroundColorSpan hiddenSpan = new ForegroundColorSpan(0x00000000);
+            final HiddenTypingSpan hiddenSpan = new HiddenTypingSpan();
             editable.setSpan(hiddenSpan, candidate.start, candidate.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             glyphs.add(new Glyph(
                 candidate.text,
@@ -396,7 +415,9 @@ final class LumaTypingAnimator implements TextWatcher {
             final int start = editable.getSpanStart(glyph.hiddenSpan);
             final int end = editable.getSpanEnd(glyph.hiddenSpan);
             final long duration = glyph.durationMs;
-            if (!isValidGlyph(editable, glyph, start, end) || now - glyph.startTime >= duration) {
+            if (!isValidGlyph(editable, glyph, start, end)
+                || !isLayoutReady(view.getLayout(), start, end)
+                || now - glyph.startTime >= duration) {
                 editable.removeSpan(glyph.hiddenSpan);
                 iterator.remove();
             }
@@ -439,10 +460,23 @@ final class LumaTypingAnimator implements TextWatcher {
 
     private void clearGlyphs(Editable editable) {
         for (int i = 0; i < glyphs.size(); i++) {
-            editable.removeSpan(glyphs.get(i).hiddenSpan);
+            if (glyphText != null) {
+                glyphText.removeSpan(glyphs.get(i).hiddenSpan);
+            }
+            if (editable != null && editable != glyphText) {
+                editable.removeSpan(glyphs.get(i).hiddenSpan);
+            }
         }
         glyphs.clear();
         candidates.clear();
+        glyphText = null;
+    }
+
+    private void bindGlyphText(Editable editable) {
+        if (glyphText != editable) {
+            clearGlyphs(editable);
+            glyphText = editable;
+        }
     }
 
     private BlurMaskFilter getBlurFilter(float blur, int blurLevel) {
@@ -468,7 +502,73 @@ final class LumaTypingAnimator implements TextWatcher {
                 return false;
             }
         }
+        return canDrawRange(editable, start, end);
+    }
+
+    private static boolean canDrawRange(Editable editable, int start, int end) {
+        // Raw Canvas.drawText does not reproduce styled spans, grapheme clusters
+        // or contextual/RTL shaping. Keep those ranges entirely in the native
+        // layout instead of hiding them and drawing a visibly different glyph.
+        if (start < 0 || end <= start || end > editable.length()) {
+            return false;
+        }
+        for (int offset = start; offset < end;) {
+            final int codePoint = Character.codePointAt(editable, offset);
+            if (Character.charCount(codePoint) > 1 || isCombiningCharacter(codePoint)
+                || !isPlainLetterOrSymbol(codePoint)) {
+                return false;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        if ((start > 0 && isCombiningCharacter(Character.codePointBefore(editable, start)))
+            || (end < editable.length() && isCombiningCharacter(Character.codePointAt(editable, end)))) {
+            return false;
+        }
+        final CharacterStyle[] spans = editable.getSpans(start, end, CharacterStyle.class);
+        if (spans != null) {
+            for (CharacterStyle span : spans) {
+                if (!(span instanceof HiddenTypingSpan)) {
+                    return false;
+                }
+            }
+        }
         return true;
+    }
+
+    private static boolean isPlainLetterOrSymbol(int codePoint) {
+        // Explicit BMP ranges keep the input usable on the app's API 21
+        // minimum; Character.UnicodeScript was only added to Android in API 24.
+        return (codePoint >= 0x20 && codePoint <= 0x7E)
+            || (codePoint >= 0x00C0 && codePoint <= 0x024F)
+            || (codePoint >= 0x0370 && codePoint <= 0x052F)
+            || (codePoint >= 0x1E00 && codePoint <= 0x1FFF);
+    }
+
+    private static boolean isLayoutReady(Layout layout, int start, int end) {
+        if (layout == null || end > layout.getText().length()) {
+            return false;
+        }
+        final int line = layout.getLineForOffset(start);
+        return layout.getParagraphDirection(line) > 0
+            && !layout.isRtlCharAt(start)
+            && !(start > 0 && layout.isRtlCharAt(start - 1))
+            && !(end < layout.getText().length() && layout.isRtlCharAt(end));
+    }
+
+    private static boolean isCombiningCharacter(int codePoint) {
+        final int type = Character.getType(codePoint);
+        return type == Character.NON_SPACING_MARK
+            || type == Character.COMBINING_SPACING_MARK
+            || type == Character.ENCLOSING_MARK
+            || codePoint == 0x200D;
+    }
+
+    // Animation markup belongs to this view, never to a copied draft or slice.
+    private static final class HiddenTypingSpan extends CharacterStyle implements NoCopySpan, UpdateAppearance {
+        @Override
+        public void updateDrawState(TextPaint paint) {
+            paint.setColor(0x00000000);
+        }
     }
 
     private static boolean isWhitespace(CharSequence text, int start, int end) {
@@ -514,7 +614,12 @@ final class LumaTypingAnimator implements TextWatcher {
     }
 
     private static boolean isEmojiLike(Editable editable, int start, int end, int codePoint) {
-        if (Character.charCount(codePoint) > 1 || codePoint == 0x200D || codePoint == 0xFE0F || codePoint == 0x20E3) {
+        // The common-prefix/suffix comparison is in UTF-16 units. Replacing
+        // one supplementary character with another can leave only its low or
+        // high surrogate in the changed range. Never hide/redraw that half:
+        // the native layout must keep rendering the complete character.
+        if (Character.charCount(codePoint) > 1 || Character.getType(codePoint) == Character.SURROGATE
+            || codePoint == 0x200D || codePoint == 0xFE0F || codePoint == 0x20E3) {
             return true;
         }
         if ((codePoint >= 0x2600 && codePoint <= 0x27BF) || (codePoint >= 0x1F000 && codePoint <= 0x1FAFF)) {
@@ -561,14 +666,14 @@ final class LumaTypingAnimator implements TextWatcher {
 
     private static final class Glyph {
         final String text;
-        final ForegroundColorSpan hiddenSpan;
+        final CharacterStyle hiddenSpan;
         final long startTime;
         final boolean wordBatch;
         final long durationMs;
         final int blurLevel;
         final float slideDistanceDp;
 
-        Glyph(String text, ForegroundColorSpan hiddenSpan, long startTime, boolean wordBatch,
+        Glyph(String text, CharacterStyle hiddenSpan, long startTime, boolean wordBatch,
               long durationMs, int blurLevel, float slideDistanceDp) {
             this.text = text;
             this.hiddenSpan = hiddenSpan;

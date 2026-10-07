@@ -1,5 +1,30 @@
 # Luma regression tests
 
+For the .74 candidate, `run-android-audit74.ps1 -JavaHome <JDK 17>` runs all
+source/model regressions, including the two isolated header/updater runners.
+The completed typing audit additionally compiles the full production animator
+against deterministic Android models: 25 cases, 11,275 assertions, including
+rapid edits, composition, paste, styling, Unicode, disabled/detached/rebound
+targets, copied drafts, word/single-glyph modes and scrolled multiline input.
+The expanded header suite has 436 assertions and the isolated SimpleTextView
+placeholder/callback setter suite has 10. These model counts are not a count
+of independent bugs and do not certify the real Samsung IME or Android renderer.
+Complex/styled/RTL ranges fall back to native text drawing instead of being
+temporarily concealed and reproduced with an incorrect raw glyph.
+The new checks cover queue-wide notification coalescing without losing alerts,
+cancelled conference lookups and reused login identities, one-shot exports with
+immutable selections and separately owned files, late worker callbacks, damaged
+notification history, valid negative secret-chat message IDs, concurrent notes,
+cancel/retry update downloads, active typing drawable callbacks and UTF-16 emoji
+replacement. Header methods are extracted verbatim against small platform models;
+they are not Android-rendered screenshots. Keystore and server exports are not
+device-tested by these fixtures. Source wiring checks also require the delivery
+wake lock to be released after the actual coalesced notification update.
+
+No .74 APK is implied by these tests. A successful standalone Android build and
+device checks remain separate requirements; do not publish a manifest for a
+candidate that has not produced a verified APK.
+
 The .71 tools model tests cover local search, strict portable-settings validation,
 preset/custom profiles, identity-bound vault sessions with stale authentication rejection,
 real AES-GCM encryption/tamper/AAD tests, note limits, and notification history limits/deduplication.

@@ -26,6 +26,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
+import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -144,6 +145,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     }
 
     private final Options options;
+    private final LumaExportSession session;
     private final Listener listener;
     private final AccountInstance account;
     private final ConnectionsManager connectionsManager;
@@ -181,15 +183,36 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     private volatile File activeArchive;
 
     public LumaChatExportManager(@NonNull Options options, @NonNull Listener listener) {
-        this.options = options;
+        this.options = new Options(options.account, options.dialogId, options.title);
+        this.options.mergeDialogId = options.mergeDialogId;
+        this.options.threadId = options.threadId;
+        this.options.savedPeerId = options.savedPeerId;
+        this.options.savedParentDialogId = options.savedParentDialogId;
+        this.options.historyMode = options.historyMode;
+        this.options.outputFormat = options.outputFormat;
+        this.options.includeMedia = options.includeMedia;
+        this.options.includePhotos = options.includePhotos;
+        this.options.includeVideos = options.includeVideos;
+        this.options.includeFiles = options.includeFiles;
+        this.options.maxMediaBytes = options.maxMediaBytes;
+        this.options.secretChat = options.secretChat;
+        this.options.protectedContent = options.protectedContent;
+        this.options.desktopAccountLayout = options.desktopAccountLayout;
+        session = new LumaExportSession(this.options.account);
         this.listener = listener;
-        account = AccountInstance.getInstance(options.account);
+        account = AccountInstance.getInstance(this.options.account);
         connectionsManager = account.getConnectionsManager();
         messagesController = account.getMessagesController();
         fileLoader = account.getFileLoader();
     }
 
     public void start() {
+        if (!session.startOnce(cancelled, terminalCallbackSent)) return;
+        if (!session.hasOwner()) {
+            fail(localized("Для экспорта необходимо войти в аккаунт.", "Sign in before exporting a chat."), null);
+            return;
+        }
+        if (stoppedOrOwnerChanged()) return;
         if (options.secretChat || DialogObject.isEncryptedDialog(options.dialogId)) {
             fail(localized("Секретные чаты пока нельзя экспортировать.", "Secret chats cannot be exported yet."), null);
             return;
@@ -203,11 +226,15 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
             return;
         }
         try {
-            createSessionDirectories();
+            synchronized (worker) {
+                if (cancelled.get() || terminalCallbackSent.get()) return;
+                createSessionDirectories();
+            }
         } catch (Throwable e) {
             fail(localized("Не удалось подготовить папку экспорта.", "Could not prepare the export folder."), e);
             return;
         }
+        if (stoppedOrOwnerChanged()) return;
         if (options.includeMedia) {
             account.getNotificationCenter().addObserver(this, NotificationCenter.fileLoaded);
             account.getNotificationCenter().addObserver(this, NotificationCenter.fileLoadFailed);
@@ -218,7 +245,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     }
 
     public void cancel() {
-        if (!cancelled.compareAndSet(false, true)) {
+        if (terminalCallbackSent.get() || !cancelled.compareAndSet(false, true)) {
             return;
         }
         connectionsManager.cancelRequestsForGuid(requestGuid);
@@ -250,14 +277,14 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
             throw new IllegalStateException("No cache directory");
         }
         outputDir = new File(exportCache, "luma_chat_exports");
-        if (!outputDir.exists() && !outputDir.mkdirs()) {
+        if (!outputDir.exists() && !outputDir.mkdirs() && !outputDir.isDirectory()) {
             throw new IllegalStateException("Could not create output directory");
         }
         File sessionRoot = new File(privateCache, "luma_chat_export_sessions");
-        if (!sessionRoot.exists() && !sessionRoot.mkdirs()) {
+        if (!sessionRoot.exists() && !sessionRoot.mkdirs() && !sessionRoot.isDirectory()) {
             throw new IllegalStateException("Could not create session root");
         }
-        sessionDir = new File(sessionRoot, ".session_" + System.currentTimeMillis() + "_" + Math.abs(options.dialogId));
+        sessionDir = LumaExportSession.createDirectory(sessionRoot);
         pagesDir = new File(sessionDir, "pages");
         mediaDir = new File(sessionDir, "media");
         if (!pagesDir.mkdirs() || !mediaDir.mkdirs()) {
@@ -266,7 +293,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     }
 
     private void requestNextPage() {
-        if (cancelled.get()) {
+        if (stoppedOrOwnerChanged()) {
             return;
         }
         final TLObject request;
@@ -305,7 +332,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
             return;
         }
         int requestId = connectionsManager.sendRequest(request, (response, error) -> {
-            if (cancelled.get()) {
+            if (stoppedOrOwnerChanged()) {
                 return;
             }
             if (error != null) {
@@ -318,7 +345,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
                 return;
             }
             TLRPC.messages_Messages page = (TLRPC.messages_Messages) response;
-            worker.execute(() -> processPage(page));
+            executeIfActive(() -> processPage(page));
         });
         connectionsManager.bindRequestToGuid(requestId, requestGuid);
     }
@@ -336,7 +363,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     }
 
     private void processPage(TLRPC.messages_Messages page) {
-        if (cancelled.get()) {
+        if (stoppedOrOwnerChanged()) {
             return;
         }
         try {
@@ -380,7 +407,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
             try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(pageFile), StandardCharsets.UTF_8))) {
                 Collections.reverse(accepted);
                 for (TLRPC.Message message : accepted) {
-                    if (cancelled.get()) {
+                    if (stoppedOrOwnerChanged()) {
                         return;
                     }
                     MessageObject object = new MessageObject(options.account, message, users, chats, false, false,
@@ -405,6 +432,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     }
 
     private void advanceSourceOrBuild() {
+        if (stoppedOrOwnerChanged()) return;
         if (sourceIndex == 0 && options.historyMode == HISTORY_DIALOG && options.mergeDialogId != 0) {
             sourceIndex = 1;
             activeSourceDialogId = options.mergeDialogId;
@@ -414,7 +442,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
             return;
         }
         notifyProgress(STAGE_ARCHIVE);
-        worker.execute(options.outputFormat == OUTPUT_PDF ? this::buildPdf : this::buildArchive);
+        executeIfActive(options.outputFormat == OUTPUT_PDF ? this::buildPdf : this::buildArchive);
     }
 
     private JSONObject createMessageJson(TLRPC.Message message, MessageObject object,
@@ -516,7 +544,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         if (source == null || !source.exists()) {
             source = downloadMedia(object, attachment);
         }
-        if (cancelled.get()) {
+        if (stoppedOrOwnerChanged()) {
             return;
         }
         if (source == null || !source.exists()) {
@@ -598,7 +626,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         activeDocument = attachment.document;
         activePhotoSize = attachment.photoSize;
         AndroidUtilities.runOnUIThread(() -> {
-            if (cancelled.get()) {
+            if (stoppedOrOwnerChanged()) {
                 CountDownLatch latch = waitingFileLatch;
                 if (latch != null) latch.countDown();
                 return;
@@ -611,7 +639,14 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
                         "jpg", FileLoader.PRIORITY_HIGH, 0);
             }
         });
-        boolean signaled = waitingFileLatch.await(DOWNLOAD_TIMEOUT_MINUTES, TimeUnit.MINUTES);
+        CountDownLatch downloadLatch = waitingFileLatch;
+        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(DOWNLOAD_TIMEOUT_MINUTES);
+        boolean signaled = false;
+        while (!signaled && !stoppedOrOwnerChanged()) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) break;
+            signaled = downloadLatch.await(Math.min(remaining, TimeUnit.SECONDS.toNanos(1)), TimeUnit.NANOSECONDS);
+        }
         File result = downloadedFile;
         if (!signaled && !cancelled.get()) {
             AndroidUtilities.runOnUIThread(() -> {
@@ -638,7 +673,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     }
 
     private void buildArchive() {
-        if (cancelled.get()) {
+        if (stoppedOrOwnerChanged()) {
             return;
         }
         File archive = null;
@@ -690,7 +725,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     }
 
     private void buildPdf() {
-        if (cancelled.get()) {
+        if (stoppedOrOwnerChanged()) {
             return;
         }
         File pdf = null;
@@ -831,7 +866,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
              BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(destination))) {
             int read;
             while ((read = input.read(buffer)) != -1) {
-                if (cancelled.get()) {
+                if (stoppedOrOwnerChanged()) {
                     destination.delete();
                     return;
                 }
@@ -841,7 +876,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     }
 
     private void ensureNotCancelled() throws ExportCancelledException {
-        if (cancelled.get()) {
+        if (stoppedOrOwnerChanged()) {
             throw new ExportCancelledException();
         }
     }
@@ -849,7 +884,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     private void notifyProgress(int stage) {
         Progress progress = progress(stage);
         AndroidUtilities.runOnUIThread(() -> {
-            if (!terminalCallbackSent.get()) {
+            if (!stoppedOrOwnerChanged()) {
                 listener.onProgress(progress);
             }
         });
@@ -861,49 +896,70 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
     }
 
     private void complete(File archive) {
-        if (!terminalCallbackSent.compareAndSet(false, true)) {
-            return;
+        synchronized (worker) {
+            if (stoppedOrOwnerChanged() || !terminalCallbackSent.compareAndSet(false, true)) {
+                archive.delete();
+                return;
+            }
+            worker.shutdown();
         }
         removeObservers();
         Progress finalProgress = progress(STAGE_ARCHIVE);
-        worker.shutdown();
-        AndroidUtilities.runOnUIThread(() -> listener.onComplete(archive, finalProgress));
+        AndroidUtilities.runOnUIThread(() -> {
+            if (!session.isCurrent()) {
+                archive.delete();
+                listener.onCancelled();
+            } else {
+                listener.onComplete(archive, finalProgress);
+            }
+        });
     }
 
     private void fail(String message, Throwable error) {
-        if (!terminalCallbackSent.compareAndSet(false, true)) {
-            return;
+        synchronized (worker) {
+            if (!terminalCallbackSent.compareAndSet(false, true)) return;
+            cancelled.set(true);
+            connectionsManager.cancelRequestsForGuid(requestGuid);
+            CountDownLatch latch = waitingFileLatch;
+            if (latch != null) latch.countDown();
+            removeObservers();
+            final File archive = activeArchive;
+            worker.execute(() -> {
+                if (archive != null && archive.exists()) archive.delete();
+                cleanupSession(true);
+                worker.shutdown();
+            });
         }
-        cancelled.set(true);
-        connectionsManager.cancelRequestsForGuid(requestGuid);
-        CountDownLatch latch = waitingFileLatch;
-        if (latch != null) latch.countDown();
-        removeObservers();
-        final File archive = activeArchive;
-        worker.execute(() -> {
-            if (archive != null && archive.exists()) {
-                archive.delete();
-            }
-            cleanupSession(true);
-            worker.shutdown();
-        });
         AndroidUtilities.runOnUIThread(() -> listener.onError(message, error));
     }
 
     private void finishCancelled() {
-        if (!terminalCallbackSent.compareAndSet(false, true)) {
-            return;
+        synchronized (worker) {
+            if (!terminalCallbackSent.compareAndSet(false, true)) return;
+            removeObservers();
+            final File archive = activeArchive;
+            worker.execute(() -> {
+                if (archive != null && archive.exists()) archive.delete();
+                cleanupSession(true);
+                worker.shutdown();
+            });
         }
-        removeObservers();
-        final File archive = activeArchive;
-        worker.execute(() -> {
-            if (archive != null && archive.exists()) {
-                archive.delete();
-            }
-            cleanupSession(true);
-            worker.shutdown();
-        });
         AndroidUtilities.runOnUIThread(listener::onCancelled);
+    }
+
+    private boolean stoppedOrOwnerChanged() {
+        if (cancelled.get() || terminalCallbackSent.get()) return true;
+        if (!session.isCurrent()) {
+            cancel();
+            return true;
+        }
+        return false;
+    }
+
+    private boolean executeIfActive(Runnable task) {
+        boolean accepted = session.executeIfActive(worker, cancelled, terminalCallbackSent, task);
+        if (!accepted && !session.isCurrent()) cancel();
+        return accepted;
     }
 
     private void removeObservers() {
@@ -932,6 +988,7 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
 
     @Override
     public void didReceivedNotification(int id, int accountId, Object... args) {
+        if (accountId != options.account || stoppedOrOwnerChanged()) return;
         if ((id != NotificationCenter.fileLoaded && id != NotificationCenter.fileLoadFailed) || args.length == 0) {
             return;
         }
@@ -984,17 +1041,8 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         return TextUtils.isEmpty(clean) ? "chat" : clean;
     }
 
-    private static File uniqueFile(File directory, String name) {
-        File result = new File(directory, name);
-        if (!result.exists()) return result;
-        int dot = name.lastIndexOf('.');
-        String base = dot > 0 ? name.substring(0, dot) : name;
-        String extension = dot > 0 ? name.substring(dot) : "";
-        for (int i = 2; i < 10_000; i++) {
-            result = new File(directory, base + " (" + i + ")" + extension);
-            if (!result.exists()) return result;
-        }
-        return new File(directory, base + "_" + System.currentTimeMillis() + extension);
+    private static File uniqueFile(File directory, String name) throws IOException {
+        return LumaExportSession.reserveFile(directory, name);
     }
 
     private static String extensionForMime(String mime) {

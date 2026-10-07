@@ -22,13 +22,18 @@ import android.view.DragAndDropPermissions;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
+import org.telegram.messenger.BlackHoleVault;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaEmergencyMode;
+import org.telegram.messenger.LumaConferenceRequestState;
+import org.telegram.messenger.LumaNotificationAccountGuard;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
+import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
@@ -135,8 +140,13 @@ public class VoIPGroupNotification {
     public static State currentState;
     private static HashSet<Integer> ignoreCalls;
     private static Runnable missRunnable;
+    private static final LumaConferenceRequestState pendingRequest = new LumaConferenceRequestState();
     public static void request(Context context, int account, long dialogId, String names, long call_id, int msg_id, boolean video) {
         if (Build.VERSION.SDK_INT < 26 || currentCallId == call_id || currentState != null && currentState.call_id == call_id) return;
+        final long expectedOwner = UserConfig.getInstance(account).getClientUserId();
+        if (!LumaNotificationAccountGuard.allows(expectedOwner, expectedOwner, call_id, call_id,
+                BlackHoleVault.contains(account, dialogId), LumaEmergencyMode.isEnabled(account)
+                && !LumaEmergencyMode.isSelectedDialog(account, dialogId))) return;
 
         if (VoIPService.getSharedInstance() != null) {
             if (currentState != null) {
@@ -149,11 +159,24 @@ public class VoIPGroupNotification {
             return;
 
         currentCallId = call_id;
+        final long requestToken = pendingRequest.begin(account, call_id, msg_id);
         final TL_phone.getGroupCall req = new TL_phone.getGroupCall();
         req.call = new TLRPC.TL_inputGroupCallInviteMessage();
         req.call.msg_id = msg_id;
         req.limit = 3;
         ConnectionsManager.getInstance(account).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
+            if (!pendingRequest.isCurrent(requestToken)) return;
+            // The chat/account may have been hidden, logged out or replaced
+            // while getGroupCall was in flight. Do not publish the old caller.
+            if (!LumaNotificationAccountGuard.allows(expectedOwner,
+                    UserConfig.getInstance(account).getClientUserId(), call_id, currentCallId,
+                    BlackHoleVault.contains(account, dialogId), LumaEmergencyMode.isEnabled(account)
+                    && !LumaEmergencyMode.isSelectedDialog(account, dialogId))) {
+                pendingRequest.finish(requestToken);
+                if (currentCallId == call_id && currentState == null) currentCallId = 0;
+                return;
+            }
+            pendingRequest.finish(requestToken);
             if (res instanceof TL_phone.groupCall) {
                 final TL_phone.groupCall r = (TL_phone.groupCall) res;
                 MessagesController.getInstance(account).putUsers(r.users, false);
@@ -386,10 +409,16 @@ public class VoIPGroupNotification {
     }
 
     public static void hide(Context context) {
-        if (currentState == null) return;
+        if (currentState == null) {
+            long pendingCall = pendingRequest.cancelAll();
+            if (currentCallId == pendingCall) currentCallId = 0;
+            return;
+        }
         hide(context, currentState.currentAccount, currentState.msg_id);
     }
     public static void hide(Context context, int currentAccount, int msg_id) {
+        long pendingCall = pendingRequest.cancelMessage(currentAccount, msg_id);
+        if (pendingCall != 0 && currentState == null && currentCallId == pendingCall) currentCallId = 0;
         if (currentState == null || currentState.currentAccount != currentAccount || currentState.msg_id != msg_id) {
             return;
         }
@@ -407,6 +436,8 @@ public class VoIPGroupNotification {
         }
     }
     public static void hideByCallId(Context context, int currentAccount, long call_id) {
+        long pendingCall = pendingRequest.cancelCall(currentAccount, call_id);
+        if (pendingCall != 0 && currentState == null && currentCallId == pendingCall) currentCallId = 0;
         if (currentState == null || currentState.currentAccount != currentAccount || currentState.call_id != call_id) {
             return;
         }
