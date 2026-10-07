@@ -30,7 +30,7 @@ $expected = [ordered]@{
     PRIVACY = @{ Method = 'fillPrivacyItems'; Rows = @('ROW_GHOST_ENABLED', 'ROW_GHOST_SCHEDULE_SEND_ENABLED', 'ROW_DELETED_MESSAGES_ENABLED') }
     PROFILE = @{ Method = 'fillProfileItems'; Rows = @('ROW_STAR_RATING_ENABLED', 'ROW_STAR_RATING_LEVEL', 'ROW_ANONYMOUS_NUMBER_ENABLED', 'ROW_ANONYMOUS_NUMBER', 'ROW_PROFILE_VERIFICATION_ENABLED') }
     TYPING = @{ Method = 'fillTypingItems'; Rows = @('ROW_ENABLED', 'ROW_RESET') }
-    SENDING = @{ Method = 'fillSendingItems'; Rows = @('ROW_DELAYED_SEND_ENABLED') }
+    SENDING = @{ Method = 'fillSendingItems'; Rows = @('ROW_DELAYED_SEND_ENABLED', 'ROW_ROUND_VIDEO_QUALITY') }
     CONNECTION = @{ Method = 'fillConnectionItems'; Rows = @('ROW_EMERGENCY_ENABLED', 'ROW_EMERGENCY_CHAT', 'ROW_ACCOUNT_EXPORT') }
 }
 $visibleRows = @()
@@ -40,10 +40,11 @@ foreach ($name in $expected.Keys) {
     Check ($dispatch -match "case ${name}:\s+$($entry.Method)\(items\);") "Section $name routes to its own content"
     Check ([regex]::Matches($root, "sectionItem\(Section\.${name},").Count -eq 1) "Section $name appears once in the menu"
     $actualRows = @([regex]::Matches($body, '\bROW_\w+\b') | ForEach-Object Value)
-    Check (@(Compare-Object $entry.Rows $actualRows).Count -eq 0) "Section $name retains precisely its original controls"
+    Check (@(Compare-Object $entry.Rows $actualRows).Count -eq 0) "Section $name retains all expected controls"
     $visibleRows += $actualRows
 }
-Check ($visibleRows.Count -eq $rows.Count -and @(Compare-Object @($rows | ForEach-Object { $_.Groups[1].Value }) $visibleRows).Count -eq 0) 'All fourteen existing controls are reachable once'
+Check ($visibleRows.Count -eq 15 -and $visibleRows.Count -eq $rows.Count -and @(Compare-Object @($rows | ForEach-Object { $_.Groups[1].Value }) $visibleRows).Count -eq 0) 'All fourteen existing controls and the new round-video switch are reachable once'
+Check ((Method $advanced 'fillSendingItems').Contains('LumaRoundVideoQuality.isEnabled()') -and $click.Contains('LumaRoundVideoQuality.setEnabled(enabled);')) 'Round-video quality uses its persistent recording preference'
 $typing = Method $advanced 'fillTypingItems'
 foreach ($setting in @('SpeedLevel', 'BlurLevel', 'HeightLevel', 'SwipeMode')) {
     Check ($typing.Contains("LumaTextAnimation.get$setting()") -and $typing.Contains("LumaTextAnimation::set$setting")) "Typing slider $setting keeps its original preference"
@@ -53,7 +54,8 @@ Check ((Method $advanced 'fillPrivacyItems').Contains('ExperimentalGhostSchedule
 foreach ($warning in @('ExperimentalStarRatingInfo', 'ExperimentalAnonymousNumberInfo', 'ExperimentalProfileVerificationInfo')) {
     Check ((Method $advanced 'fillProfileItems').Contains($warning)) "Local-only explanation remains ($warning)"
 }
-Check ($updates -notmatch 'ROW_SOURCE|showSourceDialog|sourceLabel|R\.string\.LumaUpdate(?:AdvancedHeader|Source)') 'Update source card and URL editor are absent from the user interface'
+Check ($updates -notmatch 'ROW_SOURCE|showSourceDialog|sourceLabel|R\.string\.LumaUpdate(?:AdvancedHeader|Source(?:Title|Info|Hint|Name)?)\b') 'Update source card and URL editor are absent from the user interface'
+Check ($updates.Contains('UItem.asButton(ROW_REPAIR,') -and $updates.Contains('controller.setManifestUrl(null);') -and $updates.Contains('LumaUpdateRepairSourceInfo')) 'Explicit restore action repairs stale sources without exposing a URL editor'
 Check ($updates.Contains('controller.checkForUpdate(true,') -and $updates.Contains('controller.setAutoCheckEnabled(enabled);') -and $updates.Contains('showCustomUpdateAppPopup')) 'Manual checks, automatic checks and update installation remain available'
 Check ((Method $updater 'getManifestUrl' 'public').Contains('getString("manifest_url", null)') -and (Method $updater 'getManifestUrl' 'public').Contains('isHttps(saved) ? saved.trim() : BuildVars.LUMA_UPDATE_MANIFEST_URL')) 'Valid saved sources remain respected; empty/corrupt sources recover the built-in URL'
 Check ($updater.Contains('LumaUpdateFiles') -and $updater.Contains('sha256')) 'Updater integrity validation is not removed'

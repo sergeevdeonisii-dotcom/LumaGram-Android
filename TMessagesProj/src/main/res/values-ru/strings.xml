@@ -435,6 +435,13 @@
     <string name="LumaUpdateSourceMissing">Источник обновлений Lunagram пока не настроен.</string>
     <string name="LumaUpdateSourceInvalid">Можно использовать только корректный HTTPS‑адрес.</string>
     <string name="LumaUpdateCheckFailed">Не удалось подключиться к серверу обновлений Lunagram.</string>
+    <string name="LumaUpdateRepairSource">Восстановить проверку обновлений</string>
+    <string name="LumaUpdateRepairSourceInfo">Восстановить официальный источник обновлений Lunagram и проверить снова? Аккаунт и остальные настройки останутся без изменений.</string>
+    <string name="LumaUpdateRestoreAction">Восстановить</string>
+    <string name="LumaUpdateSourceNoNewVersion">В этом источнике не найдена более новая версия.</string>
+    <string name="LumaRoundVideoQualityTitle">Кружки</string>
+    <string name="LumaRoundVideoQualityEnable">Запись высокого качества</string>
+    <string name="LumaRoundVideoQualityInfo">Более чёткие HD-кружки на поддерживаемых камерах и кодеках. Файлы больше, отправка может занимать дольше. Без обрезки отправляется записанный файл без повторного сжатия; обрезка всё ещё требует обработки. На неподдерживаемых устройствах используется стандартное качество.</string>
     <string name="LumaUpdateManifestInvalid">В манифесте обновления нет обязательных данных безопасности либо у него неверный формат.</string>
     <string name="LumaUpdateDownloadFailed">Не удалось скачать обновление. Проверь подключение и попробуй снова.</string>
     <string name="LumaUpdateHashMismatch">Загруженный APK не прошёл проверку SHA‑256 и был удалён.</string>

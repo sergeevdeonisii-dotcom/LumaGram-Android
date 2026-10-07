@@ -11378,6 +11378,13 @@
     <string name="LumaUpdateSourceMissing">The Lunagram update source is not configured yet.</string>
     <string name="LumaUpdateSourceInvalid">Only a valid HTTPS address is allowed.</string>
     <string name="LumaUpdateCheckFailed">Could not connect to the Lunagram update server.</string>
+    <string name="LumaUpdateRepairSource">Restore update checks</string>
+    <string name="LumaUpdateRepairSourceInfo">Restore the official Lunagram update source and check again? Your account and other settings will stay unchanged.</string>
+    <string name="LumaUpdateRestoreAction">Restore</string>
+    <string name="LumaUpdateSourceNoNewVersion">No newer version was found in this update source.</string>
+    <string name="LumaRoundVideoQualityTitle">Video messages</string>
+    <string name="LumaRoundVideoQualityEnable">High-quality recording</string>
+    <string name="LumaRoundVideoQualityInfo">Sharper HD video messages on supported cameras and encoders. Files are larger and uploads may take longer. Unedited recordings are sent without re-encoding; trimming still requires processing. Unsupported devices use standard recording quality.</string>
     <string name="LumaUpdateManifestInvalid">The update manifest is missing required security information or has an invalid format.</string>
     <string name="LumaUpdateDownloadFailed">The update could not be downloaded. Check your connection and try again.</string>
     <string name="LumaUpdateHashMismatch">The downloaded APK failed its SHA-256 check and was deleted.</string>

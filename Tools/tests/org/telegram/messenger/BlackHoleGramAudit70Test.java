@@ -151,8 +151,20 @@ public final class BlackHoleGramAudit70Test {
         controller.setManifestUrl("");
         check(controller.getManifestUrl().equals(BuildVars.LUMA_UPDATE_MANIFEST_URL), "clearing custom source resets to default instead of disabling updates");
         controller.checkForUpdate(true, completions::incrementAndGet);
-        lastRequest().deliver("");
-        check(controller.getLastError() != null && completions.get() == 5, "network failure releases joined callback with an error");
+        HttpGetTask primary = lastRequest();
+        int beforeFallback = HttpGetTask.requests.size();
+        primary.deliver("");
+        HttpGetTask fallback = lastRequest();
+        check(fallback != primary && HttpGetTask.requests.size() == beforeFallback + 1
+            && controller.isChecking() && completions.get() == 4,
+            "official primary failure awaits its single fallback without completing joined callback early");
+        fallback.deliver("");
+        check(controller.getLastError() != null && !controller.isChecking() && completions.get() == 5,
+            "failure of both official transports releases joined callback exactly once with an error");
+        primary.deliver("new");
+        fallback.deliver("new");
+        check(controller.getLastError() != null && controller.getUpdate() == null && completions.get() == 5,
+            "late primary and duplicate fallback cannot replace terminal error or finish callback twice");
     }
 
     private static HttpGetTask lastRequest() { return HttpGetTask.requests.get(HttpGetTask.requests.size() - 1); }

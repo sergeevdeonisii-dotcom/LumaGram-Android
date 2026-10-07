@@ -22,7 +22,15 @@ public final class BlackHoleGramTools71Test {
  }
  private static void settings(){
   Map<String,Object> values=BlackHoleSettings.capture(0);BlackHoleSettings.validate(values);
-  check(values.size()==26,"all portable settings captured");
+  check(values.size()==27,"all portable settings captured, including round-video quality");
+  check(Boolean.TRUE.equals(values.get("send.roundHighQuality")),"round-video HD preference defaults enabled in export");
+  Map<String,Object> quality=new HashMap<>();quality.put("send.roundHighQuality",false);BlackHoleSettings.apply(0,quality);
+  check(!LumaRoundVideoQuality.isEnabled()&&Boolean.FALSE.equals(BlackHoleSettings.capture(0).get("send.roundHighQuality")),"round-video quality survives portable boolean import/export");
+  Map<String,Object> legacy=new HashMap<>(values);legacy.remove("send.roundHighQuality");BlackHoleSettings.apply(0,legacy);
+  check(!LumaRoundVideoQuality.isEnabled(),"legacy 26-field imports preserve the current round-video preference");
+  quality.put("send.roundHighQuality","true");expectFailure(()->BlackHoleSettings.apply(0,quality));
+  check(!LumaRoundVideoQuality.isEnabled(),"invalid quality import is rejected before any setting write");
+  LumaRoundVideoQuality.setEnabled(true);
   for(String k:values.keySet())check(!k.contains("vault")&&!k.contains("note")&&!k.contains("token")&&!k.contains("manifest"),"sensitive settings excluded");
   Map<String,Object> bad=new HashMap<>();bad.put("typing.enabled",false);bad.put("format.style",7);
   boolean before=LumaTextAnimation.isEnabled();expectFailure(()->BlackHoleSettings.apply(0,bad));

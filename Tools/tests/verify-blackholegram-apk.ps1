@@ -3,8 +3,8 @@ param(
     [Parameter(Mandatory = $true)][string]$SdkPath,
     [Parameter(Mandatory = $true)][string]$JavaHome,
     [string]$NdkVersion = '27.2.12479018',
-    [string]$VersionName = '12.10.6-lunagram.75',
-    [int]$VersionCode = 71549,
+    [string]$VersionName = '12.10.6-lunagram.76',
+    [int]$VersionCode = 71559,
     # Recheck signing only when its configuration, key or build variant changes.
     [switch]$VerifySignature
 )
@@ -36,6 +36,12 @@ if ($LASTEXITCODE -ne 0 -or !$resources.Contains('drawable/bhg_icon_blackhole_ph
     throw 'The new Black Hole photo resource is missing from the final APK'
 }
 Write-Output 'PASS: new Black Hole photo resource in the packaged APK'
+foreach ($newString in @('LumaRoundVideoQualityTitle', 'LumaRoundVideoQualityEnable',
+        'LumaRoundVideoQualityInfo', 'LumaUpdateRepairSource', 'LumaUpdateRepairSourceInfo',
+        'LumaUpdateRestoreAction', 'LumaUpdateSourceNoNewVersion')) {
+    if (!$resources.Contains("string/$newString")) { throw "Missing .76 resource: $newString" }
+    Write-Output "PASS: .76 resource string/$newString"
+}
 $blackHoleIcon = [regex]::Match($resources, '(?ms)^\s*resource 0x[0-9a-fA-F]+ mipmap/bhg_icon_blackhole\r?\n(?<configs>.*?)(?=^\s*resource 0x|\z)')
 if (!$blackHoleIcon.Success) { throw 'Packaged Black Hole launcher resource is missing' }
 $blackHoleConfigs = @([regex]::Matches($blackHoleIcon.Groups['configs'].Value, '\((?<qualifier>[^)]*)\)\s+\(file\)\s+(?<path>res/[^\s]+\.xml)\s+type=XML'))

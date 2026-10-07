@@ -33,6 +33,7 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
     private static final int ROW_CHECK = 1;
     private static final int ROW_AUTO = 2;
     private static final int ROW_UPDATE = 4;
+    private static final int ROW_REPAIR = 5;
 
     private UniversalRecyclerView listView;
     private AlertDialog checkProgressDialog;
@@ -109,6 +110,8 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
         items.add(UItem.asHeader(getString(R.string.LumaUpdateAutomaticHeader)));
         items.add(UItem.asCheck(ROW_AUTO, getString(R.string.LumaUpdateAutomatic)).setChecked(controller.isAutoCheckEnabled()));
         items.add(UItem.asShadow(getString(R.string.LumaUpdateAutomaticInfo)));
+        items.add(UItem.asButton(ROW_REPAIR, getString(R.string.LumaUpdateRepairSource)));
+        items.add(UItem.asShadow(null));
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {
@@ -119,6 +122,15 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
             if (view instanceof TextCheckCell) {
                 ((TextCheckCell) view).setChecked(enabled);
             }
+        } else if (item.id == ROW_REPAIR) {
+            new AlertDialog.Builder(getContext(), resourceProvider)
+                    .setTitle(getString(R.string.LumaUpdateRepairSource))
+                    .setMessage(getString(R.string.LumaUpdateRepairSourceInfo))
+                    .setPositiveButton(getString(R.string.LumaUpdateRestoreAction), (dialog, which) -> {
+                        controller.setManifestUrl(null);
+                        checkNow();
+                    })
+                    .setNegativeButton(getString(R.string.Cancel), null).show();
         } else if (item.id == ROW_CHECK) {
             checkNow();
         } else if (item.id == ROW_UPDATE) {
@@ -162,7 +174,7 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
             }
             BetaUpdate update = controller.getUpdate();
             if (update == null) {
-                BulletinFactory.of(this).createSimpleBulletin(R.raw.chats_infotip, getString(R.string.YourVersionIsLatest)).show();
+                BulletinFactory.of(this).createSimpleBulletin(R.raw.chats_infotip, getString(R.string.LumaUpdateSourceNoNewVersion)).show();
             } else {
                 ApplicationLoader.applicationLoaderInstance.showCustomUpdateAppPopup(getContext(), update, currentAccount);
             }
