@@ -79,7 +79,9 @@ public final class LumaUpdaterController {
     private final ArrayList<Runnable> checkCompletions = new ArrayList<>();
 
     private LumaUpdaterController() {
-        load();
+        // Restricted builds never read the full edition's pending APK or clean
+        // its cache. A future manual full-edition install can still use it.
+        if (LumaBuildPolicy.allowsBuiltInUpdates()) load();
     }
 
     private SharedPreferences preferences() {
@@ -133,6 +135,7 @@ public final class LumaUpdaterController {
     }
 
     public String getManifestUrl() {
+        if (!LumaBuildPolicy.allowsBuiltInUpdates()) return "";
         String saved = preferences().getString("manifest_url", null);
         // The source editor is no longer exposed. Recover old cleared/corrupt
         // values without losing a valid custom HTTPS source.
@@ -140,6 +143,7 @@ public final class LumaUpdaterController {
     }
 
     public boolean setManifestUrl(String value) {
+        if (!LumaBuildPolicy.allowsBuiltInUpdates()) return false;
         value = value == null ? "" : value.trim();
         if (!TextUtils.isEmpty(value) && !isHttps(value)) {
             return false;
@@ -184,19 +188,20 @@ public final class LumaUpdaterController {
     }
 
     public boolean hasManifestUrl() {
-        return isHttps(getManifestUrl());
+        return LumaBuildPolicy.allowsBuiltInUpdates() && isHttps(getManifestUrl());
     }
 
     public boolean isAutoCheckEnabled() {
-        return preferences().getBoolean("auto_check", true);
+        return LumaBuildPolicy.allowsBuiltInUpdates() && preferences().getBoolean("auto_check", true);
     }
 
     public void setAutoCheckEnabled(boolean enabled) {
+        if (!LumaBuildPolicy.allowsBuiltInUpdates()) return;
         preferences().edit().putBoolean("auto_check", enabled).apply();
     }
 
     public boolean isChecking() {
-        return checking;
+        return LumaBuildPolicy.allowsBuiltInUpdates() && checking;
     }
 
     public String getLastError() {
@@ -204,6 +209,16 @@ public final class LumaUpdaterController {
     }
 
     public void checkForUpdate(boolean force, Runnable whenDone) {
+        if (!LumaBuildPolicy.allowsBuiltInUpdates()) {
+            if (whenDone != null) {
+                try {
+                    whenDone.run();
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+            }
+            return;
+        }
         if (!force && LumaEmergencyMode.isEnabled(UserConfig.selectedAccount)) {
             if (whenDone != null) {
                 whenDone.run();
@@ -347,7 +362,7 @@ public final class LumaUpdaterController {
     }
 
     public BetaUpdate getUpdate() {
-        if (versionCode <= getCurrentVersionCode() || TextUtils.isEmpty(version)) {
+        if (!LumaBuildPolicy.allowsBuiltInUpdates() || versionCode <= getCurrentVersionCode() || TextUtils.isEmpty(version)) {
             return null;
         }
         return new BetaUpdate(version, versionCode, changelog);
@@ -369,6 +384,10 @@ public final class LumaUpdaterController {
 
     public void downloadUpdate(DownloadListener listener) {
         addDownloadListener(listener);
+        if (!LumaBuildPolicy.allowsBuiltInUpdates()) {
+            notifyDownloadFinished(null, LocaleController.getString(R.string.LumaUpdateSourceMissing));
+            return;
+        }
         File existing = getDownloadedFile();
         if (existing != null) {
             notifyDownloadFinished(existing, null);
@@ -496,15 +515,15 @@ public final class LumaUpdaterController {
     }
 
     public boolean isDownloading() {
-        return downloading;
+        return LumaBuildPolicy.allowsBuiltInUpdates() && downloading;
     }
 
     public float getDownloadingProgress() {
-        return downloadingProgress;
+        return LumaBuildPolicy.allowsBuiltInUpdates() ? downloadingProgress : 0f;
     }
 
     public File getDownloadedFile() {
-        if (TextUtils.isEmpty(path)) {
+        if (!LumaBuildPolicy.allowsBuiltInUpdates() || TextUtils.isEmpty(path)) {
             return null;
         }
         File file = new File(path);
@@ -517,6 +536,7 @@ public final class LumaUpdaterController {
     }
 
     public boolean install(Activity activity) {
+        if (!LumaBuildPolicy.allowsBuiltInUpdates()) return false;
         File file = getDownloadedFile();
         if (activity == null || file == null) {
             return false;

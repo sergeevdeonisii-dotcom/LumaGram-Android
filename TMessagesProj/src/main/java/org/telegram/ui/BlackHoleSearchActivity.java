@@ -9,6 +9,7 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 
 import org.telegram.messenger.BlackHoleSearch;
+import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -41,14 +42,20 @@ public final class BlackHoleSearchActivity extends BaseFragment {
                 R.string.LiquidGlassInputSize, R.string.LiquidGlassWallpaperRefraction, R.string.LiquidGlassAdaptiveColor,
                 R.string.LiquidGlassSeparateColors, R.string.LiquidGlassColorStrength, R.string.LiquidGlassColorTransition);
         group(3, R.string.TextAnimationSettingsTitle, R.string.TextAnimationEnable, R.string.LumaAutomaticMessageStyle);
-        group(4, R.string.LumaUpdatesTitle, R.string.LumaUpdatesTitle, R.string.LumaUpdateAutomaticHeader);
-        group(101, R.string.BlackHoleAdvancedPrivacyTitle, R.string.ExperimentalGhostEnable,
-                R.string.ExperimentalGhostHeader, R.string.ExperimentalDeletedMessagesEnable);
-        group(102, R.string.BlackHoleAdvancedProfileTitle, R.string.ExperimentalStarRatingHeader,
-                R.string.ExperimentalAnonymousNumberHeader, R.string.ExperimentalProfileVerificationHeader);
+        if (LumaBuildPolicy.allowsBuiltInUpdates()) {
+            group(4, R.string.LumaUpdatesTitle, R.string.LumaUpdatesTitle, R.string.LumaUpdateAutomaticHeader);
+        }
+        if (LumaBuildPolicy.allowsPrivacyTools()) {
+            group(101, R.string.BlackHoleAdvancedPrivacyTitle, R.string.ExperimentalGhostEnable,
+                    R.string.ExperimentalGhostHeader, R.string.ExperimentalDeletedMessagesEnable);
+        }
+        group(102, R.string.BlackHoleAdvancedProfileTitle, R.string.ExperimentalStarRatingHeader);
+        if (LumaBuildPolicy.allowsAnonymousNumber()) group(102, R.string.BlackHoleAdvancedProfileTitle, R.string.ExperimentalAnonymousNumberHeader);
+        if (LumaBuildPolicy.allowsProfileVerification()) group(102, R.string.BlackHoleAdvancedProfileTitle, R.string.ExperimentalProfileVerificationHeader);
         group(103, R.string.BlackHoleAdvancedTypingTitle, R.string.ExperimentalTypingSpeed,
                 R.string.ExperimentalTypingBlur, R.string.ExperimentalTypingHeight, R.string.ExperimentalTypingSwipe);
-        group(104, R.string.BlackHoleAdvancedSendingTitle, R.string.ExperimentalDelayedSendEnable);
+        group(104, R.string.BlackHoleAdvancedSendingTitle, R.string.LumaRoundVideoQualityEnable, R.string.LumaRoundVideoStartRearCamera);
+        if (LumaBuildPolicy.allowsPrivacyTools()) group(104, R.string.BlackHoleAdvancedSendingTitle, R.string.ExperimentalDelayedSendEnable);
         group(105, R.string.BlackHoleAdvancedConnectionTitle, R.string.EmergencyConnectionHeader, R.string.EmergencyConnectionChat);
         group(201, R.string.BlackHoleGramSettingsTitle, R.string.BHGProfiles);
         group(202, R.string.BlackHoleGramSettingsTitle, R.string.BHGNotes);
@@ -84,6 +91,8 @@ public final class BlackHoleSearchActivity extends BaseFragment {
     private void click(UItem item, View view, int position, float x, float y) {
         if (item.id <= 0 || item.id > catalog.size()) return;
         int destination = catalog.get(item.id - 1).destination;
+        if (destination == 4 && !LumaBuildPolicy.allowsBuiltInUpdates()) return;
+        if (destination == 101 && !LumaBuildPolicy.allowsPrivacyTools()) return;
         BaseFragment screen;
         if (destination == 1 || destination == 2) screen = new LiquidGlassSettingsActivity(destination == 2);
         else if (destination == 3) screen = new TextAnimationSettingsActivity();

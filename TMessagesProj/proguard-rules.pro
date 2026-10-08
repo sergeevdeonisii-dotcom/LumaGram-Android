@@ -12,6 +12,9 @@
 -keep class org.webrtc.audio.* { *; }
 -keep class org.webrtc.voiceengine.* { *; }
 -keep class org.telegram.messenger.* { *; }
+# Keep the edition boundary independently auditable in downloaded CI APKs.
+# No allowoptimization: delivery verifies these five constant-return methods.
+-keep class org.telegram.messenger.LumaBuildPolicy { public static boolean *(); }
 -keep class org.telegram.messenger.camera.* { *; }
 -keep class org.telegram.messenger.secretmedia.* { *; }
 -keep class org.telegram.messenger.support.* { *; }

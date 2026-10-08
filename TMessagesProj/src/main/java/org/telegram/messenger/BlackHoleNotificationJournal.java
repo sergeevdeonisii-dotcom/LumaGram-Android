@@ -22,11 +22,21 @@ public final class BlackHoleNotificationJournal {
         String key() { return dialogId + ":" + messageId; }
     }
     private BlackHoleNotificationJournal() {}
-    public static boolean isEnabled(int account) { return LumaAccountData.preferences(account).getBoolean(ENABLED, false); }
+    public static boolean isEnabled(int account) {
+        // History is opt-in. A legacy/corrupt preference with another type must not
+        // crash the settings UI (SharedPreferences.getBoolean throws ClassCastException).
+        return Boolean.TRUE.equals(LumaAccountData.preferences(account).getAll().get(ENABLED));
+    }
     public static synchronized void setEnabled(int account, boolean enabled) {
         LumaAccountData.preferences(account).edit().putBoolean(ENABLED, enabled).apply();
     }
-    private static String limit(String text, int max) { return text == null ? "" : text.substring(0, Math.min(max, text.length())); }
+    private static String limit(String text, int max) {
+        if (text == null) return "";
+        int end = Math.min(max, text.length());
+        if (end > 0 && end < text.length() && Character.isHighSurrogate(text.charAt(end - 1))
+                && Character.isLowSurrogate(text.charAt(end))) end--;
+        return text.substring(0, end);
+    }
     public static synchronized ArrayList<Entry> entries(int account) throws Exception {
         long owner = UserConfig.getInstance(account).getClientUserId();
         ArrayList<Entry> result = new ArrayList<>();

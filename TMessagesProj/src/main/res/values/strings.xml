@@ -11384,6 +11384,11 @@
     <string name="LumaUpdateSourceNoNewVersion">No newer version was found in this update source.</string>
     <string name="LumaRoundVideoQualityTitle">Video messages</string>
     <string name="LumaRoundVideoQualityEnable">High-quality recording</string>
+    <string name="LumaRoundVideoStartRearCamera">Start with the rear camera</string>
+    <string name="LumaFriendsProfilesInfo">Normal and Work profiles adjust appearance and typing animation.</string>
+    <string name="LumaFriendsProfileInfo">Local display of your level</string>
+    <string name="LumaFriendsSendingInfo">Round video quality and initial camera</string>
+    <string name="LumaRoundVideoStartRearCameraInfo">New video messages start with the rear camera. You can still switch cameras while recording. A paused recording keeps its current camera.</string>
     <string name="LumaRoundVideoQualityInfo">Sharper HD video messages with a target of 60 frames per second on supported cameras and encoders. Files are larger and uploads may take longer. Low light may reduce the camera frame rate. If 60 FPS is not supported, recording falls back to 30 FPS or standard quality. Unedited recordings are sent without re-encoding; trimming still requires processing.</string>
     <string name="LumaUpdateManifestInvalid">The update manifest is missing required security information or has an invalid format.</string>
     <string name="LumaUpdateDownloadFailed">The update could not be downloaded. Check your connection and try again.</string>

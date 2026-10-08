@@ -21,6 +21,7 @@ import org.telegram.messenger.BlackHoleNotificationJournal;
 import org.telegram.messenger.BlackHolePrivateData;
 import org.telegram.messenger.BlackHoleSettings;
 import org.telegram.messenger.BlackHoleVault;
+import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessagesController;
@@ -62,6 +63,7 @@ public final class BlackHoleToolsActivity extends BaseFragment {
     private String exportText;
     private long owner;
     private boolean busy, openedInitial;
+    private int journalLoadGeneration;
 
     public BlackHoleToolsActivity(int page) { this(page, 0); }
     public BlackHoleToolsActivity(int page, long initialDialog) { this.page = page; this.initialDialog = initialDialog; }
@@ -104,12 +106,12 @@ public final class BlackHoleToolsActivity extends BaseFragment {
             return;
         }
         if (page == PROFILES) {
-            for (int id = 0; id < 3; id++) {
+            for (int id : profileIds()) {
                 boolean selected = false;
                 try { selected = BlackHoleSettings.capture(currentAccount).equals(BlackHoleSettings.profile(currentAccount, id)); } catch (Exception e) { FileLog.e(e); }
                 items.add(UItem.asRadio(100 + id, profileName(id), getString(R.string.BHGApplyProfile)).setChecked(selected));
             }
-            items.add(UItem.asShadow(getString(R.string.BHGProfilesInfo)));
+            items.add(UItem.asShadow(getString(LumaBuildPolicy.isFriendsEdition() ? R.string.LumaFriendsProfilesInfo : R.string.BHGProfilesInfo)));
             items.add(UItem.asButton(SAVE_PROFILE, R.drawable.msg_saved, getString(R.string.BHGSaveProfile)));
         } else if (page == TRANSFER) {
             items.add(UItem.asButton(EXPORT, R.drawable.msg_saved, getString(R.string.BHGExport)).setEnabled(!busy));
@@ -123,7 +125,9 @@ public final class BlackHoleToolsActivity extends BaseFragment {
             for (int n = 0; n < journal.size(); n++) {
                 BlackHoleNotificationJournal.Entry e = journal.get(n);
                 items.add(UItem.asHeader(e.title));
-                items.add(UItem.asButton(200 + n, e.text, org.telegram.messenger.LocaleController.formatDateAudio(e.date / 1000, true)));
+                UItem row = UItem.asButton(200 + n, e.text, org.telegram.messenger.LocaleController.formatDateAudio(e.date / 1000, true));
+                row.object = e;
+                items.add(row);
             }
             if (journal.isEmpty()) items.add(UItem.asShadow(getString(R.string.BHGJournalEmpty)));
         } else {
@@ -152,7 +156,7 @@ public final class BlackHoleToolsActivity extends BaseFragment {
         else if (item.id == SAVE_PROFILE) showDialog(new AlertDialog.Builder(getParentActivity(), resourceProvider)
                 .setTitle(getString(R.string.BHGSaveProfile)).setItems(profileNames(), (d, which) -> {
                     if (!currentOwner()) return;
-                    try { BlackHoleSettings.saveProfile(currentAccount, which); done(); } catch (Exception e) { error(e); }
+                    try { BlackHoleSettings.saveProfile(currentAccount, profileIds()[which]); done(); } catch (Exception e) { error(e); }
                 }).setNegativeButton(getString(R.string.Cancel), null).create());
         else if (item.id == EXPORT) exportSettings();
         else if (item.id == IMPORT) {
@@ -161,6 +165,7 @@ public final class BlackHoleToolsActivity extends BaseFragment {
         } else if (item.id == ENABLED) {
             BlackHoleNotificationJournal.setEnabled(currentAccount, !BlackHoleNotificationJournal.isEnabled(currentAccount)); refresh();
         } else if (item.id == CLEAR) confirm(getString(R.string.BHGJournalClear), () -> {
+            journalLoadGeneration++;
             BlackHoleNotificationJournal.clear(currentAccount); journal.clear(); refresh();
         });
         else if (item.id == ADD) pickDialog();
@@ -168,8 +173,8 @@ public final class BlackHoleToolsActivity extends BaseFragment {
         else if (item.object instanceof Long) {
             long did = (Long) item.object;
             if (page == VAULT) openChat(did); else editNote(did);
-        } else if (page == JOURNAL && item.id >= 200 && item.id < 200 + journal.size()) {
-            BlackHoleNotificationJournal.Entry entry = journal.get(item.id - 200);
+        } else if (page == JOURNAL && item.object instanceof BlackHoleNotificationJournal.Entry) {
+            BlackHoleNotificationJournal.Entry entry = (BlackHoleNotificationJournal.Entry) item.object;
             showDialog(new AlertDialog.Builder(getParentActivity(), resourceProvider).setTitle(entry.title).setMessage(entry.text)
                     .setPositiveButton(getString(R.string.OK), null).create());
         }
@@ -195,14 +200,21 @@ public final class BlackHoleToolsActivity extends BaseFragment {
     }
     private void refresh() { if (listView != null) { listView.setVisibility(View.VISIBLE); listView.adapter.update(true); } }
     private void loadJournal() {
+        final int generation = ++journalLoadGeneration;
         if (page != JOURNAL || needsUnlock()) { journal.clear(); return; }
         final long expectedOwner = owner;
         Utilities.globalQueue.postRunnable(() -> {
             try {
                 if (UserConfig.getInstance(currentAccount).getClientUserId() != expectedOwner) return;
                 ArrayList<BlackHoleNotificationJournal.Entry> data = BlackHoleNotificationJournal.entries(currentAccount);
-                AndroidUtilities.runOnUIThread(() -> { if (currentOwner() && !needsUnlock()) { journal = data; refresh(); } });
-            } catch (Exception e) { AndroidUtilities.runOnUIThread(() -> { if (currentOwner()) error(e); }); }
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (generation == journalLoadGeneration && !isPaused() && currentOwner() && !needsUnlock()) {
+                        journal = data; refresh();
+                    }
+                });
+            } catch (Exception e) { AndroidUtilities.runOnUIThread(() -> {
+                if (generation == journalLoadGeneration && !isPaused() && currentOwner()) error(e);
+            }); }
         });
     }
     private void pickDialog() {
@@ -324,6 +336,7 @@ public final class BlackHoleToolsActivity extends BaseFragment {
         loadJournal(); refresh(); if (!needsUnlock()) AndroidUtilities.runOnUIThread(this::openInitial, 250);
     }
     @Override public void onPause() {
+        journalLoadGeneration++;
         if (privatePage()) {
             if (listView != null) listView.setVisibility(View.INVISIBLE);
             dismissCurrentDialog();
@@ -331,12 +344,20 @@ public final class BlackHoleToolsActivity extends BaseFragment {
         super.onPause();
     }
     public static String profileName(int id) { return getString(id == 1 ? R.string.BHGProfileGhost : id == 2 ? R.string.BHGProfileWork : R.string.BHGProfileNormal); }
-    private static String[] profileNames() { return new String[]{profileName(0), profileName(1), profileName(2)}; }
+    private static int[] profileIds() {
+        return LumaBuildPolicy.allowsPrivacyTools() ? new int[]{0, 1, 2} : new int[]{0, 2};
+    }
+    private static String[] profileNames() {
+        int[] ids = profileIds();
+        String[] names = new String[ids.length];
+        for (int n = 0; n < ids.length; n++) names[n] = profileName(ids[n]);
+        return names;
+    }
     public static void showProfiles(BaseFragment host) {
         final long owner = UserConfig.getInstance(host.getCurrentAccount()).getClientUserId();
         host.showDialog(new AlertDialog.Builder(host.getParentActivity(), host.getResourceProvider()).setTitle(getString(R.string.BHGProfiles))
                 .setItems(profileNames(), (d, id) -> {
-                    if (!host.isFinished && owner > 0 && owner == UserConfig.getInstance(host.getCurrentAccount()).getClientUserId()) applyProfile(host, id);
+                    if (!host.isFinished && owner > 0 && owner == UserConfig.getInstance(host.getCurrentAccount()).getClientUserId()) applyProfile(host, profileIds()[id]);
                 }).setNegativeButton(getString(R.string.Cancel), null).create());
     }
     private static void applyProfile(BaseFragment host, int id) {

@@ -18,10 +18,11 @@ public final class LumaProfileVerification {
     }
 
     public static boolean isEnabled(int account) {
-        return preferences(account).getBoolean(KEY_ENABLED, false);
+        return LumaBuildPolicy.allowsProfileVerification() && preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
+        if (!LumaBuildPolicy.allowsProfileVerification()) return;
         preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
 }

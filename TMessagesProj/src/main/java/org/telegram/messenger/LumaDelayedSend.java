@@ -22,10 +22,11 @@ public final class LumaDelayedSend {
     }
 
     public static boolean isEnabled() {
-        return preferences().getBoolean(KEY_ENABLED, false);
+        return LumaBuildPolicy.allowsPrivacyTools() && preferences().getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(boolean enabled) {
+        if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         preferences().edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
 
@@ -34,11 +35,12 @@ public final class LumaDelayedSend {
     }
 
     public static void setDelayStep(int step) {
+        if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         preferences().edit().putInt(KEY_DELAY_STEP, clampStep(step)).apply();
     }
 
     public static long getDelayMs() {
-        return getDelayStep() * 200L;
+        return LumaBuildPolicy.allowsPrivacyTools() ? getDelayStep() * 200L : 0L;
     }
 
     /** Preserve the deadline after closing a chat, without retaining its UI or a reused account slot. */
@@ -48,7 +50,7 @@ public final class LumaDelayedSend {
             if (ownerId <= 0 || UserConfig.getInstance(account).getClientUserId() != ownerId) return;
             SendMessagesHelper helper = SendMessagesHelper.getInstance(account);
             for (SendMessagesHelper.SendMessageParams message : messages) helper.sendMessage(message);
-        }, remainingDelay(sendAt, SystemClock.uptimeMillis()));
+        }, LumaBuildPolicy.allowsPrivacyTools() ? remainingDelay(sendAt, SystemClock.uptimeMillis()) : 0L);
     }
 
     static long remainingDelay(long sendAt, long now) {

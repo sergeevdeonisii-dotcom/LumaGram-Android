@@ -8,6 +8,7 @@ import android.view.View;
 import android.widget.FrameLayout;
 
 import org.telegram.messenger.R;
+import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
@@ -61,8 +62,10 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
         items.add(UItem.asButton(104, R.drawable.msg_saved, getString(R.string.BHGTransfer)));
         items.add(UItem.asButton(105, R.drawable.msg_secret, getString(R.string.BHGVault)));
         items.add(UItem.asShadow(getString(R.string.BHGToolsInfo)));
-        items.add(UItem.asButton(ROW_UPDATES, R.drawable.settings_features, getString(R.string.LumaUpdatesTitle)));
-        items.add(UItem.asShadow(getString(R.string.LumaUpdatesInfo)));
+        if (LumaBuildPolicy.allowsBuiltInUpdates()) {
+            items.add(UItem.asButton(ROW_UPDATES, R.drawable.settings_features, getString(R.string.LumaUpdatesTitle)));
+            items.add(UItem.asShadow(getString(R.string.LumaUpdatesInfo)));
+        }
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {
@@ -71,6 +74,7 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
         } else if (item.id == ROW_MESSAGES) {
             openSettings(new TextAnimationSettingsActivity());
         } else if (item.id == ROW_UPDATES) {
+            if (!LumaBuildPolicy.allowsBuiltInUpdates()) return;
             openSettings(new LumaUpdateActivity());
         } else if (item.id == ROW_SEARCH) {
             openSettings(new BlackHoleSearchActivity());

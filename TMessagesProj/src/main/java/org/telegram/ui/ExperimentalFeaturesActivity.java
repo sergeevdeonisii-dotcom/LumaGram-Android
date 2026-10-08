@@ -21,6 +21,8 @@ import org.telegram.messenger.LumaProfileVerification;
 import org.telegram.messenger.LumaStarRating;
 import org.telegram.messenger.LumaTextAnimation;
 import org.telegram.messenger.LumaRoundVideoQuality;
+import org.telegram.messenger.LumaRoundVideoCamera;
+import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
@@ -84,6 +86,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private static final int ROW_PROFILE_VERIFICATION_ENABLED = 13;
     private static final int ROW_GHOST_SCHEDULE_SEND_ENABLED = 14;
     private static final int ROW_ROUND_VIDEO_QUALITY = 15;
+    private static final int ROW_ROUND_VIDEO_REAR_CAMERA = 16;
 
     private final Section section;
     private UniversalRecyclerView listView;
@@ -98,6 +101,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
 
     public static ExperimentalFeaturesActivity forSection(int id) {
         Section section = Section.fromId(id);
+        if (section == Section.PRIVACY && !LumaBuildPolicy.allowsPrivacyTools()) section = Section.ROOT;
         return new ExperimentalFeaturesActivity(section == null ? Section.ROOT : section);
     }
 
@@ -156,17 +160,19 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
 
     private void fillSections(ArrayList<UItem> items) {
         items.add(UItem.asHeader(getString(R.string.BlackHoleAdvancedAccountHeader)));
-        items.add(sectionItem(Section.PRIVACY, IconBackgroundColors.GREEN,
-                R.drawable.settings_privacy, R.string.BlackHoleAdvancedPrivacyInfo));
+        if (LumaBuildPolicy.allowsPrivacyTools()) {
+            items.add(sectionItem(Section.PRIVACY, IconBackgroundColors.GREEN,
+                    R.drawable.settings_privacy, R.string.BlackHoleAdvancedPrivacyInfo));
+        }
         items.add(sectionItem(Section.PROFILE, IconBackgroundColors.BLUE,
-                R.drawable.settings_account, R.string.BlackHoleAdvancedProfileInfo));
+                R.drawable.settings_account, LumaBuildPolicy.isFriendsEdition() ? R.string.LumaFriendsProfileInfo : R.string.BlackHoleAdvancedProfileInfo));
         items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader(getString(R.string.BlackHoleAdvancedAppHeader)));
         items.add(sectionItem(Section.TYPING, IconBackgroundColors.PURPLE,
                 R.drawable.settings_features, R.string.BlackHoleAdvancedTypingInfo));
         items.add(sectionItem(Section.SENDING, IconBackgroundColors.ORANGE,
-                R.drawable.settings_chat, R.string.BlackHoleAdvancedSendingInfo));
+                R.drawable.settings_chat, LumaBuildPolicy.isFriendsEdition() ? R.string.LumaFriendsSendingInfo : R.string.BlackHoleAdvancedSendingInfo));
         items.add(sectionItem(Section.CONNECTION, IconBackgroundColors.CYAN,
                 R.drawable.settings_data, R.string.BlackHoleAdvancedConnectionInfo));
         items.add(UItem.asShadow(getString(R.string.BlackHoleAdvancedSectionsInfo)));
@@ -227,6 +233,10 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         items.add(UItem.asCheck(ROW_ROUND_VIDEO_QUALITY, getString(R.string.LumaRoundVideoQualityEnable))
                 .setChecked(LumaRoundVideoQuality.isEnabled()));
         items.add(UItem.asShadow(getString(R.string.LumaRoundVideoQualityInfo)));
+        items.add(UItem.asCheck(ROW_ROUND_VIDEO_REAR_CAMERA, getString(R.string.LumaRoundVideoStartRearCamera))
+                .setChecked(LumaRoundVideoCamera.isStartWithRearCameraEnabled()));
+        items.add(UItem.asShadow(getString(R.string.LumaRoundVideoStartRearCameraInfo)));
+        if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         final boolean delayedSendEnabled = LumaDelayedSend.isEnabled();
         items.add(UItem.asHeader(getString(R.string.ExperimentalDelayedSendHeader)));
         items.add(UItem.asCheck(ROW_DELAYED_SEND_ENABLED, getString(R.string.ExperimentalDelayedSendEnable))
@@ -264,6 +274,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     }
 
     private void fillPrivacyItems(ArrayList<UItem> items) {
+        if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         final boolean ghostEnabled = LumaGhostMode.isEnabled(currentAccount);
         items.add(UItem.asHeader(getString(R.string.ExperimentalGhostHeader)));
         items.add(UItem.asCheck(ROW_GHOST_ENABLED, getString(R.string.ExperimentalGhostEnable))
@@ -295,6 +306,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         ).setEnabled(starRatingEnabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalStarRatingInfo)));
 
+        if (LumaBuildPolicy.allowsAnonymousNumber()) {
         final boolean anonymousNumberEnabled = LumaAnonymousNumber.isEnabled(currentAccount);
         items.add(UItem.asHeader(getString(R.string.ExperimentalAnonymousNumberHeader)));
         items.add(UItem.asCheck(ROW_ANONYMOUS_NUMBER_ENABLED, getString(R.string.ExperimentalAnonymousNumberEnable))
@@ -304,15 +316,24 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             LocaleController.formatString(R.string.ExperimentalAnonymousNumberValue, "+" + LumaAnonymousNumber.getPhone(currentAccount))
         ).setEnabled(anonymousNumberEnabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalAnonymousNumberInfo)));
+        }
 
+        if (LumaBuildPolicy.allowsProfileVerification()) {
         final boolean localVerificationEnabled = LumaProfileVerification.isEnabled(currentAccount);
         items.add(UItem.asHeader(getString(R.string.ExperimentalProfileVerificationHeader)));
         items.add(UItem.asCheck(ROW_PROFILE_VERIFICATION_ENABLED, getString(R.string.ExperimentalProfileVerificationEnable))
             .setChecked(localVerificationEnabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalProfileVerificationInfo)));
+        }
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {
+        if (!LumaBuildPolicy.allowsPrivacyTools() && (item.id == ROW_DELAYED_SEND_ENABLED
+                || item.id == ROW_GHOST_ENABLED || item.id == ROW_GHOST_SCHEDULE_SEND_ENABLED
+                || item.id == ROW_DELETED_MESSAGES_ENABLED || item.id == Section.PRIVACY.id)) return;
+        if (!LumaBuildPolicy.allowsAnonymousNumber()
+                && (item.id == ROW_ANONYMOUS_NUMBER_ENABLED || item.id == ROW_ANONYMOUS_NUMBER)) return;
+        if (!LumaBuildPolicy.allowsProfileVerification() && item.id == ROW_PROFILE_VERIFICATION_ENABLED) return;
         if (section == Section.ROOT) {
             Section destination = Section.fromId(item.id);
             if (destination != null) {
@@ -343,6 +364,11 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         } else if (item.id == ROW_ROUND_VIDEO_QUALITY) {
             final boolean enabled = !LumaRoundVideoQuality.isEnabled();
             LumaRoundVideoQuality.setEnabled(enabled);
+            if (view instanceof TextCheckCell) ((TextCheckCell) view).setChecked(enabled);
+            if (listView != null && listView.adapter != null) listView.adapter.update(false);
+        } else if (item.id == ROW_ROUND_VIDEO_REAR_CAMERA) {
+            final boolean enabled = !LumaRoundVideoCamera.isStartWithRearCameraEnabled();
+            LumaRoundVideoCamera.setStartWithRearCameraEnabled(enabled);
             if (view instanceof TextCheckCell) ((TextCheckCell) view).setChecked(enabled);
             if (listView != null && listView.adapter != null) listView.adapter.update(false);
         } else if (item.id == ROW_DELAYED_SEND_ENABLED) {

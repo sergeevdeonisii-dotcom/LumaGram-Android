@@ -441,6 +441,11 @@
     <string name="LumaUpdateSourceNoNewVersion">В этом источнике не найдена более новая версия.</string>
     <string name="LumaRoundVideoQualityTitle">Кружки</string>
     <string name="LumaRoundVideoQualityEnable">Запись высокого качества</string>
+    <string name="LumaRoundVideoStartRearCamera">Начинать с задней камеры</string>
+    <string name="LumaFriendsProfilesInfo">Обычный и рабочий профили: оформление и анимация ввода.</string>
+    <string name="LumaFriendsProfileInfo">Локальное отображение уровня</string>
+    <string name="LumaFriendsSendingInfo">Качество кружков и начальная камера</string>
+    <string name="LumaRoundVideoStartRearCameraInfo">Новые кружки записываются сначала на заднюю камеру. Во время записи можно переключиться на переднюю. Продолжение записи после паузы сохраняет выбранную камеру.</string>
     <string name="LumaRoundVideoQualityInfo">Более чёткие HD-кружки с целью 60 кадров в секунду на поддерживаемых камерах и кодеках. Файлы больше, отправка может занимать дольше. При слабом освещении камера может снизить частоту кадров. Если 60 FPS не поддерживается, запись переходит на 30 FPS или стандартное качество. Без обрезки отправляется записанный файл без повторного сжатия; обрезка всё ещё требует обработки.</string>
     <string name="LumaUpdateManifestInvalid">В манифесте обновления нет обязательных данных безопасности либо у него неверный формат.</string>
     <string name="LumaUpdateDownloadFailed">Не удалось скачать обновление. Проверь подключение и попробуй снова.</string>

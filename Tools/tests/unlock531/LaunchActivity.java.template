@@ -1,0 +1,12 @@
+package org.telegram.ui;
+import java.util.ArrayList;
+import java.util.List;
+import org.telegram.ui.Components.PasscodeView;
+public final class LaunchActivity extends android.app.Activity {
+    public final List<PasscodeView> overlayPasscodeViews = new ArrayList<>();
+    public PasscodeDialog passcodeDialog;
+    public static final class PasscodeDialog { public PasscodeView passcodeView; }
+    public void addOverlayPasscodeView(PasscodeView view) { overlayPasscodeViews.add(view); }
+    public void removeOverlayPasscodeView(PasscodeView view) { overlayPasscodeViews.remove(view); }
+    // PRODUCTION_ARBITRATION_METHOD
+}

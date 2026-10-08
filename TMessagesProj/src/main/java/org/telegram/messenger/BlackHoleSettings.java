@@ -25,6 +25,7 @@ public final class BlackHoleSettings {
         v.put("send.delayed", LumaDelayedSend.isEnabled());
         v.put("send.step", LumaDelayedSend.getDelayStep());
         v.put("send.roundHighQuality", LumaRoundVideoQuality.isEnabled());
+        v.put("send.roundStartRear", LumaRoundVideoCamera.isStartWithRearCameraEnabled());
         v.put("glass.enabled", LiteMode.getLiquidGlassEnabled());
         v.put("glass.powerSaver", LiteMode.getLiquidGlassKeepInPowerSaver());
         v.put("glass.opacity", LiteMode.getLiquidGlassOpacityLevel());
@@ -47,7 +48,7 @@ public final class BlackHoleSettings {
     }
 
     public static void validate(Map<String, Object> values) {
-        if (values.isEmpty() || values.size() > 27) throw new IllegalArgumentException("settings count");
+        if (values.isEmpty() || values.size() > 28) throw new IllegalArgumentException("settings count");
         for (Map.Entry<String, Object> e : values.entrySet()) {
             String k = e.getKey(); Object v = e.getValue();
             switch (k) {
@@ -55,7 +56,7 @@ public final class BlackHoleSettings {
                 case "glass.powerSaver": case "glass.adaptive": case "glass.wallpaper":
                 case "glass.separate": case "ghost.enabled": case "ghost.schedule":
                 case "deleted.keep": case "rating.enabled": case "number.enabled":
-                case "verification.enabled": case "send.roundHighQuality":
+                case "verification.enabled": case "send.roundHighQuality": case "send.roundStartRear":
                     if (!(v instanceof Boolean)) throw new IllegalArgumentException(k);
                     break;
                 case "typing.speed": case "typing.blur": case "typing.height": case "typing.swipe":
@@ -110,6 +111,7 @@ public final class BlackHoleSettings {
         LumaAnonymousNumber.setEnabled(account, b(v, "number.enabled"));
         LumaProfileVerification.setEnabled(account, b(v, "verification.enabled"));
         LumaRoundVideoQuality.setEnabled(b(v, "send.roundHighQuality"));
+        LumaRoundVideoCamera.setStartWithRearCameraEnabled(b(v, "send.roundStartRear"));
     }
 
     private static boolean b(Map<String, Object> v, String k) { return (Boolean) v.get(k); }
@@ -137,16 +139,40 @@ public final class BlackHoleSettings {
     public static Map<String, Object> profile(int account, int id) throws Exception {
         checkProfile(id);
         String saved = LumaAccountData.preferences(account).getString(PROFILE_KEY + id, null);
-        if (saved != null) return decode(saved);
+        if (saved != null) return effectiveProfile(account, decode(saved));
         Map<String, Object> values = capture(account);
         values.put("ghost.enabled", id == PROFILE_GHOST);
         values.put("ghost.schedule", id == PROFILE_GHOST);
         if (id == PROFILE_WORK) {
             values.put("typing.enabled", false); values.put("glass.enabled", false);
-            values.put("format.style", 0); values.put("send.delayed", true); values.put("send.step", 10);
+            values.put("format.style", 0);
+            if (LumaBuildPolicy.allowsPrivacyTools()) {
+                values.put("send.delayed", true); values.put("send.step", 10);
+            }
         }
+        values = effectiveProfile(account, values);
         LumaAccountData.preferences(account).edit().putString(PROFILE_KEY + id, encode(values)).apply();
         return values;
+    }
+
+    /** Missing legacy keys inherit current settings; unavailable capabilities stay effective no-ops. */
+    private static Map<String, Object> effectiveProfile(int account, Map<String, Object> saved) {
+        Map<String, Object> current = capture(account);
+        Map<String, Object> result = new LinkedHashMap<>(current);
+        result.putAll(saved);
+        if (!LumaBuildPolicy.allowsPrivacyTools()) {
+            for (String key : new String[]{"ghost.enabled", "ghost.schedule", "deleted.keep", "send.delayed", "send.step"}) {
+                result.put(key, current.get(key));
+            }
+        }
+        if (!LumaBuildPolicy.allowsAnonymousNumber()) {
+            result.put("number.enabled", current.get("number.enabled"));
+            result.put("number.digits", current.get("number.digits"));
+        }
+        if (!LumaBuildPolicy.allowsProfileVerification()) {
+            result.put("verification.enabled", current.get("verification.enabled"));
+        }
+        return result;
     }
 
     public static void saveProfile(int account, int id) throws Exception {
@@ -156,5 +182,6 @@ public final class BlackHoleSettings {
 
     private static void checkProfile(int id) {
         if (id < PROFILE_NORMAL || id > PROFILE_WORK) throw new IllegalArgumentException("profile");
+        if (id == PROFILE_GHOST && !LumaBuildPolicy.allowsPrivacyTools()) throw new IllegalArgumentException("profile unavailable in Friends edition");
     }
 }

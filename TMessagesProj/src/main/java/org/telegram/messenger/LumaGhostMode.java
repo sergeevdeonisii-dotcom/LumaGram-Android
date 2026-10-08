@@ -22,19 +22,21 @@ public final class LumaGhostMode {
     }
 
     public static boolean isEnabled(int account) {
-        return preferences(account).getBoolean(KEY_ENABLED, false);
+        return LumaBuildPolicy.allowsPrivacyTools() && preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
+        if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
         MessagesController.getInstance(account).setLumaGhostModeEnabled(enabled);
     }
 
     public static boolean isScheduledSendEnabled(int account) {
-        return preferences(account).getBoolean(KEY_SCHEDULE_SEND, false);
+        return LumaBuildPolicy.allowsPrivacyTools() && preferences(account).getBoolean(KEY_SCHEDULE_SEND, false);
     }
 
     public static void setScheduledSendEnabled(int account, boolean enabled) {
+        if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         preferences(account).edit().putBoolean(KEY_SCHEDULE_SEND, enabled).apply();
     }
 
