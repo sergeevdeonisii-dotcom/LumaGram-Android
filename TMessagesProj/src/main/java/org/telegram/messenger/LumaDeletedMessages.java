@@ -22,10 +22,11 @@ public final class LumaDeletedMessages {
     }
 
     public static boolean isEnabled(int account) {
-        return preferences(account).getBoolean(KEY_ENABLED, false);
+        return LumaBuildPolicy.allowsPrivacyTools() && preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
+        if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
 
@@ -49,14 +50,27 @@ public final class LumaDeletedMessages {
     }
 
     public static synchronized boolean isDeleted(int account, long dialogId, int messageId) {
-        if (messageId == 0) {
+        if (!LumaBuildPolicy.allowsPrivacyTools() || messageId == 0) {
             return false;
         }
         return preferences(account).getStringSet(KEY_IDS, new HashSet<>()).contains(key(dialogId, messageId));
     }
 
+    /** One storage batch must use the state before either message table writes its tombstones. */
+    public static synchronized Set<String> snapshotDeleted(int account) {
+        if (!LumaBuildPolicy.allowsPrivacyTools()) {
+            return new HashSet<>();
+        }
+        return new HashSet<>(preferences(account).getStringSet(KEY_IDS, new HashSet<>()));
+    }
+
+    public static boolean isDeleted(Set<String> snapshot, long dialogId, int messageId) {
+        return messageId != 0 && snapshot.contains(key(dialogId, messageId));
+    }
+
     /** Explicit local removal must not turn into another retained tombstone. */
     public static synchronized void forgetDeleted(int account, long dialogId, List<Integer> messageIds) {
+        if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         SharedPreferences prefs = preferences(account);
         Set<String> saved = new HashSet<>(prefs.getStringSet(KEY_IDS, new HashSet<>()));
         boolean changed = false;

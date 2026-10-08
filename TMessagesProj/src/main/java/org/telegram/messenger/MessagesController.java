@@ -23182,10 +23182,10 @@ public class MessagesController extends BaseController implements NotificationCe
                 processNewDifferenceParams(-1, res.pts, -1, res.pts_count);
                 getMessagesStorage().getStorageQueue().postRunnable(() -> {
                     ArrayList<Integer> dbMessages = getMessagesStorage().getCachedMessagesInRange(dialogId, minDate, maxDate);
-                    getMessagesStorage().markMessagesAsDeleted(dialogId, dbMessages, false, true, 0, 0);
+                    getMessagesStorage().markMessagesAsDeleted(dialogId, dbMessages, false, true, 0, 0, true);
                     getMessagesStorage().updateDialogsWithDeletedMessages(dialogId, 0, dbMessages, null);
                     AndroidUtilities.runOnUIThread(() -> {
-                        getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, dbMessages, channelId, false);
+                        getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, dbMessages, channelId, false, false, false, 0, null, true);
                         if (res.offset > 0) {
                             deleteMessagesRange(dialogId, channelId, minDate, maxDate, forAll, callback);
                         } else {

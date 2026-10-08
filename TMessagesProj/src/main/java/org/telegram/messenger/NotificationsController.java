@@ -1431,17 +1431,28 @@ public class NotificationsController extends BaseController implements Notificat
         return total_unread_count;
     }
 
-    private void recordJournalForDialog(long dialogId, String title) {
-        if (!BlackHoleNotificationJournal.isEnabled(currentAccount) || BlackHoleVault.contains(currentAccount, dialogId)) return;
-        ArrayList<BlackHoleNotificationJournal.Entry> batch = new ArrayList<>();
-        for (MessageObject message : pushMessages) {
-            if (message.getDialogId() != dialogId || message.isStoryPush || message.messageOwner == null) continue;
-            String text = getStringForMessage(message, false, new boolean[1], null);
-            if (text != null) batch.add(new BlackHoleNotificationJournal.Entry(dialogId, message.getId(),
-                    System.currentTimeMillis(), title, text));
-            if (batch.size() >= 20) break;
+    private boolean canJournalMessage(MessageObject message, boolean preview) {
+        if (message == null || message.messageOwner == null) return false;
+        long dialogId = message.getDialogId();
+        boolean sensitive = DialogObject.isEncryptedDialog(dialogId) || dialogId == 777000
+                || dialogId == UserObject.VERIFY || dialogId == UserObject.OAUTH
+                || message.messageOwner instanceof TLRPC.TL_messageService || message.isStoryPush
+                || message.isStoryMentionPush || message.isStoryReactionPush || message.isReactionPush
+                || message.isOauthPush || message.hasMediaSpoilers();
+        for (TLRPC.MessageEntity entity : message.messageOwner.entities) {
+            if (entity instanceof TLRPC.TL_messageEntitySpoiler) sensitive = true;
         }
-        BlackHoleNotificationJournal.record(currentAccount, batch);
+        boolean disappearing = message.messageOwner.ttl > 0 || message.messageOwner.ttl_period > 0
+                || message.isSecretMedia() || message.messageOwner.media != null && message.messageOwner.media.ttl_seconds != 0;
+        TLRPC.UserFull userFull = dialogId > 0 ? getMessagesController().getUserFull(dialogId) : null;
+        TLRPC.ChatFull chatFull = dialogId < 0 ? getMessagesController().getChatFull(-dialogId) : null;
+        disappearing |= userFull != null && userFull.ttl_period > 0 || chatFull != null && chatFull.ttl_period > 0;
+        return BlackHoleNotificationJournal.canRecordPreview(
+                preview && !AndroidUtilities.needShowPasscode() && !SharedConfig.isWaitingForPasscodeEnter,
+                !message.isFcmMessage(), BlackHoleVault.contains(currentAccount, dialogId)
+                        || LumaEmergencyMode.isEnabled(currentAccount) && !LumaEmergencyMode.isSelectedDialog(currentAccount, dialogId),
+                message.messageOwner.noforwards || getMessagesController().isPeerNoForwards(dialogId),
+                disappearing, sensitive);
     }
 
     public void processDialogsUpdateRead(LongSparseIntArray dialogsToUpdate) {
@@ -1980,10 +1991,10 @@ public class NotificationsController extends BaseController implements Notificat
             return LocaleController.getString(R.string.NotificationHiddenMessage);
         } else {
             boolean isChannel = ChatObject.isChannel(chat) && !chat.megagroup;
-            if (messageObject.messageOwner != null && messageObject.messageOwner.rich_message != null) {
-                return messageObject.messageText.toString();
-            }
             if (dialogPreviewEnabled && (chat_id == 0 && fromId != 0 && preferences.getBoolean("EnablePreviewAll", true) || chat_id != 0 && (!isChannel && preferences.getBoolean("EnablePreviewGroup", true) || isChannel && preferences.getBoolean("EnablePreviewChannel", true)))) {
+                if (messageObject.messageOwner.rich_message != null) {
+                    return messageObject.messageText.toString();
+                }
                 if (messageObject.messageOwner instanceof TLRPC.TL_messageService) {
                     userName[0] = null;
                     if (messageObject.messageOwner.action instanceof TLRPC.TL_messageActionSetSameChatWallPaper) {
@@ -4926,6 +4937,8 @@ public class NotificationsController extends BaseController implements Notificat
 
     @SuppressLint("InlinedApi")
     private void showExtraNotifications(NotificationCompat.Builder notificationBuilder, String summary, long lastDialogId, long lastTopicId, String chatName, long[] vibrationPattern, int ledColor, Uri sound, int importance, boolean isDefault, boolean isInApp, boolean isSilent, int chatType) {
+        final long notificationOwner = getUserConfig().getClientUserId();
+        final boolean journalEnabled = BlackHoleNotificationJournal.isEnabled(currentAccount);
         FileLog.d("showExtraNotifications pushMessages.size()=" + pushMessages.size());
         if (Build.VERSION.SDK_INT >= 26) {
             notificationBuilder.setChannelId(validateChannelId(lastDialogId, lastTopicId, chatName, vibrationPattern, ledColor, sound, importance, isDefault, isInApp, isSilent, chatType));
@@ -4981,8 +4994,9 @@ public class NotificationsController extends BaseController implements Notificat
             TLRPC.User user;
             TLRPC.Chat chat;
             NotificationCompat.Builder notification;
+            ArrayList<BlackHoleNotificationJournal.Entry> journalEntries;
 
-            NotificationHolder(int i, long li, boolean story, long topicId, String n, TLRPC.User u, TLRPC.Chat c, NotificationCompat.Builder builder) {
+            NotificationHolder(int i, long li, boolean story, long topicId, String n, TLRPC.User u, TLRPC.Chat c, NotificationCompat.Builder builder, ArrayList<BlackHoleNotificationJournal.Entry> journal) {
                 id = i;
                 name = n;
                 user = u;
@@ -4991,16 +5005,25 @@ public class NotificationsController extends BaseController implements Notificat
                 dialogId = li;
                 this.story = story;
                 this.topicId = topicId;
+                journalEntries = journal;
             }
 
             void call() {
+                if (notificationOwner <= 0 || notificationOwner != getUserConfig().getClientUserId()) return;
                 if (BlackHoleVault.contains(currentAccount, dialogId)) return;
+                if (LumaEmergencyMode.isEnabled(currentAccount) && !LumaEmergencyMode.isSelectedDialog(currentAccount, dialogId)) return;
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.w("show dialog notification with id " + id + " " + dialogId +  " user=" + user + " chat=" + chat);
                 }
                 try {
-                    notificationManager.notify(id, notification.build());
-                    if (!story) recordJournalForDialog(dialogId, name);
+                    Notification posted = notification.build();
+                    notificationManager.notify(id, posted);
+                    NotificationChannel channel = Build.VERSION.SDK_INT >= 26 ? notificationManager.getNotificationChannel(posted.getChannelId()) : null;
+                    if (!story && !AndroidUtilities.needShowPasscode() && !SharedConfig.isWaitingForPasscodeEnter
+                            && notificationManager.areNotificationsEnabled()
+                            && (Build.VERSION.SDK_INT < 26 || channel != null && channel.getImportance() != NotificationManager.IMPORTANCE_NONE)) {
+                        BlackHoleNotificationJournal.record(currentAccount, notificationOwner, journalEntries);
+                    }
                 } catch (SecurityException e) {
                     FileLog.e(e);
                     resetNotificationSound(notification, dialogId, lastTopicId, chatName, vibrationPattern, ledColor, sound, importance, isDefault, isInApp, isSilent, chatType);
@@ -5327,6 +5350,7 @@ public class NotificationsController extends BaseController implements Notificat
             StringBuilder text = new StringBuilder();
             String[] senderName = new String[1];
             boolean[] preview = new boolean[1];
+            ArrayList<BlackHoleNotificationJournal.Entry> journalEntries = new ArrayList<>();
             ArrayList<TL_keyboard.KeyboardInlineButtonRow> rows = null;
             int rowsMid = 0;
             if (dialogKey.story) {
@@ -5393,6 +5417,7 @@ public class NotificationsController extends BaseController implements Notificat
                     if (text.length() > 0) {
                         text.append("\n\n");
                     }
+                    int previewStart = text.length();
                     if (dialogId != selfUserId && messageObject.messageOwner.from_scheduled && DialogObject.isUserDialog(dialogId)) {
                         message = String.format("%1$s: %2$s", LocaleController.getString(R.string.NotificationMessageScheduledName), message);
                         text.append(message);
@@ -5404,6 +5429,11 @@ public class NotificationsController extends BaseController implements Notificat
                         }
                     }
 
+                    if (journalEnabled && canJournalMessage(messageObject, preview[0])) {
+                        journalEntries.add(new BlackHoleNotificationJournal.Entry(dialogId, messageObject.getId(),
+                                System.currentTimeMillis(), name, text.substring(previewStart)));
+                        if (journalEntries.size() > 20) journalEntries.remove(0);
+                    }
                     long uid;
                     if (dialogId == UserObject.VERIFY && messageObject.getForwardedFromId() != null) {
                         uid = messageObject.getForwardedFromId();
@@ -5799,7 +5829,7 @@ public class NotificationsController extends BaseController implements Notificat
                 setNotificationChannel(mainNotification, builder, useSummaryNotification);
             }
             FileLog.d("showExtraNotifications: holders.add " + dialogId);
-            holders.add(new NotificationHolder(internalId, dialogId, dialogKey.story, topicId, name, user, chat, builder));
+            holders.add(new NotificationHolder(internalId, dialogId, dialogKey.story, topicId, name, user, chat, builder, journalEntries));
             wearNotificationsIds.put(dialogId, internalId);
         }
 

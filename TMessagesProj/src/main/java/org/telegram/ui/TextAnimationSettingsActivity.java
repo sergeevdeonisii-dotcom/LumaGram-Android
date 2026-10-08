@@ -15,6 +15,7 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.TextCheckCell;
+import org.telegram.ui.Cells.TextDetailCell;
 import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.UItem;
@@ -63,7 +64,7 @@ public class TextAnimationSettingsActivity extends BaseFragment {
         items.add(UItem.asShadow(getString(R.string.TextAnimationEnableInfo)));
 
         items.add(UItem.asHeader(getString(R.string.LumaMessageFormatting)));
-        items.add(UItem.asButton(
+        items.add(TextDetailCell.Factory.of(
             ROW_AUTO_STYLE,
             getString(R.string.LumaAutomaticMessageStyle),
             getStyleNames()[LumaMessageFormatting.getAutomaticStyle()]

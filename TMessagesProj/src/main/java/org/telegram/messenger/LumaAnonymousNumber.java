@@ -21,10 +21,11 @@ public final class LumaAnonymousNumber {
     }
 
     public static boolean isEnabled(int account) {
-        return preferences(account).getBoolean(KEY_ENABLED, false);
+        return LumaBuildPolicy.allowsAnonymousNumber() && preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
+        if (!LumaBuildPolicy.allowsAnonymousNumber()) return;
         preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
 
@@ -33,6 +34,7 @@ public final class LumaAnonymousNumber {
     }
 
     public static void setDigits(int account, String digits) {
+        if (!LumaBuildPolicy.allowsAnonymousNumber()) return;
         preferences(account).edit().putString(KEY_DIGITS, normalize(digits)).apply();
     }
 

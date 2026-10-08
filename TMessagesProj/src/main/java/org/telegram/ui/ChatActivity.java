@@ -165,6 +165,7 @@ import org.telegram.messenger.LanguageDetector;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LumaDeletedMessages;
 import org.telegram.messenger.LumaEditHistory;
+import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.messenger.LumaGhostMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
@@ -26651,7 +26652,6 @@ public class ChatActivity extends BaseFragment implements
                 }
                 if (LumaDeletedMessages.shouldRetain(currentAccount, forceLocalRemoval,
                         obj.scheduled || chatMode == MODE_SCHEDULED, chatMode == MODE_QUICK_REPLIES || chatMode == MODE_WELCOME_MESSAGES)) {
-                    LumaDeletedMessages.rememberDeleted(currentAccount, obj.getDialogId(), obj.getId());
                     obj.lumaRetainedDeleted = true;
                     int changedIndex = chatAdapter != null && chatAdapter.isFiltered && filteredMessagesDict != null
                         ? chatAdapter.filteredMessages.indexOf(filteredMessagesDict.get(mid))
@@ -26926,7 +26926,7 @@ public class ChatActivity extends BaseFragment implements
     private final ChatActivityDraftMessageMeasureController botDraftHeightController = new ChatActivityDraftMessageMeasureController();
 
     private void showLocalEditHistory(MessageObject message) {
-        if (getParentActivity() == null) {
+        if (!LumaBuildPolicy.allowsPrivacyTools() || message == null || getParentActivity() == null) {
             return;
         }
         JSONArray versions = LumaEditHistory.getVersions(currentAccount, message.getDialogId(), message.getId());
@@ -39789,7 +39789,7 @@ public class ChatActivity extends BaseFragment implements
         @Override
         public void didPressTime(ChatMessageCell cell) {
             MessageObject message = cell.getMessageObject();
-            if (message != null && message.messageOwner != null
+            if (LumaBuildPolicy.allowsPrivacyTools() && message != null && message.messageOwner != null
                     && (message.messageOwner.flags & TLRPC.MESSAGE_FLAG_EDITED) != 0
                     && !message.messageOwner.edit_hide) {
                 showLocalEditHistory(message);

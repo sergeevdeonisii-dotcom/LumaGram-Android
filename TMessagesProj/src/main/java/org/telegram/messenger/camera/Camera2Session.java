@@ -54,6 +54,10 @@ public class Camera2Session {
     private volatile boolean isError;
     private volatile boolean isSuccess;
     private volatile boolean isClosed;
+    private final Object lifecycleLock = new Object();
+    // Caller callbacks may synchronously destroy/join the camera worker. Do not
+    // hold its resource lock while notifying the UI.
+    private final Object completionLock = new Object();
 
     private final CameraManager cameraManager;
     private final boolean isFront;
@@ -208,56 +212,88 @@ public class Camera2Session {
         cameraStateCallback = new CameraDevice.StateCallback() {
             @Override
             public void onOpened(@NonNull CameraDevice camera) {
-                Camera2Session.this.cameraDevice = camera;
-                Camera2Session.this.lastTime = System.currentTimeMillis();
-                FileLog.d("Camera2Session camera #" + cameraId + " opened");
-                checkOpen();
+                synchronized (lifecycleLock) {
+                    if (isClosed) {
+                        camera.close();
+                        return;
+                    }
+                    Camera2Session.this.cameraDevice = camera;
+                    Camera2Session.this.lastTime = System.currentTimeMillis();
+                    FileLog.d("Camera2Session camera #" + cameraId + " opened");
+                    checkOpen();
+                }
             }
 
             @Override
             public void onDisconnected(@NonNull CameraDevice camera) {
-                Camera2Session.this.cameraDevice = camera;
-                FileLog.d("Camera2Session camera #" + cameraId + " disconnected");
-                publishError();
+                synchronized (lifecycleLock) {
+                    if (isClosed) {
+                        camera.close();
+                        return;
+                    }
+                    Camera2Session.this.cameraDevice = camera;
+                    FileLog.d("Camera2Session camera #" + cameraId + " disconnected");
+                    publishError();
+                }
             }
 
             @Override
             public void onError(@NonNull CameraDevice camera, int error) {
-                Camera2Session.this.cameraDevice = camera;
-                FileLog.e("Camera2Session camera #" + cameraId + " received " + error + " error");
-                publishError();
+                synchronized (lifecycleLock) {
+                    if (isClosed) {
+                        camera.close();
+                        return;
+                    }
+                    Camera2Session.this.cameraDevice = camera;
+                    FileLog.e("Camera2Session camera #" + cameraId + " received " + error + " error");
+                    publishError();
+                }
             }
         };
 
         captureStateCallback = new CameraCaptureSession.StateCallback() {
             @Override
             public void onConfigured(@NonNull CameraCaptureSession session) {
-                captureSession = session;
-                FileLog.e("Camera2Session camera #" + cameraId + " capture session configured");
-                Camera2Session.this.lastTime = System.currentTimeMillis();
-                try {
-                    if (!updateCaptureRequest()) {
-                        publishError();
+                synchronized (lifecycleLock) {
+                    if (isClosed) {
+                        session.close();
                         return;
                     }
-                    AndroidUtilities.runOnUIThread(() -> {
-                        isSuccess = true;
-                        if (doneCallback != null) {
-                            doneCallback.run();
-                            doneCallback = null;
+                    captureSession = session;
+                    FileLog.e("Camera2Session camera #" + cameraId + " capture session configured");
+                    Camera2Session.this.lastTime = System.currentTimeMillis();
+                    try {
+                        if (!updateCaptureRequest()) {
+                            publishError();
+                            return;
                         }
-                    });
-                } catch (Exception e) {
-                    FileLog.e(e);
-                    publishError();
+                        AndroidUtilities.runOnUIThread(() -> {
+                            synchronized (completionLock) {
+                                if (isClosed) return;
+                                isSuccess = true;
+                                Runnable callback = doneCallback;
+                                doneCallback = null;
+                                if (callback != null) callback.run();
+                            }
+                        });
+                    } catch (Exception e) {
+                        FileLog.e(e);
+                        publishError();
+                    }
                 }
             }
 
             @Override
             public void onConfigureFailed(@NonNull CameraCaptureSession session) {
-                captureSession = session;
-                FileLog.e("Camera2Session camera #" + cameraId + " capture session failed to configure");
-                publishError();
+                synchronized (lifecycleLock) {
+                    if (isClosed) {
+                        session.close();
+                        return;
+                    }
+                    captureSession = session;
+                    FileLog.e("Camera2Session camera #" + cameraId + " capture session failed to configure");
+                    publishError();
+                }
             }
         };
 
@@ -283,17 +319,22 @@ public class Camera2Session {
 
     private void publishError() {
         AndroidUtilities.runOnUIThread(() -> {
-            if (isClosed) return;
-            isError = true;
-            Runnable callback = errorCallback;
-            errorCallback = null;
-            if (callback != null) callback.run();
+            synchronized (completionLock) {
+                if (isClosed) return;
+                isError = true;
+                Runnable callback = errorCallback;
+                errorCallback = null;
+                if (callback != null) callback.run();
+            }
         });
     }
 
     public void whenError(Runnable callback) {
-        if (isError && !isClosed) callback.run();
-        else errorCallback = callback;
+        synchronized (completionLock) {
+            if (isClosed) return;
+            if (isError) callback.run();
+            else errorCallback = callback;
+        }
     }
 
     public int getRecordingFrameRate() { return recordingFrameRate; }
@@ -306,27 +347,34 @@ public class Camera2Session {
 
     private Runnable doneCallback;
     public void whenDone(Runnable doneCallback) {
-        if (isInitiated()) {
-            doneCallback.run();
-            this.doneCallback = null;
-        } else {
-            this.doneCallback = doneCallback;
+        synchronized (completionLock) {
+            if (isClosed) return;
+            if (isInitiated()) {
+                this.doneCallback = null;
+                doneCallback.run();
+            } else {
+                this.doneCallback = doneCallback;
+            }
         }
     }
 
     public void open(SurfaceTexture surfaceTexture) {
+        if (isClosed) return;
         handler.post(() -> {
-            this.surfaceTexture = surfaceTexture;
-            if (surfaceTexture != null) {
-                surfaceTexture.setDefaultBufferSize(getPreviewWidth(), getPreviewHeight());
+            synchronized (lifecycleLock) {
+                if (isClosed) return;
+                this.surfaceTexture = surfaceTexture;
+                if (surfaceTexture != null) {
+                    surfaceTexture.setDefaultBufferSize(getPreviewWidth(), getPreviewHeight());
+                }
+                checkOpen();
             }
-            checkOpen();
         });
     }
 
     private boolean opened = false;
     private void checkOpen() {
-        if (opened) return;
+        if (isClosed || opened) return;
         if (surfaceTexture == null || cameraDevice == null) return;
         opened = true;
 
@@ -489,21 +537,17 @@ public class Camera2Session {
     }
 
     public void destroy(boolean async, Runnable afterCallback) {
-        isClosed = true;
+        synchronized (completionLock) {
+            synchronized (lifecycleLock) {
+                isClosed = true;
+                isSuccess = false;
+                doneCallback = null;
+                errorCallback = null;
+            }
+        }
         if (async) {
             handler.post(() -> {
-                if (captureSession != null) {
-                    captureSession.close();
-                    captureSession = null;
-                }
-                if (cameraDevice != null) {
-                    cameraDevice.close();
-                    cameraDevice = null;
-                }
-                if (imageReader != null) {
-                    imageReader.close();
-                    imageReader = null;
-                }
+                closeCameraResources();
                 thread.quitSafely();
                 AndroidUtilities.runOnUIThread(() -> {
                     try {
@@ -517,6 +561,21 @@ public class Camera2Session {
                 });
             });
         } else {
+            closeCameraResources();
+            thread.quitSafely();
+            try {
+                thread.join();
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+            if (afterCallback != null) {
+                AndroidUtilities.runOnUIThread(afterCallback);
+            }
+        }
+    }
+
+    private void closeCameraResources() {
+        synchronized (lifecycleLock) {
             if (captureSession != null) {
                 captureSession.close();
                 captureSession = null;
@@ -529,15 +588,13 @@ public class Camera2Session {
                 imageReader.close();
                 imageReader = null;
             }
-            thread.quitSafely();
-            try {
-                thread.join();
-            } catch (Exception e) {
-                FileLog.e(e);
+            if (surface != null) {
+                surface.release();
+                surface = null;
             }
-            if (afterCallback != null) {
-                AndroidUtilities.runOnUIThread(afterCallback);
-            }
+            // The preview owns its texture; release only this session's wrapper.
+            surfaceTexture = null;
+            captureRequestBuilder = null;
         }
     }
 
@@ -566,7 +623,7 @@ public class Camera2Session {
     }
 
     private boolean updateCaptureRequest() {
-        if (cameraDevice == null || surface == null || captureSession == null) return false;
+        if (isClosed || cameraDevice == null || surface == null || captureSession == null) return false;
         for (int attempt = 0; attempt < 2; attempt++) {
             try {
                 int template;

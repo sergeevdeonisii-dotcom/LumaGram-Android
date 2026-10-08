@@ -7,7 +7,7 @@ $run = Join-Path $OutputRoot ([guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path (Join-Path $run 'classes') | Out-Null
 $sources = @((Get-ChildItem (Join-Path $PSScriptRoot 'fixtures') -Recurse -Filter '*.java').FullName)
 $sources += @((Get-ChildItem (Join-Path $PSScriptRoot 'org') -Recurse -Filter '*.java').FullName)
-$actual = @('LumaAccountData', 'LumaAnonymousNumber', 'LumaDeletedMessages', 'LumaStarRating',
+$actual = @('LumaBuildPolicy', 'LumaRoundVideoCamera', 'LumaAccountData', 'LumaAnonymousNumber', 'LumaDeletedMessages', 'LumaStarRating',
     'LumaDelayedSend', 'LumaUpdateFiles', 'LumaUpdaterController', 'LumaAccountExportManager', 'LumaPresenceRequestState', 'LumaGhostMode',
     'LumaMessageFormatting', 'LumaGiftVisibilityOperation', 'LumaTextAnimation', 'LumaProfileVerification', 'LumaNotificationUpdateState', 'LumaNotificationAccountGuard', 'LumaConferenceRequestState', 'LumaExportSession',
     'BlackHoleSearch', 'BlackHoleSettings', 'BlackHoleVault', 'BlackHoleSealedData', 'BlackHoleNotes', 'BlackHoleNotificationJournal')

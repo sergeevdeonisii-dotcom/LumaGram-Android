@@ -140,7 +140,7 @@ android {
     defaultConfig {
         minSdkVersion 21
         targetSdkVersion 36
-        versionName APP_VERSION_NAME
+        versionName APP_VERSION_NAME + (String.valueOf(rootProject.findProperty('lumaFriendsEdition')) == 'true' ? '-friends' : '')
         ndkVersion "27.2.12479018"
 
         multiDexEnabled true

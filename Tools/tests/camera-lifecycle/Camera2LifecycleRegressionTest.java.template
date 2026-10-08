@@ -1,0 +1,181 @@
+import java.util.ArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+public final class Camera2Session {
+    @interface NonNull {}
+    static int assertions;
+    static void check(boolean value, String label) { assertions++; if (!value) throw new AssertionError(label); }
+    static final class Handler {
+        final ArrayList<Runnable> tasks = new ArrayList<>();
+        boolean post(Runnable task) { tasks.add(task); return true; }
+        void drain() { while (!tasks.isEmpty()) tasks.remove(0).run(); }
+    }
+    static final class HandlerThread {
+        int quits, joins;
+        void quitSafely() { quits++; }
+        void join() { joins++; }
+    }
+    static final class AndroidUtilities {
+        static final Handler ui = new Handler();
+        static void runOnUIThread(Runnable task) { ui.post(task); }
+    }
+    static final class FileLog {
+        static void d(String message) {}
+        static void e(String message) {}
+        static void e(Exception error) {}
+    }
+    static final class SurfaceTexture {
+        int resizes, releases;
+        void setDefaultBufferSize(int width, int height) { resizes++; }
+    }
+    static final class Surface {
+        int releases;
+        Surface(SurfaceTexture texture) {}
+        void release() { releases++; }
+    }
+    static final class ImageReader {
+        int closes;
+        Surface getSurface() { return new Surface(null); }
+        void close() { closes++; }
+    }
+    static final class CameraDevice {
+        int closes, creates;
+        void close() { closes++; }
+        void createCaptureSession(ArrayList<Surface> surfaces, CameraCaptureSession.StateCallback callback, Object handler) { creates++; }
+        abstract static class StateCallback {
+            public abstract void onOpened(CameraDevice camera);
+            public abstract void onDisconnected(CameraDevice camera);
+            public abstract void onError(CameraDevice camera, int error);
+        }
+    }
+    static final class CameraCaptureSession {
+        int closes;
+        void close() { closes++; }
+        abstract static class StateCallback {
+            public abstract void onConfigured(CameraCaptureSession session);
+            public abstract void onConfigureFailed(CameraCaptureSession session);
+        }
+    }
+    private volatile boolean isError, isSuccess, isClosed;
+    private final Object lifecycleLock = new Object();
+    private final Object completionLock = new Object();
+    private final String cameraId = "test";
+    private final Handler handler = new Handler();
+    private final HandlerThread thread = new HandlerThread();
+    private CameraDevice cameraDevice;
+    private CameraCaptureSession captureSession;
+    private SurfaceTexture surfaceTexture;
+    private Surface surface;
+    private ImageReader imageReader;
+    private Object captureRequestBuilder;
+    private final CameraDevice.StateCallback cameraStateCallback;
+    private final CameraCaptureSession.StateCallback captureStateCallback;
+    private Runnable doneCallback, errorCallback;
+    private long lastTime;
+    private boolean opened;
+    private int requests;
+    private boolean updateCaptureRequest() {
+        requests++;
+        return !isClosed && cameraDevice != null && surface != null && captureSession != null;
+    }
+    private int getPreviewWidth() { return 640; }
+    private int getPreviewHeight() { return 640; }
+    Camera2Session() {
+        // PRODUCTION_CALLBACKS
+    }
+    // PRODUCTION_METHODS
+
+    static Camera2Session openedSession() {
+        Camera2Session owner = new Camera2Session();
+        owner.open(new SurfaceTexture()); owner.handler.drain();
+        owner.cameraStateCallback.onOpened(new CameraDevice());
+        return owner;
+    }
+    static void lateCallbacks(boolean async) {
+        Camera2Session owner = new Camera2Session(); int[] events = {0};
+        owner.whenDone(() -> events[0]++); owner.whenError(() -> events[0]++);
+        owner.destroy(async, () -> events[0]++);
+        CameraDevice opened = new CameraDevice(), disconnected = new CameraDevice(), errored = new CameraDevice();
+        CameraCaptureSession configured = new CameraCaptureSession(), failed = new CameraCaptureSession();
+        owner.cameraStateCallback.onOpened(opened);
+        owner.cameraStateCallback.onDisconnected(disconnected);
+        owner.cameraStateCallback.onError(errored, 1);
+        owner.captureStateCallback.onConfigured(configured);
+        owner.captureStateCallback.onConfigureFailed(failed);
+        check(opened.closes == 1 && disconnected.closes == 1 && errored.closes == 1, "All late camera devices close without resurrection");
+        check(configured.closes == 1 && failed.closes == 1, "Both late capture-session callbacks close their session");
+        check(owner.cameraDevice == null && owner.captureSession == null && owner.requests == 0, "Closed owner never adopts or configures late resources");
+        owner.handler.drain(); AndroidUtilities.ui.drain();
+        check(events[0] == 1 && !owner.isInitiated() && !owner.isSuccess, "Only teardown callback runs after closure");
+        check(owner.doneCallback == null && owner.errorCallback == null, "Teardown drops caller callback references");
+        owner.whenDone(() -> events[0]++); owner.whenError(() -> events[0]++);
+        check(owner.doneCallback == null && owner.errorCallback == null && events[0] == 1, "Closed owner cannot retain new listeners");
+    }
+    static void concurrentCompletion() throws Exception {
+        final Camera2Session owner = openedSession();
+        CountDownLatch entered = new CountDownLatch(1), finish = new CountDownLatch(1);
+        owner.whenDone(() -> {
+            entered.countDown();
+            try { if (!finish.await(2, TimeUnit.SECONDS)) throw new AssertionError("Completion timeout"); }
+            catch (InterruptedException e) { throw new AssertionError(e); }
+            check(!owner.isClosed, "A live callback stays ordered before concurrent teardown");
+        });
+        owner.captureStateCallback.onConfigured(new CameraCaptureSession());
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread completion = new Thread(() -> {
+            try { AndroidUtilities.ui.drain(); } catch (Throwable error) { failure.set(error); }
+        });
+        completion.start();
+        check(entered.await(2, TimeUnit.SECONDS), "UI callback started");
+        Thread teardown = new Thread(() -> owner.destroy(false, null));
+        teardown.start();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (teardown.getState() != Thread.State.BLOCKED && teardown.isAlive() && System.nanoTime() < deadline) Thread.yield();
+        boolean blocked = teardown.getState() == Thread.State.BLOCKED && !owner.isClosed;
+        finish.countDown();
+        completion.join(2000); teardown.join(2000);
+        check(blocked, "Background destroy cannot interleave inside UI completion");
+        check(!completion.isAlive() && !teardown.isAlive() && owner.isClosed, "Completion and teardown finish without a lock deadlock");
+        check(failure.get() == null, "Concurrent callback completed without an off-thread assertion failure");
+        AndroidUtilities.ui.drain();
+        Camera2Session reentrant = openedSession();
+        reentrant.whenDone(() -> reentrant.destroy(false, null));
+        reentrant.captureStateCallback.onConfigured(new CameraCaptureSession());
+        AndroidUtilities.ui.drain();
+        check(reentrant.isClosed && reentrant.cameraDevice == null, "A completion callback may synchronously destroy its owner");
+    }
+    public static void main(String[] args) throws Exception {
+        lateCallbacks(false); lateCallbacks(true);
+        concurrentCompletion();
+        Camera2Session owner = openedSession(); int[] ready = {0};
+        owner.whenDone(() -> ready[0]++); owner.captureStateCallback.onConfigured(new CameraCaptureSession());
+        check(owner.requests == 1 && ready[0] == 0, "Configuration queues readiness on the UI thread");
+        AndroidUtilities.ui.drain();
+        check(owner.isInitiated() && ready[0] == 1, "Live owner becomes ready exactly once");
+        owner.whenDone(() -> ready[0]++);
+        check(ready[0] == 2 && owner.doneCallback == null, "Ready owner invokes fresh listener immediately");
+        owner = openedSession(); ready[0] = 0;
+        owner.whenDone(() -> ready[0]++); owner.captureStateCallback.onConfigured(new CameraCaptureSession());
+        owner.destroy(false, null); AndroidUtilities.ui.drain();
+        check(ready[0] == 0 && !owner.isSuccess, "Queued success cannot restart a destroyed recording");
+        owner = new Camera2Session(); SurfaceTexture queuedTexture = new SurfaceTexture();
+        owner.open(queuedTexture); owner.destroy(true, null); owner.handler.drain(); AndroidUtilities.ui.drain();
+        check(queuedTexture.resizes == 0 && owner.surfaceTexture == null, "Queued open ignores the caller texture after closure");
+        owner.open(queuedTexture);
+        check(owner.handler.tasks.isEmpty(), "Closed owner does not queue another open");
+        owner = openedSession(); CameraDevice camera = owner.cameraDevice;
+        CameraCaptureSession capture = owner.captureSession = new CameraCaptureSession();
+        ImageReader reader = owner.imageReader = new ImageReader(); Surface wrapper = owner.surface;
+        SurfaceTexture callerTexture = owner.surfaceTexture; owner.captureRequestBuilder = new Object();
+        owner.destroy(false, null);
+        check(camera.closes == 1 && capture.closes == 1 && reader.closes == 1 && wrapper.releases == 1, "Teardown closes each owned camera resource and Surface wrapper");
+        check(callerTexture.releases == 0, "Preview-owned SurfaceTexture is not released by the camera session");
+        check(owner.surface == null && owner.surfaceTexture == null && owner.captureRequestBuilder == null, "Teardown clears stale preview/request references");
+        owner.destroy(false, null);
+        check(camera.closes == 1 && capture.closes == 1 && reader.closes == 1 && wrapper.releases == 1, "Repeated teardown does not double-release resources");
+        AndroidUtilities.ui.drain();
+        System.out.println("PASS: " + assertions + " Camera2 lifecycle assertions using verbatim callbacks and teardown methods.");
+    }
+}

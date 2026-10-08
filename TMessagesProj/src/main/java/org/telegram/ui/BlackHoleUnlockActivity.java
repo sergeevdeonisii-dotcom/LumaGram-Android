@@ -16,35 +16,74 @@ public final class BlackHoleUnlockActivity extends BaseFragment {
     private long owner;
     private long epoch;
     private boolean accepted;
+    private LaunchActivity passcodeHost;
+    private PasscodeView registeredPasscode;
     public BlackHoleUnlockActivity(Runnable onAccepted) { this.onAccepted = onAccepted; }
     @Override public boolean onFragmentCreate() {
-        owner = UserConfig.getInstance(currentAccount).getClientUserId(); epoch = BlackHoleVault.authenticationEpoch(); return owner > 0;
+        owner = UserConfig.getInstance(currentAccount).getClientUserId(); epoch = BlackHoleVault.authenticationEpoch(); return owner > 0 && super.onFragmentCreate();
     }
     @Override public View createView(Context context) {
+        unregisterPasscodeView();
+        accepted = false;
         actionBar.setVisibility(View.GONE);
         passcode = new PasscodeView(context) {
             @Override protected void onHidden() {
+                if (isFinished || this != passcode || getParentActivity() == null) return;
                 finishFragment();
-                if (accepted && UserConfig.getInstance(currentAccount).getClientUserId() == owner && onAccepted != null)
-                    AndroidUtilities.runOnUIThread(onAccepted);
+                if (accepted && onAccepted != null) AndroidUtilities.runOnUIThread(() -> {
+                    if (!org.telegram.messenger.ApplicationLoader.mainInterfacePaused
+                            && owner > 0 && owner == UserConfig.getInstance(currentAccount).getClientUserId()
+                            && epoch == BlackHoleVault.authenticationEpoch() && BlackHoleVault.isUnlocked(currentAccount))
+                        onAccepted.run();
+                });
             }
         };
         passcode.setDelegate(view -> {
-            accepted = !org.telegram.messenger.ApplicationLoader.mainInterfacePaused && epoch == BlackHoleVault.authenticationEpoch()
-                    && owner == UserConfig.getInstance(currentAccount).getClientUserId();
+            accepted = !isFinished && !isPaused() && getParentActivity() != null && view == passcode
+                    && !org.telegram.messenger.ApplicationLoader.mainInterfacePaused && epoch == BlackHoleVault.authenticationEpoch()
+                    && owner > 0 && owner == UserConfig.getInstance(currentAccount).getClientUserId();
             if (accepted) BlackHoleVault.acceptAuthentication(currentAccount, owner, epoch);
         });
         passcode.onShow(true, false);
         return fragmentView = passcode;
     }
-    @Override public void onResume() { super.onResume(); if (passcode != null) passcode.onResume(); }
+    private void registerPasscodeView() {
+        if (isFinished || isPaused() || !(getParentActivity() instanceof LaunchActivity) || passcode == null) {
+            unregisterPasscodeView();
+            return;
+        }
+        LaunchActivity host = (LaunchActivity) getParentActivity();
+        if (passcodeHost == host && registeredPasscode == passcode) return;
+        unregisterPasscodeView();
+        passcodeHost = host;
+        registeredPasscode = passcode;
+        host.addOverlayPasscodeView(passcode);
+    }
+    private void unregisterPasscodeView() {
+        if (passcodeHost != null && registeredPasscode != null) passcodeHost.removeOverlayPasscodeView(registeredPasscode);
+        passcodeHost = null;
+        registeredPasscode = null;
+    }
+    @Override public void onResume() {
+        super.onResume();
+        if (isFinished) return;
+        // Native fingerprint arbitration requires registration before PasscodeView.onResume().
+        registerPasscodeView();
+        if (passcode != null) passcode.onResume();
+    }
     @Override public void onPause() {
+        super.onPause();
+        unregisterPasscodeView();
         if (passcode != null) passcode.onPause();
         if (!accepted && org.telegram.messenger.ApplicationLoader.mainInterfacePaused) {
             if (fragmentView != null) fragmentView.setVisibility(View.INVISIBLE);
             AndroidUtilities.runOnUIThread(() -> { if (!isFinished) finishFragment(false); });
         }
-        super.onPause();
+    }
+    @Override public void onFragmentDestroy() {
+        unregisterPasscodeView();
+        if (passcode != null) passcode.onPause();
+        super.onFragmentDestroy();
     }
     @Override public boolean onBackPressed(boolean invoked) {
         return passcode == null || passcode.onBackPressed();

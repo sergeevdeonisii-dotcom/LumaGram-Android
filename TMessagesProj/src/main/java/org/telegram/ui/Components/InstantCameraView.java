@@ -83,6 +83,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaRoundVideoCamera;
 import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessagesController;
@@ -744,9 +745,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         cameraReady = false;
         selectedCamera = null;
         if (!fromPaused) {
-            if (!useCamera2) {
-                isFrontface = true;
-            }
+            isFrontface = LumaRoundVideoCamera.initialFrontCamera(useCamera2 ? isFrontface : true, false);
             updateFlash();
             recordedTime = 0;
             progress = 0;
@@ -812,6 +811,11 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 }
                 updateFlash();
                 camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1];
+                if (camera2SessionCurrent == null && camera2Sessions[isFrontface ? 1 : 0] != null) {
+                    isFrontface = !isFrontface;
+                    camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1];
+                    updateFlash();
+                }
                 if (camera2SessionCurrent != null && camera2Sessions[isFrontface ? 1 : 0] == null) {
                     bothCameras = false;
                 }
@@ -819,8 +823,17 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     abortCameraStartup(startupGeneration);
                     return;
                 }
+                if (!bothCameras) {
+                    previewSize[0] = new Size(camera2SessionCurrent.getPreviewWidth(), camera2SessionCurrent.getPreviewHeight());
+                }
             } else {
                 camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, getRecordingQualityProfile().size, getRecordingQualityProfile().size, getRecordingQualityProfile().frameRate);
+                if (camera2SessionCurrent == null) {
+                    // A rear-camera preference must not prevent recording on a front-only device.
+                    isFrontface = !isFrontface;
+                    camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, getRecordingQualityProfile().size, getRecordingQualityProfile().size, getRecordingQualityProfile().frameRate);
+                    updateFlash();
+                }
                 if (camera2SessionCurrent == null) {
                     abortCameraStartup(startupGeneration);
                     return;
@@ -829,6 +842,8 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 previewSize[0] = new Size(camera2SessionCurrent.getPreviewWidth(), camera2SessionCurrent.getPreviewHeight());
             }
         }
+        // Dual sessions keep front/back textures at 0/1; single sessions always use texture 0.
+        surfaceIndex = useCamera2 && bothCameras && !isFrontface ? 1 : 0;
         textureView = new TextureView(getContext());
         textureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
             @Override
@@ -1393,6 +1408,10 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         }
         if (selectedCamera == null) {
             return false;
+        }
+        if (isFrontface != selectedCamera.isFrontface()) {
+            isFrontface = selectedCamera.isFrontface();
+            updateFlash();
         }
 
         ArrayList<Size> previewSizes = selectedCamera.getPreviewSizes();

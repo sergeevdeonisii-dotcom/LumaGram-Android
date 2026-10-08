@@ -120,6 +120,7 @@ import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LocationController;
 import org.telegram.messenger.LumaUpdaterController;
+import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
@@ -1197,6 +1198,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (account == UserConfig.selectedAccount || !UserConfig.isValidAccount(account)) {
             return;
         }
+        org.telegram.messenger.BlackHoleVault.lockAll();
         switchingAccount = true;
 
         ConnectionsManager.getInstance(currentAccount).setAppPaused(true, false);
@@ -1376,6 +1378,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     private void showUpdateActivity(int account, TLRPC.TL_help_appUpdate update, boolean check) {
+        if (!LumaBuildPolicy.allowsBuiltInUpdates()) return;
         if (blockingUpdateView == null) {
             blockingUpdateView = new BlockingUpdateView(LaunchActivity.this);
             drawerLayoutContainer.addView(blockingUpdateView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
@@ -1499,7 +1502,11 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     public boolean allowShowFingerprintDialog(PasscodeView passcodeView) {
-        return overlayPasscodeViews.isEmpty() && this.passcodeDialog != null ? passcodeView == this.passcodeDialog.passcodeView : overlayPasscodeViews.get(overlayPasscodeViews.size() - 1) == passcodeView;
+        if (passcodeView == null) return false;
+        if (!overlayPasscodeViews.isEmpty()) {
+            return overlayPasscodeViews.get(overlayPasscodeViews.size() - 1) == passcodeView;
+        }
+        return passcodeDialog != null && passcodeView == passcodeDialog.passcodeView;
     }
 
     private boolean handleIntent(Intent intent, boolean isNew, boolean restore, boolean fromPassword) {
@@ -5958,6 +5965,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     private boolean firstAppUpdateCheck = true;
     public void checkAppUpdate(boolean force, Browser.Progress progress) {
+        if (!LumaBuildPolicy.allowsBuiltInUpdates()) {
+            if (progress != null) progress.end();
+            return;
+        }
         if (!ApplicationLoader.isStandaloneBuild() && !ApplicationLoader.isBetaBuild()) {
             return;
         }
@@ -7047,7 +7058,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         }
         if (UserConfig.getInstance(UserConfig.selectedAccount).unacceptedTermsOfService != null) {
             showTosActivity(UserConfig.selectedAccount, UserConfig.getInstance(UserConfig.selectedAccount).unacceptedTermsOfService);
-        } else if (SharedConfig.pendingAppUpdate != null && SharedConfig.pendingAppUpdate.can_not_skip) {
+        } else if (LumaBuildPolicy.allowsBuiltInUpdates() && SharedConfig.pendingAppUpdate != null && SharedConfig.pendingAppUpdate.can_not_skip) {
             showUpdateActivity(UserConfig.selectedAccount, SharedConfig.pendingAppUpdate, true);
         }
         checkAppUpdate(false, null);

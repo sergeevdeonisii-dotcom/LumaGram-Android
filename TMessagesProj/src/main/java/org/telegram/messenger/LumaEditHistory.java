@@ -43,7 +43,7 @@ public final class LumaEditHistory {
     }
 
     public static synchronized void rememberEdit(int account, long dialogId, TLRPC.Message before, TLRPC.Message after) {
-        if (before == null || after == null || before.id <= 0 || before.id != after.id
+        if (!LumaBuildPolicy.allowsPrivacyTools() || before == null || after == null || before.id <= 0 || before.id != after.id
                 || (after.flags & TLRPC.MESSAGE_FLAG_EDITED) == 0
                 || after.edit_date == 0 || after.edit_date < before.edit_date
                 || TextUtils.equals(text(before), text(after))) {
@@ -88,6 +88,7 @@ public final class LumaEditHistory {
     }
 
     public static synchronized JSONArray getVersions(int account, long dialogId, int messageId) {
+        if (!LumaBuildPolicy.allowsPrivacyTools()) return new JSONArray();
         try {
             return new JSONArray(preferences(account).getString(key(account, dialogId, messageId), "[]"));
         } catch (JSONException exception) {

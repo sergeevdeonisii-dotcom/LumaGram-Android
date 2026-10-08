@@ -117,6 +117,7 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaGhostMode;
+import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.messenger.LumaUpdaterController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
@@ -13718,7 +13719,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return;
         }
 
-        io.addChecked(LumaGhostMode.isEnabled(currentAccount), getString(R.string.ExperimentalGhostHeader), () -> {
+        if (LumaBuildPolicy.allowsPrivacyTools()) io.addChecked(LumaGhostMode.isEnabled(currentAccount), getString(R.string.ExperimentalGhostHeader), () -> {
             boolean enabled = !LumaGhostMode.isEnabled(currentAccount);
             LumaGhostMode.setEnabled(currentAccount, enabled);
             BulletinFactory.of(this).createSimpleBulletin(

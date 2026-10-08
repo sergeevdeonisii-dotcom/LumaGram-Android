@@ -17,6 +17,8 @@ import android.graphics.Matrix;
 import android.graphics.Outline;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
 import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -36,6 +38,7 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaRoundVideoCamera;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -371,7 +374,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         activeOutputResolution = SharedSettings.roundVideoOutputResolution.get();
         session = new RoundVideoSession.Builder(getContext(), textureView)
                 .setOutputDirectory(new File(ApplicationLoader.getFilesDirFixed(), "cache"))
-                .setInitialFacing(SharedSettings.roundVideoLastCamera.get())
+                .setInitialFacing(getInitialCameraFacing(fromPaused))
                 .setOutputResolution(activeOutputResolution)
                 .setVideoBitrate(SharedSettings.roundVideoVideoBitrate.get())
                 .setCameraResolution(SharedSettings.roundVideoCameraResolution.get())
@@ -384,6 +387,28 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         MediaController.getInstance().requestRecordAudioFocus(true);
         session.start();
         startAnimation(true, fromPaused);
+    }
+
+    private RoundVideoSession.CameraFacing getInitialCameraFacing(boolean fromPaused) {
+        RoundVideoSession.CameraFacing previous = SharedSettings.roundVideoLastCamera.get();
+        if (fromPaused || !LumaRoundVideoCamera.isStartWithRearCameraEnabled()) return previous;
+        boolean front = LumaRoundVideoCamera.initialFrontCamera(previous == RoundVideoSession.CameraFacing.FRONT, false);
+        try {
+            CameraManager manager = (CameraManager) getContext().getSystemService(Context.CAMERA_SERVICE);
+            if (manager != null) {
+                boolean frontAvailable = false, backAvailable = false;
+                for (String id : manager.getCameraIdList()) {
+                    Integer facing = manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING);
+                    frontAvailable |= facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT;
+                    backAvailable |= facing != null && facing == CameraCharacteristics.LENS_FACING_BACK;
+                }
+                front = LumaRoundVideoCamera.availableFrontCamera(front, frontAvailable, backAvailable);
+            }
+        } catch (Exception error) {
+            // Let the recording session report unavailable cameras or missing permission normally.
+            FileLog.e(error);
+        }
+        return front ? RoundVideoSession.CameraFacing.FRONT : RoundVideoSession.CameraFacing.BACK;
     }
 
     @Override

@@ -1,0 +1,50 @@
+name: Lunagram .80 personal APK
+
+on:
+  push:
+    branches: ["agent/lunagram-personal-audit-20261008"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lunagram-personal80-apk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'sergeevdeonisii-dotcom/LumaGram-Android' && github.ref == 'refs/heads/agent/lunagram-personal-audit-20261008'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: "2"
+    steps:
+      - name: Check out exact source and pinned submodules
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 1
+          submodules: recursive
+          persist-credentials: false
+      - name: Set up JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build personal APK with a disposable key
+        shell: bash
+        env:
+          LUMA_API_ID: ${{ secrets.LUMA_API_ID }}
+          LUMA_API_HASH: ${{ secrets.LUMA_API_HASH }}
+        run: bash Tools/ci/build-lunagram-personal80.sh
+      - name: Upload temporary APK and public metadata
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: lunagram-80-personal-temporary-signed
+          path: |
+            ${{ runner.temp }}/lunagram80-artifacts/*.apk
+            ${{ runner.temp }}/lunagram80-artifacts/build-metadata.json
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+          include-hidden-files: false

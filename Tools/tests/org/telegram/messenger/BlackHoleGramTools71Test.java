@@ -22,11 +22,19 @@ public final class BlackHoleGramTools71Test {
  }
  private static void settings(){
   Map<String,Object> values=BlackHoleSettings.capture(0);BlackHoleSettings.validate(values);
-  check(values.size()==27,"all portable settings captured, including round-video quality");
+  check(values.size()==28,"all portable settings captured, including round-video quality and initial camera");
   check(Boolean.TRUE.equals(values.get("send.roundHighQuality")),"round-video HD preference defaults enabled in export");
+  check(Boolean.FALSE.equals(values.get("send.roundStartRear")),"rear initial camera is opt in");
+  Map<String,Object> rear=new HashMap<>();rear.put("send.roundStartRear",true);BlackHoleSettings.apply(0,rear);
+  check(LumaRoundVideoCamera.isStartWithRearCameraEnabled()&&Boolean.TRUE.equals(BlackHoleSettings.capture(0).get("send.roundStartRear")),"rear camera preference survives portable boolean import/export");
+  Map<String,Object> beforeRear=new HashMap<>(values);beforeRear.remove("send.roundStartRear");BlackHoleSettings.apply(0,beforeRear);
+  check(LumaRoundVideoCamera.isStartWithRearCameraEnabled(),"legacy 27-field imports preserve current rear camera preference");
+  rear.put("send.roundStartRear","true");expectFailure(()->BlackHoleSettings.apply(0,rear));
+  check(LumaRoundVideoCamera.isStartWithRearCameraEnabled(),"invalid rear preference is rejected before any write");
+  LumaRoundVideoCamera.setStartWithRearCameraEnabled(false);
   Map<String,Object> quality=new HashMap<>();quality.put("send.roundHighQuality",false);BlackHoleSettings.apply(0,quality);
   check(!LumaRoundVideoQuality.isEnabled()&&Boolean.FALSE.equals(BlackHoleSettings.capture(0).get("send.roundHighQuality")),"round-video quality survives portable boolean import/export");
-  Map<String,Object> legacy=new HashMap<>(values);legacy.remove("send.roundHighQuality");BlackHoleSettings.apply(0,legacy);
+  Map<String,Object> legacy=new HashMap<>(values);legacy.remove("send.roundHighQuality");legacy.remove("send.roundStartRear");BlackHoleSettings.apply(0,legacy);
   check(!LumaRoundVideoQuality.isEnabled(),"legacy 26-field imports preserve the current round-video preference");
   quality.put("send.roundHighQuality","true");expectFailure(()->BlackHoleSettings.apply(0,quality));
   check(!LumaRoundVideoQuality.isEnabled(),"invalid quality import is rejected before any setting write");
