@@ -5,26 +5,30 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const PACKAGE = 'org.luma.liquid.web';
-const BASE_VERSION = '12.10.6-lunagram.79';
-const VERSION_CODE = 71589;
+const RELEASES = {
+  '79': { version: '12.10.6-lunagram.79', code: 71589 },
+  '80': { version: '12.10.6-lunagram.80', code: 71599 },
+};
 
 function requireValue(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-export function expectedArtifact(edition) {
+export function expectedArtifact(edition, release = '79') {
   requireValue(edition === 'full' || edition === 'friends', 'Unknown APK edition.');
+  requireValue(Object.hasOwn(RELEASES, release), 'Unknown APK release.');
+  const { version, code } = RELEASES[release];
   return {
     edition,
-    fileName: `Lunagram-${BASE_VERSION}-${edition}-temporary.apk`,
-    versionName: BASE_VERSION + (edition === 'friends' ? '-friends' : ''),
-    versionCode: VERSION_CODE,
+    fileName: `Lunagram-${version}-${edition}-temporary.apk`,
+    versionName: version + (edition === 'friends' ? '-friends' : ''),
+    versionCode: code,
     friendsEdition: edition === 'friends',
   };
 }
 
-export function validateOutputMetadata(metadata, edition) {
-  const expected = expectedArtifact(edition);
+export function validateOutputMetadata(metadata, edition, release = '79') {
+  const expected = expectedArtifact(edition, release);
   requireValue(metadata.applicationId === PACKAGE, 'Output metadata has an unexpected package.');
   requireValue(Array.isArray(metadata.elements) && metadata.elements.length === 1, 'Expected one standalone arm64 APK.');
   const element = metadata.elements[0];
@@ -41,8 +45,8 @@ export function validateGeneratedFlag(source, edition) {
   // Never print any part of BuildConfig: adjacent fields contain API credentials.
 }
 
-export function validateApkBadging(badging, edition) {
-  const expected = expectedArtifact(edition);
+export function validateApkBadging(badging, edition, release = '79') {
+  const expected = expectedArtifact(edition, release);
   const name = badging.match(/^package: name='([^']+)'/m)?.[1];
   const versionCode = Number(badging.match(/^package:.*\bversionCode='([0-9]+)'/m)?.[1]);
   const versionName = badging.match(/^package:.*\bversionName='([^']+)'/m)?.[1];
@@ -63,17 +67,17 @@ function safeArtifactPath(directory, fileName) {
 }
 
 async function collect(args) {
-  const expected = expectedArtifact(args.edition);
+  const expected = expectedArtifact(args.edition, args.release);
   const repo = path.resolve(args['repo-root']);
   const directory = path.resolve(args['artifact-dir']);
   const outputDirectory = path.join(repo, 'TMessagesProj_AppStandalone/build/outputs/apk/afat/standalone');
   const outputMetadata = JSON.parse(fs.readFileSync(path.join(outputDirectory, 'output-metadata.json'), 'utf8'));
-  const sourceApk = path.join(outputDirectory, validateOutputMetadata(outputMetadata, args.edition));
+  const sourceApk = path.join(outputDirectory, validateOutputMetadata(outputMetadata, args.edition, args.release));
   const buildConfig = path.join(repo, 'TMessagesProj/build/generated/source/buildConfig/standalone/org/telegram/messenger/BuildConfig.java');
   validateGeneratedFlag(fs.readFileSync(buildConfig, 'utf8'), args.edition);
   const badging = spawnSync(args.aapt, ['dump', 'badging', sourceApk], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
   requireValue(!badging.error && badging.status === 0, 'Android APK inspection failed.');
-  validateApkBadging(badging.stdout, args.edition);
+  validateApkBadging(badging.stdout, args.edition, args.release);
   const revision = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' });
   const commit = revision.stdout?.trim();
   requireValue(revision.status === 0 && /^[0-9a-f]{40}$/.test(commit), 'Source commit is unavailable.');
@@ -97,13 +101,13 @@ async function collect(args) {
   console.log(`Collected ${args.edition} APK; public SHA-256 ${hash}.`);
 }
 
-async function verifyPair(directory) {
+async function verifyPair(directory, release) {
   const metadata = JSON.parse(fs.readFileSync(path.join(directory, 'build-metadata.json'), 'utf8'));
   requireValue(metadata.schemaVersion === 1 && metadata.packageName === PACKAGE && metadata.architecture === 'arm64-v8a'
     && metadata.sourceCommit === process.env.GITHUB_SHA && metadata.artifacts?.length === 2, 'Incomplete APK pair metadata.');
   for (const edition of ['full', 'friends']) {
     const entry = metadata.artifacts.find(item => item.edition === edition);
-    const expected = expectedArtifact(edition);
+    const expected = expectedArtifact(edition, release);
     requireValue(entry && Object.entries(expected).every(([key, value]) => entry[key] === value), 'APK pair has an inconsistent edition.');
     requireValue(/^[0-9a-f]{64}$/.test(entry.sha256)
       && await sha256(safeArtifactPath(directory, entry.fileName)) === entry.sha256, 'Artifact SHA-256 does not match.');
@@ -120,7 +124,7 @@ async function main() {
     else args[key.slice(2)] = process.argv[++i];
   }
   requireValue(typeof args['artifact-dir'] === 'string', 'Artifact directory is required.');
-  if (args['verify-pair']) return verifyPair(path.resolve(args['artifact-dir']));
+  if (args['verify-pair']) return verifyPair(path.resolve(args['artifact-dir']), args.release);
   requireValue(typeof args['repo-root'] === 'string' && typeof args.aapt === 'string', 'Repository and Android inspection tool are required.');
   return collect(args);
 }

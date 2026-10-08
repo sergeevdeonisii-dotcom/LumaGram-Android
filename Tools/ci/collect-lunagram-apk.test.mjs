@@ -39,3 +39,19 @@ test('missing or duplicate edition declarations rejected without printing BuildC
   assert.throws(() => validateGeneratedFlag('public static final String APP_HASH = "private fixture";', 'full'));
   assert.throws(() => validateGeneratedFlag('public static final boolean LUMA_FRIENDS_EDITION = false;\npublic static final boolean LUMA_FRIENDS_EDITION = false;', 'full'));
 });
+test('personal .80 has its own version and rejects .79 or Friends metadata', () => {
+  const expected = expectedArtifact('full', '80');
+  assert.equal(expected.versionCode, 71599);
+  assert.equal(expected.versionName, '12.10.6-lunagram.80');
+  const metadata = output('full');
+  assert.throws(() => validateOutputMetadata(metadata, 'full', '80'));
+  metadata.elements[0].versionCode = expected.versionCode;
+  metadata.elements[0].versionName = expected.versionName;
+  assert.equal(validateOutputMetadata(metadata, 'full', '80'), 'app.apk');
+  const manifest = `package: name='org.luma.liquid.web' versionCode='71599' versionName='12.10.6-lunagram.80'\nnative-code: 'arm64-v8a'\n`;
+  validateApkBadging(manifest, 'full', '80');
+  assert.throws(() => validateApkBadging(manifest, 'friends', '80'));
+  assert.throws(() => validateApkBadging(manifest, 'full'));
+  assert.throws(() => expectedArtifact('full', '81'));
+  assert.throws(() => expectedArtifact('full', 'toString'));
+});
