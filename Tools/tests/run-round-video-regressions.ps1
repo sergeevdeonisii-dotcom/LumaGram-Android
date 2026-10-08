@@ -202,7 +202,13 @@ $prepare=Method $instant 'private void prepareEncoder(boolean fromPause)'
 if($prepare.IndexOf('prepareRecordingCodecs(fromPause)') -gt $prepare.IndexOf('audioRecorder.startRecording()')){throw 'Codec fallback must finish before AudioRecord starts.'}
 if($instant -match 'videoEditedInfo\.framerate = 25|videoEditedInfo\.resultWidth = videoEditedInfo\.originalWidth = 360|videoEditedInfo\.bitrate = 1000000'){throw 'Legacy round-video metadata/compression constants remain.'}
 if(([regex]::Matches($instant,'LumaRoundVideoQuality.applyMetadata\(videoEditedInfo, encodingProfile\)')).Count -ne 4){throw 'All preview/send/trim metadata paths must use the captured encoder profile.'}
-if(([regex]::Matches($instant,'Camera2Session.create\([^\r\n]*getRecordingQualityProfile\(\).size')).Count -ne 3){throw 'Camera2 open/dual/flip must use the captured profile.'}
+$cameraCreates = [regex]::Matches($instant, 'Camera2Session\.create\(([^;]+)\);')
+if ($cameraCreates.Count -ne 4) { throw 'Camera2 must cover dual, initial, unavailable-facing fallback, and flip capture paths.' }
+foreach ($create in $cameraCreates) {
+    if ($create.Groups[1].Value -notmatch ',\s*getRecordingQualityProfile\(\)\.size,\s*getRecordingQualityProfile\(\)\.size,\s*getRecordingQualityProfile\(\)\.frameRate\s*$') {
+        throw 'Every Camera2 open/fallback/dual/flip must use the captured size and frame rate.'
+    }
+}
 $draw=Method $instant 'private void onDraw(Integer cameraId, boolean updateTexImage1, boolean updateTexImage2)'
 if(-not $draw.Contains('if (!recording && isCameraReadyForHighQualityRecording())')){throw 'Each new/resumed camera must be configured before starting the segment; preview drawing itself remains ungated.'}
 if($draw.IndexOf('isCameraReadyForHighQualityRecording()') -gt $draw.IndexOf('videoEncoder.startRecording(')){throw 'HD camera readiness must be checked before encoder startup.'}

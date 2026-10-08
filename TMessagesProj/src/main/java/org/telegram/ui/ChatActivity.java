@@ -26652,7 +26652,6 @@ public class ChatActivity extends BaseFragment implements
                 }
                 if (LumaDeletedMessages.shouldRetain(currentAccount, forceLocalRemoval,
                         obj.scheduled || chatMode == MODE_SCHEDULED, chatMode == MODE_QUICK_REPLIES || chatMode == MODE_WELCOME_MESSAGES)) {
-                    LumaDeletedMessages.rememberDeleted(currentAccount, obj.getDialogId(), obj.getId());
                     obj.lumaRetainedDeleted = true;
                     int changedIndex = chatAdapter != null && chatAdapter.isFiltered && filteredMessagesDict != null
                         ? chatAdapter.filteredMessages.indexOf(filteredMessagesDict.get(mid))

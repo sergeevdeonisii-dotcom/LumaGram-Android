@@ -11,7 +11,6 @@ import android.text.InputFilter;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 
 import org.telegram.messenger.AndroidUtilities;
@@ -37,7 +36,10 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Cells.TextDetailCell;
 import org.telegram.ui.Components.BulletinFactory;
+import org.telegram.ui.Components.EditTextBoldCursor;
+import org.telegram.ui.Components.LumaDialogInput;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
@@ -125,7 +127,7 @@ public final class BlackHoleToolsActivity extends BaseFragment {
             for (int n = 0; n < journal.size(); n++) {
                 BlackHoleNotificationJournal.Entry e = journal.get(n);
                 items.add(UItem.asHeader(e.title));
-                UItem row = UItem.asButton(200 + n, e.text, org.telegram.messenger.LocaleController.formatDateAudio(e.date / 1000, true));
+                UItem row = TextDetailCell.Factory.of(200 + n, e.text, org.telegram.messenger.LocaleController.formatDateAudio(e.date / 1000, true));
                 row.object = e;
                 items.add(row);
             }
@@ -251,15 +253,14 @@ public final class BlackHoleToolsActivity extends BaseFragment {
     private void editNote(long did) {
         if (!currentOwner() || needsUnlock() || BlackHoleVault.blocks(currentAccount, did)) return;
         try {
-            EditText field = new EditText(getParentActivity());
-            field.setTextColor(Theme.getColor(Theme.key_dialogTextBlack, resourceProvider));
-            field.setTextSize(16); field.setGravity(Gravity.TOP);
-            field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+            EditTextBoldCursor field = LumaDialogInput.create(getParentActivity(),
+                    InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES,
+                    true, resourceProvider);
             field.setFilters(new InputFilter[]{new InputFilter.LengthFilter(BlackHoleNotes.MAX_LENGTH)});
-            field.setMinLines(3); field.setMaxLines(8); field.setPadding(AndroidUtilities.dp(24), AndroidUtilities.dp(8), AndroidUtilities.dp(24), AndroidUtilities.dp(8));
+            field.setMinLines(3); field.setMaxLines(8);
             field.setText(BlackHoleNotes.get(currentAccount, did)); field.setSelection(field.length());
             showDialog(new AlertDialog.Builder(getParentActivity(), resourceProvider).setTitle(dialogTitle(currentAccount, did))
-                    .setMessage(getString(R.string.BHGNotesInfo)).setView(field)
+                    .setMessage(getString(R.string.BHGNotesInfo)).setView(LumaDialogInput.wrap(field))
                     .setPositiveButton(getString(R.string.Save), (d, w) -> {
                         if (!currentOwner() || needsUnlock()) return;
                         try { BlackHoleNotes.save(currentAccount, did, field.getText().toString()); refresh(); } catch (Exception e) { error(e); }

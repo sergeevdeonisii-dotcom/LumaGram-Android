@@ -36,6 +36,21 @@ public final class Journal531RegressionTest {
         BlackHoleNotificationJournal.setEnabled(0, true);
         check(BlackHoleNotificationJournal.isEnabled(0), "Explicit toggle repairs flag with a boolean");
 
+        check(BlackHoleNotificationJournal.canRecordPreview(true, true, false, false, false, false),
+                "Visible ordinary full-metadata preview is eligible");
+        check(!BlackHoleNotificationJournal.canRecordPreview(false, true, false, false, false, false),
+                "Hidden or passcode-redacted previews are not retained");
+        check(!BlackHoleNotificationJournal.canRecordPreview(true, false, false, false, false, false),
+                "FCM-only content without complete privacy metadata is not retained");
+        check(!BlackHoleNotificationJournal.canRecordPreview(true, true, true, false, false, false),
+                "Vault and emergency-excluded chats are not retained");
+        check(!BlackHoleNotificationJournal.canRecordPreview(true, true, false, true, false, false),
+                "Message and peer no-forward protection prevents retention");
+        check(!BlackHoleNotificationJournal.canRecordPreview(true, true, false, false, true, false),
+                "TTL messages and disappearing media are not retained");
+        check(!BlackHoleNotificationJournal.canRecordPreview(true, true, false, false, false, true),
+                "Secret, login-code, service and spoiler content is not retained");
+
         BlackHoleNotificationJournal.Entry empty = new BlackHoleNotificationJournal.Entry(42, 1, 1, null, null);
         check(empty.title.isEmpty() && empty.text.isEmpty(), "Null title and text safe for rendering");
         String emoji = "\ud83d\ude80";
@@ -54,8 +69,12 @@ public final class Journal531RegressionTest {
         ArrayList<BlackHoleNotificationJournal.Entry> batch = new ArrayList<>();
         batch.add(null);
         batch.add(new BlackHoleNotificationJournal.Entry(42, 5, System.currentTimeMillis(), null, null));
+        BlackHoleNotificationJournal.record(0, UserConfig.ids[0] + 1, batch);
+        check(BlackHoleNotificationJournal.entries(0).isEmpty(), "Stale posted-notification owner cannot write into a replacement account");
         BlackHoleNotificationJournal.record(0, batch);
         check(BlackHoleNotificationJournal.entries(0).size() == 1, "Null batch entry skipped, normalized record loads");
+        BlackHoleNotificationJournal.record(0, batch);
+        check(BlackHoleNotificationJournal.entries(0).size() == 1, "Repeated posts remain deduplicated");
         UserConfig.ids[0] = 0;
         check(BlackHoleNotificationJournal.entries(0).isEmpty(), "Logged-out account does not display old entries");
         System.out.println("PASS: " + assertions + " notification-journal preference/content assertions. Not the owner's crash reproduction or Android UI/Keystore verification.");

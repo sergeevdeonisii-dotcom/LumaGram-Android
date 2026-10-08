@@ -7911,6 +7911,11 @@ public class ChatActivityEnterView extends FrameLayout implements
                 } else if (whitespaceIndex > 0) {
                     end = whitespaceIndex;
                 }
+                if (end < text.length() && end > start
+                        && Character.isHighSurrogate(text.charAt(end - 1))
+                        && Character.isLowSurrogate(text.charAt(end))) {
+                    end--;
+                }
 
                 CharSequence part = text.subSequence(start, end);
                 if (!hasOnlyEmoji) {
@@ -7980,7 +7985,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 } else {
                     SendMessagesHelper.getInstance(currentAccount).sendMessage(params);
                 }
-                start = end + 1;
+                start = end;
             } while (end != text.length());
             if (delaySend && !delayedMessages.isEmpty()) {
                 queueDelayedTextSend(

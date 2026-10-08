@@ -6,12 +6,13 @@ import android.content.Context;
 import android.os.Bundle;
 import android.text.InputType;
 import android.text.TextUtils;
-import android.widget.EditText;
 import android.view.Gravity;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
 import android.widget.FrameLayout;
 
 import org.telegram.messenger.DialogObject;
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LumaDelayedSend;
 import org.telegram.messenger.LumaEmergencyMode;
 import org.telegram.messenger.LumaGhostMode;
@@ -33,9 +34,12 @@ import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.TextCheckCell;
+import org.telegram.ui.Cells.TextDetailCell;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.IconBackgroundColors;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.EditTextBoldCursor;
+import org.telegram.ui.Components.LumaDialogInput;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalRecyclerView;
@@ -257,7 +261,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         items.add(UItem.asHeader(getString(R.string.EmergencyConnectionHeader)));
         items.add(UItem.asCheck(ROW_EMERGENCY_ENABLED, getString(R.string.EmergencyConnectionEnable))
             .setChecked(emergencyEnabled));
-        items.add(UItem.asButton(
+        items.add(TextDetailCell.Factory.of(
             ROW_EMERGENCY_CHAT,
             getString(R.string.EmergencyConnectionChat),
             getEmergencyChatTitle()
@@ -265,7 +269,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         items.add(UItem.asShadow(getString(R.string.EmergencyConnectionInfo)));
 
         items.add(UItem.asHeader(tr("Данные аккаунта", "Account data")));
-        items.add(UItem.asButton(ROW_ACCOUNT_EXPORT,
+        items.add(TextDetailCell.Factory.of(ROW_ACCOUNT_EXPORT,
                 tr("Экспорт аккаунта", "Account export"),
                 tr("HTML · чаты и медиа", "HTML · chats and media")));
         items.add(UItem.asShadow(tr(
@@ -495,14 +499,13 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     }
 
     private void showStarRatingLevelDialog() {
-        final EditText editText = new EditText(getParentActivity());
-        editText.setInputType(InputType.TYPE_CLASS_NUMBER);
-        editText.setSingleLine(true);
+        final EditTextBoldCursor editText = LumaDialogInput.create(
+                getParentActivity(), InputType.TYPE_CLASS_NUMBER, false, resourceProvider);
         editText.setText(String.valueOf(LumaStarRating.getLevel(currentAccount)));
         editText.setSelectAllOnFocus(true);
         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), resourceProvider);
         builder.setTitle(getString(R.string.ExperimentalStarRatingChooseTitle));
-        builder.setView(editText);
+        builder.setView(LumaDialogInput.wrap(editText));
         builder.setNegativeButton(getString(R.string.Cancel), null);
         builder.setPositiveButton(getString(R.string.OK), (dialog, which) -> {
             int level;
@@ -523,21 +526,19 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 listView.adapter.update(false);
             }
         });
-        showDialog(builder.create());
-        editText.requestFocus();
+        showProfileInputDialog(builder, editText);
     }
 
     private void showAnonymousNumberDialog() {
-        final EditText editText = new EditText(getParentActivity());
-        editText.setInputType(InputType.TYPE_CLASS_NUMBER);
-        editText.setSingleLine(true);
+        final EditTextBoldCursor editText = LumaDialogInput.create(
+                getParentActivity(), InputType.TYPE_CLASS_NUMBER, false, resourceProvider);
         editText.setHint("00000000");
         editText.setText(LumaAnonymousNumber.getDigits(currentAccount));
         editText.setSelectAllOnFocus(true);
         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), resourceProvider);
         builder.setTitle(getString(R.string.ExperimentalAnonymousNumberChooseTitle));
         builder.setMessage(getString(R.string.ExperimentalAnonymousNumberChooseInfo));
-        builder.setView(editText);
+        builder.setView(LumaDialogInput.wrap(editText));
         builder.setNegativeButton(getString(R.string.Cancel), null);
         builder.setPositiveButton(getString(R.string.OK), (dialog, which) -> {
             String value = editText.getText().toString();
@@ -553,8 +554,22 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 listView.adapter.update(false);
             }
         });
-        showDialog(builder.create());
-        editText.requestFocus();
+        showProfileInputDialog(builder, editText);
+    }
+
+    private void showProfileInputDialog(AlertDialog.Builder builder, EditTextBoldCursor editText) {
+        AlertDialog dialog = builder.create();
+        dialog.setOnShowListener(ignored -> {
+            editText.requestFocus();
+            AndroidUtilities.showKeyboard(editText);
+        });
+        editText.setOnEditorActionListener((view, actionId, event) -> {
+            if (actionId != EditorInfo.IME_ACTION_DONE) return false;
+            View button = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            if (button != null) button.performClick();
+            return true;
+        });
+        showDialog(dialog);
     }
 
     private void openEmergencyChatPicker() {

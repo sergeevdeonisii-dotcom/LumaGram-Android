@@ -52,6 +52,32 @@ public final class LumaUpdaterCheck76Test {
         test("completion reentry owns fresh listeners and watchdog",()->{LumaUpdaterController c=controller();AtomicInteger outer=new AtomicInteger(),inner=new AtomicInteger();c.checkForUpdate(true,()->{outer.incrementAndGet();c.checkForUpdate(true,inner::incrementAndGet);});HttpGetTask first=latest();first.deliver(manifest("first",71500,"https://github.com/fixture/first.apk"));HttpGetTask second=latest();check(second!=first&&c.isChecking()&&outer.get()==1&&inner.get()==0,"reentrant completion creates separately owned request");second.deliver(manifest("second",71510,"https://github.com/fixture/second.apk"));check(!c.isChecking()&&outer.get()==1&&inner.get()==1&&c.getLastError()==null,"reentrant check finishes once without previous drain stealing callback");AndroidUtilities.advanceBy(31000);check(c.getLastError()==null&&inner.get()==1,"both completed watchdogs removed");});
         test("download cancellation reentry cannot persist stale check state",()->{LumaUpdaterController c=controller();c.checkForUpdate(true,null);latest().deliver(manifest("initial",71500,"https://github.com/fixture/initial.apk"));AtomicInteger reentered=new AtomicInteger(),oldDone=new AtomicInteger(),newDone=new AtomicInteger();String source="https://reentrant.example/latest.json";c.downloadUpdate(new LumaUpdaterController.DownloadListener(){public void onProgress(float value){}public void onFinished(File file,String error){android.content.SharedPreferences prefs=ApplicationLoader.applicationContext.getSharedPreferences("luma_updates",Context.MODE_PRIVATE);check(prefs.getInt("version_code",0)==71510&&prefs.getLong("last_check",0)>0,"valid new manifest is persisted before external cancellation listener");reentered.incrementAndGet();check(c.setManifestUrl(source),"cancellation listener can replace the source");}});check(c.isDownloading(),"old release download active before replacement manifest");c.checkForUpdate(true,oldDone::incrementAndGet);latest().deliver(manifest("changed",71510,"https://github.com/fixture/changed.apk"));HttpGetTask replacement=latest();check(reentered.get()==1&&oldDone.get()==1&&c.isChecking()&&c.getUpdate()==null&&replacement.url.startsWith(source+"?"),"download listener owns fresh source and its request after valid terminal reentry");android.content.SharedPreferences prefs=ApplicationLoader.applicationContext.getSharedPreferences("luma_updates",Context.MODE_PRIVATE);check(prefs.getLong("last_check",0)==0&&(long)field(c,"lastCheck")==0&&prefs.getInt("version_code",0)==0&&source.equals(prefs.getString("manifest_url",null)),"old terminal cannot resave last_check/release after reentrant source reset");c.checkForUpdate(true,newDone::incrementAndGet);check(latest()==replacement,"joined replacement request stays independently owned");replacement.deliver(manifest("replacement",71520,"https://github.com/fixture/replacement.apk"));check(!c.isChecking()&&newDone.get()==1&&oldDone.get()==1&&c.getLastError()==null&&(int)field(c,"versionCode")==71520,"reentrant replacement source finishes normally without stale callback drain");});
         test("one failed check callback cannot strand another",()->{LumaUpdaterController c=controller();AtomicInteger survives=new AtomicInteger();c.checkForUpdate(true,()->{throw new IllegalStateException("callback fixture");});c.checkForUpdate(true,survives::incrementAndGet);latest().deliver(manifest("good",71500,"https://github.com/fixture/good.apk"));check(!c.isChecking()&&survives.get()==1&&c.getLastError()==null,"callback exception isolated after terminal state");});
+        test("clock rollback cannot suppress automatic updates", () -> {
+            ApplicationLoader.applicationContext.getSharedPreferences("luma_updates", Context.MODE_PRIVATE)
+                    .edit().putLong("last_check", System.currentTimeMillis() + 86400000L).apply();
+            LumaUpdaterController c = controller();
+            AtomicInteger done = new AtomicInteger();
+            c.checkForUpdate(false, done::incrementAndGet);
+            check(HttpGetTask.requests.size() == 1 && c.isChecking() && done.get() == 0,
+                    "future persisted timestamp must allow a fresh automatic check");
+            latest().deliver(manifest("clock-rollback", PackageManager.installedVersion, "https://github.com/fixture/luna.apk"));
+            check(!c.isChecking() && done.get() == 1 && c.getLastError() == null,
+                    "fresh check completes normally after clock rollback");
+            check((long) field(c, "lastCheck") <= System.currentTimeMillis(),
+                    "successful check replaces the future timestamp");
+        });
+        test("recent automatic check remains throttled", () -> {
+            ApplicationLoader.applicationContext.getSharedPreferences("luma_updates", Context.MODE_PRIVATE)
+                    .edit().putLong("last_check", System.currentTimeMillis() - 60000L).apply();
+            LumaUpdaterController c = controller();
+            AtomicInteger done = new AtomicInteger();
+            c.checkForUpdate(false, done::incrementAndGet);
+            check(HttpGetTask.requests.isEmpty() && !c.isChecking() && done.get() == 1,
+                    "recent automatic check completes without duplicate network work");
+            c.checkForUpdate(true, done::incrementAndGet);
+            check(HttpGetTask.requests.size() == 1 && c.isChecking(),
+                    "manual check still bypasses the normal interval");
+        });
         System.out.println("RESULT updater76-controller "+cases+" cases, "+assertions+" assertions, "+failures+" failures. Full production controller; controlled HTTP/UI/JSON models, not Android/GitHub live proof.");
         if(failures>0)System.exit(1);
     }

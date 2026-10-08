@@ -69,6 +69,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -14589,6 +14590,7 @@ public class MessagesStorage extends BaseController {
                 }
             } else {
                 long currentUser = getUserConfig().getClientUserId();
+                final Set<String> deletedBeforeBatch = LumaDeletedMessages.snapshotDeleted(currentAccount);
 
                 ArrayList<Integer> unknownMessages = new ArrayList<>(messages);
                 ArrayList<Integer> unknownMessagesInTopics = new ArrayList<>(messages);
@@ -14623,7 +14625,7 @@ public class MessagesStorage extends BaseController {
                         if (keepDeletedMessages) {
                             LumaDeletedMessages.rememberDeleted(currentAccount, did, mid);
                         }
-                        if (did != currentUser && !(forceLocalRemoval && LumaDeletedMessages.isDeleted(currentAccount, did, mid))) {
+                        if (did != currentUser && !LumaDeletedMessages.isDeleted(deletedBeforeBatch, did, mid)) {
                             int read_state = cursor.intValue(2);
                             if (cursor.intValue(3) == 0) {
                                 Integer[] unread_count = dialogsToUpdate.get(did);
@@ -14706,7 +14708,7 @@ public class MessagesStorage extends BaseController {
                             }
                             topicId = MessageObject.getTopicId(currentAccount, message, getForumTypeFlags(did));
                         }
-                        if (topicId != 0 && !(forceLocalRemoval && LumaDeletedMessages.isDeleted(currentAccount, did, mid))) {
+                        if (topicId != 0 && !LumaDeletedMessages.isDeleted(deletedBeforeBatch, did, mid)) {
                             TopicKey topicKey = TopicKey.of(did, topicId);
 
                             int read_state = cursor.intValue(2);

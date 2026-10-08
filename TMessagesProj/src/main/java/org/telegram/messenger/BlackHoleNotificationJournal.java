@@ -22,6 +22,10 @@ public final class BlackHoleNotificationJournal {
         String key() { return dialogId + ":" + messageId; }
     }
     private BlackHoleNotificationJournal() {}
+    public static boolean canRecordPreview(boolean visible, boolean metadataKnown, boolean hidden,
+                                           boolean protectedContent, boolean disappearing, boolean sensitive) {
+        return visible && metadataKnown && !hidden && !protectedContent && !disappearing && !sensitive;
+    }
     public static boolean isEnabled(int account) {
         // History is opt-in. A legacy/corrupt preference with another type must not
         // crash the settings UI (SharedPreferences.getBoolean throws ClassCastException).
@@ -70,7 +74,9 @@ public final class BlackHoleNotificationJournal {
         return result;
     }
     public static synchronized void record(int account, ArrayList<Entry> batch) {
-        long owner = UserConfig.getInstance(account).getClientUserId();
+        record(account, UserConfig.getInstance(account).getClientUserId(), batch);
+    }
+    public static synchronized void record(int account, long owner, ArrayList<Entry> batch) {
         if (owner <= 0 || !isEnabled(account) || !BlackHolePrivateData.isAvailable() || batch == null || batch.isEmpty()
                 || owner != UserConfig.getInstance(account).getClientUserId()) return;
         try {

@@ -245,7 +245,10 @@ public final class LumaUpdaterController {
             }
             return;
         }
-        if (!force && System.currentTimeMillis() - lastCheck < CHECK_INTERVAL) {
+        // A restored backup or a clock correction can leave lastCheck in the future.
+        // Only elapsed time in the normal interval should suppress automatic checks.
+        final long now = System.currentTimeMillis();
+        if (!force && lastCheck > 0L && lastCheck <= now && now - lastCheck < CHECK_INTERVAL) {
             if (whenDone != null) {
                 whenDone.run();
             }

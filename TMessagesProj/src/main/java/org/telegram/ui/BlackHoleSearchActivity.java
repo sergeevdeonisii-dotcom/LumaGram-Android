@@ -15,6 +15,7 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Cells.TextDetailCell;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
@@ -36,6 +37,7 @@ public final class BlackHoleSearchActivity extends BaseFragment {
         for (int title : titles) catalog.add(new Entry(title, path, destination));
     }
     @Override public View createView(Context context) {
+        openedSearch = false;
         catalog.clear();
         group(1, R.string.LiquidGlassSettingsTitle, R.string.LiquidGlassEnable, R.string.LiquidGlassPowerSaver);
         group(2, R.string.LiquidGlassAdvancedTitle, R.string.LiquidGlassPanelOpacity, R.string.LiquidGlassRefraction,
@@ -84,7 +86,7 @@ public final class BlackHoleSearchActivity extends BaseFragment {
         for (int n = 0; n < catalog.size(); n++) {
             Entry e = catalog.get(n);
             String name = getString(e.title), path = getString(e.path);
-            if (BlackHoleSearch.matches(query, name + " " + path)) items.add(UItem.asButton(n + 1, name, path));
+            if (BlackHoleSearch.matches(query, name + " " + path)) items.add(TextDetailCell.Factory.of(n + 1, name, path));
         }
         if (items.isEmpty()) items.add(UItem.asShadow(getString(R.string.BHGSearchEmpty)));
     }
@@ -103,6 +105,6 @@ public final class BlackHoleSearchActivity extends BaseFragment {
     }
     @Override public void onTransitionAnimationEnd(boolean isOpen, boolean backward) {
         super.onTransitionAnimationEnd(isOpen, backward);
-        if (isOpen && !openedSearch && actionBar != null) { openedSearch = true; actionBar.openSearchField("", true); }
+        if (isOpen && !openedSearch && actionBar != null) { openedSearch = true; actionBar.openSearchField(query, true); }
     }
 }

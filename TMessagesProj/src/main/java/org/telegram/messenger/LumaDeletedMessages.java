@@ -56,6 +56,18 @@ public final class LumaDeletedMessages {
         return preferences(account).getStringSet(KEY_IDS, new HashSet<>()).contains(key(dialogId, messageId));
     }
 
+    /** One storage batch must use the state before either message table writes its tombstones. */
+    public static synchronized Set<String> snapshotDeleted(int account) {
+        if (!LumaBuildPolicy.allowsPrivacyTools()) {
+            return new HashSet<>();
+        }
+        return new HashSet<>(preferences(account).getStringSet(KEY_IDS, new HashSet<>()));
+    }
+
+    public static boolean isDeleted(Set<String> snapshot, long dialogId, int messageId) {
+        return messageId != 0 && snapshot.contains(key(dialogId, messageId));
+    }
+
     /** Explicit local removal must not turn into another retained tombstone. */
     public static synchronized void forgetDeleted(int account, long dialogId, List<Integer> messageIds) {
         if (!LumaBuildPolicy.allowsPrivacyTools()) return;

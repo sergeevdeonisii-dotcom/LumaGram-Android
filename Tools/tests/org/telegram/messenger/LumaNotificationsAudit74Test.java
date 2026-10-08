@@ -69,6 +69,38 @@ public final class LumaNotificationsAudit74Test {
                     "suppressed conference updates can dismiss their existing invite");
             check(controller.substring(batch, conference).contains("messageObjects == null || messageObjects.isEmpty()"),
                     "empty/null notification batches complete without dereferencing null");
+            check(!controller.contains("recordJournalForDialog"), "journal never rescans unposted whole-dialog messages");
+            int previewEligibility = controller.indexOf("private boolean canJournalMessage(");
+            int previewEligibilityEnd = controller.indexOf("public void processDialogsUpdateRead(", previewEligibility);
+            check(previewEligibility >= 0 && previewEligibilityEnd > previewEligibility, "journal eligibility is wired into the actual controller");
+            String journalPolicy = controller.substring(previewEligibility, previewEligibilityEnd);
+            for (String gate : new String[]{"messageOwner.noforwards", "isPeerNoForwards(dialogId)", "messageOwner.ttl_period",
+                    "messageOwner.ttl", "media.ttl_seconds", "isSecretMedia()", "userFull.ttl_period", "chatFull.ttl_period",
+                    "isFcmMessage()", "TL_messageEntitySpoiler", "DialogObject.isEncryptedDialog(dialogId)", "UserObject.VERIFY",
+                    "UserObject.OAUTH", "dialogId == 777000", "BlackHoleVault.contains", "LumaEmergencyMode", "isWaitingForPasscodeEnter"}) {
+                check(journalPolicy.contains(gate), "journal eligibility includes " + gate);
+            }
+            int journalCapture = controller.indexOf("if (journalEnabled && canJournalMessage(messageObject, preview[0]))");
+            int topicFilter = controller.lastIndexOf("if (topicId != messageTopicId)", journalCapture);
+            check(topicFilter > 0 && topicFilter < journalCapture && controller.indexOf("text.substring(previewStart)", journalCapture) > journalCapture,
+                    "journal records only selected-topic displayed preview rows");
+            int posted = controller.indexOf("notificationManager.notify(id, posted);");
+            int journalWrite = controller.indexOf("BlackHoleNotificationJournal.record(currentAccount, notificationOwner, journalEntries);", posted);
+            check(posted > 0 && journalWrite > posted && controller.substring(posted, journalWrite).contains("areNotificationsEnabled()")
+                    && controller.substring(posted, journalWrite).contains("channel.getImportance() != NotificationManager.IMPORTANCE_NONE")
+                    && controller.substring(posted, journalWrite).contains("!SharedConfig.isWaitingForPasscodeEnter"),
+                    "journal writes only after permitted actual post with original owner and visible channel");
+            int shortPreview = controller.indexOf("public String getShortStringForMessage(");
+            int richText = controller.indexOf("messageObject.messageOwner.rich_message != null", shortPreview);
+            check(richText > controller.indexOf("if (dialogPreviewEnabled &&", shortPreview),
+                    "rich-message notifications honor the standard preview switch");
+            String launch = new String(Files.readAllBytes(Paths.get(args[0],
+                    "TMessagesProj/src/main/java/org/telegram/ui/LaunchActivity.java")), StandardCharsets.UTF_8);
+            int accountSwitch = launch.indexOf("public void switchToAccount(int account, boolean removeAll, GenericProvider");
+            int accountWrite = launch.indexOf("UserConfig.selectedAccount = account;", accountSwitch);
+            int vaultLock = launch.indexOf("BlackHoleVault.lockAll();", accountSwitch);
+            check(accountSwitch >= 0 && vaultLock > accountSwitch && vaultLock < accountWrite,
+                    "in-app account switching revokes vault authentication before changing accounts");
             int scheduledUpdate = controller.indexOf("private final Runnable notificationUpdateRunnable");
             int actualPost = controller.indexOf("showOrUpdateNotificationInternal(notify);", scheduledUpdate);
             int wakeRelease = controller.indexOf("releaseNotificationDelayWakeLock();", actualPost);
