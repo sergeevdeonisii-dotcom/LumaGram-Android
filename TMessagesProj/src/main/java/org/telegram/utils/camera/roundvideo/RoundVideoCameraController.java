@@ -650,11 +650,13 @@ final class RoundVideoCameraController {
                     try {
                         activeFacing = selectedFacing;
                         repeatingBuilder = createRepeatingRequestBuilder(true);
-                        if (glProcessor != null) glProcessor.onCameraSessionConfigured();
                         boolean wasSwitch = notifySwitchCompletion;
+                        submitRepeatingRequest();
+                        // A rejected high-FPS request can recreate the session.
+                        // Keep the switch pending until that retry really starts.
+                        if (glProcessor != null) glProcessor.onCameraSessionConfigured();
                         notifySwitchCompletion = false;
                         awaitingSwitchPreviewFrame = wasSwitch;
-                        submitRepeatingRequest();
                         diagnostics.log("capture session configured: facing=" + activeFacing
                                 + ", fpsRange=" + activeFpsRange
                                 + ", elapsedMs=" + elapsedMs(captureSessionRequestedNs)

@@ -25,6 +25,7 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
     private static final int ROW_MESSAGES = 2;
     private static final int ROW_UPDATES = 3;
     private static final int ROW_SEARCH = 4;
+    private static final int ROW_ROUND_CAMERA = 5;
 
     @Override
     public View createView(Context context) {
@@ -55,6 +56,8 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
         items.add(UItem.asShadow(getString(R.string.LiquidGlassSettingsInfo)));
         items.add(UItem.asButton(ROW_MESSAGES, R.drawable.msg_photo_curve, getString(R.string.TextAnimationSettingsTitle)));
         items.add(UItem.asShadow(getString(R.string.TextAnimationSettingsInfo)));
+        items.add(UItem.asButton(ROW_ROUND_CAMERA, R.drawable.msg_camera, getString(R.string.RoundVideoSettings)));
+        items.add(UItem.asShadow(getString(R.string.LumaRoundVideoControlsInfo)));
         items.add(UItem.asHeader(getString(R.string.BHGToolsHeader)));
         items.add(UItem.asButton(101, R.drawable.msg_customize, getString(R.string.BHGProfiles)));
         items.add(UItem.asButton(102, R.drawable.msg_edit, getString(R.string.BHGNotes)));
@@ -78,6 +81,8 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
             openSettings(new LumaUpdateActivity());
         } else if (item.id == ROW_SEARCH) {
             openSettings(new BlackHoleSearchActivity());
+        } else if (item.id == ROW_ROUND_CAMERA) {
+            openSettings(new RoundVideoSettingsActivity());
         } else if (item.id >= 101 && item.id <= 105) {
             openSettings(new BlackHoleToolsActivity(item.id - 100));
         }

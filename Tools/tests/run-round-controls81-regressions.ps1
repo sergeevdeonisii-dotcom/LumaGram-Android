@@ -66,9 +66,22 @@ foreach($guard in @('generation != captureGeneration', 'cameraDevice != expected
     if(!$modern.Contains($guard)){throw "Missing new recorder integration: $guard"}
 }
 $settings=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/ui/RoundVideoSettingsActivity.java'))
+$configured=Method $modern 'public void onConfigured('
+if($configured.IndexOf('submitRepeatingRequest();') -gt $configured.IndexOf('notifySwitchCompletion = false;')) {
+    throw 'A rejected capture request must not consume camera-switch completion.'
+}
+$gl=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/camera/roundvideo/RoundVideoGlProcessor.java'))
+foreach($guard in @('overlayRenderer.setHorizon(', 'horizonLock.correction(frontCamera, cameraTimestampRealtime ? timestamp : 0L)',
+    'new LumaRoundVideoQuality.FrameGate(60, sourceFps)', 'gate.accept(timestamp, frontCamera ? 1 : 0)',
+    'overlayRenderer.renderRawCameraToOutput(textureId, textureMatrix, outputSize, outputSize)',
+    'EGL14.eglDestroySurface(eglDisplay, eglPreviewSurface)')) {
+    if(!$gl.Contains($guard)){throw "Missing new recorder GL integration: $guard"}
+}
 foreach($guard in @('new SlideChooseView(context)', 'LumaRoundVideoQuality::setFrameRateLevel', 'LumaRoundVideoStabilization::setMode')) {
     if(!$settings.Contains($guard)){throw "Missing shared native slider: $guard"}
 }
+$navigation=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/ui/BlackHoleGramSettingsActivity.java'))
+if(!$navigation.Contains('openSettings(new RoundVideoSettingsActivity());')) { throw 'Round camera sliders must be accessible without hidden developer settings.' }
 foreach($guard in @('getHighSpeedVideoFpsRangesFor(size)','getHighSpeedVideoSizes()','createConstrainedHighSpeedCaptureSession(',
     'setRepeatingBurst(fastSession.createHighSpeedRequestList(', 'generation != captureGeneration', 'fallbackHighSpeedSession()',
     'LumaRoundVideoStabilization.videoMode(', 'Build.VERSION.SDK_INT >= 33')) {

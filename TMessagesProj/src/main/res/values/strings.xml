@@ -11451,6 +11451,7 @@
     <string name="UnsupportedMessageMessage">Update Telegram to view this message</string>
     <string name="UnsupportedUpdate">Update</string>
     <string name="RoundVideoSettings">Round Video</string>
+    <string name="LumaRoundVideoControlsInfo">Frame rate, camera stabilization and experimental horizon lock.</string>
     <string name="RoundVideoGeneral">Recorder</string>
     <string name="RoundVideoUseNewRecorder">Use Camera2 recorder</string>
     <string name="RoundVideoOutputResolution">Output resolution</string>
