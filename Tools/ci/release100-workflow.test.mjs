@@ -40,7 +40,8 @@ test('release-blocking regression suites execute before either APK is built', ()
       'run-round-settings100-regressions.ps1', 'run-startup100-regressions.ps1', 'run-glass-contrast100-regressions.ps1',
       'run-round-limits100-regressions.ps1', 'run-round-stats82-regressions.ps1', 'run-round-export82-regressions.ps1',
       'check-release100-security.ps1', 'run-http-url100-regressions.ps1', 'run-media-browser100-regressions.ps1',
-      'run-playback-privacy100-regressions.ps1', 'run-update-presentation100-regressions.ps1']) {
+      'run-playback-privacy100-regressions.ps1', 'run-update-presentation100-regressions.ps1',
+      'lunagram-support100.test.mjs']) {
     assert.ok(workflow.indexOf(script) > 0 && workflow.indexOf(script) < buildStep, script);
   }
   for (const line of workflow.split('\n').filter(x => x.includes('-JavaHome'))) {

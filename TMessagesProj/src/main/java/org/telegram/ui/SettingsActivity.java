@@ -152,6 +152,7 @@ import me.vkryl.android.animator.FactorAnimator;
 public class SettingsActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, ImageUpdater.ImageUpdaterDelegate, MainTabsActivity.TabFragmentDelegate, FactorAnimator.Target {
     private static final int BHG_SETTINGS_ROW = 1001;
     private static final int BHG_ADVANCED_ROW = 1002;
+    private static final int LUNAGRAM_SUPPORT_ROW = 1003;
 
     private static final int ANIMATOR_ID_SEARCH_PAGE_VISIBLE = 0;
 
@@ -695,6 +696,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(2, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_chat, getString(R.string.SettingsChat), getString(R.string.SettingsChatInfo)));
         items.add(SettingCell.Factory.of(BHG_SETTINGS_ROW, IconBackgroundColors.CYAN.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_chat, getString(R.string.BlackHoleGramSettingsTitle), getString(R.string.BlackHoleGramSettingsInfo)));
         items.add(SettingCell.Factory.of(BHG_ADVANCED_ROW, IconBackgroundColors.ORANGE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_features, getString(R.string.ExperimentalFeaturesTitle), getString(R.string.ExperimentalFeaturesInfo)));
+        items.add(SettingCell.Factory.of(LUNAGRAM_SUPPORT_ROW, IconBackgroundColors.CYAN.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_gram_24, getString(R.string.LunagramSupportTitle), getString(R.string.LunagramSupportInfo)));
         items.add(SettingCell.Factory.of(3, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_privacy, getString(R.string.SettingsPrivacySecurity), getString(R.string.SettingsPrivacySecurityInfo)));
         items.add(SettingCell.Factory.of(5, IconBackgroundColors.RED.top, IconBackgroundColors.RED.bottom, R.drawable.settings_sounds, getString(R.string.SettingsNotifications), getString(R.string.SettingsNotificationsInfo)));
         items.add(SettingCell.Factory.of(6, IconBackgroundColors.BLUE_DEEP.top, IconBackgroundColors.BLUE_DEEP.bottom, R.drawable.settings_data, getString(R.string.SettingsData), getString(R.string.SettingsDataInfo)));
@@ -838,6 +840,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 presentSettingFragment(screen);
                 break;
             }
+            case LUNAGRAM_SUPPORT_ROW:
+                LunagramSupport.show(this);
+                break;
             case 3:
                 presentSettingFragment(new PrivacySettingsActivity());
                 break;

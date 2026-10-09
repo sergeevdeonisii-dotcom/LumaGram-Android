@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           bash -n Tools/ci/build-lunagram-release100.sh
-          node --test Tools/ci/collect-lunagram-apk.test.mjs Tools/ci/release100-workflow.test.mjs
+          node --test Tools/ci/collect-lunagram-apk.test.mjs Tools/ci/release100-workflow.test.mjs Tools/tests/lunagram-support100.test.mjs
       - name: Test camera policy, edition separation, size-safe export and security
         shell: pwsh
         run: |

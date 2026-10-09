@@ -334,6 +334,10 @@
     <string name="BlackHoleAdvancedSectionsInfo">Выберите раздел для настройки функций. Ваши прежние настройки сохранены.</string>
     <string name="BlackHoleGramSettingsTitle">Lunagram — настройки</string>
     <string name="BlackHoleGramSettingsInfo">Стекло, ввод, оформление сообщений и обновления</string>
+    <string name="LunagramSupportTitle">Поддержка автора</string>
+    <string name="LunagramSupportInfo">Поддержать развитие Lunagram в TON</string>
+    <string name="LunagramSupportDescription">Спасибо за поддержку Lunagram!\n\nАдрес TON-кошелька · сеть TON</string>
+    <string name="LunagramSupportCopy">Скопировать адрес</string>
     <string name="ExperimentalFeaturesWarning">Эти параметры экспериментальные. Значения по умолчанию сохраняют первоначальную плавную анимацию ввода.</string>
     <string name="EmergencyConnectionHeader">Экстренная связь</string>
     <string name="EmergencyConnectionEnable">Использовать экстренную связь</string>

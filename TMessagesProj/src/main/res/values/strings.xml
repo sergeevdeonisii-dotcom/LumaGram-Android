@@ -11277,6 +11277,10 @@
     <string name="BlackHoleAdvancedSectionsInfo">Choose a section to adjust its features. Existing settings are preserved.</string>
     <string name="BlackHoleGramSettingsTitle">Lunagram — Settings</string>
     <string name="BlackHoleGramSettingsInfo">Glass, input, message formatting and updates</string>
+    <string name="LunagramSupportTitle">Support the author</string>
+    <string name="LunagramSupportInfo">Support Lunagram development with TON</string>
+    <string name="LunagramSupportDescription">Thank you for supporting Lunagram!\n\nTON wallet address · TON network</string>
+    <string name="LunagramSupportCopy">Copy address</string>
     <string name="ExperimentalFeaturesWarning">These controls are experimental. Defaults preserve the original smooth typing animation.</string>
     <string name="EmergencyConnectionHeader">Emergency connection</string>
     <string name="EmergencyConnectionEnable">Use emergency connection</string>
