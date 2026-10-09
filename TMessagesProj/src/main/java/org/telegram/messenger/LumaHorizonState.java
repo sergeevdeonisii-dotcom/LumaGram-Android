@@ -77,4 +77,19 @@ public final class LumaHorizonState {
         }
         return result;
     }
+
+    /** Inverse of the screen-space rotation/crop, for a shader which samples
+     * an already cropped camera texture. Rotate in square space before applying
+     * the non-square source's UV aspect ratio and its SurfaceTexture matrix. */
+    public static void textureCoordinates(float[] result, float halfWidth, float halfHeight, float angle, boolean enabled) {
+        double radians = Math.toRadians(enabled ? angle : 0);
+        float c = (float) Math.cos(radians) / (enabled ? 1.414214f : 1f);
+        float s = (float) Math.sin(radians) / (enabled ? 1.414214f : 1f);
+        for (int i = 0; i < 4; i++) {
+            float x = (i & 1) == 0 ? -1f : 1f;
+            float y = i < 2 ? -1f : 1f;
+            result[i * 2] = 0.5f + halfWidth * (c * x + s * y);
+            result[i * 2 + 1] = 0.5f + halfHeight * (c * y - s * x);
+        }
+    }
 }

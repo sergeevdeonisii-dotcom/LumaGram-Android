@@ -14,6 +14,9 @@ import android.view.Surface;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.telegram.messenger.LumaHorizonLock;
+import org.telegram.messenger.LumaRoundVideoQuality;
+
 import java.util.concurrent.CountDownLatch;
 
 final class RoundVideoGlProcessor {
@@ -54,6 +57,12 @@ final class RoundVideoGlProcessor {
     private volatile long presentationTimeLimitNs = Long.MAX_VALUE;
     private final FrameTimingListener frameTimingListener;
     private final ErrorListener errorListener;
+    private final Surface previewSurface;
+    private final LumaHorizonLock horizonLock;
+    private volatile boolean frontCamera;
+    private volatile LumaRoundVideoQuality.FrameGate frameGate;
+    private volatile LumaRoundVideoQuality.FrameGate previewGate;
+    private android.opengl.EGLSurface eglPreviewSurface = EGL14.EGL_NO_SURFACE;
 
     private HandlerThread thread;
     private Handler handler;
@@ -120,7 +129,9 @@ final class RoundVideoGlProcessor {
             @NonNull RoundVideoDiagnostics diagnostics,
             long presentationTimeOriginNs,
             @Nullable FrameTimingListener frameTimingListener,
-            @Nullable ErrorListener errorListener
+            @Nullable ErrorListener errorListener,
+            @Nullable Surface previewSurface,
+            @Nullable LumaHorizonLock horizonLock
     ) {
         this.inputSize = inputSize;
         this.outputSurface = outputSurface;
@@ -135,6 +146,14 @@ final class RoundVideoGlProcessor {
         this.recordingStarted = presentationTimeOriginNs != 0;
         this.frameTimingListener = frameTimingListener;
         this.errorListener = errorListener;
+        this.previewSurface = previewSurface;
+        this.horizonLock = horizonLock;
+    }
+
+    public void setCameraPolicy(boolean frontCamera, int targetFps, int sourceFps) {
+        this.frontCamera = frontCamera;
+        frameGate = new LumaRoundVideoQuality.FrameGate(targetFps, sourceFps);
+        previewGate = new LumaRoundVideoQuality.FrameGate(60, sourceFps);
     }
 
     @NonNull
@@ -387,6 +406,10 @@ final class RoundVideoGlProcessor {
                 0
         );
         checkEglObject(eglSurface != EGL14.EGL_NO_SURFACE, "Unable to create EGL surface");
+        if (previewSurface != null) {
+            eglPreviewSurface = EGL14.eglCreateWindowSurface(eglDisplay, configs[0], previewSurface, surfaceAttributes, 0);
+            checkEglObject(eglPreviewSurface != EGL14.EGL_NO_SURFACE, "Unable to create round-video preview surface");
+        }
 
         makeCurrent();
         diagnostics.log("GL initialized: egl=" + versions[0] + "." + versions[1]
@@ -450,6 +473,22 @@ final class RoundVideoGlProcessor {
             inputSurfaceTexture.updateTexImage();
             inputSurfaceTexture.getTransformMatrix(textureMatrix);
             long timestamp = inputSurfaceTexture.getTimestamp();
+            boolean horizon = horizonLock != null && horizonLock.isRunning();
+            overlayRenderer.setHorizon(horizon ? horizonLock.correction(frontCamera, cameraTimestampRealtime ? timestamp : 0L) : 0f, horizon);
+            LumaRoundVideoQuality.FrameGate uiGate = previewGate;
+            if (eglPreviewSurface != EGL14.EGL_NO_SURFACE && (uiGate == null || uiGate.accept(timestamp, frontCamera ? 1 : 0))) {
+                // Draw the same sensor pose and source crop to the UI before
+                // returning to the encoder surface. UI stalls never duplicate MP4 frames.
+                if (!EGL14.eglMakeCurrent(eglDisplay, eglPreviewSurface, eglPreviewSurface, eglContext)) {
+                    throw new IllegalStateException("Unable to make round-video preview current");
+                }
+                EGL14.eglSwapInterval(eglDisplay, 0);
+                overlayRenderer.renderRawCameraToOutput(textureId, textureMatrix, outputSize, outputSize);
+                if (!EGL14.eglSwapBuffers(eglDisplay, eglPreviewSurface)) {
+                    throw new IllegalStateException("Unable to render round-video preview");
+                }
+                makeCurrent();
+            }
             inputFrames++;
             if (inputFrames == 1) {
                 diagnostics.log("first GL input frame: cameraTimestampNs=" + timestamp
@@ -471,6 +510,8 @@ final class RoundVideoGlProcessor {
                 }
                 return;
             }
+            LumaRoundVideoQuality.FrameGate gate = frameGate;
+            if (switchState == SWITCH_NONE && gate != null && !gate.accept(timestamp, frontCamera ? 1 : 0)) return;
             long frameTime = SystemClock.elapsedRealtimeNanos();
             if (lastFrameTime != 0) {
                 long gapNs = frameTime - lastFrameTime;
@@ -836,6 +877,9 @@ final class RoundVideoGlProcessor {
             if (eglSurface != EGL14.EGL_NO_SURFACE) {
                 EGL14.eglDestroySurface(eglDisplay, eglSurface);
             }
+            if (eglPreviewSurface != EGL14.EGL_NO_SURFACE) {
+                EGL14.eglDestroySurface(eglDisplay, eglPreviewSurface);
+            }
             if (eglContext != EGL14.EGL_NO_CONTEXT) {
                 EGL14.eglDestroyContext(eglDisplay, eglContext);
             }
@@ -846,6 +890,7 @@ final class RoundVideoGlProcessor {
         eglDisplay = EGL14.EGL_NO_DISPLAY;
         eglContext = EGL14.EGL_NO_CONTEXT;
         eglSurface = EGL14.EGL_NO_SURFACE;
+        eglPreviewSurface = EGL14.EGL_NO_SURFACE;
     }
 
     private static void checkEglObject(boolean valid, @NonNull String message) {

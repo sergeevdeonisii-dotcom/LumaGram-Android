@@ -1,5 +1,8 @@
 param([string]$JavaHome=$env:JAVA_HOME, [string]$OutputRoot='D:\CodexBuildCache\Lunagram-81-controls-tests')
 $ErrorActionPreference='Stop'
+$javaSuffix = if ($env:OS -eq 'Windows_NT') { '.exe' } else { '' }
+$javac = Join-Path $JavaHome ('bin/javac' + $javaSuffix)
+$java = Join-Path $JavaHome ('bin/java' + $javaSuffix)
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $classes=Join-Path $OutputRoot ('run-'+[guid]::NewGuid().ToString()+'/classes')
 New-Item -ItemType Directory -Path $classes -Force | Out-Null
@@ -12,9 +15,9 @@ $sources=@(
     'Tools/tests/fixtures/android/content/SharedPreferences.java',
     'Tools/tests/round-video-fixtures/org/telegram/messenger/VideoEditedInfo.java'
 ) | ForEach-Object { Join-Path $repo $_ }
-& (Join-Path $JavaHome 'bin/javac.exe') -J-Xmx128m -encoding UTF-8 -d $classes $sources
+& $javac -J-Xmx128m -encoding UTF-8 -d $classes $sources
 if($LASTEXITCODE -ne 0){throw 'Round controls compilation failed.'}
-& (Join-Path $JavaHome 'bin/java.exe') -Xmx128m -cp $classes org.telegram.messenger.RoundControls81Test
+& $java -Xmx128m -cp $classes org.telegram.messenger.RoundControls81Test
 if($LASTEXITCODE -ne 0){throw 'Round controls regressions failed.'}
 $camera=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/messenger/camera/Camera2Session.java'))
 $view=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/ui/Components/InstantCameraView.java'))
@@ -33,10 +36,39 @@ $methods=@('private static Range<Integer> chooseRecordingFpsRange(', 'private st
 $template=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'round-controls81/CameraRates81Test.java.template'))
 $generated=Join-Path (Split-Path $classes) 'CameraRates81Test.java'
 [IO.File]::WriteAllText($generated,$template.Replace('// PRODUCTION_RATE_METHODS',($methods -join "`n")),[Text.UTF8Encoding]::new($false))
-& (Join-Path $JavaHome 'bin/javac.exe') -J-Xmx128m -encoding UTF-8 -cp $classes -d $classes $generated
+& $javac -J-Xmx128m -encoding UTF-8 -cp $classes -d $classes $generated
 if($LASTEXITCODE -ne 0){throw 'Camera rate-selection compilation failed.'}
-& (Join-Path $JavaHome 'bin/java.exe') -Xmx128m -cp $classes org.telegram.messenger.CameraRates81Test
+& $java -Xmx128m -cp $classes org.telegram.messenger.CameraRates81Test
 if($LASTEXITCODE -ne 0){throw 'Camera rate-selection regressions failed.'}
+$modern=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/camera/roundvideo/RoundVideoCameraController.java'))
+$session=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/camera/roundvideo/RoundVideoSession.java'))
+$methods=@('private FrameRatePlan resolveFrameRate(', 'private static boolean supportsFrameDuration(',
+    'private static Range<Integer> findBestFpsRange(', 'private static Size[] filterSizesForFrameRate(',
+    'private static OutputPair chooseOutputPair(', 'private static OutputPair chooseTierPair(',
+    'private static Size chooseFallbackRecordingSize(', 'private static int getSourceCropSize(',
+    'private static Size choosePreviewSize(', 'private static int comparePreviewSizes(', 'private static int compareOutputPairs(',
+    'private static boolean hasSameAspectRatio(', 'private static boolean isValidTierSize(', 'private static boolean isWithinAbsoluteLimit(',
+    'private static int shortSide(', 'private static long area(', 'private static boolean contains(',
+    'private static final class FrameRatePlan', 'private static final class OutputPair') |
+    ForEach-Object { Method $modern $_ }
+$template=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'round-controls81/ModernCamera81Test.java.template'))
+$generated=Join-Path (Split-Path $classes) 'ModernCamera81Test.java'
+$template=$template.Replace('// PRODUCTION_METHODS',($methods -join "`n")).Replace('// PRODUCTION_ENUM',(Method $session 'public enum FrameRate'))
+[IO.File]::WriteAllText($generated,$template,[Text.UTF8Encoding]::new($false))
+& $javac -J-Xmx128m -encoding UTF-8 -cp $classes -d $classes $generated
+if($LASTEXITCODE -ne 0){throw 'New-recorder camera policy compilation failed.'}
+& $java -Xmx128m -cp $classes org.telegram.messenger.ModernCamera81Test
+if($LASTEXITCODE -ne 0){throw 'New-recorder camera policy regressions failed.'}
+foreach($guard in @('generation != captureGeneration', 'cameraDevice != expectedDevice',
+    'createConstrainedHighSpeedCaptureSession(Collections.singletonList(recordingSurface)',
+    'fast.setRepeatingBurst(fast.createHighSpeedRequestList(request)', 'glProcessor.updateInputConfiguration(',
+    'LumaRoundVideoStabilization.videoMode(', 'horizonLock.stop();')) {
+    if(!$modern.Contains($guard)){throw "Missing new recorder integration: $guard"}
+}
+$settings=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/ui/RoundVideoSettingsActivity.java'))
+foreach($guard in @('new SlideChooseView(context)', 'LumaRoundVideoQuality::setFrameRateLevel', 'LumaRoundVideoStabilization::setMode')) {
+    if(!$settings.Contains($guard)){throw "Missing shared native slider: $guard"}
+}
 foreach($guard in @('getHighSpeedVideoFpsRangesFor(size)','getHighSpeedVideoSizes()','createConstrainedHighSpeedCaptureSession(',
     'setRepeatingBurst(fastSession.createHighSpeedRequestList(', 'generation != captureGeneration', 'fallbackHighSpeedSession()',
     'LumaRoundVideoStabilization.videoMode(', 'Build.VERSION.SDK_INT >= 33')) {

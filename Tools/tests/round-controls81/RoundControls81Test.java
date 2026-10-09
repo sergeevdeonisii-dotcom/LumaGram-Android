@@ -13,11 +13,13 @@ public final class RoundControls81Test {
     public static void main(String[] args) {
         MessagesController.values.clear();
         check(LumaRoundVideoQuality.getPreferredFrameRate() == 60, "Existing 60fps default retained");
+        check(LumaRoundVideoQuality.getPreferredFrameRate(30) == 30, "New recorder's old default retained before slider change");
         LumaRoundVideoQuality.Profile base = LumaRoundVideoQuality.baseline(384, 1000, 64);
         for (int level = 0; level <= 3; level++) {
             LumaRoundVideoQuality.setFrameRateLevel(level);
             int fps = (level + 1) * 30;
             check(LumaRoundVideoQuality.getPreferredFrameRate() == fps && LumaRoundVideoQuality.getFrameRateLevel() == level, "Slider persists " + fps);
+            check(LumaRoundVideoQuality.getPreferredFrameRate(30) == fps, "Common slider overrides either recorder default");
             LumaRoundVideoQuality.Profile p = LumaRoundVideoQuality.forCamera(base, true, fps);
             check(p.frameRate == fps && p.videoBitrate == 6_000_000 * (level + 1), "Frame rate/bitrate agree");
             check(LumaRoundVideoQuality.forCamera(base, true, 30).frameRate == 30, "Cannot invent camera support");
@@ -95,6 +97,20 @@ public final class RoundControls81Test {
             }
         }
         check(Arrays.equals(before,IDENTITY),"Horizon never mutates shared base matrix");
+        float[] uv = new float[8];
+        for (int degrees = -360; degrees <= 360; degrees++) for (float halfWidth : new float[]{0.5f,0.28125f}) {
+            float halfHeight = halfWidth == 0.5f ? 0.28125f : 0.5f;
+            float[] matrix = LumaHorizonState.transform(IDENTITY, degrees);
+            LumaHorizonState.textureCoordinates(uv,halfWidth,halfHeight,degrees,true);
+            for (int corner=0;corner<4;corner++) {
+                float x=(uv[2*corner]-0.5f)/halfWidth, y=(uv[2*corner+1]-0.5f)/halfHeight;
+                near(matrix[0]*x+matrix[4]*y,(corner&1)==0?-1:1,0.00001f,"Both GL recorders apply inverse sampling of same horizon rotation");
+                near(matrix[1]*x+matrix[5]*y,corner<2?-1:1,0.00001f,"UV aspect ratio retained across rotations");
+                check(uv[2*corner]>=0 && uv[2*corner]<=1 && uv[2*corner+1]>=0 && uv[2*corner+1]<=1,"No out-of-texture corners in new recorder");
+            }
+        }
+        LumaHorizonState.textureCoordinates(uv,0.5f,0.5f,90,false);
+        check(Arrays.equals(uv,new float[]{0,0,1,0,0,1,1,1}),"Disabled horizon leaves source crop unchanged");
         near(LumaHorizonState.correction(90,90,false,false),0,0.001f,"Android ROTATION_90 compensates physical counter-clockwise rotation");
         near(LumaHorizonState.correction(-90,270,false,false),0,0.001f,"Android ROTATION_270 compensates physical clockwise rotation");
         near(LumaHorizonState.correction(42,0,true,true),42,0.001f,"Android mirrored front preview must not reverse gravity twice");

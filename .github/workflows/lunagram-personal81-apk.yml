@@ -32,16 +32,9 @@ jobs:
           distribution: temurin
           java-version: "17"
       - name: Test round controls and horizon math
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p "$RUNNER_TEMP/round-controls-tests"
-          javac -J-Xmx128m -encoding UTF-8 -d "$RUNNER_TEMP/round-controls-tests" \
-            TMessagesProj/src/main/java/org/telegram/messenger/{LumaRoundVideoQuality,LumaRoundVideoStabilization,LumaHorizonState}.java \
-            Tools/tests/round-controls81/RoundControls81Test.java \
-            Tools/tests/typing-fixtures/org/telegram/messenger/MessagesController.java \
-            Tools/tests/fixtures/android/content/SharedPreferences.java \
-            Tools/tests/round-video-fixtures/org/telegram/messenger/VideoEditedInfo.java
-          java -Xmx128m -cp "$RUNNER_TEMP/round-controls-tests" org.telegram.messenger.RoundControls81Test
+          ./Tools/tests/run-round-controls81-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-controls-tests')
       - name: Build personal APK with a disposable key
         shell: bash
         env:

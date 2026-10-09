@@ -11391,7 +11391,7 @@
     <string name="LumaRoundVideoStartRearCameraInfo">New video messages start with the rear camera. You can still switch cameras while recording. A paused recording keeps its current camera.</string>
     <string name="LumaRoundVideoQualityInfo">Sharper 640 × 640 video messages. Files are larger and uploads may take longer. Unedited recordings are sent without re-encoding; trimming still requires processing.</string>
     <string name="LumaRoundVideoFps">Frame rate · FPS</string>
-    <string name="LumaRoundVideoFpsInfo">Preferred rate: 30–120 FPS. Depends on the selected camera and encoder; unsupported rates fall back to the nearest lower rate. Switching cameras or low light may reduce smoothness. Higher rates increase heat and battery usage. Enable Camera2 in camera settings for 120 FPS.</string>
+    <string name="LumaRoundVideoFpsInfo">Preferred rate: 30–120 FPS. Depends on the selected camera and encoder; unsupported rates use a lower rate. Switching cameras or low light may reduce smoothness. Higher rates increase heat and battery usage. The sliders apply to both recorders. The legacy recorder requires high-quality round videos for higher FPS; 120 FPS requires Camera2. After changing settings, reopen the chat.</string>
     <string name="LumaRoundVideoStabilization">Video message stabilization</string>
     <string name="LumaRoundVideoStabilizationOff">Off</string>
     <string name="LumaRoundVideoStabilizationStandard">Standard</string>
@@ -11460,7 +11460,7 @@
     <string name="RoundVideoCameraResolutionLow">Low</string>
     <string name="RoundVideoFrameRate">Frame rate</string>
     <string name="RoundVideoBitrate">Video bitrate</string>
-    <string name="RoundVideoGeneralInfo">60 FPS is used only when both front and rear cameras support it. Otherwise recording falls back to 30 FPS.</string>
+    <string name="RoundVideoGeneralInfo">Resolution and bitrate above configure the new recorder. Bitrate is specified for 30 FPS and scales with higher frame rates. FPS and stabilization below are shared by both recorders. Camera support and lighting determine the actual rate.</string>
     <string name="RoundVideoComposition">Composition</string>
     <string name="RoundVideoCompositionEnabled">Round video styling</string>
     <string name="RoundVideoCompositionInfo">Disable styling to record a plain square without outside-circle blur, dimming or Telegram overlays.</string>

@@ -28,8 +28,13 @@ public final class LumaRoundVideoQuality {
     }
 
     public static int getPreferredFrameRate() {
+        return getPreferredFrameRate(HIGH_FRAME_RATE);
+    }
+
+    /** Preserve each recorder's old default until the common slider is changed. */
+    public static int getPreferredFrameRate(int fallback) {
         return normalizeFrameRate(MessagesController.getGlobalMainSettings()
-            .getInt(FRAME_RATE_PREFERENCE_KEY, HIGH_FRAME_RATE));
+            .getInt(FRAME_RATE_PREFERENCE_KEY, fallback));
     }
 
     public static int getFrameRateLevel() { return getPreferredFrameRate() / FRAME_RATE - 1; }
