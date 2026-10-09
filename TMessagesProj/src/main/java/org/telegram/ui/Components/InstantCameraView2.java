@@ -47,7 +47,6 @@ import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.VideoEditedInfo;
-import org.telegram.messenger.LumaRoundVideoStats;
 import org.telegram.messenger.utils.Choreographer60FpsContent;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
@@ -374,8 +373,8 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         progressView.setProgress(0f);
         showInitialPlaceholder();
         upload = new TelegramRoundVideoUpload(currentAccount, secretChat);
-        activeOutputResolution = SharedSettings.roundVideoOutputResolution.get();
-        requestedRecordingFps = LumaRoundVideoQuality.getPreferredFrameRate(SharedSettings.roundVideoFrameRate.get().getValue());
+        activeOutputResolution = SharedSettings.getRoundVideoOutputResolution();
+        requestedRecordingFps = LumaRoundVideoQuality.getPreferredFrameRate(SharedSettings.getRoundVideoFrameRate().getValue());
         session = new RoundVideoSession.Builder(getContext(), textureView)
                 .setOutputDirectory(new File(ApplicationLoader.getFilesDirFixed(), "cache"))
                 .setInitialFacing(getInitialCameraFacing(fromPaused))
@@ -852,7 +851,6 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
     private void completeSend(@NonNull RoundVideoSession.Result result) {
         SendOptions options = pendingSend;
         if (options == null) return;
-        LumaRoundVideoStats.inspectAsync(result.getFile(), requestedRecordingFps, "camera2");
         pendingSend = null;
         sent = true;
         TelegramRoundVideoUpload.UploadInfo uploadInfo = upload == null
@@ -900,6 +898,8 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         info.startTime = -1;
         info.endTime = -1;
         info.estimatedDuration = durationMs;
+        info.originalDuration = durationMs * 1000L;
+        info.roundVideoRequestedFps = requestedRecordingFps;
         info.estimatedSize = Math.max(1L, uploadInfo == null ? file.length() : uploadInfo.size);
         info.roundVideo = true;
         info.framerate = session == null || session.getActiveFrameRate() == null

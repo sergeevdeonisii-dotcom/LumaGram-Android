@@ -85,7 +85,6 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaRoundVideoCamera;
 import org.telegram.messenger.LumaRoundVideoQuality;
-import org.telegram.messenger.LumaRoundVideoStats;
 import org.telegram.messenger.LumaRoundVideoStabilization;
 import org.telegram.messenger.LumaHorizonLock;
 import org.telegram.messenger.LumaHorizonState;
@@ -1060,7 +1059,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 if (videoEditedInfo.endTime > 0) {
                     videoEditedInfo.endTime *= 1000;
                 }
-                FileLoader.getInstance(currentAccount).cancelFileUpload(cameraFile.getAbsolutePath(), false);
+                FileLoader.getInstance(currentAccount).cancelFileUpload(cameraFile.getAbsolutePath(), isSecretChat);
             } else {
                 videoEditedInfo.estimatedSize = Math.max(1, size);
             }
@@ -3200,38 +3199,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         private boolean sentMedia;
 
         private void handleStopRecording(final int send, final SendOptions sendOptions) {
-            final boolean runDone;
-            if (send == ENCODER_SEND_SEND && (videoEditedInfo == null || !videoEditedInfo.needConvert()) && !delegate.isInScheduleMode()) {
-                runDone = false;
-                if (!sentMedia) {
-                    sentMedia = true;
-                    AndroidUtilities.runOnUIThread(() -> {
-                        videoEditedInfo = new VideoEditedInfo();
-                        videoEditedInfo.startTime = -1;
-                        videoEditedInfo.endTime = -1;
-                        videoEditedInfo.estimatedSize = Math.max(1, size);
-                        videoEditedInfo.roundVideo = true;
-                        videoEditedInfo.file = file;
-                        videoEditedInfo.encryptedFile = encryptedFile;
-                        videoEditedInfo.key = key;
-                        videoEditedInfo.iv = iv;
-                        LumaRoundVideoQuality.applyMetadata(videoEditedInfo, encodingProfile);
-                        videoEditedInfo.originalPath = videoFile.getAbsolutePath();
-                        videoEditedInfo.notReadyYet = true;
-                        videoEditedInfo.thumb = firstFrameThumb;
-                        videoEditedInfo.estimatedDuration = recordedTime;
-                        firstFrameThumb = null;
-                        MediaController.PhotoEntry entry = new MediaController.PhotoEntry(0, 0, 0, videoFile.getAbsolutePath(), 0, true, 0, 0, 0);
-                        if (sendOptions != null) {
-                            entry.ttl = sendOptions.ttl;
-                            entry.effectId = sendOptions.effectId;
-                        }
-                        delegate.sendMedia(entry, videoEditedInfo, sendOptions == null || sendOptions.notify, sendOptions != null ? sendOptions.scheduleDate : 0, sendOptions != null ? sendOptions.scheduleRepeatPeriod : 0, false, sendOptions != null ? sendOptions.stars : 0);
-                    });
-                }
-            } else {
-                runDone = true;
-            }
+            // A growing MP4 cannot be checked against Telegram's round-message byte limit.
+            // Preserve the original recording and hand it to send preparation only after finalization.
+            final boolean runDone = true;
             if (running && !pauseRecorder) {
                 FileLog.d("InstantCamera handleStopRecording running=false");
                 sendWhenDone = send;
@@ -3323,7 +3293,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
             FileLog.d("InstantCamera handleStopRecording send " + send);
             if (send == ENCODER_SEND_CANCEL) {
-                FileLoader.getInstance(currentAccount).cancelFileUpload(videoFile.getAbsolutePath(), false);
+                FileLoader.getInstance(currentAccount).cancelFileUpload(videoFile.getAbsolutePath(), isSecretChat);
                 try {
                     fileToWrite.delete();
                 } catch (Throwable ignore) {}
@@ -3331,7 +3301,6 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     videoFile.delete();
                 } catch (Throwable ignore) {}
             } else {
-                LumaRoundVideoStats.inspectAsync(videoFile, requestedRecordingFps, "legacy");
                 if (runDone && (send != ENCODER_SEND_SEND || !sentMedia)) {
                     sentMedia = true;
                     AndroidUtilities.runOnUIThread(() -> {
@@ -3340,6 +3309,10 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                             videoEditedInfo.startTime = -1;
                             videoEditedInfo.endTime = -1;
                         }
+                        videoEditedInfo.roundVideo = true;
+                        if (videoEditedInfo.estimatedDuration <= 0) videoEditedInfo.estimatedDuration = recordedTime;
+                        videoEditedInfo.originalDuration = recordedTime * 1000L;
+                        videoEditedInfo.roundVideoRequestedFps = requestedRecordingFps;
                         if (videoEditedInfo.needConvert()) {
                             file = null;
                             encryptedFile = null;
@@ -3357,7 +3330,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                             if (videoEditedInfo.endTime > 0) {
                                 videoEditedInfo.endTime *= 1000;
                             }
-                            FileLoader.getInstance(currentAccount).cancelFileUpload(cameraFile.getAbsolutePath(), false);
+                            FileLoader.getInstance(currentAccount).cancelFileUpload(cameraFile.getAbsolutePath(), isSecretChat);
                         } else {
                             videoEditedInfo.estimatedSize = Math.max(1, size);
                         }

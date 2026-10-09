@@ -2712,7 +2712,50 @@ public class ChatActivity extends BaseFragment implements
         }
         updateLiquidGlassReplyPanelLayout(enabled);
         updateLiquidGlassHeaderLayout(enabled);
+        if (blurredBackgroundColorProvider != null) {
+            blurredBackgroundColorProvider.updateColors();
+        }
+        if (chatActivityEnterView != null) {
+            chatActivityEnterView.updateColors();
+        }
+        refreshChatGlassTextColors();
+        for (BlurredBackgroundDrawable drawable : glassAttachedDrawables) {
+            drawable.updateColors();
+        }
         invalidateAllGlassAttachedViews();
+    }
+
+    private void refreshChatGlassTextColors() {
+        if (avatarContainer != null) {
+            avatarContainer.updateChatTextColors();
+            avatarContainer.updateColors();
+        }
+        if (actionBar != null && !isReport()) {
+            actionBar.setItemsColor(getThemedColor(Theme.key_actionBarDefaultIcon), false);
+        }
+        if (bizBotButton != null) {
+            bizBotButton.updateColors();
+        }
+        if (pinnedCounterTextView != null) {
+            pinnedCounterTextView.setTextColor(getThemedColor(Theme.key_chat_topPanelTitle));
+        }
+        for (int i = 0; i < pinnedNameTextView.length; i++) {
+            if (pinnedNameTextView[i] != null) {
+                pinnedNameTextView[i].setTextColor(getThemedColor(Theme.key_chat_topPanelTitle));
+            }
+            if (pinnedMessageTextView[i] != null) {
+                pinnedMessageTextView[i].setTextColor(getThemedColor(Theme.key_chat_topPanelMessage));
+            }
+        }
+        if (closePinned != null) {
+            closePinned.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_chat_topPanelClose), PorterDuff.Mode.MULTIPLY));
+        }
+        if (pinnedListButton != null) {
+            pinnedListButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_chat_topPanelClose), PorterDuff.Mode.MULTIPLY));
+        }
+        if (pinnedProgress != null) {
+            pinnedProgress.setProgressColor(getThemedColor(Theme.key_chat_topPanelLine));
+        }
     }
 
     private static boolean isLiquidInputControlVisible(View view) {
@@ -42957,6 +43000,7 @@ public class ChatActivity extends BaseFragment implements
             for (BlurredBackgroundDrawable d : glassAttachedDrawables) {
                 d.updateColors();
             }
+            refreshChatGlassTextColors();
             invalidateAllGlassAttachedViews();
         };
         ArrayList<ThemeDescription> themeDescriptions = new ArrayList<>();
@@ -43768,6 +43812,7 @@ public class ChatActivity extends BaseFragment implements
         private final HashMap<String, Drawable> currentDrawables = new HashMap<>();
         private final HashMap<String, Paint> currentPaints = new HashMap<>();
         private final Matrix actionMatrix = new Matrix();
+        private final SparseIntArray lumaGlassContrastColors = new SparseIntArray();
 
         private SparseIntArray currentColors = new SparseIntArray();
         private SparseIntArray animatingColors;
@@ -43814,6 +43859,15 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public int getColor(int key) {
+            return applyChatGlassContrast(key, getRawColor(key));
+        }
+
+        @Override
+        public int getPreviewColor(int key) {
+            return getRawColor(key);
+        }
+
+        private int getRawColor(int key) {
             if (animatingColors != null) {
                 int index = animatingColors.indexOfKey(key);
                 if (index >= 0) {
@@ -43844,6 +43898,10 @@ public class ChatActivity extends BaseFragment implements
         }
 
         public int getCurrentColor(int key, boolean ignoreAnimation) {
+            return applyChatGlassContrast(key, getRawCurrentColor(key, ignoreAnimation));
+        }
+
+        private int getRawCurrentColor(int key, boolean ignoreAnimation) {
             if (chatTheme == null && backgroundDrawable == null) {
                 return Theme.getColor(key);
             }
@@ -43861,6 +43919,26 @@ public class ChatActivity extends BaseFragment implements
                 }
             }
             return Theme.getColor(key);
+        }
+
+        private int applyChatGlassContrast(int key, int color) {
+            if (isDark() || !LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS)) return color;
+            // Only foregrounds placed on our light chat glass. Message bubbles, stickers,
+            // blue button backgrounds and their white labels must keep their theme colors.
+            if (key != Theme.key_actionBarDefaultTitle && key != Theme.key_actionBarDefaultSubtitle
+                    && key != Theme.key_actionBarDefaultIcon && key != Theme.key_chat_status
+                    && key != Theme.key_chat_topPanelTitle && key != Theme.key_chat_topPanelMessage
+                    && key != Theme.key_chat_topPanelClose && key != Theme.key_chat_topPanelLine
+                    && key != Theme.key_chat_messagePanelText && key != Theme.key_chat_messagePanelHint
+                    && key != Theme.key_chat_messagePanelCursor && key != Theme.key_chat_messagePanelIcons
+                    && key != Theme.key_chat_messagePanelCancelInlineBot && key != Theme.key_chat_recordTime
+                    && key != Theme.key_glass_defaultIcon && key != Theme.key_glass_defaultText) return color;
+            int index = lumaGlassContrastColors.indexOfKey(color);
+            if (index >= 0) return lumaGlassContrastColors.valueAt(index);
+            int adjusted = org.telegram.messenger.LumaGlassContrast.foreground(color, false, true);
+            if (lumaGlassContrastColors.size() >= 64) lumaGlassContrastColors.clear();
+            lumaGlassContrastColors.put(color, adjusted);
+            return adjusted;
         }
 
         @Override

@@ -130,7 +130,7 @@ public class PushListenerController {
                     if (!Arrays.equals(SharedConfig.pushAuthKeyId, inAuthKeyId)) {
                         onDecryptError();
                         if (BuildVars.LOGS_ENABLED) {
-                            FileLog.d(String.format(Locale.US, tag + " DECRYPT ERROR 2 k1=%s k2=%s, key=%s", Utilities.bytesToHex(SharedConfig.pushAuthKeyId), Utilities.bytesToHex(inAuthKeyId), Utilities.bytesToHex(SharedConfig.pushAuthKey)));
+                            FileLog.d(tag + " DECRYPT ERROR 2: key ID mismatch");
                         }
                         return;
                     }
@@ -145,7 +145,7 @@ public class PushListenerController {
                     if (!Utilities.arraysEquals(messageKey, 0, messageKeyFull, 8)) {
                         onDecryptError();
                         if (BuildVars.LOGS_ENABLED) {
-                            FileLog.d(String.format(tag + " DECRYPT ERROR 3, key = %s", Utilities.bytesToHex(SharedConfig.pushAuthKey)));
+                            FileLog.d(tag + " DECRYPT ERROR 3: authentication failed");
                         }
                         return;
                     }
@@ -1503,9 +1503,9 @@ public class PushListenerController {
                         onDecryptError();
                     }
                     if (BuildVars.LOGS_ENABLED) {
-                        FileLog.e("error in loc_key = " + loc_key + " json " + jsonString);
+                        // Parser exception messages can themselves contain private JSON values.
+                        FileLog.e("Unable to process push payload (" + e.getClass().getSimpleName() + ")");
                     }
-                    FileLog.e(e);
                 }
             });
         });
@@ -1684,7 +1684,7 @@ public class PushListenerController {
             String currentPushString = SharedConfig.pushString;
             if (!TextUtils.isEmpty(currentPushString)) {
                 if (BuildVars.DEBUG_PRIVATE_VERSION && BuildVars.LOGS_ENABLED) {
-                    FileLog.d("FCM regId = " + currentPushString);
+                    FileLog.d("FCM registration is available");
                 }
             } else {
                 if (BuildVars.LOGS_ENABLED) {

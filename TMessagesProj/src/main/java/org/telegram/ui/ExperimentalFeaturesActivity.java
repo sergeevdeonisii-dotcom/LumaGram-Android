@@ -239,17 +239,14 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 .setChecked(LumaRoundVideoQuality.isEnabled()));
         items.add(UItem.asShadow(getString(R.string.LumaRoundVideoQualityInfo)));
         items.add(UItem.asHeader(getString(R.string.LumaRoundVideoFps)));
-        items.add(UItem.asSlideView(new String[] {"30", "60", "90", "120"},
+        items.add(UItem.asSlideView(new String[] {"30", "60"},
                 LumaRoundVideoQuality.getFrameRateLevel(), LumaRoundVideoQuality::setFrameRateLevel)
                 .setEnabled(LumaRoundVideoQuality.isEnabled()));
         items.add(UItem.asShadow(getString(R.string.LumaRoundVideoFpsInfo)));
         items.add(UItem.asHeader(getString(R.string.LumaRoundVideoStabilization)));
-        items.add(UItem.asSlideView(new String[] {
-                getString(R.string.LumaRoundVideoStabilizationOff),
-                getString(R.string.LumaRoundVideoStabilizationStandard),
-                getString(R.string.LumaRoundVideoStabilizationEnhanced)
-        }, LumaRoundVideoStabilization.getMode(), LumaRoundVideoStabilization::setMode));
-        items.add(UItem.asShadow(getString(R.string.LumaRoundVideoStabilizationInfo)));
+        items.add(UItem.asSlideView(RoundVideoSettingsActivity.stabilizationOptions(),
+                LumaRoundVideoStabilization.getMode(), LumaRoundVideoStabilization::setMode));
+        items.add(UItem.asShadow(getString(RoundVideoSettingsActivity.stabilizationInfoResource())));
         items.add(UItem.asCheck(ROW_ROUND_VIDEO_REAR_CAMERA, getString(R.string.LumaRoundVideoStartRearCamera))
                 .setChecked(LumaRoundVideoCamera.isStartWithRearCameraEnabled()));
         items.add(UItem.asShadow(getString(R.string.LumaRoundVideoStartRearCameraInfo)));

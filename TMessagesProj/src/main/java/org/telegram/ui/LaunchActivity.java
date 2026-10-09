@@ -391,10 +391,16 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     private FrameMetricsOverlayView frameMetricsOverlayView;
+    private boolean lumaLauncherStartup;
+    private org.telegram.ui.Components.LumaStartupReveal lumaStartupReveal;
     // private RefreshRateController refreshRateController;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Intent startupIntent = getIntent();
+        lumaLauncherStartup = savedInstanceState == null && startupIntent != null
+                && Intent.ACTION_MAIN.equals(startupIntent.getAction())
+                && startupIntent.hasCategory(Intent.CATEGORY_LAUNCHER) && startupIntent.getData() == null;
         isActive = true;
         activeInstanceCount++;
         if (BuildVars.DEBUG_VERSION) {
@@ -1423,6 +1429,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     public void showPasscodeActivity(boolean fingerprint, boolean animated, int x, int y, Runnable onShow, Runnable onStart) {
+        dismissLumaStartupReveal();
         if (drawerLayoutContainer == null || isFinishing()) {
             return;
         }
@@ -6134,11 +6141,15 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     @Override
     public void onNewIntent(Intent intent) {
+        dismissLumaStartupReveal();
+        lumaLauncherStartup = false;
         super.onNewIntent(intent);
         handleIntent(intent, true, false, false, null, true, true);
     }
 
     public void onNewIntent(Intent intent, Browser.Progress progress) {
+        dismissLumaStartupReveal();
+        lumaLauncherStartup = false;
         super.onNewIntent(intent);
         handleIntent(intent, true, false, false, progress, true, false);
     }
@@ -6734,11 +6745,13 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     @Override
     public void onUserInteraction() {
         super.onUserInteraction();
+        dismissLumaStartupReveal();
         voipLaunchedInBackground = false;
     }
 
     @Override
     protected void onPause() {
+        dismissLumaStartupReveal();
         super.onPause();
         boolean privateVaultSession = false;
         for (int slot = 0; slot < UserConfig.MAX_ACCOUNT_COUNT; slot++)
@@ -6877,6 +6890,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     @Override
     protected void onDestroy() {
+        dismissLumaStartupReveal();
         isActive = false;
         activeInstanceCount--;
         unregisterReceiver(batteryReceiver);
@@ -7088,6 +7102,38 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         //if (refreshRateController != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
         //    refreshRateController.start();
         //}
+        maybeShowLumaStartupReveal();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            maybeShowLumaStartupReveal();
+        } else {
+            dismissLumaStartupReveal();
+        }
+    }
+
+    private void maybeShowLumaStartupReveal() {
+        if (lumaStartupReveal != null || !lumaLauncherStartup) return;
+        boolean protectedScreen = SharedConfig.appLocked || SharedConfig.isWaitingForPasscodeEnter
+                || (passcodeDialog != null && passcodeDialog.passcodeView.getVisibility() == View.VISIBLE)
+                || !overlayPasscodeViews.isEmpty() || voipLaunchedInBackground || isInPictureInPictureMode;
+        try {
+            lumaStartupReveal = org.telegram.ui.Components.LumaStartupReveal.maybeShow(frameLayout,
+                    lumaLauncherStartup, isResumed && hasWindowFocus() && !isFinishing(), protectedScreen);
+        } catch (RuntimeException error) {
+            lumaLauncherStartup = false;
+            FileLog.e(error);
+        }
+    }
+
+    private void dismissLumaStartupReveal() {
+        if (lumaStartupReveal != null) {
+            lumaStartupReveal.dismiss();
+            lumaStartupReveal = null;
+        }
     }
 
     public static Runnable whenResumed;

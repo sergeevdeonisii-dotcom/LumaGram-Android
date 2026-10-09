@@ -9,7 +9,9 @@ public final class LumaRoundVideoQuality {
     public static final int HIGH_FRAME_RATE = 60;
     public static final int HIGH_FRAME_RATE_VIDEO_BITRATE = 12_000_000;
     public static final int FRAME_RATE = 30;
+    /** Keep old media/camera cadence math intact; new recordings are capped separately. */
     public static final int MAX_FRAME_RATE = 120;
+    public static final int MAX_RECORDING_FRAME_RATE = 60;
     public static final String FRAME_RATE_PREFERENCE_KEY = "lunagram_round_video_fps";
     public static final long MAX_DURATION_MS = 60_000L;
 
@@ -33,8 +35,20 @@ public final class LumaRoundVideoQuality {
 
     /** Preserve each recorder's old default until the common slider is changed. */
     public static int getPreferredFrameRate(int fallback) {
-        return normalizeFrameRate(MessagesController.getGlobalMainSettings()
-            .getInt(FRAME_RATE_PREFERENCE_KEY, fallback));
+        android.content.SharedPreferences preferences = MessagesController.getGlobalMainSettings();
+        int stored;
+        boolean invalidType = false;
+        try {
+            stored = preferences.getInt(FRAME_RATE_PREFERENCE_KEY, fallback);
+        } catch (ClassCastException invalidRestoredValue) {
+            stored = fallback;
+            invalidType = true;
+        }
+        int normalized = Math.min(MAX_RECORDING_FRAME_RATE, normalizeFrameRate(stored));
+        if (invalidType || preferences.contains(FRAME_RATE_PREFERENCE_KEY) && stored != normalized) {
+            preferences.edit().putInt(FRAME_RATE_PREFERENCE_KEY, normalized).apply();
+        }
+        return normalized;
     }
 
     public static int getFrameRateLevel() { return getPreferredFrameRate() / FRAME_RATE - 1; }
@@ -46,7 +60,7 @@ public final class LumaRoundVideoQuality {
     }
 
     public static void setFrameRateLevel(int level) {
-        int fps = (Math.max(0, Math.min(3, level)) + 1) * FRAME_RATE;
+        int fps = (Math.max(0, Math.min(1, level)) + 1) * FRAME_RATE;
         MessagesController.getGlobalMainSettings().edit().putInt(FRAME_RATE_PREFERENCE_KEY, fps).apply();
     }
 

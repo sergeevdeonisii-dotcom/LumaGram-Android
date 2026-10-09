@@ -9,6 +9,21 @@ function output(edition) {
 function badging(edition) {
   return `package: name='org.luma.liquid.web' versionCode='71589' versionName='${expectedArtifact(edition).versionName}'\nnative-code: 'arm64-v8a'\n`;
 }
+
+test('1.0.0 keeps one public version name, a monotonic code and distinct verified editions', () => {
+  for (const edition of ['full', 'friends']) {
+    const expected = expectedArtifact(edition, '100');
+    assert.equal(expected.versionName, '1.0.0');
+    assert.equal(expected.versionCode, 71629);
+    assert.equal(expected.friendsEdition, edition === 'friends');
+    assert.ok(expected.fileName.includes(`-${edition}-`));
+    validateOutputMetadata({ applicationId: 'org.luma.liquid.web', elements: [{ versionName: '1.0.0', versionCode: 71629, outputFile: 'app.apk' }] }, edition, '100');
+    validateApkBadging("package: name='org.luma.liquid.web' versionCode='71629' versionName='1.0.0'\nnative-code: 'arm64-v8a'\n", edition, '100');
+    validateGeneratedFlag(`public static final boolean LUMA_FRIENDS_EDITION = ${edition === 'friends'};`, edition);
+    assert.throws(() => validateGeneratedFlag(`public static final boolean LUMA_FRIENDS_EDITION = ${edition !== 'friends'};`, edition));
+    assert.throws(() => validateApkBadging("package: name='org.luma.liquid.web' versionCode='71619' versionName='1.0.0'\nnative-code: 'arm64-v8a'\n", edition, '100'));
+  }
+});
 for (const edition of ['full', 'friends']) {
   test(`${edition}: output metadata, library flag and APK manifest must agree`, () => {
     assert.equal(validateOutputMetadata(output(edition), edition), 'app.apk');

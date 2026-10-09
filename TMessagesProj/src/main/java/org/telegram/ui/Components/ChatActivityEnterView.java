@@ -10669,6 +10669,12 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     @Override
     public void updateColors() {
+        if (messageEditText != null) {
+            messageEditText.setTextColor(getThemedColor(Theme.key_chat_messagePanelText));
+            messageEditText.setHintColor(getThemedColor(Theme.key_chat_messagePanelHint));
+            messageEditText.setHintTextColor(getThemedColor(Theme.key_chat_messagePanelHint));
+            messageEditText.setCursorColor(getThemedColor(Theme.key_chat_messagePanelCursor));
+        }
         if (messageSendPreview != null) {
             messageSendPreview.updateColors();
         }

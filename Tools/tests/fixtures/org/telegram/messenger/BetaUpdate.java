@@ -1,1 +1,1 @@
-package org.telegram.messenger; public class BetaUpdate { public final int versionCode;public BetaUpdate(String version,int code,String log){versionCode=code;} }
+package org.telegram.messenger; public class BetaUpdate { public final int versionCode;public BetaUpdate(String version,int code,String log){versionCode=code;} public boolean higherThan(BetaUpdate update){return update==null||versionCode>update.versionCode;} }

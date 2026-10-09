@@ -1,0 +1,125 @@
+package org.telegram.messenger;
+
+import java.util.ArrayList;
+import java.util.Random;
+import java.util.TreeMap;
+
+/** Actual production color policy plus the extracted chat-only foreground dispatch. */
+public final class GlassContrast100Test {
+    private static int checks;
+    private static void check(boolean value, String label) {
+        checks++;
+        if (!value) throw new AssertionError(label);
+    }
+    private static class Theme {
+        static final int key_actionBarDefaultTitle = 1, key_actionBarDefaultSubtitle = 2,
+            key_actionBarDefaultIcon = 3, key_chat_status = 4, key_chat_topPanelTitle = 5,
+            key_chat_topPanelMessage = 6, key_chat_topPanelClose = 7, key_chat_topPanelLine = 8,
+            key_chat_messagePanelText = 9, key_chat_messagePanelHint = 10,
+            key_chat_messagePanelCursor = 11, key_chat_messagePanelIcons = 12,
+            key_chat_messagePanelCancelInlineBot = 13, key_chat_recordTime = 14,
+            key_glass_defaultIcon = 15, key_glass_defaultText = 16;
+    }
+    private static class LiteMode {
+        static final int FLAG_LIQUID_GLASS = 1;
+        static boolean enabled = true;
+        static boolean isEnabled(int flag) { return enabled; }
+    }
+    private static class SparseIntArray {
+        final TreeMap<Integer, Integer> values = new TreeMap<>();
+        int indexOfKey(int key) { return new ArrayList<>(values.keySet()).indexOf(key); }
+        int valueAt(int index) { return new ArrayList<>(values.values()).get(index); }
+        int size() { return values.size(); }
+        void clear() { values.clear(); }
+        void put(int key, int value) { values.put(key, value); }
+    }
+    private final SparseIntArray lumaGlassContrastColors = new SparseIntArray();
+    private boolean dark;
+    private boolean isDark() { return dark; }
+
+    @DISPATCH@
+
+    public static void main(String[] args) {
+        // Reproduce the reported light-theme grey-on-dark-wallpaper configuration.
+        int oldPanel = 0x75ffffff;
+        int oldHint = 0xffb2b2b2;
+        check(LumaGlassContrast.contrast(oldHint, LumaGlassContrast.composite(oldPanel, 0xff000000)) < 4.5,
+            "negative control: previous translucent daytime hint is not readable");
+        int panel = LumaGlassContrast.panel(oldPanel, false, true);
+        int text = LumaGlassContrast.foreground(oldHint, false, true);
+        double ratio = LumaGlassContrast.contrast(text, LumaGlassContrast.composite(panel, 0xff000000));
+        check(ratio >= 4.5, "reported case must meet text contrast");
+        System.out.printf("Reported case: panel #%08X, hint #%08X, contrast %.2f:1%n", panel, text, ratio);
+
+        int[] walls = {0xff000000, 0xffffffff, 0xff808080, 0xffff0000, 0xff00ff00,
+            0xff0000ff, 0xff111629, 0xffffff00, 0xff00ffff, 0xffff00ff};
+        int[] tints = {0xff000000, 0xffffffff, 0xff808080, 0xffff0000, 0xff00ff00,
+            0xff0000ff, 0xff7755aa, 0xffccdfff};
+        int[] foregrounds = {0xff000000, 0xffffffff, 0xff999999, 0xffb2b2b2,
+            0xff168acd, 0xff76bbff, 0xffaab4da, 0x80808080, 0x01ffffff};
+        for (int tint : tints) {
+            int previousAlpha = -1;
+            for (int alpha = 0; alpha <= 255; alpha++) {
+                int original = tint & 0x00ffffff | alpha << 24;
+                int protectedPanel = LumaGlassContrast.panel(original, false, true);
+                check((protectedPanel >>> 24) >= previousAlpha, "opacity control stays ordered");
+                previousAlpha = protectedPanel >>> 24;
+                check(previousAlpha >= 204, "daytime opacity floor");
+                check(alpha == 255 || previousAlpha < 255 || alpha >= 253, "glass stays translucent");
+                check((protectedPanel >>> 16 & 255) >= 238 && (protectedPanel >>> 8 & 255) >= 238
+                    && (protectedPanel & 255) >= 238, "bright tint floor");
+                check(LumaGlassContrast.panel(original, true, true) == original, "dark surface bit-identical");
+                check(LumaGlassContrast.panel(original, false, false) == original, "non-glass bit-identical");
+                // All three settings-generated alpha ranges, plus fully transparent/opaque themes.
+                if (alpha % 17 != 0 && alpha != 92 && alpha != 117 && alpha != 143 && alpha != 158 && alpha != 184) continue;
+                for (int wall : walls) for (int fg : foregrounds) {
+                    assertReadable(fg, protectedPanel, wall);
+                }
+            }
+        }
+        Random random = new Random(100);
+        for (int i = 0; i < 20000; i++) {
+            int originalPanel = random.nextInt();
+            int fg = (random.nextInt() & 0x00ffffff) | (1 + random.nextInt(255)) << 24;
+            int wall = random.nextInt() | 0xff000000;
+            assertReadable(fg, LumaGlassContrast.panel(originalPanel, false, true), wall);
+            check(LumaGlassContrast.foreground(fg, true, true) == fg, "dark foreground identity");
+            check(LumaGlassContrast.foreground(fg, false, false) == fg, "non-glass foreground identity");
+        }
+        check(LumaGlassContrast.foreground(0x00123456, false, true) == 0x00123456,
+            "intentionally transparent colors are not exposed");
+        check(LumaGlassContrast.foreground(0xff303030, false, true) == 0xff303030,
+            "already readable theme text is unchanged");
+
+        GlassContrast100Test delegate = new GlassContrast100Test();
+        for (int key = 1; key <= 16; key++) {
+            check(delegate.applyChatGlassContrast(key, oldHint) == text, "every scoped chat label is protected");
+        }
+        for (int excludedKey = -2; excludedKey < 0; excludedKey++) {
+            check(delegate.applyChatGlassContrast(excludedKey, 0xffffffff) == 0xffffffff,
+                "nonallowlisted bubble/white-on-blue button colors are untouched");
+        }
+        for (int i = 0; i < 1000; i++) {
+            int fg = random.nextInt();
+            check(delegate.applyChatGlassContrast(10, fg) == LumaGlassContrast.foreground(fg, false, true),
+                "extracted delegate agrees after cache churn");
+            check(delegate.lumaGlassContrastColors.size() <= 64, "bounded animation-color cache");
+        }
+        delegate.dark = true;
+        check(delegate.applyChatGlassContrast(10, oldHint) == oldHint, "day to night ignores cached correction");
+        delegate.dark = false;
+        LiteMode.enabled = false;
+        check(delegate.applyChatGlassContrast(10, oldHint) == oldHint, "glass off restores original label");
+        LiteMode.enabled = true;
+        check(delegate.applyChatGlassContrast(10, oldHint) == text, "glass on restores correction");
+        System.out.println("Glass contrast100: " + checks + " checks passed (pure color + actual extracted dispatch).");
+    }
+
+    private static void assertReadable(int fg, int panel, int wall) {
+        int adjusted = LumaGlassContrast.foreground(fg, false, true);
+        double contrast = LumaGlassContrast.contrast(adjusted, LumaGlassContrast.composite(panel, wall));
+        check(contrast >= 4.5, String.format("contrast %.5f fg=%08x adjusted=%08x panel=%08x wall=%08x",
+            contrast, fg, adjusted, panel, wall));
+        check((adjusted >>> 24) >= (fg >>> 24), "contrast repair must not make text fainter");
+    }
+}

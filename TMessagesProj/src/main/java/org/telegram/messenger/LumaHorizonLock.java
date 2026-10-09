@@ -22,7 +22,7 @@ public final class LumaHorizonLock implements SensorEventListener {
 
     public boolean start() {
         stop();
-        if (manager == null) return false;
+        if (!LumaBuildPolicy.allowsEnhancedRoundVideoStabilization() || manager == null) return false;
         Sensor sensor = manager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR);
         if (sensor == null) sensor = manager.getDefaultSensor(Sensor.TYPE_GRAVITY);
         if (sensor == null) return false;

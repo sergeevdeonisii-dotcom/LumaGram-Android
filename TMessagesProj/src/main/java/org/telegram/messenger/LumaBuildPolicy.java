@@ -22,6 +22,11 @@ public final class LumaBuildPolicy {
         return !BuildConfig.LUMA_FRIENDS_EDITION;
     }
 
+    /** Sensor-based horizon lock is personal-only; ordinary stabilization and FPS are public. */
+    public static boolean allowsEnhancedRoundVideoStabilization() {
+        return !BuildConfig.LUMA_FRIENDS_EDITION;
+    }
+
     /** The full edition's feed must never replace a restricted Friends APK. */
     public static boolean allowsBuiltInUpdates() {
         return !BuildConfig.LUMA_FRIENDS_EDITION;

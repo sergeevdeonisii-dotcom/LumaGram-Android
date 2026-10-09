@@ -87,6 +87,11 @@ public class MessagePreviewView extends FrameLayout {
         Drawable getWallpaperDrawable();
 
         boolean isWallpaperMotion();
+
+        /** This preview has an opaque themed header, not the chat's glass surface. */
+        default int getPreviewColor(int key) {
+            return getColor(key);
+        }
     }
 
     public static final int TAB_REPLY = 0;
@@ -2213,7 +2218,7 @@ public class MessagePreviewView extends FrameLayout {
             title = new AnimatedTextView.AnimatedTextDrawable(true, true, true);
             title.setAnimationProperties(.3f, 0, 430, CubicBezierInterpolator.EASE_OUT_QUINT);
             title.setTypeface(AndroidUtilities.bold());
-            title.setTextColor(Theme.getColor(Theme.key_actionBarDefaultTitle, resourcesProvider));
+            title.setTextColor(MessagePreviewView.this.resourcesProvider.getPreviewColor(Theme.key_actionBarDefaultTitle));
             title.setTextSize(dp(18));
             title.setEllipsizeByGradient(!LocaleController.isRTL);
             title.setCallback(this);
@@ -2221,7 +2226,7 @@ public class MessagePreviewView extends FrameLayout {
 
             subtitle = new AnimatedTextView.AnimatedTextDrawable(true, true, true);
             subtitle.setAnimationProperties(.3f, 0, 430, CubicBezierInterpolator.EASE_OUT_QUINT);
-            subtitle.setTextColor(Theme.getColor(Theme.key_actionBarDefaultSubtitle, resourcesProvider));
+            subtitle.setTextColor(MessagePreviewView.this.resourcesProvider.getPreviewColor(Theme.key_actionBarDefaultSubtitle));
             subtitle.setTextSize(dp(14));
             subtitle.setEllipsizeByGradient(!LocaleController.isRTL);
             subtitle.setCallback(this);

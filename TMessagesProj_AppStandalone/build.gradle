@@ -11,6 +11,27 @@ def lumaStorePassword = lumaSigning.getProperty('storePassword', RELEASE_STORE_P
 def lumaKeyAlias = lumaSigning.getProperty('keyAlias', RELEASE_KEY_ALIAS)
 def lumaKeyPassword = lumaSigning.getProperty('keyPassword', RELEASE_KEY_PASSWORD)
 
+// Run only for an actual non-debug build, never during IDE sync or debug builds.
+// CI deliberately supplies a disposable key; the release publisher checks the
+// final production certificate after local re-signing.
+def validateLumaReleaseSigning = {
+    if (!lumaSigningFile.isFile()
+            || ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].any {
+                !lumaSigning.getProperty(it)?.trim()
+            }) {
+        throw new GradleException('Lunagram release signing must be explicitly configured in local-signing/luma-signing.properties. Public fallback signing is not allowed.')
+    }
+    def configuredKey = rootProject.file(lumaSigning.getProperty('storeFile')).canonicalFile
+    def publicTestKey = rootProject.file('TMessagesProj/config/release.keystore').canonicalFile
+    if (!configuredKey.isFile() || configuredKey == publicTestKey
+            || (publicTestKey.isFile() && java.nio.file.Files.mismatch(configuredKey.toPath(), publicTestKey.toPath()) == -1L)) {
+        throw new GradleException('Lunagram release signing requires an existing, non-public configured key.')
+    }
+}
+def lumaReleaseSigningCheck = tasks.register('verifyLunagramReleaseSigning') {
+    doLast { validateLumaReleaseSigning() }
+}
+
 repositories {
     mavenCentral()
     google()
@@ -124,6 +145,9 @@ android {
     defaultConfig.versionCode = Integer.parseInt(APP_VERSION_CODE)
 
     applicationVariants.all { variant ->
+        if (variant.buildType.name != 'debug') {
+            variant.preBuildProvider.configure { dependsOn(lumaReleaseSigningCheck) }
+        }
         variant.outputs.all { output ->
             outputFileName = "app.apk"
             output.versionCodeOverride = defaultConfig.versionCode * 10 + variant.productFlavors.get(0).abiVersionCode
@@ -140,7 +164,7 @@ android {
     defaultConfig {
         minSdkVersion 21
         targetSdkVersion 36
-        versionName APP_VERSION_NAME + (String.valueOf(rootProject.findProperty('lumaFriendsEdition')) == 'true' ? '-friends' : '')
+        versionName APP_VERSION_NAME
         ndkVersion "27.2.12479018"
 
         multiDexEnabled true

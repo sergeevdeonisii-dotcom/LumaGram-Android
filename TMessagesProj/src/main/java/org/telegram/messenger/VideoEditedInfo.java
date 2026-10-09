@@ -61,6 +61,9 @@ public class VideoEditedInfo {
     public long estimatedSize;
     public long estimatedDuration;
     public boolean roundVideo;
+    /** Nonzero only for round videos requiring a verified, size-bounded export. Persisted for retries. */
+    public long roundVideoFileSizeLimit;
+    public int roundVideoRequestedFps;
     public boolean muted;
     public float volume = 1f;
     public long originalDuration;
@@ -418,7 +421,7 @@ public class VideoEditedInfo {
 
     public String getString() {
         String filters;
-        if (avatarStartTime != -1 || filterState != null || paintPath != null || blurPath != null || mediaEntities != null && !mediaEntities.isEmpty() || cropState != null) {
+        if (roundVideoFileSizeLimit > 0 || avatarStartTime != -1 || filterState != null || paintPath != null || blurPath != null || mediaEntities != null && !mediaEntities.isEmpty() || cropState != null) {
             int len = 10;
             if (filterState != null) {
                 len += 160;
@@ -438,7 +441,7 @@ public class VideoEditedInfo {
                 blurPathBytes = null;
             }
             SerializedData serializedData = new SerializedData(len);
-            serializedData.writeInt32(11);
+            serializedData.writeInt32(12);
             serializedData.writeInt64(avatarStartTime);
             serializedData.writeInt32(originalBitrate);
             if (filterState != null) {
@@ -540,6 +543,8 @@ public class VideoEditedInfo {
             } else {
                 serializedData.writeInt32(TLRPC.TL_null.constructor);
             }
+            serializedData.writeInt64(roundVideoFileSizeLimit);
+            serializedData.writeInt32(roundVideoRequestedFps);
             filters = Utilities.bytesToHex(serializedData.toByteArray());
             serializedData.cleanup();
         } else {
@@ -549,6 +554,8 @@ public class VideoEditedInfo {
     }
 
     public boolean parseString(String string) {
+        roundVideoFileSizeLimit = 0;
+        roundVideoRequestedFps = 0;
         if (string.length() < 6) {
             return false;
         }
@@ -689,6 +696,11 @@ public class VideoEditedInfo {
                                 }
                             }
                         }
+                        if (version >= 12) {
+                            long limit = serializedData.readInt64(false);
+                            roundVideoFileSizeLimit = limit > 0 ? LumaRoundVideoLimits.normalizeLimit(limit) : 0;
+                            roundVideoRequestedFps = serializedData.readInt32(false);
+                        }
                         serializedData.cleanup();
                     }
                 } else {
@@ -711,6 +723,7 @@ public class VideoEditedInfo {
     }
 
     public boolean needConvert() {
+        if (roundVideo && roundVideoFileSizeLimit > 0) return true;
         if (isStory) {
             if (!fromCamera) {
                 return true;

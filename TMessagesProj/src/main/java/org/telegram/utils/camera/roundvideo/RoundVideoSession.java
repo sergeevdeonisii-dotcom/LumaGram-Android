@@ -37,10 +37,12 @@ public final class RoundVideoSession {
         P480(480),
         /** 360 x 360 output. */
         P360(360),
-        /** 720 x 720 output; camera input still has to support the selected FPS. */
+        /** Legacy .82 preference, migrated to P640 before recording. */
         P720(720),
-        /** 1080 x 1080 output, where supported by the camera and encoder. */
-        P1080(1080);
+        /** Legacy .82 preference, migrated to P640 before recording. */
+        P1080(1080),
+        /** Maximum interoperable Telegram video-note output. */
+        P640(640);
 
         private final int size;
 
@@ -51,6 +53,11 @@ public final class RoundVideoSession {
         /** Returns the encoded width and height in pixels. */
         public int getSize() {
             return size;
+        }
+
+        /** Keep legacy enum names readable without emitting incompatible video notes. */
+        public OutputResolution forVideoNote() {
+            return size > 640 ? P640 : this;
         }
     }
 
@@ -95,7 +102,7 @@ public final class RoundVideoSession {
         }
 
         public static FrameRate fromValue(int value) {
-            return values()[Math.max(0, Math.min(3, value / 30 - 1))];
+            return value >= 60 ? FPS_60 : FPS_30;
         }
     }
 
@@ -249,7 +256,7 @@ public final class RoundVideoSession {
 
         /** Sets the required square encoder resolution. */
         public @NonNull Builder setOutputResolution(@NonNull OutputResolution resolution) {
-            outputResolution = resolution;
+            outputResolution = resolution.forVideoNote();
             return this;
         }
 
@@ -267,7 +274,7 @@ public final class RoundVideoSession {
 
         /** Sets the required capture frame-rate policy. */
         public @NonNull Builder setFrameRate(@NonNull FrameRate rate) {
-            frameRate = rate;
+            frameRate = FrameRate.fromValue(rate.getValue());
             return this;
         }
 

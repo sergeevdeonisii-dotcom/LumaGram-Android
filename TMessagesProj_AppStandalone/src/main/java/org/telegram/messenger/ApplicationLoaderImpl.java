@@ -163,9 +163,9 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
         LumaUpdaterController controller = LumaUpdaterController.getInstance();
         File downloaded = controller.getDownloadedFile();
         StringBuilder message = new StringBuilder();
-        message.append(LocaleController.formatString(org.telegram.messenger.R.string.LumaUpdateVersion, update.version));
+        message.append(LocaleController.formatString(org.telegram.messenger.R.string.LumaUpdateVersion, LumaUpdatePresentation.forDisplay(update.version)));
         if (!TextUtils.isEmpty(update.changelog)) {
-            message.append("\n\n").append(update.changelog);
+            message.append("\n\n").append(LumaUpdatePresentation.forDisplay(update.changelog));
         }
         message.append("\n\n").append(LocaleController.getString(org.telegram.messenger.R.string.LumaUpdateSecureInfo));
         new AlertDialog.Builder(context)
@@ -223,7 +223,7 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
                     try {
                         new AlertDialog.Builder(activity)
                                 .setTitle(LocaleController.getString(org.telegram.messenger.R.string.LumaUpdatesTitle))
-                                .setMessage(error)
+                                .setMessage(LumaUpdatePresentation.forDisplay(error))
                                 .setPositiveButton(LocaleController.getString(org.telegram.messenger.R.string.OK), null)
                                 .show();
                     } catch (Exception e) {

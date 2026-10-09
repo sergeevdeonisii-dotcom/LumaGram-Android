@@ -15,6 +15,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.LumaRoundVideoStabilization;
 import org.telegram.messenger.LumaRoundVideoStats;
+import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.utils.settings.SharedSettings;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -69,8 +70,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
     private static final RoundVideoSession.OutputResolution[] OUTPUT_RESOLUTIONS = {
             RoundVideoSession.OutputResolution.P360,
             RoundVideoSession.OutputResolution.P480,
-            RoundVideoSession.OutputResolution.P720,
-            RoundVideoSession.OutputResolution.P1080
+            RoundVideoSession.OutputResolution.P640
     };
 
     private RecyclerListView listView;
@@ -135,7 +135,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
         if (position == ROW_OUTPUT_RESOLUTION) {
             showChoice(
                     R.string.RoundVideoOutputResolution,
-                    new CharSequence[]{"360 × 360", "480 × 480", "720 × 720", "1080 × 1080"},
+                    new CharSequence[]{"360 × 360", "480 × 480", "640 × 640"},
                     index -> SharedSettings.roundVideoOutputResolution.set(OUTPUT_RESOLUTIONS[index])
             );
         } else if (position == ROW_CAMERA_RESOLUTION) {
@@ -188,6 +188,19 @@ public class RoundVideoSettingsActivity extends BaseFragment {
 
     private interface ChoiceHandler {
         void onChoice(int index);
+    }
+
+    static String[] stabilizationOptions() {
+        String off = LocaleController.getString(R.string.LumaRoundVideoStabilizationOff);
+        String standard = LocaleController.getString(R.string.LumaRoundVideoStabilizationStandard);
+        return LumaBuildPolicy.allowsEnhancedRoundVideoStabilization()
+                ? new String[]{off, standard, LocaleController.getString(R.string.LumaRoundVideoStabilizationEnhanced)}
+                : new String[]{off, standard};
+    }
+
+    static int stabilizationInfoResource() {
+        return LumaBuildPolicy.allowsEnhancedRoundVideoStabilization()
+                ? R.string.LumaRoundVideoStabilizationInfo : R.string.LumaRoundVideoStabilizationPublicInfo;
     }
 
     private static String cameraResolutionLabel(RoundVideoSession.CameraResolution resolution) {
@@ -265,14 +278,11 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 SlideChooseView cell = (SlideChooseView) holder.itemView;
                 cell.setCallback(null);
                 if (position == ROW_FRAME_RATE) {
-                    int fallback = enabled ? SharedSettings.roundVideoFrameRate.get().getValue() : LumaRoundVideoQuality.HIGH_FRAME_RATE;
-                    cell.setOptions(LumaRoundVideoQuality.getPreferredFrameRate(fallback) / 30 - 1, "30", "60", "90", "120");
+                    int fallback = enabled ? SharedSettings.getRoundVideoFrameRate().getValue() : LumaRoundVideoQuality.HIGH_FRAME_RATE;
+                    cell.setOptions(LumaRoundVideoQuality.getPreferredFrameRate(fallback) / 30 - 1, "30", "60");
                     cell.setCallback(LumaRoundVideoQuality::setFrameRateLevel);
                 } else {
-                    cell.setOptions(LumaRoundVideoStabilization.getMode(),
-                            LocaleController.getString(R.string.LumaRoundVideoStabilizationOff),
-                            LocaleController.getString(R.string.LumaRoundVideoStabilizationStandard),
-                            LocaleController.getString(R.string.LumaRoundVideoStabilizationEnhanced));
+                    cell.setOptions(LumaRoundVideoStabilization.getMode(), stabilizationOptions());
                     cell.setCallback(LumaRoundVideoStabilization::setMode);
                 }
             } else if (holder.getItemViewType() == TYPE_CHECK) {
@@ -297,7 +307,8 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 if (position == ROW_OUTPUT_RESOLUTION) {
                     cell.setTextAndValue(
                             LocaleController.getString(R.string.RoundVideoOutputResolution),
-                            SharedSettings.roundVideoOutputResolution.get().getSize() + "p",
+                            SharedSettings.getRoundVideoOutputResolution().getSize() + " × "
+                                    + SharedSettings.getRoundVideoOutputResolution().getSize(),
                             true
                     );
                 } else if (position == ROW_CAMERA_RESOLUTION) {
@@ -319,7 +330,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                         ? LocaleController.getString(R.string.RoundVideoGeneralInfo)
                         : position == ROW_LAST_RECORDING_INFO ? lastRecordingInfo()
                         : position == ROW_FRAME_RATE_INFO ? LocaleController.getString(R.string.LumaRoundVideoFpsInfo)
-                        : position == ROW_STABILIZATION_INFO ? LocaleController.getString(R.string.LumaRoundVideoStabilizationInfo)
+                        : position == ROW_STABILIZATION_INFO ? LocaleController.getString(stabilizationInfoResource())
                         : LocaleController.getString(R.string.RoundVideoCompositionInfo));
             }
         }

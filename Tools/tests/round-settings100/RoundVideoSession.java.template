@@ -1,0 +1,12 @@
+package org.telegram.utils.camera.roundvideo;
+import androidx.annotation.NonNull;
+
+/** Real extracted production enums and builder setters, not camera or codec execution. */
+public final class RoundVideoSession {
+    // PRODUCTION_ENUMS
+    public static final class Builder {
+        public OutputResolution outputResolution;
+        public FrameRate frameRate;
+        // PRODUCTION_SETTERS
+    }
+}

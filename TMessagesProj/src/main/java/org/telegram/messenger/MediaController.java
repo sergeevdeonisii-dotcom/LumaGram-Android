@@ -6611,6 +6611,14 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         int originalBitrate = info.originalBitrate;
         boolean isSecret = DialogObject.isEncryptedDialog(messageObject.getDialogId()) || info.forceFragmenting;
         final File cacheFile = new File(messageObject.messageOwner.attachPath);
+        final boolean constrainedRound = info.roundVideo && info.roundVideoFileSizeLimit > 0;
+        if (constrainedRound && (info.bitrate <= 0 || info.originalDuration <= 0
+                || videoPath == null || !new File(videoPath).isFile()
+                || sameFile(videoPath, cacheFile))) {
+            showRoundVideoPreparationError();
+            didWriteData(convertMessage, cacheFile, true, 0, 0, true, 1f);
+            return false;
+        }
         if (cacheFile.exists()) {
             cacheFile.delete();
         }
@@ -6634,7 +6642,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         }
 
         // Round videos already carry the recorder's validated rate. Trimming
-        // must not quietly turn 60/90/120 fps recordings into 59 or 30 fps.
+        // must not quietly turn supported 60 fps recordings into 59 or 30 fps.
         final int maximumFrameRate = info.roundVideo ? LumaRoundVideoQuality.MAX_FRAME_RATE : 59;
         if (framerate == 0) {
             framerate = info.roundVideo ? LumaRoundVideoQuality.FRAME_RATE : 25;
@@ -6674,6 +6682,9 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 if (info.canceled) {
                     return;
                 }
+                // The encoder's bitrate is a target, not a guaranteed file-size ceiling.
+                // No upload may observe this generation until its final MP4 is validated.
+                if (constrainedRound) return;
                 if (availableSize < 0) {
                     availableSize = cacheFile.length();
                 }
@@ -6703,7 +6714,9 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         );
         convertVideoParams.soundInfos.addAll(info.mixedSoundInfos);
         boolean error = videoConvertor.convertVideo(convertVideoParams);
-
+        if (!error && constrainedRound) {
+            error = !validatePreparedRoundVideo(cacheFile, info.roundVideoFileSizeLimit, duration);
+        }
 
         boolean canceled = info.canceled;
         if (!canceled) {
@@ -6717,9 +6730,48 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         }
 
         preferences.edit().putBoolean("isPreviousOk", true).apply();
+        if (constrainedRound && !canceled) {
+            if (error) {
+                showRoundVideoPreparationError();
+            } else {
+                LumaRoundVideoStats.inspectAsync(cacheFile,
+                    info.roundVideoRequestedFps > 0 ? info.roundVideoRequestedFps : info.framerate, "unknown");
+            }
+        }
         didWriteData(convertMessage, cacheFile, true, videoConvertor.getLastFrameTimestamp(), cacheFile.length(), error || canceled, 1f);
 
         return true;
+    }
+
+    private static boolean sameFile(String source, File destination) {
+        try {
+            return new File(source).getCanonicalFile().equals(destination.getCanonicalFile());
+        } catch (IOException error) {
+            // Fail closed before deleting a destination whose identity is unknown.
+            return true;
+        }
+    }
+
+    private static boolean validatePreparedRoundVideo(File output, long limit, long expectedDurationUs) {
+        if (!LumaRoundVideoLimits.acceptsOutput(output.length(), limit)) return false;
+        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+        try {
+            retriever.setDataSource(output.getAbsolutePath());
+            int width = Integer.parseInt(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH));
+            int height = Integer.parseInt(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT));
+            long durationMs = Long.parseLong(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));
+            return LumaRoundVideoLimits.acceptsVideo(width, height, durationMs, expectedDurationUs / 1000L);
+        } catch (Exception error) {
+            FileLog.e(error);
+            return false;
+        } finally {
+            try { retriever.release(); } catch (Exception ignored) {}
+        }
+    }
+
+    private static void showRoundVideoPreparationError() {
+        AndroidUtilities.runOnUIThread(() -> org.telegram.ui.Components.BulletinFactory.global()
+            .createErrorBulletin(LocaleController.getString(R.string.LumaRoundVideoPrepareFailed)).show());
     }
 
     public static int getVideoBitrate(String path) {

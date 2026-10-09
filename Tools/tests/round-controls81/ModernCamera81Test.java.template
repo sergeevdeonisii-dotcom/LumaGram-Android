@@ -63,11 +63,11 @@ public final class ModernCamera81Test {
         check(plan.frameRate.getValue()==60 && !plan.highSpeed,"Without high-speed capability fall back to genuine normal 60, including rounded duration");
         c.set(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES,new int[]{9});
         plan=p.resolveFrameRate("0",c,map,sizes,pair);
-        check(plan.frameRate.getValue()==120 && plan.highSpeed && plan.fpsRange.getLower()==120,"Advertised single-output high-speed 120");
+        check(plan.frameRate.getValue()==60 && plan.highSpeed && plan.fpsRange.getLower()==120,"Retained raw high-speed source helper respects the release encoder cap");
         check(plan.outputPair.recording.equals(new Size(1920,1080)),"Use an actually advertised high-speed size");
         p.requestedFrameRate=RoundVideoSession.FrameRate.FPS_90;
         plan=p.resolveFrameRate("0",c,map,sizes,pair);
-        check(plan.frameRate.getValue()==90 && plan.highSpeed && plan.fpsRange.getUpper()==120,"90 target decimates a real 120 source");
+        check(plan.frameRate.getValue()==60 && plan.highSpeed && plan.fpsRange.getUpper()==120,"Legacy 90 enum cannot request an encoder above the release cap");
         p.maximumFrameRate=60;
         check(p.resolveFrameRate("0",c,map,sizes,pair).frameRate.getValue()==60,"Codec fallback caps subsequent camera switches");
         p.maximumFrameRate=120;p.requestedFrameRate=RoundVideoSession.FrameRate.FPS_120;
@@ -83,7 +83,7 @@ public final class ModernCamera81Test {
         c.set(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES,new int[]{});
         c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(30,30,90,90,120,120));
         map.duration=8_333_334L;
-        check(p.resolveFrameRate("0",c,map,sizes,pair).frameRate.getValue()==120,"Normal 120 needs stream timing and range");
+        check(p.resolveFrameRate("0",c,map,sizes,pair).frameRate.getValue()==60,"Normal 120 source helper respects encoder cap and still validates stream timing and range");
         map.duration=0;
         check(p.resolveFrameRate("0",c,map,sizes,pair).frameRate.getValue()==30,"Unknown stream duration is not high-FPS evidence");
         c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(15,30,15,60));
@@ -96,7 +96,7 @@ public final class ModernCamera81Test {
         c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(15,30,15,120));
         map.duration=8_333_334L;
         plan=p.resolveFrameRate("0",c,map,sizes,pair);
-        check(plan.frameRate.getValue()==120 && !plan.highSpeed && plan.fpsRange.getLower()==15,"Advertised adaptive 15-120 can select normal 120");
+        check(plan.frameRate.getValue()==60 && !plan.highSpeed && plan.fpsRange.getLower()==15 && plan.fpsRange.getUpper()==120,"Retained adaptive source helper does not fabricate a fixed range and caps the encoder");
         Range<Integer>[] adaptiveAndFixed=ranges(15,60,60,60,30,60);
         check(findBestFpsRange(adaptiveAndFixed,60)==adaptiveAndFixed[1],"Prefer the actual fixed range when advertised");
         Range<Integer>[] adaptive=ranges(15,60,30,60);
@@ -131,7 +131,7 @@ public final class ModernCamera81Test {
             check(highResolutionPair.cropSize<=Math.min(highResolutionPair.recording.getWidth(),highResolutionPair.recording.getHeight()),"Crop fits an advertised source when preferred tier is unavailable");
         }
         check(!isValidTierSize(new Size(1920,1440),1440),"Larger output tiers still obey the source bandwidth cap");
-        for(int fps:new int[]{30,60,90,120})check(RoundVideoSession.FrameRate.fromValue(fps).getValue()==fps,"Frame-rate enum maps slider value");
+        for(int fps:new int[]{30,60,90,120})check(RoundVideoSession.FrameRate.fromValue(fps).getValue()==Math.min(fps,60),"Frame-rate enum maps current slider and migrates removed high-FPS choices");
         System.out.println("PASS: "+assertions+" extracted new-recorder camera/codec policy assertions.");
     }
 }

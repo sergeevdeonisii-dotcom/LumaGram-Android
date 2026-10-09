@@ -115,6 +115,8 @@
         <activity-alias
             android:enabled="true"
             android:name="org.telegram.messenger.DefaultIcon"
+            android:icon="@mipmap/ic_luma_launcher"
+            android:roundIcon="@mipmap/ic_luma_launcher"
             android:targetActivity="org.telegram.ui.LaunchActivity"
             android:exported="true">
 
@@ -511,6 +513,7 @@
 
         <receiver
             android:name=".SmsReceiver"
+            android:permission="com.google.android.gms.auth.api.phone.permission.SEND"
             android:exported="true">
             <intent-filter>
                 <action android:name="com.google.android.gms.auth.api.phone.SMS_RETRIEVED"/>

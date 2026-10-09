@@ -1,0 +1,70 @@
+package org.telegram.messenger;
+import java.util.*;
+import org.telegram.tgnet.SerializedData;
+
+public class VideoEditedInfo {
+    public long startTime = -1, endTime = -1, avatarStartTime = -1, originalDuration, estimatedDuration, estimatedSize, videoOffset, roundVideoFileSizeLimit;
+    public int rotationValue, originalWidth, originalHeight, resultWidth, resultHeight, bitrate, originalBitrate, framerate = 30, roundVideoRequestedFps;
+    public String originalPath, paintPath, blurPath;
+    public boolean roundVideo, muted, isPhoto, isStory, fromCamera, isSticker, notReadyYet, canceled, needUpdateProgress;
+    public float volume = 1f;
+    public Object file, encryptedFile;
+    public byte[] key, iv;
+    public MediaController.SavedFilterState filterState;
+    public MediaController.CropState cropState;
+    public ArrayList<MediaEntity> mediaEntities;
+    public ArrayList<Object> mixedSoundInfos = new ArrayList<>();
+    public CollageLayout collage;
+    public ArrayList<Part> collageParts;
+    static class MediaEntity {
+        MediaEntity(SerializedData data, boolean full) { throw new UnsupportedOperationException(); }
+        void serializeTo(SerializedData data, boolean full) { throw new UnsupportedOperationException(); }
+    }
+    static class Part {
+        Object part;
+        void readParams(SerializedData data, boolean full) { throw new UnsupportedOperationException(); }
+        void serializeToStream(SerializedData data) { throw new UnsupportedOperationException(); }
+    }
+    @@GET_STRING@@
+    @@PARSE_STRING@@
+    @@NEED_CONVERT@@
+}
+class CollageLayout {
+    ArrayList<Object> parts = new ArrayList<>();
+    CollageLayout(String value) { throw new UnsupportedOperationException(); }
+}
+class PointF { float x, y; PointF(float x, float y) { this.x = x; this.y = y; } }
+class PhotoFilterView {
+    static class CurvesValue { float blacksLevel, shadowsLevel, midtonesLevel, highlightsLevel, whitesLevel; }
+    static class CurvesToolValue { CurvesValue luminanceCurve, redCurve, greenCurve, blueCurve; }
+}
+class MediaController {
+    VideoEditedInfo info = new VideoEditedInfo();
+    java.io.File cacheFile = new java.io.File("nonexistent-output");
+    boolean constrainedRound;
+    Object convertMessage;
+    int writes;
+    void didWriteData(Object message, java.io.File file, boolean last, long timestamp, long bytes, boolean error, float progress) { writes++; }
+    class Callback {
+        private long lastAvailableSize;
+        @@UPLOAD_CALLBACK@@
+    }
+    static class SavedFilterState {
+        float enhanceValue, softenSkinValue, exposureValue, contrastValue, warmthValue, saturationValue, fadeValue,
+            highlightsValue, shadowsValue, vignetteValue, grainValue, sharpenValue, blurExcludeSize, blurExcludeBlurSize, blurAngle;
+        int tintShadowsColor, tintHighlightsColor, blurType;
+        PointF blurExcludePoint;
+        PhotoFilterView.CurvesToolValue curvesToolValue;
+    }
+    static class CropState {
+        float cropPx, cropPy, cropPw, cropPh, cropScale, cropRotate;
+        int transformWidth, transformHeight, transformRotation;
+        boolean mirrored;
+        boolean isEmpty() { return false; }
+    }
+}
+class TLRPC { static class TL_null { static final int constructor = 0x56730bcc; } }
+class Utilities {
+    static String bytesToHex(byte[] bytes) { return java.util.HexFormat.of().formatHex(bytes); }
+    static byte[] hexToBytes(String value) { return java.util.HexFormat.of().parseHex(value); }
+}

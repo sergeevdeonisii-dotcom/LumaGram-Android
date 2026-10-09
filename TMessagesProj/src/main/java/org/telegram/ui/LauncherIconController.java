@@ -2,13 +2,32 @@ package org.telegram.ui;
 
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
 
 public class LauncherIconController {
+    private static final String RESTORED_ORIGINAL_ICON = "luma_original_icon_restored_100";
+
     public static void tryFixLauncherIconIfNeeded() {
+        Context context = ApplicationLoader.applicationContext;
+        SharedPreferences preferences = context.getSharedPreferences("systemConfig", Context.MODE_PRIVATE);
+        if (!preferences.getBoolean(RESTORED_ORIGINAL_ICON, false)) {
+            // Restore the old brand once. Other chosen icons survive the update; Black Hole stays
+            // available and can be selected again without being reset on every process launch.
+            try {
+                if (isEnabled(LauncherIcon.BLACK_HOLE)) {
+                    setIcon(LauncherIcon.DEFAULT);
+                }
+                preferences.edit().putBoolean(RESTORED_ORIGINAL_ICON, true).apply();
+            } catch (RuntimeException error) {
+                // A cosmetic migration must not prevent opening the app on an OEM launcher.
+                FileLog.e(error);
+            }
+        }
         for (LauncherIcon icon : LauncherIcon.values()) {
             if (isEnabled(icon)) {
                 return;
@@ -37,7 +56,7 @@ public class LauncherIconController {
     }
 
     public enum LauncherIcon {
-        DEFAULT("DefaultIcon", R.drawable.icon_background_sa, R.mipmap.icon_foreground_sa, R.string.AppIconDefault),
+        DEFAULT("DefaultIcon", R.drawable.luma_launcher_background, R.drawable.icon_plane, R.string.AppIconDefault),
         BLACK_HOLE("BlackHoleIcon", R.drawable.bhg_icon_blackhole_background, R.drawable.bhg_icon_blackhole_foreground, R.string.AppIconBlackHole),
         GRAPHITE("LumaGraphiteIcon", R.drawable.luma_icon_graphite_background, R.drawable.luma_icon_silver_foreground, R.string.AppIconLumaGraphite),
         NAVY("LumaNavyIcon", R.drawable.luma_icon_navy_background, R.drawable.luma_icon_silver_foreground, R.string.AppIconLumaNavy),

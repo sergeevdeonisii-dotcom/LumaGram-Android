@@ -18,12 +18,13 @@ public final class RoundControls81Test {
         LumaRoundVideoQuality.Profile base = LumaRoundVideoQuality.baseline(384, 1000, 64);
         for (int level = 0; level <= 3; level++) {
             LumaRoundVideoQuality.setFrameRateLevel(level);
-            int fps = (level + 1) * 30;
-            check(LumaRoundVideoQuality.getPreferredFrameRate() == fps && LumaRoundVideoQuality.getFrameRateLevel() == level, "Slider persists " + fps);
+            int safeLevel = Math.min(level, 1);
+            int fps = (safeLevel + 1) * 30;
+            check(LumaRoundVideoQuality.getPreferredFrameRate() == fps && LumaRoundVideoQuality.getFrameRateLevel() == safeLevel, "Release slider persists only 30/60, including old higher levels");
             check(LumaRoundVideoQuality.prefersHighFrameRateCapture() == (fps > 30), "High FPS selects a capable Camera2 path, 30 keeps default API");
             check(LumaRoundVideoQuality.getPreferredFrameRate(30) == fps, "Common slider overrides either recorder default");
             LumaRoundVideoQuality.Profile p = LumaRoundVideoQuality.forCamera(base, true, fps);
-            check(p.frameRate == fps && p.videoBitrate == 6_000_000 * (level + 1), "Frame rate/bitrate agree");
+            check(p.frameRate == fps && p.videoBitrate == 6_000_000 * (safeLevel + 1), "Frame rate/bitrate agree");
             check(LumaRoundVideoQuality.forCamera(base, true, 30).frameRate == 30, "Cannot invent camera support");
             VideoEditedInfo info = new VideoEditedInfo();
             LumaRoundVideoQuality.applyMetadata(info, p);
@@ -36,9 +37,10 @@ public final class RoundControls81Test {
             }
         }
         LumaRoundVideoQuality.setFrameRateLevel(999);
-        check(LumaRoundVideoQuality.getPreferredFrameRate() == 120, "Corrupt upper slider input clamped");
+        check(LumaRoundVideoQuality.getPreferredFrameRate() == 60, "Corrupt upper slider input clamped to release maximum");
         LumaRoundVideoQuality.Profile p = LumaRoundVideoQuality.forCamera(base, true, 120);
-        for (int expected : new int[] {90, 60, 30}) {
+        check(p.frameRate == 60, "High-speed camera capability cannot override the release recording cap");
+        for (int expected : new int[] {30}) {
             p = LumaRoundVideoQuality.fallback(p, base);
             check(p.frameRate == expected && p.highQuality, "Stepwise codec fallback " + expected);
         }
@@ -49,6 +51,15 @@ public final class RoundControls81Test {
         check(LumaRoundVideoQuality.supportsTargetFrameRate(Arrays.asList(new int[]{30,30},new int[]{120,120}),120,1), "Real 120 range accepted");
         check(LumaRoundVideoQuality.supportsTargetFrameRate(Collections.singletonList(new int[]{15,60}),60,1), "Adaptive normal60 accepted");
         check(LumaRoundVideoQuality.supportsTargetFrameRate(Collections.singletonList(new int[]{15,120}),120,1), "Adaptive normal120 accepted");
+        check(LumaRoundVideoQuality.normalizeFrameRate(120) == 120, "Legacy high-FPS utility math remains available independently of recording preference");
+        for (int legacyFps : new int[]{90,120}) {
+            LumaRoundVideoQuality.FrameGate legacyGate = new LumaRoundVideoQuality.FrameGate(legacyFps);
+            for (int frame=0; frame<legacyFps*3; frame++) {
+                long timestamp=1_000_000_000L+Math.round(frame*1_000_000_000.0/legacyFps);
+                check(legacyGate.accept(timestamp,1), "Legacy high-FPS utility retains every genuine frame");
+                check(!legacyGate.accept(timestamp,1), "Legacy utility never repeats frames");
+            }
+        }
         check(!LumaRoundVideoQuality.supportsTargetFrameRate(Collections.singletonList(new int[]{0,120}),120,1), "Malformed adaptive range rejected");
         for (int target : new int[]{30,60,90}) {
             LumaRoundVideoQuality.FrameGate gate = new LumaRoundVideoQuality.FrameGate(target,120);

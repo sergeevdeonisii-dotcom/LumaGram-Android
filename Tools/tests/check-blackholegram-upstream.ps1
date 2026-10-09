@@ -19,7 +19,8 @@ foreach ($resource in @('LumaUpdateVersion','LumaUpdateSecureInfo','LumaUpdatesT
     Check ($standaloneLoader.Contains("org.telegram.messenger.R.string.$resource") -and $standaloneLoader -notmatch "(?<!\.)\bR\.string\.$resource\b") "Standalone updater uses the library resource namespace ($resource)"
 }
 Check ((Source 'gradle.properties') -match '(?m)^APP_PACKAGE=org\.luma\.liquid\r?$') 'Legacy Android package is unchanged'
-Check ((Source 'gradle.properties') -match '(?m)^APP_VERSION_NAME=12\.10\.6-lunagram\.\d+\r?$') 'Version identifies the retained upstream base and Lunagram brand'
+Check ((Source 'gradle.properties') -match '(?m)^APP_VERSION_NAME=1\.0\.0\r?$') 'Lunagram product version is 1.0.0'
+Check ((Source ($java + 'messenger/BuildVars.java')).Contains('TELEGRAM_BASE_VERSION = "12.10.6"')) 'Upstream base stays separately identified'
 Check ((Source ($java + 'tgnet/TLRPC.java')) -match 'LAYER = 229;') 'Telegram layer 229 is present'
 foreach ($locale in @('values', 'values-ru')) {
     $xml = [xml](Source "TMessagesProj/src/main/res/$locale/strings.xml")

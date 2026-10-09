@@ -10,6 +10,7 @@ const RELEASES = {
   '80': { version: '12.10.6-lunagram.80', code: 71599 },
   '81': { version: '12.10.6-lunagram.81', code: 71609 },
   '82': { version: '12.10.6-lunagram.82', code: 71619 },
+  '100': { version: '1.0.0', code: 71629, unifiedVersionName: true },
 };
 
 function requireValue(condition, message) {
@@ -19,11 +20,11 @@ function requireValue(condition, message) {
 export function expectedArtifact(edition, release = '79') {
   requireValue(edition === 'full' || edition === 'friends', 'Unknown APK edition.');
   requireValue(Object.hasOwn(RELEASES, release), 'Unknown APK release.');
-  const { version, code } = RELEASES[release];
+  const { version, code, unifiedVersionName } = RELEASES[release];
   return {
     edition,
     fileName: `Lunagram-${version}-${edition}-temporary.apk`,
-    versionName: version + (edition === 'friends' ? '-friends' : ''),
+    versionName: version + (edition === 'friends' && !unifiedVersionName ? '-friends' : ''),
     versionCode: code,
     friendsEdition: edition === 'friends',
   };

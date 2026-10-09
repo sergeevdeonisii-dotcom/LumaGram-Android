@@ -368,7 +368,15 @@ public final class LumaUpdaterController {
         if (!LumaBuildPolicy.allowsBuiltInUpdates() || versionCode <= getCurrentVersionCode() || TextUtils.isEmpty(version)) {
             return null;
         }
-        return new BetaUpdate(version, versionCode, changelog);
+        return new BetaUpdate(version, versionCode, changelog) {
+            @Override
+            public boolean higherThan(BetaUpdate update) {
+                // Lunagram owns a monotonically increasing Android version code.
+                // A marketing-name reset (12.10.x -> 1.0.0) is not a downgrade.
+                // Keep upstream BetaUpdate's name policy unchanged for other channels.
+                return update == null || versionCode > update.versionCode;
+            }
+        };
     }
 
     public void addDownloadListener(DownloadListener listener) {

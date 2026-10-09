@@ -1,0 +1,44 @@
+package org.telegram.ui;
+import org.telegram.messenger.LumaBuildPolicy;
+import org.telegram.messenger.LumaRoundVideoQuality;
+import org.telegram.messenger.LumaRoundVideoStabilization;
+import org.telegram.utils.camera.roundvideo.RoundVideoSession;
+import org.telegram.utils.settings.SharedSettings;
+
+/** Runs the exact settings choices/edition helpers extracted from production. */
+public final class RoundSettingsUiProbe {
+    static final class R {
+        static final class string {
+            static final int LumaRoundVideoStabilizationOff=0, LumaRoundVideoStabilizationStandard=1,
+                    LumaRoundVideoStabilizationEnhanced=2, LumaRoundVideoStabilizationInfo=3,
+                    LumaRoundVideoStabilizationPublicInfo=4;
+        }
+    }
+    static final class LocaleController { static String getString(int value) { return String.valueOf(value); } }
+    public static final class SlideChooseView {
+        public int index;
+        public String[] choices;
+        void setOptions(int index, String... choices) {
+            this.index=index;this.choices=choices;
+            if(index<0||index>=choices.length)throw new AssertionError("Slider index out of range");
+        }
+    }
+    // PRODUCTION_RESOLUTIONS
+    // PRODUCTION_HELPERS
+    public static int[] outputSizes() {
+        int[] result=new int[OUTPUT_RESOLUTIONS.length];
+        for(int i=0;i<result.length;i++)result[i]=OUTPUT_RESOLUTIONS[i].getSize();
+        return result;
+    }
+    public static SlideChooseView fps(boolean enabled) {
+        SlideChooseView cell=new SlideChooseView();
+        // PRODUCTION_FPS_OPTIONS
+        return cell;
+    }
+    public static SlideChooseView stabilization() {
+        SlideChooseView cell=new SlideChooseView();
+        // PRODUCTION_STABILIZATION_OPTIONS
+        return cell;
+    }
+    public static int info() { return stabilizationInfoResource(); }
+}

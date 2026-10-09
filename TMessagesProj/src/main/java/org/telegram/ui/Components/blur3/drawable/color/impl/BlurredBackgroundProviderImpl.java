@@ -8,6 +8,7 @@ import androidx.core.graphics.ColorUtils;
 import androidx.core.math.MathUtils;
 
 import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LumaGlassContrast;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.SharedConfig;
@@ -157,7 +158,8 @@ public class BlurredBackgroundProviderImpl {
                     final float alpha = LiteMode.getLiquidGlassChatPanelAlpha(isDark);
                     final int colorBg = LumaAdaptiveGlassPalette.tint(
                         Theme.getColor(Theme.key_chat_messagePanelBackground, r), r, true);
-                    return Theme.multAlpha(colorBg, alpha);
+                    return LumaGlassContrast.panel(Theme.multAlpha(colorBg, alpha), isDark,
+                            LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS));
                 })
                 .setStrokeColorTop(0xFFFFFFFF, 0x46FFFFFF)
                 .setStrokeColorBottom(0xFFFFFFFF, 0x24FFFFFF)
@@ -179,7 +181,8 @@ public class BlurredBackgroundProviderImpl {
                     final float alpha = LiteMode.getLiquidGlassChatPanelAlpha(isDark);
                     final int colorBg = LumaAdaptiveGlassPalette.tint(
                         Theme.getColor(Theme.key_chat_topPanelBackground, r), r, false);
-                    return Theme.multAlpha(colorBg, alpha);
+                    return LumaGlassContrast.panel(Theme.multAlpha(colorBg, alpha), isDark,
+                            LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS));
                 })
                 .setStrokeColorTop(0xFFFFFFFF, 0x20FFFFFF)
                 .setStrokeColorBottom(0xFFFFFFFF, 0x14FFFFFF)
@@ -217,7 +220,8 @@ public class BlurredBackgroundProviderImpl {
                 final float alpha = liquidAlpha(0.85f);
                 final int colorBg = LumaAdaptiveGlassPalette.tint(
                     Theme.getColor(Theme.key_chat_topPanelBackground, r), r, false);
-                return Theme.multAlpha(colorBg, alpha);
+                return LumaGlassContrast.panel(Theme.multAlpha(colorBg, alpha), isDark,
+                        LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS));
             })
             .setStrokeColorTop(0, 0)
             .setStrokeColorBottom(0, 0)

@@ -534,6 +534,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
     public int maxCaptionLength;
     public int roundVideoSize;
+    public long roundVideoMaxFileSize;
     public int roundVideoBitrate;
     public int roundAudioBitrate;
     public boolean blockedCountry;
@@ -1633,6 +1634,7 @@ public class MessagesController extends BaseController implements NotificationCe
         pmReadDateExpirePeriod = mainPreferences.getInt("pmReadDateExpirePeriod", 7 * 86400);
         suggestStickersApiOnly = mainPreferences.getBoolean("suggestStickersApiOnly", false);
         roundVideoSize = mainPreferences.getInt("roundVideoSize", 384);
+        roundVideoMaxFileSize = LumaRoundVideoLimits.normalizeLimit(mainPreferences.getLong("roundVideoMaxFileSize", LumaRoundVideoLimits.DEFAULT_MAX_FILE_BYTES));
         roundVideoBitrate = mainPreferences.getInt("roundVideoBitrate", 1000);
         roundAudioBitrate = mainPreferences.getInt("roundAudioBitrate", 64);
         pendingSuggestions = mainPreferences.getStringSet("pendingSuggestions", null);
@@ -3262,6 +3264,20 @@ public class MessagesController extends BaseController implements NotificationCe
                         for (int b = 0, N2 = jsonObject.value.size(); b < N2; b++) {
                             TLRPC.TL_jsonObjectValue value2 = jsonObject.value.get(b);
                             switch (value2.key) {
+                                case "max_size": {
+                                    if (value2.value instanceof TLRPC.TL_jsonNumber) {
+                                        double valueBytes = ((TLRPC.TL_jsonNumber) value2.value).value;
+                                        if (Double.isFinite(valueBytes) && valueBytes > 0 && valueBytes <= Integer.MAX_VALUE) {
+                                            long maximum = LumaRoundVideoLimits.normalizeLimit((long) valueBytes);
+                                            if (maximum != roundVideoMaxFileSize) {
+                                                roundVideoMaxFileSize = maximum;
+                                                editor.putLong("roundVideoMaxFileSize", maximum);
+                                                changed = true;
+                                            }
+                                        }
+                                    }
+                                    break;
+                                }
                                 case "diameter": {
                                     if (value2.value instanceof TLRPC.TL_jsonNumber) {
                                         TLRPC.TL_jsonNumber number = (TLRPC.TL_jsonNumber) value2.value;

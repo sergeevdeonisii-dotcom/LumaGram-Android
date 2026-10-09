@@ -1870,6 +1870,21 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         return Theme.getColor(key, resourcesProvider);
     }
 
+    /** Rebind cached chat labels when glass or day/night settings change while away. */
+    public void updateChatTextColors() {
+        titleTextView.setTextColor(getThemedColor(Theme.key_actionBarDefaultTitle));
+        final int subtitleKey = lastSubtitle != null || lastSubtitleColorKey < 0
+            ? Theme.key_actionBarDefaultSubtitle : lastSubtitleColorKey;
+        final int subtitleColor = overrideSubtitleColor != null
+            ? overrideSubtitleColor : getThemedColor(subtitleKey);
+        if (subtitleTextView != null) {
+            subtitleTextView.setTextColor(subtitleColor);
+        }
+        if (animatedSubtitleTextView != null) {
+            animatedSubtitleTextView.setTextColor(subtitleColor);
+        }
+    }
+
     public void updateColors() {
         if (currentTypingDrawable != null) {
             currentTypingDrawable.setColor(getThemedColor(Theme.key_chat_status));

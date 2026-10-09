@@ -12,7 +12,7 @@ public final class SharedSettings {
         BooleanSetting.of("round_video_camera2_enabled", BuildConfig.DEBUG_VERSION);
 
     public static final EnumSetting<RoundVideoSession.OutputResolution> roundVideoOutputResolution =
-        EnumSetting.of("round_video_output_resolution", RoundVideoSession.OutputResolution.P720);
+        EnumSetting.of("round_video_output_resolution", RoundVideoSession.OutputResolution.P640);
 
     public static final EnumSetting<RoundVideoSession.CameraResolution> roundVideoCameraResolution =
         EnumSetting.of("round_video_camera_resolution", RoundVideoSession.CameraResolution.HIGH);
@@ -28,6 +28,33 @@ public final class SharedSettings {
 
     public static final EnumSetting<RoundVideoSession.CameraFacing> roundVideoLastCamera =
         EnumSetting.of("round_video_last_camera", RoundVideoSession.CameraFacing.FRONT);
+
+    /** Migrate .82's unsupported encoded sizes, retaining lower explicit choices. */
+    public static RoundVideoSession.OutputResolution getRoundVideoOutputResolution() {
+        RoundVideoSession.OutputResolution stored;
+        try {
+            stored = roundVideoOutputResolution.get();
+        } catch (ClassCastException invalidRestoredValue) {
+            stored = RoundVideoSession.OutputResolution.P640;
+            roundVideoOutputResolution.set(stored);
+        }
+        RoundVideoSession.OutputResolution compatible = stored.forVideoNote();
+        if (compatible != stored) roundVideoOutputResolution.set(compatible);
+        return compatible;
+    }
+
+    public static RoundVideoSession.FrameRate getRoundVideoFrameRate() {
+        RoundVideoSession.FrameRate stored;
+        try {
+            stored = roundVideoFrameRate.get();
+        } catch (ClassCastException invalidRestoredValue) {
+            stored = RoundVideoSession.FrameRate.FPS_30;
+            roundVideoFrameRate.set(stored);
+        }
+        RoundVideoSession.FrameRate compatible = RoundVideoSession.FrameRate.fromValue(stored.getValue());
+        if (compatible != stored) roundVideoFrameRate.set(compatible);
+        return compatible;
+    }
 
     private SharedSettings() {
     }

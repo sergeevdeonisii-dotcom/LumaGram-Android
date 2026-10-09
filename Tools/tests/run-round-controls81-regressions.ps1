@@ -9,9 +9,11 @@ New-Item -ItemType Directory -Path $classes -Force | Out-Null
 $sources=@(
     'TMessagesProj/src/main/java/org/telegram/messenger/LumaRoundVideoQuality.java',
     'TMessagesProj/src/main/java/org/telegram/messenger/LumaRoundVideoStabilization.java',
+    'TMessagesProj/src/main/java/org/telegram/messenger/LumaBuildPolicy.java',
     'TMessagesProj/src/main/java/org/telegram/messenger/LumaHorizonState.java',
     'Tools/tests/round-controls81/RoundControls81Test.java',
     'Tools/tests/typing-fixtures/org/telegram/messenger/MessagesController.java',
+    'Tools/tests/fixtures/org/telegram/messenger/BuildConfig.java',
     'Tools/tests/fixtures/android/content/SharedPreferences.java',
     'Tools/tests/round-video-fixtures/org/telegram/messenger/VideoEditedInfo.java'
 ) | ForEach-Object { Join-Path $repo $_ }

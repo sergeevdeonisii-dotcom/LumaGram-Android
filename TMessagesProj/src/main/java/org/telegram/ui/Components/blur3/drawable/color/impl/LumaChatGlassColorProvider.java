@@ -2,6 +2,7 @@ package org.telegram.ui.Components.blur3.drawable.color.impl;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LumaGlassContrast;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.blur3.drawable.color.BlurredBackgroundColorProvider;
 
@@ -38,7 +39,7 @@ public class LumaChatGlassColorProvider implements BlurredBackgroundColorProvide
         }
         final int tintedColor = LumaAdaptiveGlassPalette.tint(themedColor, resourcesProvider, true);
         final float alpha = LiteMode.getLiquidGlassChatPanelAlpha(dark);
-        backgroundColor = Theme.multAlpha(tintedColor, alpha);
+        backgroundColor = LumaGlassContrast.panel(Theme.multAlpha(tintedColor, alpha), dark, true);
         updateChrome(tintedColor);
     }
 

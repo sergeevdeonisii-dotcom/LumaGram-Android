@@ -34,6 +34,7 @@ import org.telegram.ui.Components.LayoutHelper;
 public class BusinessBotButton extends FrameLayout {
 
     private final int currentAccount;
+    private final Theme.ResourcesProvider resourcesProvider;
 
     private final AvatarDrawable avatarDrawable;
     private final BackupImageView avatarView;
@@ -53,6 +54,7 @@ public class BusinessBotButton extends FrameLayout {
         super(context);
 
         this.currentAccount = chatActivity.getCurrentAccount();
+        this.resourcesProvider = resourcesProvider;
         paused = false;
 
         avatarView = new BackupImageView(context);
@@ -151,6 +153,16 @@ public class BusinessBotButton extends FrameLayout {
             itemOptions.show();
         });
         addView(menuView, LayoutHelper.createFrame(32, 32, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 8, 0, 6, 0));
+    }
+
+    public void updateColors() {
+        titleView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, resourcesProvider));
+        subtitleView.setTextColor(Theme.getColor(Theme.key_chat_topPanelMessage, resourcesProvider));
+        menuView.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_chat_topPanelClose, resourcesProvider), PorterDuff.Mode.MULTIPLY));
+        // The stop/start label is on an opaque accent button, not the glass surface.
+        pauseButton.setTextColor(Theme.getColor(Theme.key_featuredStickers_buttonText, resourcesProvider));
+        int accent = Theme.getColor(Theme.key_featuredStickers_addButton, resourcesProvider);
+        pauseButton.setBackgroundDrawable(Theme.createSimpleSelectorRoundRectDrawable(dp(14), accent, Theme.blendOver(accent, Theme.multAlpha(Color.WHITE, .12f))));
     }
 
     private float leftMargin;

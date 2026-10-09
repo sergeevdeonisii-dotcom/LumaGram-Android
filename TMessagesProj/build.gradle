@@ -135,7 +135,7 @@ if (!(lumaFriendsEditionValue in ['true', 'false'])) {
     throw new GradleException('lumaFriendsEdition must be exactly true or false')
 }
 def lumaFriendsEdition = lumaFriendsEditionValue == 'true'
-def lumaBuildVersionName = APP_VERSION_NAME + (lumaFriendsEdition ? '-friends' : '')
+def lumaBuildVersionName = APP_VERSION_NAME
 android {
     compileSdkVersion 36
     buildToolsVersion '36.0.0'

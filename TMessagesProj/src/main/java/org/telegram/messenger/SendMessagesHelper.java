@@ -11900,6 +11900,17 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 String path = videoPath;
                 String originalPath = videoPath;
                 File temp = new File(originalPath);
+                final boolean constrainedRound = LumaRoundVideoLimits.prepareForSend(videoEditedInfo, temp,
+                    accountInstance.getMessagesController().roundVideoMaxFileSize);
+                if (constrainedRound) {
+                    // Never reuse either kind of growing/original upload for the recompressed MP4.
+                    FileLoader.getInstance(accountInstance.getCurrentAccount()).cancelFileUpload(videoPath, false);
+                    FileLoader.getInstance(accountInstance.getCurrentAccount()).cancelFileUpload(videoPath, true);
+                } else if (isRound && !videoEditedInfo.notReadyYet) {
+                    LumaRoundVideoStats.inspectAsync(temp,
+                        videoEditedInfo.roundVideoRequestedFps > 0 ? videoEditedInfo.roundVideoRequestedFps : videoEditedInfo.framerate,
+                        "unknown");
+                }
                 long startTime = 0;
 
                 originalPath += temp.length() + "_" + temp.lastModified();
@@ -11914,7 +11925,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 }
                 TLRPC.TL_document document = null;
                 String parentObject = null;
-                if (!isEncrypted && ttl == 0 && (videoEditedInfo == null || videoEditedInfo.filterState == null && videoEditedInfo.paintPath == null && videoEditedInfo.mediaEntities == null && videoEditedInfo.cropState == null)) {
+                if (!constrainedRound && !isEncrypted && ttl == 0 && (videoEditedInfo == null || videoEditedInfo.filterState == null && videoEditedInfo.paintPath == null && videoEditedInfo.mediaEntities == null && videoEditedInfo.cropState == null)) {
                     Object[] sentData = accountInstance.getMessagesStorage().getSentFile(originalPath, !isEncrypted ? MessagesStorage.SENT_FILE_TYPE_VIDEO : MessagesStorage.SENT_FILE_TYPE_VIDEO_ENCRYPTED);
                     if (sentData != null && sentData[0] instanceof TLRPC.TL_document) {
                         document = (TLRPC.TL_document) sentData[0];
@@ -11978,7 +11989,8 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         attributeVideo.duration = videoEditedInfo.estimatedDuration / 1000.0;
                         document.size = videoEditedInfo.estimatedSize;
                     } else if (videoEditedInfo != null && videoEditedInfo.needConvert()) {
-                        if (videoEditedInfo.muted) {
+                        // A silent round remains a video message, not an animated/GIF document.
+                        if (videoEditedInfo.muted && !isRound) {
                             document.attributes.add(new TLRPC.TL_documentAttributeAnimated());
                             fillVideoAttribute(videoPath, attributeVideo, videoEditedInfo);
                             videoEditedInfo.originalWidth = attributeVideo.w;

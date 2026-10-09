@@ -12,6 +12,7 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BetaUpdate;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.LumaUpdaterController;
+import org.telegram.messenger.LumaUpdatePresentation;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -93,13 +94,13 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
             String value;
             if (downloaded != null) {
                 title = getString(R.string.LumaUpdateInstall);
-                value = update.version;
+                value = LumaUpdatePresentation.forDisplay(update.version);
             } else if (controller.isDownloading()) {
                 title = getString(R.string.LumaUpdateDownloadingShort);
                 value = Math.round(controller.getDownloadingProgress() * 100) + "%";
             } else {
                 title = getString(R.string.LumaUpdateDownloadInstall);
-                value = update.version;
+                value = LumaUpdatePresentation.forDisplay(update.version);
             }
             items.add(UItem.asButton(ROW_UPDATE, title, value).accent());
         }
@@ -167,7 +168,7 @@ public class LumaUpdateActivity extends BaseFragment implements NotificationCent
             if (!TextUtils.isEmpty(controller.getLastError())) {
                 new AlertDialog.Builder(getContext(), resourceProvider)
                         .setTitle(getString(R.string.LumaUpdatesTitle))
-                        .setMessage(controller.getLastError())
+                        .setMessage(LumaUpdatePresentation.forDisplay(controller.getLastError()))
                         .setPositiveButton(getString(R.string.OK), null)
                         .show();
                 return;

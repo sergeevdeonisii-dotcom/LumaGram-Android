@@ -35,6 +35,21 @@ public final class LumaUpdaterCheck76Test {
     static Object field(Object target,String name)throws Exception{Field field=target.getClass().getDeclaredField(name);field.setAccessible(true);return field.get(target);}
     public static void main(String[] args)throws Exception{
         sandbox=new File(args[0]);
+        test("Lunagram marketing version reset uses Android version code", () -> {
+            LumaUpdaterController c = controller();
+            c.checkForUpdate(true, null);
+            String body = manifest("lunagram-1", 71629, "https://github.com/fixture/luna.apk");
+            JSONObject.responses.get(body).put("version", "1.0.0");
+            latest().deliver(body);
+            BetaUpdate update = c.getUpdate();
+            check(update != null && update.higherThan(null), "1.0.0 remains an available release");
+            check(update.higherThan(new BetaUpdate("12.10.6-lunagram.82", 71619, null)),
+                    "lower marketing version must not suppress a newer release popup");
+            check(!update.higherThan(new BetaUpdate("0.1.0", 71629, null)),
+                    "renamed same-code release is not newer");
+            check(!update.higherThan(new BetaUpdate("0.1.0", 71639, null)),
+                    "higher installed/pending code must not be downgraded");
+        });
         test("official source API first uses bounded raw media request",()->{LumaUpdaterController c=controller();AtomicInteger done=new AtomicInteger();c.checkForUpdate(true,done::incrementAndGet);HttpGetTask request=latest();check(request.url.startsWith(API+"?"),"default source starts with GitHub contents API");check(request.url.contains("ref=main"),"API targets main branch");check("application/vnd.github.raw+json".equals(request.headers.get("Accept")),"API asks for raw JSON not a base64 wrapper");bounds(request);request.deliver(manifest("api",71500,"https://github.com/fixture/luna.apk"));check(done.get()==1&&!c.isChecking()&&c.getLastError()==null&&c.getUpdate()!=null,"valid API manifest finishes once with available release");check(HttpGetTask.requests.size()==1,"valid API does not need raw fallback");});
         test("valid older API manifest is latest without error",()->{LumaUpdaterController c=controller();AtomicInteger done=new AtomicInteger();c.checkForUpdate(true,done::incrementAndGet);latest().deliver(manifest("old",PackageManager.installedVersion,"https://github.com/fixture/luna.apk"));check(done.get()==1&&!c.isChecking()&&c.getUpdate()==null&&c.getLastError()==null,"only a valid no-new-release result means latest");check(HttpGetTask.requests.size()==1,"valid older manifest does not fall back");});
         test("empty API response falls back exactly once",()->{LumaUpdaterController c=controller();AtomicInteger done=new AtomicInteger();c.checkForUpdate(true,done::incrementAndGet);HttpGetTask api=latest();api.deliver(null);check(HttpGetTask.requests.size()==2&&c.isChecking()&&done.get()==0,"empty primary retains check and callbacks while raw fallback runs");HttpGetTask raw=latest();check(raw.url.startsWith(BuildVars.LUMA_UPDATE_MANIFEST_URL+"?"),"fallback returns to exact official raw source");bounds(raw);raw.deliver(manifest("raw",71500,"https://github.com/fixture/luna.apk"));check(done.get()==1&&!c.isChecking()&&c.getLastError()==null&&c.getUpdate()!=null,"valid raw fallback accepted exactly once");check(HttpGetTask.requests.size()==2,"no extra fallback after terminal result");});
