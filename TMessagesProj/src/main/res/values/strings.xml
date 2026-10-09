@@ -11384,12 +11384,14 @@
     <string name="LumaUpdateSourceNoNewVersion">No newer Lunagram version is available yet.</string>
     <string name="LumaRoundVideoQualityTitle">Video messages</string>
     <string name="LumaRoundVideoQualityEnable">High-quality recording</string>
+    <string name="LumaRoundVideoLegacyQualityTitle">Classic recorder quality</string>
+    <string name="LumaRoundVideoLegacyQualityInfo">This switch applies only when Camera2 is off. The new recorder uses the resolution and bitrate selected above. Your classic-recorder choice is preserved.</string>
     <string name="LumaRoundVideoStartRearCamera">Start with the rear camera</string>
     <string name="LumaFriendsProfilesInfo">Normal and Work profiles adjust appearance and typing animation.</string>
     <string name="LumaFriendsProfileInfo">Local display of your level</string>
     <string name="LumaFriendsSendingInfo">Round video quality and initial camera</string>
     <string name="LumaRoundVideoStartRearCameraInfo">New video messages start with the rear camera. You can still switch cameras while recording. A paused recording keeps its current camera.</string>
-    <string name="LumaRoundVideoQualityInfo">Sharper 640 × 640 video messages. Files are larger and uploads may take longer. Unedited recordings are sent without re-encoding; trimming still requires processing.</string>
+    <string name="LumaRoundVideoQualityInfo">Sharper 640 × 640 video messages. Files are larger and uploads may take longer. Unedited recordings within Telegram’s size limit are sent without re-encoding. Larger files are compressed without shortening the recording; trimming also requires processing.</string>
     <string name="LumaRoundVideoFps">Frame rate · FPS</string>
     <string name="LumaRoundVideoMeasuredTitle">Last recorded video message</string>
     <string name="LumaRoundVideoMeasuredEmpty">Record and send a video message longer than two seconds. Its actual encoded frame rate, resolution and video bitrate will appear here. Available on Android 9 and later; a short or unreadable file cannot be measured.</string>

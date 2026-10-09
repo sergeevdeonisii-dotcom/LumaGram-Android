@@ -1,0 +1,103 @@
+package org.telegram.ui;
+
+import androidx.annotation.NonNull;
+import java.util.HashMap;
+import org.telegram.messenger.BuildConfig;
+import org.telegram.messenger.LumaRoundVideoCamera;
+import org.telegram.messenger.LumaRoundVideoQuality;
+import org.telegram.messenger.LumaRoundVideoStabilization;
+import org.telegram.utils.camera.roundvideo.RoundVideoSession;
+import org.telegram.utils.settings.SharedSettings;
+import org.telegram.messenger.MessagesController;
+
+/** Actual extracted row routing/binding, with rendering-only widgets replaced by fixtures. */
+public final class RoundSettingsNavigationProbe {
+    static class View { boolean enabled = true; void setEnabled(boolean value) { enabled = value; } }
+    static class HeaderCell extends View { String label; void setText(String value) { label = value; } }
+    static class TextCheckCell extends View {
+        String label; boolean checked;
+        void setTextAndCheck(String value, boolean checked, boolean divider) { label=value;this.checked=checked; }
+    }
+    static class TextSettingsCell extends View {
+        String label; void setTextAndValue(String label, String value, boolean divider) { this.label=label; }
+    }
+    static class TextInfoPrivacyCell extends View { String label; void setText(String value) { label=value; } }
+    static class SlideChooseView extends View {
+        String[] options; int index;
+        void setCallback(java.util.function.IntConsumer callback) {}
+        void setOptions(int index, String... choices) { this.index=index;options=choices; }
+    }
+    static class RecyclerView {
+        static class ViewHolder {
+            final View itemView; final int position, type;
+            ViewHolder(View view,int position,int type) { itemView=view;this.position=position;this.type=type; }
+            int getAdapterPosition() { return position; }
+            int getItemViewType() { return type; }
+        }
+    }
+    static class R { static class string { // RESOURCE_KEYS
+    } }
+    static class LocaleController { static String getString(int key) { return String.valueOf(key); } }
+    static class Adapter {
+        int lastChanged = -1;
+        void notifyItemChanged(int row) { lastChanged=row; }
+        void notifyDataSetChanged() {}
+    }
+    private final Adapter adapter = new Adapter();
+    private interface ChoiceHandler { void onChoice(int index); }
+    private void showChoice(int title, CharSequence[] choices, ChoiceHandler handler) {}
+    private String lastRecordingInfo() { return "measured"; }
+    static String[] stabilizationOptions() { return RoundSettingsUiProbe.stabilization().choices; }
+    static int stabilizationInfoResource() { return RoundSettingsUiProbe.info(); }
+
+    // ROW_CONSTANTS
+    // ARRAYS
+    // PRODUCTION_METHODS
+
+    private RecyclerView.ViewHolder bind(int row) {
+        int type = getItemViewType(row);
+        View view = type == TYPE_HEADER ? new HeaderCell() : type == TYPE_CHECK ? new TextCheckCell()
+            : type == TYPE_VALUE ? new TextSettingsCell() : type == TYPE_SLIDER ? new SlideChooseView() : new TextInfoPrivacyCell();
+        RecyclerView.ViewHolder holder = new RecyclerView.ViewHolder(view,row,type);
+        onBindViewHolder(holder,row);
+        return holder;
+    }
+    private static int checks;
+    private static void check(boolean value,String label) { checks++;if(!value)throw new AssertionError(label); }
+    public static int run() {
+        checks=0;
+        RoundSettingsNavigationProbe screen=new RoundSettingsNavigationProbe();
+        for(boolean camera2:new boolean[]{false,true}) for(boolean quality:new boolean[]{false,true}) for(boolean rear:new boolean[]{false,true}) {
+            SharedSettings.roundVideoCamera2Enabled.set(camera2);
+            LumaRoundVideoQuality.setEnabled(quality);
+            LumaRoundVideoCamera.setStartWithRearCameraEnabled(rear);
+            LumaRoundVideoQuality.setFrameRateLevel(1);
+            for(int row=0;row<screen.getItemCount();row++) {
+                RecyclerView.ViewHolder holder=screen.bind(row);
+                if(holder.itemView instanceof TextCheckCell) check(((TextCheckCell)holder.itemView).label!=null,"every toggle has a label");
+                if(holder.itemView instanceof TextSettingsCell) check(((TextSettingsCell)holder.itemView).label!=null,"every value has a label");
+                if(holder.itemView instanceof HeaderCell) check(((HeaderCell)holder.itemView).label!=null,"every header has a label");
+                if(holder.itemView instanceof TextInfoPrivacyCell) check(((TextInfoPrivacyCell)holder.itemView).label!=null,"every info row has text");
+            }
+            HashMap<String,Object> before=new HashMap<>(MessagesController.values);
+            RecyclerView.ViewHolder qualityCell=screen.bind(ROW_QUALITY),rearCell=screen.bind(ROW_REAR_CAMERA);
+            check(before.equals(MessagesController.values),"opening moved toggles does not reset saved preferences");
+            check(screen.isEnabled(qualityCell)==!camera2&&screen.isEnabled(rearCell),"legacy HQ only active for classic recorder; rear always clickable");
+            check(qualityCell.itemView.enabled==!camera2&&rearCell.itemView.enabled,"disabled legacy switch is visible but cannot mislead Camera2 users");
+            check(((TextCheckCell)qualityCell.itemView).checked==quality&&((TextCheckCell)rearCell.itemView).checked==rear,"moved controls show saved state");
+            check(((TextCheckCell)qualityCell.itemView).label.equals(LocaleController.getString(R.string.LumaRoundVideoQualityEnable)),"quality label in check-cell branch");
+            check(((TextCheckCell)rearCell.itemView).label.equals(LocaleController.getString(R.string.LumaRoundVideoStartRearCamera)),"rear label in check-cell branch");
+            screen.onRowClicked(ROW_QUALITY);
+            check(MessagesController.values.get("luma_round_video_high_quality").equals(camera2?quality:!quality),"legacy click writes old preference; Camera2 leaves it untouched");
+            check(camera2||screen.adapter.lastChanged==ROW_QUALITY,"quality click updates its own row");
+            screen.onRowClicked(ROW_REAR_CAMERA);
+            check(MessagesController.values.get("luma_round_video_start_rear_camera").equals(!rear),"click writes original rear-camera preference");
+            check(screen.adapter.lastChanged==ROW_REAR_CAMERA,"rear click updates its own row");
+            check(SharedSettings.roundVideoCamera2Enabled.get()==camera2,"common clicks do not switch recording engines");
+            check(LumaRoundVideoQuality.getPreferredFrameRate()==60,"common clicks do not change chosen FPS");
+        }
+        check(ROW_QUALITY<screen.getItemCount()&&ROW_REAR_CAMERA<screen.getItemCount(),"moved settings included in release row count");
+        check(ROW_COMPOSITION>=screen.getItemCount(),"private-debug composition gate is retained");
+        return checks;
+    }
+}

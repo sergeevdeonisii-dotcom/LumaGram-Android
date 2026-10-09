@@ -56,7 +56,11 @@ public final class BlackHoleSearchActivity extends BaseFragment {
         if (LumaBuildPolicy.allowsProfileVerification()) group(102, R.string.BlackHoleAdvancedProfileTitle, R.string.ExperimentalProfileVerificationHeader);
         group(103, R.string.BlackHoleAdvancedTypingTitle, R.string.ExperimentalTypingSpeed,
                 R.string.ExperimentalTypingBlur, R.string.ExperimentalTypingHeight, R.string.ExperimentalTypingSwipe);
-        group(104, R.string.BlackHoleAdvancedSendingTitle, R.string.LumaRoundVideoQualityEnable, R.string.LumaRoundVideoStartRearCamera);
+        group(5, R.string.RoundVideoSettings, R.string.RoundVideoSettings,
+                R.string.LumaRoundVideoQualityEnable, R.string.LumaRoundVideoStartRearCamera,
+                R.string.LumaRoundVideoFps, R.string.LumaRoundVideoStabilization,
+                R.string.RoundVideoOutputResolution, R.string.RoundVideoCameraResolution,
+                R.string.RoundVideoBitrate, R.string.LumaRoundVideoMeasuredTitle);
         if (LumaBuildPolicy.allowsPrivacyTools()) group(104, R.string.BlackHoleAdvancedSendingTitle, R.string.ExperimentalDelayedSendEnable);
         group(105, R.string.BlackHoleAdvancedConnectionTitle, R.string.EmergencyConnectionHeader, R.string.EmergencyConnectionChat);
         group(201, R.string.BlackHoleGramSettingsTitle, R.string.BHGProfiles);
@@ -94,11 +98,12 @@ public final class BlackHoleSearchActivity extends BaseFragment {
         if (item.id <= 0 || item.id > catalog.size()) return;
         int destination = catalog.get(item.id - 1).destination;
         if (destination == 4 && !LumaBuildPolicy.allowsBuiltInUpdates()) return;
-        if (destination == 101 && !LumaBuildPolicy.allowsPrivacyTools()) return;
+        if ((destination == 101 || destination == 104) && !LumaBuildPolicy.allowsPrivacyTools()) return;
         BaseFragment screen;
         if (destination == 1 || destination == 2) screen = new LiquidGlassSettingsActivity(destination == 2);
         else if (destination == 3) screen = new TextAnimationSettingsActivity();
         else if (destination == 4) screen = new LumaUpdateActivity();
+        else if (destination == 5) screen = new RoundVideoSettingsActivity();
         else if (destination >= 201) screen = new BlackHoleToolsActivity(destination - 200);
         else screen = ExperimentalFeaturesActivity.forSection(destination);
         screen.setCurrentAccount(currentAccount); presentFragment(screen);

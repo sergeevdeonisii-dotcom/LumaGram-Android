@@ -7,6 +7,7 @@ import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.LumaRoundVideoStabilization;
 import org.telegram.messenger.MessagesController;
 import org.telegram.ui.RoundSettingsUiProbe;
+import org.telegram.ui.RoundSettingsNavigationProbe;
 import org.telegram.utils.camera.roundvideo.RoundVideoSession;
 import org.telegram.utils.camera.roundvideo.RoundVideoSession.OutputResolution;
 import org.telegram.utils.camera.roundvideo.RoundVideoSession.FrameRate;
@@ -92,6 +93,7 @@ public final class RoundSettings100Test {
             check(ui.index<= (BuildConfig.LUMA_FRIENDS_EDITION?1:2),"Saved/imported enhanced mode cannot overflow public slider");
         }
         check(RoundSettingsUiProbe.info()==(BuildConfig.LUMA_FRIENDS_EDITION?4:3),"Edition-specific stabilization help follows UI gate");
+        assertions += RoundSettingsNavigationProbe.run();
         System.out.println("PASS "+(BuildConfig.LUMA_FRIENDS_EDITION?"public":"personal")+": "+assertions+" real settings/enums/Builder/UI assertions.");
     }
 }

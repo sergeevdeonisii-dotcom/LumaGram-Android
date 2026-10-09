@@ -1265,6 +1265,7 @@ public class PasscodeView extends FrameLayout implements NotificationCenter.Noti
     }
 
     public void onShow(boolean fingerprint, boolean animated, int x, int y, Runnable onShow, Runnable onStart) {
+        org.telegram.messenger.TelegramMediaSession.refreshPrivacyIfCreated(true);
         checkFingerprintButton();
         checkRetryTextView();
         Activity parentActivity = AndroidUtilities.findActivity(getContext());

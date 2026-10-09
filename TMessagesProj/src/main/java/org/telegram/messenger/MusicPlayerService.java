@@ -31,6 +31,7 @@ import android.support.v4.media.session.PlaybackStateCompat;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.RemoteViews;
@@ -61,6 +62,21 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
     public static final String NOTIFY_SHUFFLE = "org.telegram.android.musicplayer.shuffle";
 
     private static final int ID_NOTIFICATION = 5;
+    private static volatile MusicPlayerService runningInstance;
+
+    /** Refresh only an existing player; never start playback or create a service. */
+    public static void refreshPrivacyIfRunning() {
+        refreshPrivacyIfRunning(false);
+    }
+
+    public static void refreshPrivacyIfRunning(boolean forceRedact) {
+        MusicPlayerService existing = runningInstance;
+        if (existing != null) {
+            AndroidUtilities.runOnUIThread(() -> {
+                if (runningInstance == existing) existing.refreshPrivacy(forceRedact);
+            });
+        }
+    }
 
     private RemoteControlClient remoteControlClient;
     private AudioManager audioManager;
@@ -71,7 +87,10 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
     private MediaSessionCompat mediaSession;
     private PlaybackStateCompat.Builder playbackState;
     private Bitmap albumArtPlaceholder;
-    private int notificationMessageID;
+    private MessageObject notificationMessage;
+    private long notificationOwner;
+    private long metadataGeneration;
+    private boolean notificationRedacted;
     private ImageReceiver imageReceiver;
     private boolean foregroundServiceIsStarted;
 
@@ -99,7 +118,10 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
             NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
             NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.httpFileDidLoad);
             NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.fileLoaded);
+            NotificationCenter.getInstance(a).addObserver(this, NotificationCenter.appDidLogout);
         }
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didSetPasscode);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.activeAccountChanged);
         imageReceiver = new ImageReceiver(null);
         imageReceiver.setDelegate((imageReceiver, set, thumb, memCache) -> {
             if (set && !TextUtils.isEmpty(loadingFilePath)) {
@@ -233,6 +255,7 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
         registerReceiver(headsetPlugReceiver, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
 
         super.onCreate();
+        runningInstance = this;
     }
 
     @SuppressLint("NewApi")
@@ -289,7 +312,7 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
     }
 
 
-    private Bitmap getAvatarBitmap(TLObject userOrChat, boolean big, boolean tryLoad) {
+    private Bitmap getAvatarBitmap(int account, TLObject userOrChat, boolean big, boolean tryLoad) {
         int size = big ? 600 : 100;
         Bitmap bitmap = null;
         try {
@@ -297,14 +320,14 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
                 TLRPC.User user = (TLRPC.User) userOrChat;
                 TLRPC.FileLocation photoPath = big ? user.photo.photo_big : user.photo.photo_small;
                 if (photoPath != null) {
-                    File path = FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(photoPath, true);
+                    File path = FileLoader.getInstance(account).getPathToAttach(photoPath, true);
                     if (path.exists()) {
                         return ImageLoader.loadBitmap(path.getAbsolutePath(), null, size, size, false);
                     }
                     if (big) {
                         if (tryLoad) {
                             loadingFilePath = FileLoader.getAttachFileName(photoPath);
-                            ImageLocation photoLocation = ImageLocation.getForUser(UserConfig.selectedAccount, user, ImageLocation.TYPE_BIG);
+                            ImageLocation photoLocation = ImageLocation.getForUser(account, user, ImageLocation.TYPE_BIG);
                             imageReceiver.setImage(photoLocation, "", null, null, null, 0);
                         } else {
                             loadingFilePath = null;
@@ -315,7 +338,7 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
                 TLRPC.Chat chat = (TLRPC.Chat) userOrChat;
                 TLRPC.FileLocation photoPath = big ? chat.photo.photo_big : chat.photo.photo_small;
                 if (photoPath != null) {
-                    File path = FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(photoPath, true);
+                    File path = FileLoader.getInstance(account).getPathToAttach(photoPath, true);
                     if (path.exists()) {
                         return ImageLoader.loadBitmap(path.getAbsolutePath(), null, size, size, false);
                     }
@@ -349,16 +372,62 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
         return bitmap;
     }
 
-    @SuppressLint("NewApi")
+    private boolean isMetadataLocked() {
+        return LumaPlaybackPrivacy.passcodeLocked(!TextUtils.isEmpty(SharedConfig.passcodeHash),
+                SharedConfig.appLocked, SharedConfig.isWaitingForPasscodeEnter,
+                SharedConfig.autoLockIn, SharedConfig.lastPauseTime, SystemClock.elapsedRealtime() / 1000);
+    }
+
+    private void refreshPrivacy(boolean forceRedact) {
+        MessageObject playing = MediaController.getInstance().getPlayingMessageObject();
+        if (playing != null) {
+            createNotification(playing, false, forceRedact);
+        } else {
+            metadataGeneration++;
+            loadingFilePath = null;
+            if (mediaSession != null) mediaSession.setMetadata(null);
+            if (remoteControlClient != null) {
+                RemoteControlClient.MetadataEditor editor = remoteControlClient.editMetadata(true);
+                editor.clear();
+                editor.apply();
+            }
+            stopForeground(true);
+            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(ID_NOTIFICATION);
+            stopSelf();
+        }
+    }
+
     private void createNotification(MessageObject messageObject, boolean forBitmap) {
-        String contentTitle = messageObject.getMusicTitle();
-        String contentText = messageObject.getMusicAuthor();
-        AudioInfo audioInfo = MediaController.getInstance().getAudioInfo();
+        createNotification(messageObject, forBitmap, false);
+    }
+
+    @SuppressLint("NewApi")
+    private void createNotification(MessageObject messageObject, boolean forBitmap, boolean forceRedact) {
+        // An artwork callback or account change must never republish an old track.
+        if (messageObject == null || messageObject != MediaController.getInstance().getPlayingMessageObject()) return;
+        boolean changedMessage = notificationMessage != messageObject;
+        if (changedMessage) notificationOwner = UserConfig.getInstance(messageObject.currentAccount).getClientUserId();
+        boolean redact = LumaPlaybackPrivacy.shouldRedact(notificationOwner,
+                UserConfig.getInstance(messageObject.currentAccount).getClientUserId(), messageObject.getDialogId(),
+                DialogObject.isEncryptedDialog(messageObject.getDialogId()),
+                BlackHoleVault.contains(messageObject.currentAccount, messageObject.getDialogId()),
+                isMetadataLocked(), forceRedact);
+        boolean updateRemoteMetadata = changedMessage || notificationRedacted != redact || forBitmap || forceRedact;
+        notificationMessage = messageObject;
+        notificationRedacted = redact;
+        final long generation = ++metadataGeneration;
+        String contentTitle = redact ? LocaleController.getString(R.string.AppName) : messageObject.getMusicTitle();
+        String contentText = redact ? "" : messageObject.getMusicAuthor();
+        AudioInfo audioInfo = redact ? null : MediaController.getInstance().getAudioInfo();
+        loadingFilePath = null;
+        imageReceiver.setCurrentAccount(messageObject.currentAccount);
+        imageReceiver.setImageBitmap((BitmapDrawable) null);
         Intent intent = new Intent(ApplicationLoader.applicationContext, LaunchActivity.class);
-        if (messageObject.isMusic()) {
+        if (!redact) intent.putExtra("currentAccount", messageObject.currentAccount);
+        if (!redact && messageObject.isMusic()) {
             intent.setAction("com.tmessages.openplayer");
             intent.addCategory(Intent.CATEGORY_LAUNCHER);
-        } else if (messageObject.isVoice() || messageObject.isRoundVideo()) {
+        } else if (!redact && (messageObject.isVoice() || messageObject.isRoundVideo())) {
             intent.setAction(Intent.ACTION_VIEW);
             long fromId = 0;
             TLRPC.Message owner = messageObject.messageOwner;
@@ -377,21 +446,20 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
                 }
             }
         }
-        PendingIntent contentIntent = PendingIntent.getActivity(ApplicationLoader.applicationContext, 0, intent, fixIntentFlags(PendingIntent.FLAG_MUTABLE));
+        PendingIntent contentIntent = PendingIntent.getActivity(ApplicationLoader.applicationContext, 0, intent,
+                fixIntentFlags(PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_CANCEL_CURRENT));
 
         Notification notification;
         Bitmap albumArt = null;
         Bitmap fullAlbumArt = null;
         long duration = (long) (messageObject.getDuration() * 1000);
-        if (messageObject.isMusic()) {
+        if (!redact && messageObject.isMusic()) {
             String artworkUrl = messageObject.getArtworkUrl(true);
             String artworkUrlBig = messageObject.getArtworkUrl(false);
 
             albumArt = audioInfo != null ? audioInfo.getSmallCover() : null;
             fullAlbumArt = audioInfo != null ? audioInfo.getCover() : null;
 
-            loadingFilePath = null;
-            imageReceiver.setImageBitmap((BitmapDrawable) null);
             if (albumArt == null && !TextUtils.isEmpty(artworkUrl)) {
                 fullAlbumArt = loadArtworkFromUrl(artworkUrlBig, true, !forBitmap);
                 if (fullAlbumArt == null) {
@@ -400,24 +468,24 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
                     albumArt = loadArtworkFromUrl(artworkUrlBig, false, !forBitmap);
                 }
             } else {
-                loadingFilePath = FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(messageObject.getDocument()).getAbsolutePath();
+                loadingFilePath = FileLoader.getInstance(messageObject.currentAccount).getPathToAttach(messageObject.getDocument()).getAbsolutePath();
             }
-        } else if (messageObject.isVoice() || messageObject.isRoundVideo()) {
+        } else if (!redact && (messageObject.isVoice() || messageObject.isRoundVideo())) {
             long senderId = messageObject.getSenderId();
             if (messageObject.isFromUser()) {
-                TLRPC.User user = MessagesController.getInstance(UserConfig.selectedAccount).getUser(senderId);
+                TLRPC.User user = MessagesController.getInstance(messageObject.currentAccount).getUser(senderId);
                 if (user != null) {
                     contentTitle = UserObject.getUserName(user);
-                    fullAlbumArt = getAvatarBitmap(user, true, !forBitmap);
-                    albumArt = getAvatarBitmap(user, false, !forBitmap);
+                    fullAlbumArt = getAvatarBitmap(messageObject.currentAccount, user, true, !forBitmap);
+                    albumArt = getAvatarBitmap(messageObject.currentAccount, user, false, !forBitmap);
 
                 }
             } else {
-                TLRPC.Chat chat = MessagesController.getInstance(UserConfig.selectedAccount).getChat(-senderId);
+                TLRPC.Chat chat = MessagesController.getInstance(messageObject.currentAccount).getChat(-senderId);
                 if (chat != null) {
                     contentTitle = chat.title;
-                    fullAlbumArt = getAvatarBitmap(chat, true, !forBitmap);
-                    albumArt = getAvatarBitmap(chat, false, !forBitmap);
+                    fullAlbumArt = getAvatarBitmap(messageObject.currentAccount, chat, true, !forBitmap);
+                    albumArt = getAvatarBitmap(messageObject.currentAccount, chat, false, !forBitmap);
                 }
             }
 
@@ -541,7 +609,7 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
 
             mediaSession.setMetadata(meta.build());
 
-            bldr.setVisibility(Notification.VISIBILITY_PUBLIC);
+            bldr.setVisibility(redact ? Notification.VISIBILITY_PRIVATE : Notification.VISIBILITY_PUBLIC);
 
             notification = bldr.build();
 
@@ -659,9 +727,7 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
         }
 
         if (remoteControlClient != null) {
-            int currentID = MediaController.getInstance().getPlayingMessageObject().getId();
-            if (notificationMessageID != currentID) {
-                notificationMessageID = currentID;
+            if (updateRemoteMetadata) {
                 RemoteControlClient.MetadataEditor metadataEditor = remoteControlClient.editMetadata(true);
                 metadataEditor.putString(MediaMetadataRetriever.METADATA_KEY_ARTIST, contentText);
                 metadataEditor.putString(MediaMetadataRetriever.METADATA_KEY_TITLE, contentTitle);
@@ -680,7 +746,8 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
                 AndroidUtilities.runOnUIThread(new Runnable() {
                     @Override
                     public void run() {
-                        if (remoteControlClient == null || MediaController.getInstance().getPlayingMessageObject() == null) {
+                        if (remoteControlClient == null || generation != metadataGeneration
+                                || MediaController.getInstance().getPlayingMessageObject() != messageObject) {
                             return;
                         }
                         if (MediaController.getInstance().getPlayingMessageObject().audioPlayerDuration == C.TIME_UNSET) {
@@ -810,6 +877,9 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
     @SuppressLint("NewApi")
     @Override
     public void onDestroy() {
+        if (runningInstance == this) runningInstance = null;
+        metadataGeneration++;
+        loadingFilePath = null;
         unregisterReceiver(headsetPlugReceiver);
         super.onDestroy();
         stopForeground(true);
@@ -827,12 +897,20 @@ public class MusicPlayerService extends Service implements NotificationCenter.No
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.httpFileDidLoad);
             NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.fileLoaded);
+            NotificationCenter.getInstance(a).removeObserver(this, NotificationCenter.appDidLogout);
         }
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.didSetPasscode);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.activeAccountChanged);
     }
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
-        if (id == NotificationCenter.messagePlayingPlayStateChanged) {
+        if (id == NotificationCenter.didSetPasscode) {
+            // PasscodeView dispatches before its delegate clears waiting-for-passcode.
+            AndroidUtilities.runOnUIThread(MusicPlayerService::refreshPrivacyIfRunning, 1);
+        } else if (id == NotificationCenter.activeAccountChanged || id == NotificationCenter.appDidLogout) {
+            refreshPrivacyIfRunning();
+        } else if (id == NotificationCenter.messagePlayingPlayStateChanged) {
             MessageObject messageObject = MediaController.getInstance().getPlayingMessageObject();
             if (messageObject != null) {
                 createNotification(messageObject, false);

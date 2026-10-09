@@ -1,0 +1,194 @@
+package org.telegram.messenger;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Executes extracted production decision and metadata-publishing blocks, without Android. */
+public final class PlaybackPrivacy100Probe {
+    private static int checks;
+    private MessageObject notificationMessage;
+    private long notificationOwner;
+    private long metadataGeneration;
+    private boolean notificationRedacted;
+    private String loadingFilePath;
+    private final ImageReceiver imageReceiver = new ImageReceiver();
+    private final Session mediaSession = new Session();
+    private final RemoteControlClient remoteControlClient = new RemoteControlClient();
+
+    /* LOCK_METHOD */
+
+    private Projection render(MessageObject messageObject, boolean forBitmap, boolean forceRedact) {
+        /* DECISION_BODY */
+        return new Projection(contentTitle, contentText, audioInfo, redact, updateRemoteMetadata, generation);
+    }
+
+    private void publishModern(Projection p, Bitmap art) {
+        String contentTitle = p.title, contentText = p.author;
+        AudioInfo audioInfo = p.audio;
+        MessageObject messageObject = MediaController.instance.playing;
+        Bitmap fullAlbumArt = art;
+        long duration = 120000;
+        /* MODERN_METADATA */
+    }
+
+    private void publishLegacy(Projection p, Bitmap art) {
+        String contentTitle = p.title, contentText = p.author;
+        AudioInfo audioInfo = p.audio;
+        Bitmap fullAlbumArt = art;
+        /* LEGACY_METADATA */
+    }
+
+    private static void check(boolean value, String label) {
+        checks++;
+        if (!value) throw new AssertionError(label);
+    }
+
+    private static final class Projection {
+        final String title, author;
+        final AudioInfo audio;
+        final boolean redacted, refreshLegacy;
+        final long generation;
+        Projection(String t, String a, AudioInfo info, boolean r, boolean refresh, long g) {
+            title=t; author=a; audio=info; redacted=r; refreshLegacy=refresh; generation=g;
+        }
+    }
+
+    private static final class MessageObject {
+        int currentAccount;
+        long dialog = 30;
+        long audioPlayerDuration = 120;
+        int privateReads;
+        boolean music = true;
+        long getDialogId() { return dialog; }
+        String getMusicTitle() { privateReads++; return "private-title"; }
+        String getMusicAuthor() { privateReads++; return "private-author"; }
+        boolean isMusic() { return music; }
+    }
+    private static final class UserConfig {
+        static final UserConfig[] accounts = {new UserConfig(), new UserConfig()};
+        long owner = 100;
+        static UserConfig getInstance(int account) { return accounts[account]; }
+        long getClientUserId() { return owner; }
+    }
+    private static final class BlackHoleVault {
+        static final boolean[] protectedAccounts = new boolean[2];
+        static boolean contains(int account, long dialog) { return protectedAccounts[account]; }
+    }
+    private static final class SharedConfig {
+        static String passcodeHash = "";
+        static boolean appLocked, isWaitingForPasscodeEnter;
+        static int autoLockIn, lastPauseTime;
+    }
+    private static final class SystemClock {
+        static long uptime = 100000;
+        static long elapsedRealtime() { return uptime; }
+    }
+    private static final class TextUtils { static boolean isEmpty(String s) { return s == null || s.isEmpty(); } }
+    private static final class DialogObject { static boolean isEncryptedDialog(long d) { return d == -999; } }
+    private static final class R { static final class string { static final int AppName = 1; } }
+    private static final class LocaleController { static String getString(int id) { return "Lunagram"; } }
+    private static final class FileLog { static void e(Throwable e) { throw new AssertionError(e); } }
+    private static final class Bitmap { boolean isRecycled() { return false; } }
+    private static final class BitmapDrawable { }
+    private static final class ImageReceiver {
+        int account, clears;
+        void setCurrentAccount(int a) { account=a; }
+        void setImageBitmap(BitmapDrawable b) { clears++; }
+    }
+    private static final class AudioInfo { String getAlbum() { return "private-album"; } }
+    private static final class MediaController {
+        static final MediaController instance = new MediaController();
+        MessageObject playing;
+        int audioReads;
+        static MediaController getInstance() { return instance; }
+        MessageObject getPlayingMessageObject() { return playing; }
+        AudioInfo getAudioInfo() { audioReads++; return new AudioInfo(); }
+    }
+    private static final class Session {
+        Map<String,Object> data;
+        void setMetadata(Map<String,Object> value) { data=value; }
+    }
+    private static final class MediaMetadataCompat {
+        static final String METADATA_KEY_ALBUM_ARTIST="albumArtist", METADATA_KEY_ARTIST="artist",
+            METADATA_KEY_DURATION="duration", METADATA_KEY_TITLE="title", METADATA_KEY_ALBUM="album", METADATA_KEY_ALBUM_ART="art";
+        static final class Builder {
+            final Map<String,Object> data = new HashMap<>();
+            Builder putString(String k,String v) { data.put(k,v); return this; }
+            Builder putLong(String k,long v) { data.put(k,v); return this; }
+            Builder putBitmap(String k,Bitmap v) { data.put(k,v); return this; }
+            Map<String,Object> build() { return data; }
+        }
+    }
+    private static final class MediaMetadataRetriever {
+        static final int METADATA_KEY_ARTIST=1, METADATA_KEY_TITLE=2, METADATA_KEY_ALBUM=3, METADATA_KEY_DURATION=4;
+    }
+    private static final class RemoteControlClient {
+        Map<Integer,Object> data = new HashMap<>();
+        MetadataEditor editMetadata(boolean replace) { return new MetadataEditor(replace); }
+        final class MetadataEditor {
+            static final int BITMAP_KEY_ARTWORK=5;
+            final Map<Integer,Object> next;
+            MetadataEditor(boolean replace) { next=replace?new HashMap<>():new HashMap<>(data); }
+            MetadataEditor putString(int k,String v) { next.put(k,v);return this; }
+            MetadataEditor putLong(int k,long v) { next.put(k,v);return this; }
+            MetadataEditor putBitmap(int k,Bitmap v) { next.put(k,v);return this; }
+            void apply() { data=next; }
+        }
+    }
+
+    private static void reset() {
+        SharedConfig.passcodeHash=""; SharedConfig.appLocked=false; SharedConfig.isWaitingForPasscodeEnter=false;
+        SharedConfig.autoLockIn=0; SharedConfig.lastPauseTime=0; SystemClock.uptime=100000;
+        UserConfig.accounts[0].owner=100; UserConfig.accounts[1].owner=200;
+        BlackHoleVault.protectedAccounts[0]=false; BlackHoleVault.protectedAccounts[1]=false;
+    }
+
+    public static void main(String[] args) {
+        reset();
+        for (int mask=0; mask<128; mask++) {
+            long captured=(mask&1)==0?100:0, live=(mask&2)==0?100:200, dialog=(mask&4)==0?30:0;
+            boolean encrypted=(mask&8)!=0, vault=(mask&16)!=0, locked=(mask&32)!=0, forced=(mask&64)!=0;
+            check(LumaPlaybackPrivacy.shouldRedact(captured, live, dialog, encrypted, vault, locked, forced)==(mask!=0), "privacy truth table");
+        }
+        for (int mask=0; mask<32; mask++) {
+            boolean enabled=(mask&1)!=0, locked=(mask&2)!=0, waiting=(mask&4)!=0, expired=(mask&8)!=0, rebooted=(mask&16)!=0;
+            check(LumaPlaybackPrivacy.passcodeLocked(enabled,locked,waiting,expired?10:0,50,rebooted?1:100)
+                    ==(enabled&&(locked||waiting||expired||rebooted)), "passcode truth table");
+        }
+        check(!LumaPlaybackPrivacy.passcodeLocked(true,false,false,100,Integer.MAX_VALUE-10,Integer.MAX_VALUE), "autolock addition does not overflow");
+        PlaybackPrivacy100Probe probe = new PlaybackPrivacy100Probe();
+        MessageObject track = new MessageObject(); MediaController.instance.playing=track;
+        Projection normal=probe.render(track,false,false);
+        check(!normal.redacted && normal.title.equals("private-title") && normal.audio!=null, "ordinary metadata preserved");
+        Bitmap cover=new Bitmap(); probe.publishModern(normal,cover); probe.publishLegacy(normal,cover);
+        check(probe.mediaSession.data.get("art")==cover && probe.remoteControlClient.data.get(5)==cover,"ordinary art preserved");
+        for (int reason=0; reason<8; reason++) {
+            reset(); track.dialog=30; track.privateReads=0;
+            int reads=MediaController.instance.audioReads;
+            if(reason==0) { SharedConfig.passcodeHash="set";SharedConfig.appLocked=true; }
+            if(reason==1) { SharedConfig.passcodeHash="set";SharedConfig.isWaitingForPasscodeEnter=true; }
+            if(reason==2) { SharedConfig.passcodeHash="set";SharedConfig.autoLockIn=10;SharedConfig.lastPauseTime=50; }
+            if(reason==3) BlackHoleVault.protectedAccounts[0]=true;
+            if(reason==4) track.dialog=-999;
+            if(reason==5) UserConfig.accounts[0].owner=200;
+            if(reason==6) UserConfig.accounts[0].owner=0;
+            Projection hidden=probe.render(track,true,reason==7);
+            check(hidden.redacted && hidden.title.equals("Lunagram") && hidden.author.isEmpty() && hidden.audio==null,"private metadata redacted");
+            check(track.privateReads==0 && reads==MediaController.instance.audioReads,"private getters/artwork source not read");
+            check(hidden.refreshLegacy,"same-track artwork callback forces legacy replacement");
+            probe.publishModern(hidden,null); probe.publishLegacy(hidden,null);
+            check(probe.mediaSession.data.get("title").equals("Lunagram") && !probe.mediaSession.data.containsKey("art") && probe.mediaSession.data.get("album")==null,"modern old title/art/album cleared");
+            check(probe.remoteControlClient.data.get(2).equals("Lunagram") && !probe.remoteControlClient.data.containsKey(5) && !probe.remoteControlClient.data.containsKey(3),"legacy old title/art/album cleared");
+        }
+        reset(); Projection unlocked=probe.render(track,false,false);
+        check(!unlocked.redacted && unlocked.refreshLegacy,"unlock restores ordinary same-track metadata");
+        check(probe.render(new MessageObject(),false,false)==null,"stale artwork message rejected");
+        MessageObject secondAccount=new MessageObject(); secondAccount.currentAccount=1;
+        MediaController.instance.playing=secondAccount; BlackHoleVault.protectedAccounts[0]=true;
+        check(!probe.render(secondAccount,false,false).redacted && probe.imageReceiver.account==1,"playing account not selected/other account drives privacy/art");
+        BlackHoleVault.protectedAccounts[1]=true;
+        check(probe.render(secondAccount,false,false).redacted,"playing account vault membership enforced");
+        check(probe.loadingFilePath==null && probe.imageReceiver.clears>0,"previous artwork cleared on every rebuild");
+        System.out.println("PASS: " + checks + " playback privacy/actual metadata assertions; no Android/network I/O");
+    }
+}

@@ -28,9 +28,14 @@ public final class LumaGlassContrast {
 
     /** Match the darkest possible protected panel, including translucent theme text. */
     public static int foreground(int color, boolean dark, boolean liquidGlass) {
-        if (dark || !liquidGlass || color >>> 24 == 0 || contrast(color, DARKEST_SURFACE) >= TEXT_CONTRAST) {
+        if (dark || !liquidGlass || color >>> 24 == 0) {
             return color;
         }
+        // Saturated translucent text has no single worst backdrop: checking grey alone
+        // can miss a contrast dip over blue/pink wallpaper. Resolve its visible shade
+        // once, then use opaque text whose contrast increases with panel luminance.
+        if (color >>> 24 != 255) color = composite(color, DARKEST_SURFACE);
+        if (contrast(color, DARKEST_SURFACE) >= TEXT_CONTRAST) return color;
         float low = 0f, high = 1f;
         int result = 0xff000000;
         for (int step = 0; step < 12; step++) {

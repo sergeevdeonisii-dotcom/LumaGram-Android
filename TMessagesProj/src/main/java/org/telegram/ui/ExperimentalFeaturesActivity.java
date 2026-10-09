@@ -21,9 +21,6 @@ import org.telegram.messenger.LumaAnonymousNumber;
 import org.telegram.messenger.LumaProfileVerification;
 import org.telegram.messenger.LumaStarRating;
 import org.telegram.messenger.LumaTextAnimation;
-import org.telegram.messenger.LumaRoundVideoQuality;
-import org.telegram.messenger.LumaRoundVideoStabilization;
-import org.telegram.messenger.LumaRoundVideoCamera;
 import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
@@ -90,8 +87,6 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private static final int ROW_ANONYMOUS_NUMBER = 12;
     private static final int ROW_PROFILE_VERIFICATION_ENABLED = 13;
     private static final int ROW_GHOST_SCHEDULE_SEND_ENABLED = 14;
-    private static final int ROW_ROUND_VIDEO_QUALITY = 15;
-    private static final int ROW_ROUND_VIDEO_REAR_CAMERA = 16;
 
     private final Section section;
     private UniversalRecyclerView listView;
@@ -106,7 +101,8 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
 
     public static ExperimentalFeaturesActivity forSection(int id) {
         Section section = Section.fromId(id);
-        if (section == Section.PRIVACY && !LumaBuildPolicy.allowsPrivacyTools()) section = Section.ROOT;
+        if ((section == Section.PRIVACY || section == Section.SENDING)
+                && !LumaBuildPolicy.allowsPrivacyTools()) section = Section.ROOT;
         return new ExperimentalFeaturesActivity(section == null ? Section.ROOT : section);
     }
 
@@ -176,8 +172,10 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         items.add(UItem.asHeader(getString(R.string.BlackHoleAdvancedAppHeader)));
         items.add(sectionItem(Section.TYPING, IconBackgroundColors.PURPLE,
                 R.drawable.settings_features, R.string.BlackHoleAdvancedTypingInfo));
-        items.add(sectionItem(Section.SENDING, IconBackgroundColors.ORANGE,
-                R.drawable.settings_chat, LumaBuildPolicy.isFriendsEdition() ? R.string.LumaFriendsSendingInfo : R.string.BlackHoleAdvancedSendingInfo));
+        if (LumaBuildPolicy.allowsPrivacyTools()) {
+            items.add(sectionItem(Section.SENDING, IconBackgroundColors.ORANGE,
+                    R.drawable.settings_chat, R.string.BlackHoleAdvancedSendingInfo));
+        }
         items.add(sectionItem(Section.CONNECTION, IconBackgroundColors.CYAN,
                 R.drawable.settings_data, R.string.BlackHoleAdvancedConnectionInfo));
         items.add(UItem.asShadow(getString(R.string.BlackHoleAdvancedSectionsInfo)));
@@ -234,22 +232,6 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     }
 
     private void fillSendingItems(ArrayList<UItem> items) {
-        items.add(UItem.asHeader(getString(R.string.LumaRoundVideoQualityTitle)));
-        items.add(UItem.asCheck(ROW_ROUND_VIDEO_QUALITY, getString(R.string.LumaRoundVideoQualityEnable))
-                .setChecked(LumaRoundVideoQuality.isEnabled()));
-        items.add(UItem.asShadow(getString(R.string.LumaRoundVideoQualityInfo)));
-        items.add(UItem.asHeader(getString(R.string.LumaRoundVideoFps)));
-        items.add(UItem.asSlideView(new String[] {"30", "60"},
-                LumaRoundVideoQuality.getFrameRateLevel(), LumaRoundVideoQuality::setFrameRateLevel)
-                .setEnabled(LumaRoundVideoQuality.isEnabled()));
-        items.add(UItem.asShadow(getString(R.string.LumaRoundVideoFpsInfo)));
-        items.add(UItem.asHeader(getString(R.string.LumaRoundVideoStabilization)));
-        items.add(UItem.asSlideView(RoundVideoSettingsActivity.stabilizationOptions(),
-                LumaRoundVideoStabilization.getMode(), LumaRoundVideoStabilization::setMode));
-        items.add(UItem.asShadow(getString(RoundVideoSettingsActivity.stabilizationInfoResource())));
-        items.add(UItem.asCheck(ROW_ROUND_VIDEO_REAR_CAMERA, getString(R.string.LumaRoundVideoStartRearCamera))
-                .setChecked(LumaRoundVideoCamera.isStartWithRearCameraEnabled()));
-        items.add(UItem.asShadow(getString(R.string.LumaRoundVideoStartRearCameraInfo)));
         if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         final boolean delayedSendEnabled = LumaDelayedSend.isEnabled();
         items.add(UItem.asHeader(getString(R.string.ExperimentalDelayedSendHeader)));
@@ -344,7 +326,8 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private void onItemClick(UItem item, View view, int position, float x, float y) {
         if (!LumaBuildPolicy.allowsPrivacyTools() && (item.id == ROW_DELAYED_SEND_ENABLED
                 || item.id == ROW_GHOST_ENABLED || item.id == ROW_GHOST_SCHEDULE_SEND_ENABLED
-                || item.id == ROW_DELETED_MESSAGES_ENABLED || item.id == Section.PRIVACY.id)) return;
+                || item.id == ROW_DELETED_MESSAGES_ENABLED || item.id == Section.PRIVACY.id
+                || item.id == Section.SENDING.id)) return;
         if (!LumaBuildPolicy.allowsAnonymousNumber()
                 && (item.id == ROW_ANONYMOUS_NUMBER_ENABLED || item.id == ROW_ANONYMOUS_NUMBER)) return;
         if (!LumaBuildPolicy.allowsProfileVerification() && item.id == ROW_PROFILE_VERIFICATION_ENABLED) return;
@@ -375,16 +358,6 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 R.raw.info,
                 getString(R.string.ExperimentalTypingResetDone)
             ).show();
-        } else if (item.id == ROW_ROUND_VIDEO_QUALITY) {
-            final boolean enabled = !LumaRoundVideoQuality.isEnabled();
-            LumaRoundVideoQuality.setEnabled(enabled);
-            if (view instanceof TextCheckCell) ((TextCheckCell) view).setChecked(enabled);
-            if (listView != null && listView.adapter != null) listView.adapter.update(false);
-        } else if (item.id == ROW_ROUND_VIDEO_REAR_CAMERA) {
-            final boolean enabled = !LumaRoundVideoCamera.isStartWithRearCameraEnabled();
-            LumaRoundVideoCamera.setStartWithRearCameraEnabled(enabled);
-            if (view instanceof TextCheckCell) ((TextCheckCell) view).setChecked(enabled);
-            if (listView != null && listView.adapter != null) listView.adapter.update(false);
         } else if (item.id == ROW_DELAYED_SEND_ENABLED) {
             final boolean enabled = !LumaDelayedSend.isEnabled();
             LumaDelayedSend.setEnabled(enabled);

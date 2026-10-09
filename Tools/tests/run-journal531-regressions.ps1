@@ -24,6 +24,7 @@ $sourcePaths = @(
     'Tools/tests/fixtures/org/telegram/messenger/UserConfig.java',
     'Tools/tests/fixtures/org/telegram/messenger/FileLog.java',
     'Tools/tests/fixtures/org/telegram/messenger/BlackHolePrivateData.java',
+    'Tools/tests/fixtures/org/telegram/messenger/TelegramMediaSession.java',
     'Tools/tests/fixtures/org/json/JSONArray.java',
     'Tools/tests/fixtures/org/json/JSONObject.java',
     'Tools/tests/fixtures/android/content/Context.java',

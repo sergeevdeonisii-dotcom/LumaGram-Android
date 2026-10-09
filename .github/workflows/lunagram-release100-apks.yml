@@ -47,6 +47,9 @@ jobs:
           ./Tools/tests/run-round-stats82-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-stats-tests')
           ./Tools/tests/run-round-export82-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-export-tests')
           ./Tools/tests/check-release100-security.ps1
+          ./Tools/tests/run-http-url100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'http-url-tests')
+          ./Tools/tests/run-media-browser100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'media-browser-tests')
+          ./Tools/tests/run-playback-privacy100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'playback-privacy-tests')
           ./Tools/tests/run-startup100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'startup-tests')
           ./Tools/tests/run-glass-contrast100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'glass-contrast-tests')
           ./Tools/tests/run-update-presentation100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'update-presentation-tests')

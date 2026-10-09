@@ -13,6 +13,7 @@ import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.LumaRoundVideoQuality;
+import org.telegram.messenger.LumaRoundVideoCamera;
 import org.telegram.messenger.LumaRoundVideoStabilization;
 import org.telegram.messenger.LumaRoundVideoStats;
 import org.telegram.messenger.LumaBuildPolicy;
@@ -30,7 +31,7 @@ import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.SlideChooseView;
 import org.telegram.utils.camera.roundvideo.RoundVideoSession;
 
-/** Configures the Camera2 round-video implementation. */
+/** All round-video controls: common preferences plus the optional Camera2 recorder. */
 public class RoundVideoSettingsActivity extends BaseFragment {
     private static final int TYPE_HEADER = 0;
     private static final int TYPE_CHECK = 1;
@@ -44,18 +45,23 @@ public class RoundVideoSettingsActivity extends BaseFragment {
     private static final int ROW_CAMERA_RESOLUTION = 3;
     private static final int ROW_BITRATE = 4;
     private static final int ROW_GENERAL_INFO = 5;
-    private static final int ROW_FRAME_RATE_HEADER = 6;
-    private static final int ROW_FRAME_RATE = 7;
-    private static final int ROW_FRAME_RATE_INFO = 8;
-    private static final int ROW_STABILIZATION_HEADER = 9;
-    private static final int ROW_STABILIZATION = 10;
-    private static final int ROW_STABILIZATION_INFO = 11;
-    private static final int ROW_LAST_RECORDING_HEADER = 12;
-    private static final int ROW_LAST_RECORDING_INFO = 13;
-    private static final int ROW_COMPOSITION_HEADER = 14;
-    private static final int ROW_COMPOSITION = 15;
-    private static final int ROW_COMPOSITION_INFO = 16;
-    private static final int ROW_COUNT = BuildConfig.DEBUG_PRIVATE_VERSION ? 17 : 14;
+    private static final int ROW_REAR_CAMERA = 6;
+    private static final int ROW_REAR_CAMERA_INFO = 7;
+    private static final int ROW_QUALITY_HEADER = 8;
+    private static final int ROW_QUALITY = 9;
+    private static final int ROW_QUALITY_INFO = 10;
+    private static final int ROW_FRAME_RATE_HEADER = 11;
+    private static final int ROW_FRAME_RATE = 12;
+    private static final int ROW_FRAME_RATE_INFO = 13;
+    private static final int ROW_STABILIZATION_HEADER = 14;
+    private static final int ROW_STABILIZATION = 15;
+    private static final int ROW_STABILIZATION_INFO = 16;
+    private static final int ROW_LAST_RECORDING_HEADER = 17;
+    private static final int ROW_LAST_RECORDING_INFO = 18;
+    private static final int ROW_COMPOSITION_HEADER = 19;
+    private static final int ROW_COMPOSITION = 20;
+    private static final int ROW_COMPOSITION_INFO = 21;
+    private static final int ROW_COUNT = BuildConfig.DEBUG_PRIVATE_VERSION ? 22 : 19;
 
     private static final int[] BITRATES = {
             750_000,
@@ -124,6 +130,18 @@ public class RoundVideoSettingsActivity extends BaseFragment {
     }
 
     private void onRowClicked(int position) {
+        // Keep the legacy preference intact while Camera2 uses explicit resolution/bitrate.
+        if (position == ROW_QUALITY) {
+            if (SharedSettings.roundVideoCamera2Enabled.get()) return;
+            LumaRoundVideoQuality.setEnabled(!LumaRoundVideoQuality.isEnabled());
+            adapter.notifyItemChanged(position);
+            return;
+        }
+        if (position == ROW_REAR_CAMERA) {
+            LumaRoundVideoCamera.setStartWithRearCameraEnabled(!LumaRoundVideoCamera.isStartWithRearCameraEnabled());
+            adapter.notifyItemChanged(position);
+            return;
+        }
         if (position == ROW_ENABLED) {
             SharedSettings.roundVideoCamera2Enabled.set(!SharedSettings.roundVideoCamera2Enabled.get());
             adapter.notifyDataSetChanged();
@@ -227,7 +245,10 @@ public class RoundVideoSettingsActivity extends BaseFragment {
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int position = holder.getAdapterPosition();
-            if (position == ROW_ENABLED) {
+            if (position == ROW_QUALITY) {
+                return !SharedSettings.roundVideoCamera2Enabled.get();
+            }
+            if (position == ROW_ENABLED || position == ROW_REAR_CAMERA) {
                 return true;
             }
             if (!SharedSettings.roundVideoCamera2Enabled.get()) {
@@ -270,6 +291,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 HeaderCell cell = (HeaderCell) holder.itemView;
                 cell.setText(position == ROW_GENERAL_HEADER
                         ? LocaleController.getString(R.string.RoundVideoGeneral)
+                        : position == ROW_QUALITY_HEADER ? LocaleController.getString(R.string.LumaRoundVideoLegacyQualityTitle)
                         : position == ROW_FRAME_RATE_HEADER ? LocaleController.getString(R.string.LumaRoundVideoFps)
                         : position == ROW_STABILIZATION_HEADER ? LocaleController.getString(R.string.LumaRoundVideoStabilization)
                         : position == ROW_LAST_RECORDING_HEADER ? LocaleController.getString(R.string.LumaRoundVideoMeasuredTitle)
@@ -287,13 +309,19 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 }
             } else if (holder.getItemViewType() == TYPE_CHECK) {
                 TextCheckCell cell = (TextCheckCell) holder.itemView;
-                cell.setEnabled(position == ROW_ENABLED || enabled);
+                cell.setEnabled(position == ROW_QUALITY ? !enabled : position == ROW_ENABLED || position == ROW_REAR_CAMERA || enabled);
                 if (position == ROW_ENABLED) {
                     cell.setTextAndCheck(
                             LocaleController.getString(R.string.RoundVideoUseNewRecorder),
                             enabled,
                             false
                     );
+                } else if (position == ROW_QUALITY) {
+                    cell.setTextAndCheck(LocaleController.getString(R.string.LumaRoundVideoQualityEnable),
+                            LumaRoundVideoQuality.isEnabled(), false);
+                } else if (position == ROW_REAR_CAMERA) {
+                    cell.setTextAndCheck(LocaleController.getString(R.string.LumaRoundVideoStartRearCamera),
+                            LumaRoundVideoCamera.isStartWithRearCameraEnabled(), false);
                 } else {
                     cell.setTextAndCheck(
                             LocaleController.getString(R.string.RoundVideoCompositionEnabled),
@@ -328,6 +356,9 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 TextInfoPrivacyCell cell = (TextInfoPrivacyCell) holder.itemView;
                 cell.setText(position == ROW_GENERAL_INFO
                         ? LocaleController.getString(R.string.RoundVideoGeneralInfo)
+                        : position == ROW_QUALITY_INFO ? LocaleController.getString(R.string.LumaRoundVideoLegacyQualityInfo)
+                                + "\n\n" + LocaleController.getString(R.string.LumaRoundVideoQualityInfo)
+                        : position == ROW_REAR_CAMERA_INFO ? LocaleController.getString(R.string.LumaRoundVideoStartRearCameraInfo)
                         : position == ROW_LAST_RECORDING_INFO ? lastRecordingInfo()
                         : position == ROW_FRAME_RATE_INFO ? LocaleController.getString(R.string.LumaRoundVideoFpsInfo)
                         : position == ROW_STABILIZATION_INFO ? LocaleController.getString(stabilizationInfoResource())
@@ -338,16 +369,18 @@ public class RoundVideoSettingsActivity extends BaseFragment {
         @Override
         public int getItemViewType(int position) {
             if (position == ROW_GENERAL_HEADER || position == ROW_COMPOSITION_HEADER
+                    || position == ROW_QUALITY_HEADER
                     || position == ROW_LAST_RECORDING_HEADER
                     || position == ROW_FRAME_RATE_HEADER || position == ROW_STABILIZATION_HEADER) {
                 return TYPE_HEADER;
             }
             if (position == ROW_FRAME_RATE || position == ROW_STABILIZATION) return TYPE_SLIDER;
-            if (position == ROW_ENABLED
+            if (position == ROW_ENABLED || position == ROW_QUALITY || position == ROW_REAR_CAMERA
                     || position == ROW_COMPOSITION) {
                 return TYPE_CHECK;
             }
             if (position == ROW_GENERAL_INFO || position == ROW_COMPOSITION_INFO
+                    || position == ROW_QUALITY_INFO || position == ROW_REAR_CAMERA_INFO
                     || position == ROW_LAST_RECORDING_INFO
                     || position == ROW_FRAME_RATE_INFO || position == ROW_STABILIZATION_INFO) {
                 return TYPE_INFO;

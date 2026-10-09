@@ -26,6 +26,7 @@ public final class BlackHoleVault {
         Set<String> copy = new HashSet<>(LumaAccountData.preferences(account).getStringSet(KEY, new HashSet<>()));
         if (protect) copy.add(Long.toString(id)); else copy.remove(Long.toString(id));
         LumaAccountData.preferences(account).edit().putStringSet(KEY, copy).apply();
+        TelegramMediaSession.refreshPrivacyIfCreated();
     }
     public static synchronized boolean isUnlocked(int account) {
         long owner = UserConfig.getInstance(account).getClientUserId();

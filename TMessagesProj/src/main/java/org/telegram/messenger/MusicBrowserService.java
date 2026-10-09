@@ -12,13 +12,13 @@ import android.annotation.TargetApi;
 import android.media.browse.MediaBrowser;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Process;
 import android.service.media.MediaBrowserService;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
 import java.util.List;
+import java.util.Collections;
 
 import javax.annotation.Nullable;
 
@@ -46,8 +46,7 @@ public class MusicBrowserService extends MediaBrowserService {
         if (clientPackageName == null) {
             return null;
         }
-        boolean isSelf = Process.SYSTEM_UID == clientUid || Process.myUid() == clientUid;
-        if (!isSelf && !PackageValidator.isKnownCaller(this, clientPackageName, clientUid)) {
+        if (!PackageValidator.isKnownCaller(this, clientPackageName, clientUid)) {
             return null;
         }
         if (TelegramMediaSession.getInstance(this).isPasscodeLocked()) {
@@ -62,7 +61,7 @@ public class MusicBrowserService extends MediaBrowserService {
         if (holder.isPasscodeLocked()) {
             Toast.makeText(getApplicationContext(), LocaleController.getString(R.string.EnterYourTelegramPasscode), Toast.LENGTH_LONG).show();
             stopSelf();
-            result.detach();
+            result.sendResult(Collections.emptyList());
             return;
         }
         result.detach();

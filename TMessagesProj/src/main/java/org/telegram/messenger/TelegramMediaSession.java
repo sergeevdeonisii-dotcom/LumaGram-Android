@@ -59,6 +59,19 @@ public class TelegramMediaSession {
         return instance;
     }
 
+    public static void refreshPrivacyIfCreated() {
+        refreshPrivacyIfCreated(false);
+    }
+
+    public static void refreshPrivacyIfCreated(boolean forceRedact) {
+        TelegramMediaSession existing = instance;
+        if (existing != null) AndroidUtilities.runOnUIThread(() -> {
+            if (forceRedact) existing.clearPublishedMetadata();
+            else existing.refreshPrivacy();
+        });
+        MusicPlayerService.refreshPrivacyIfRunning(forceRedact);
+    }
+
     private static final String SESSION_TAG = "TelegramMediaSession";
     private static final String MEDIA_ID_ROOT = "__ROOT__";
     private static final String MEDIA_ID_CHAT_PREFIX = "__CHAT_";
@@ -77,6 +90,8 @@ public class TelegramMediaSession {
     private final MediaSessionCompat session;
 
     private int currentAccount;
+    private long currentOwner;
+    private long browseGeneration;
     private long lastSelectedDialog;
 
     private boolean chatsLoaded;
@@ -94,6 +109,7 @@ public class TelegramMediaSession {
     private TelegramMediaSession(Context appContext) {
         this.appContext = appContext;
         this.currentAccount = UserConfig.selectedAccount;
+        this.currentOwner = UserConfig.getInstance(currentAccount).getClientUserId();
         this.lastSelectedDialog = AndroidUtilities.getPrefIntOrLong(MessagesController.getNotificationsSettings(currentAccount), "auto_lastSelectedDialog", 0);
 
         session = new MediaSessionCompat(appContext, SESSION_TAG);
@@ -103,7 +119,7 @@ public class TelegramMediaSession {
         Intent activityIntent = new Intent(appContext, LaunchActivity.class);
         PendingIntent pi = PendingIntent.getActivity(
                 appContext, 99, activityIntent,
-                PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         session.setSessionActivity(pi);
 
         Bundle extras = new Bundle();
@@ -128,10 +144,22 @@ public class TelegramMediaSession {
                         AndroidUtilities.runOnUIThread(this::onAccountSwitched);
                     }
                 }, NotificationCenter.activeAccountChanged);
+        NotificationCenter.getGlobalInstance().addObserver(
+                (id, account, args) -> AndroidUtilities.runOnUIThread(this::refreshPrivacy),
+                NotificationCenter.didSetPasscode);
     }
 
     private void onAccountSwitched() {
+        ArrayList<PendingBrowseRequest> oldBrowseRequests = new ArrayList<>(pendingBrowseRequests);
+        pendingBrowseRequests.clear();
+        ArrayList<Runnable> oldMusicCallbacks = new ArrayList<>();
+        for (int i = 0; i < pendingMusicLoads.size(); i++) {
+            oldMusicCallbacks.addAll(pendingMusicLoads.valueAt(i));
+        }
+        pendingMusicLoads.clear();
+        browseGeneration++;
         currentAccount = UserConfig.selectedAccount;
+        currentOwner = UserConfig.getInstance(currentAccount).getClientUserId();
         lastSelectedDialog = AndroidUtilities.getPrefIntOrLong(
                 MessagesController.getNotificationsSettings(currentAccount), "auto_lastSelectedDialog", 0);
         chatsLoaded = false;
@@ -141,20 +169,63 @@ public class TelegramMediaSession {
         chats.clear();
         musicObjects.clear();
         musicQueues.clear();
-        pendingMusicLoads.clear();
-        try {
-            session.setQueue(null);
-            session.setQueueTitle(null);
-        } catch (Throwable ignored) {
+        clearPublishedMetadata();
+        for (PendingBrowseRequest request : oldBrowseRequests) {
+            request.callback.onResult(Collections.emptyList());
+        }
+        for (Runnable callback : oldMusicCallbacks) callback.run();
+    }
+
+    private void refreshAccount() {
+        if (currentAccount != UserConfig.selectedAccount
+                || currentOwner != UserConfig.getInstance(currentAccount).getClientUserId()) {
+            onAccountSwitched();
+        }
+    }
+
+    private boolean isCurrentRequest(int account, long owner, long generation) {
+        refreshAccount();
+        return LumaMediaBrowserPolicy.sameOwner(account, owner, generation,
+                currentAccount, currentOwner, browseGeneration);
+    }
+
+    private boolean canBrowse() {
+        refreshAccount();
+        if (currentOwner > 0 && !isPasscodeLocked()) return true;
+        clearPublishedMetadata();
+        return false;
+    }
+
+    private boolean canExposeDialog(int account, long dialogId) {
+        return LumaMediaBrowserPolicy.canExpose(UserConfig.getInstance(account).getClientUserId(),
+                dialogId, DialogObject.isEncryptedDialog(dialogId),
+                BlackHoleVault.contains(account, dialogId), isPasscodeLocked());
+    }
+
+    private void clearPublishedMetadata() {
+        session.setQueue(null);
+        session.setQueueTitle(null);
+        session.setMetadata(null);
+    }
+
+    /** Clear previously published data as soon as a dialog becomes protected. */
+    public void refreshPrivacy() {
+        refreshAccount();
+        MessageObject playing = MediaController.getInstance().getPlayingMessageObject();
+        if (isPasscodeLocked() || currentOwner <= 0
+                || lastSelectedDialog != 0 && !canExposeDialog(currentAccount, lastSelectedDialog)
+                || playing != null && !canExposeDialog(playing.currentAccount, playing.getDialogId())) {
+            clearPublishedMetadata();
         }
     }
 
     public int getCurrentAccount() {
+        refreshAccount();
         return currentAccount;
     }
 
     public ArrayList<Long> getMusicDialogsSortedByVisibleOrder() {
-        ArrayList<Long> sorted = new ArrayList<>(dialogs);
+        ArrayList<Long> sorted = getMusicDialogs();
         ArrayList<TLRPC.Dialog> all = MessagesController.getInstance(currentAccount).getAllDialogs();
         final java.util.HashMap<Long, Integer> rank = new java.util.HashMap<>();
         for (int i = 0; i < all.size(); i++) {
@@ -202,6 +273,7 @@ public class TelegramMediaSession {
         final int uptime = (int) (SystemClock.elapsedRealtime() / 1000);
         return SharedConfig.passcodeHash.length() > 0 && (
                 SharedConfig.appLocked
+                        || SharedConfig.isWaitingForPasscodeEnter
                         || SharedConfig.autoLockIn != 0 && SharedConfig.lastPauseTime != 0 && (SharedConfig.lastPauseTime + SharedConfig.autoLockIn) <= uptime
                         || uptime + 5 < SharedConfig.lastPauseTime
         );
@@ -216,19 +288,25 @@ public class TelegramMediaSession {
     }
 
     public ArrayList<Long> getMusicDialogs() {
-        return dialogs;
+        ArrayList<Long> visible = new ArrayList<>();
+        if (canBrowse()) {
+            for (long did : dialogs) {
+                if (canExposeDialog(currentAccount, did)) visible.add(did);
+            }
+        }
+        return visible;
     }
 
     public TLRPC.User getMusicUser(long userId) {
-        return users.get(userId);
+        return canBrowse() && canExposeDialog(currentAccount, userId) ? users.get(userId) : null;
     }
 
     public TLRPC.Chat getMusicChat(long chatId) {
-        return chats.get(chatId);
+        return canBrowse() && canExposeDialog(currentAccount, -chatId) ? chats.get(chatId) : null;
     }
 
     public ArrayList<MessageObject> getMusicMessages(long dialogId) {
-        return musicObjects.get(dialogId);
+        return canBrowse() && canExposeDialog(currentAccount, dialogId) ? musicObjects.get(dialogId) : null;
     }
 
     public Bitmap getRoundedAvatar(File path) {
@@ -236,7 +314,7 @@ public class TelegramMediaSession {
     }
 
     public void ensureLoaded(Runnable onLoaded) {
-        if (chatsLoaded) {
+        if (!canBrowse() || chatsLoaded) {
             if (onLoaded != null) AndroidUtilities.runOnUIThread(onLoaded);
             return;
         }
@@ -258,19 +336,33 @@ public class TelegramMediaSession {
     private final ArrayList<PendingBrowseRequest> pendingBrowseRequests = new ArrayList<>();
 
     public void loadBrowseChildren(String parentMediaId, BrowseChildrenCallback callback) {
+        if (!canBrowse()) {
+            callback.onResult(Collections.emptyList());
+            return;
+        }
+        final int account = currentAccount;
+        final long owner = currentOwner;
+        final long generation = browseGeneration;
+        BrowseChildrenCallback guardedCallback = items -> callback.onResult(
+                isCurrentRequest(account, owner, generation) && !isPasscodeLocked()
+                        ? items : Collections.emptyList());
         if (!chatsLoaded) {
-            pendingBrowseRequests.add(new PendingBrowseRequest(parentMediaId, callback));
+            pendingBrowseRequests.add(new PendingBrowseRequest(parentMediaId, guardedCallback));
             loadChats();
             return;
         }
 
         long did = getDialogIdFromMediaId(parentMediaId);
+        if (did != 0 && !canExposeDialog(currentAccount, did)) {
+            guardedCallback.onResult(Collections.emptyList());
+            return;
+        }
         if (did != 0 && musicObjects.get(did) == null) {
-            loadMusicForDialog(did, () -> callback.onResult(loadChildrenSync(parentMediaId)));
+            loadMusicForDialog(did, () -> guardedCallback.onResult(loadChildrenSync(parentMediaId)));
             return;
         }
 
-        callback.onResult(loadChildrenSync(parentMediaId));
+        guardedCallback.onResult(loadChildrenSync(parentMediaId));
     }
 
     private void loadChats() {
@@ -280,6 +372,8 @@ public class TelegramMediaSession {
         loadingChats = true;
 
         final int account = currentAccount;
+        final long owner = currentOwner;
+        final long generation = browseGeneration;
         MessagesStorage messagesStorage = MessagesStorage.getInstance(account);
         messagesStorage.getStorageQueue().postRunnable(() -> {
             ArrayList<Long> loadedDialogs = new ArrayList<>();
@@ -322,7 +416,7 @@ public class TelegramMediaSession {
             }
 
             AndroidUtilities.runOnUIThread(() -> {
-                if (account != currentAccount) {
+                if (!isCurrentRequest(account, owner, generation)) {
                     return;
                 }
                 dialogs.clear();
@@ -352,6 +446,13 @@ public class TelegramMediaSession {
     }
 
     private void loadMusicForDialog(long did, Runnable onLoaded) {
+        if (!canBrowse() || !canExposeDialog(currentAccount, did)) {
+            if (onLoaded != null) onLoaded.run();
+            return;
+        }
+        final int account = currentAccount;
+        final long owner = currentOwner;
+        final long generation = browseGeneration;
         ArrayList<Runnable> callbacks = pendingMusicLoads.get(did);
         if (callbacks != null) {
             if (onLoaded != null) {
@@ -366,7 +467,6 @@ public class TelegramMediaSession {
         }
         pendingMusicLoads.put(did, callbacks);
 
-        final int account = currentAccount;
         MessagesStorage messagesStorage = MessagesStorage.getInstance(account);
         messagesStorage.getStorageQueue().postRunnable(() -> {
             ArrayList<MessageObject> arrayList = new ArrayList<>();
@@ -379,7 +479,7 @@ public class TelegramMediaSession {
                         continue;
                     }
                     TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
-                    message.readAttachPath(data, UserConfig.getInstance(account).clientUserId);
+                    message.readAttachPath(data, owner);
                     data.reuse();
                     if (!MessageObject.isMusicMessage(message)) {
                         continue;
@@ -403,11 +503,13 @@ public class TelegramMediaSession {
             }
 
             AndroidUtilities.runOnUIThread(() -> {
-                if (account != currentAccount) {
+                if (!isCurrentRequest(account, owner, generation)) {
                     return;
                 }
-                musicObjects.put(did, arrayList);
-                musicQueues.put(did, queueList);
+                if (canExposeDialog(account, did)) {
+                    musicObjects.put(did, arrayList);
+                    musicQueues.put(did, queueList);
+                }
                 ArrayList<Runnable> loadedCallbacks = pendingMusicLoads.get(did);
                 pendingMusicLoads.remove(did);
                 if (did == lastSelectedDialog) {
@@ -436,9 +538,11 @@ public class TelegramMediaSession {
 
     private List<MediaBrowser.MediaItem> loadChildrenSync(String parentMediaId) {
         List<MediaBrowser.MediaItem> mediaItems = new ArrayList<>();
+        if (!canBrowse()) return mediaItems;
         if (MEDIA_ID_ROOT.equals(parentMediaId)) {
             for (int a = 0; a < dialogs.size(); a++) {
                 long dialogId = dialogs.get(a);
+                if (!canExposeDialog(currentAccount, dialogId)) continue;
                 android.media.MediaDescription.Builder builder = new android.media.MediaDescription.Builder()
                         .setMediaId(MEDIA_ID_CHAT_PREFIX + dialogId);
                 TLRPC.FileLocation avatar = null;
@@ -482,6 +586,7 @@ public class TelegramMediaSession {
             } catch (Exception e) {
                 FileLog.e(e);
             }
+            if (!canExposeDialog(currentAccount, did)) return mediaItems;
             ArrayList<MessageObject> arrayList = musicObjects.get(did);
             if (arrayList != null) {
                 for (int a = 0; a < arrayList.size(); a++) {
@@ -498,7 +603,10 @@ public class TelegramMediaSession {
     }
 
     private void applyQueueFor(long did) {
-        if (did == 0) return;
+        if (!canBrowse() || !canExposeDialog(currentAccount, did)) {
+            clearPublishedMetadata();
+            return;
+        }
         ArrayList<MessageObject> arrayList = musicObjects.get(did);
         ArrayList<MediaSessionCompat.QueueItem> queueList = musicQueues.get(did);
         if (arrayList == null || arrayList.isEmpty() || queueList == null) return;
@@ -522,6 +630,10 @@ public class TelegramMediaSession {
 
     public void publishMetadata(MessageObject messageObject, @Nullable AudioInfo audioInfo, @Nullable Bitmap albumArt) {
         if (messageObject == null) return;
+        if (!canExposeDialog(messageObject.currentAccount, messageObject.getDialogId())) {
+            clearPublishedMetadata();
+            return;
+        }
         MediaMetadataCompat.Builder meta = new MediaMetadataCompat.Builder()
                 .putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ARTIST, messageObject.getMusicAuthor())
                 .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, messageObject.getMusicAuthor())
@@ -536,6 +648,7 @@ public class TelegramMediaSession {
     }
 
     public void publishPlaybackState(PlaybackStateCompat state) {
+        refreshPrivacy();
         session.setPlaybackState(state);
     }
 
@@ -611,14 +724,27 @@ public class TelegramMediaSession {
 
     private final class SessionCallback extends MediaSessionCompat.Callback {
 
+        private boolean canControlPlaylist() {
+            if (!canBrowse()) return false;
+            MessageObject playing = MediaController.getInstance().getPlayingMessageObject();
+            if (playing == null || !canExposeDialog(playing.currentAccount, playing.getDialogId())) return false;
+            // Shuffle/offline traversal may choose any entry. Do not allow an external
+            // controller to enter protected media through an existing in-app playlist.
+            for (MessageObject target : MediaController.getInstance().getPlaylist()) {
+                if (target == null || !canExposeDialog(target.currentAccount, target.getDialogId())) return false;
+            }
+            return true;
+        }
+
         @Override
         public void onPlay() {
+            if (!canBrowse()) return;
             MessageObject messageObject = MediaController.getInstance().getPlayingMessageObject();
             if (messageObject == null) {
                 if (lastSelectedDialog != 0) {
                     onPlayFromMediaId(lastSelectedDialog + "_" + 0, null);
                 }
-            } else {
+            } else if (canExposeDialog(messageObject.currentAccount, messageObject.getDialogId())) {
                 MediaController.getInstance().playMessage(messageObject);
             }
         }
@@ -630,6 +756,7 @@ public class TelegramMediaSession {
 
         @Override
         public void onSkipToNext() {
+            if (!canControlPlaylist()) return;
             MessageObject playing = MediaController.getInstance().getPlayingMessageObject();
             if (playing != null && playing.isMusic()) {
                 MediaController.getInstance().playNextMessage();
@@ -638,6 +765,7 @@ public class TelegramMediaSession {
 
         @Override
         public void onSkipToPrevious() {
+            if (!canControlPlaylist()) return;
             MessageObject playing = MediaController.getInstance().getPlayingMessageObject();
             if (playing != null && playing.isMusic()) {
                 MediaController.getInstance().playPreviousMessage();
@@ -646,13 +774,19 @@ public class TelegramMediaSession {
 
         @Override
         public void onSkipToQueueItem(long queueId) {
+            if (!canBrowse()) return;
+            ArrayList<MessageObject> playlist = MediaController.getInstance().getPlaylist();
+            if (!LumaMediaBrowserPolicy.validQueueIndex(queueId, playlist.size())) return;
+            MessageObject target = playlist.get((int) queueId);
+            if (target == null || !canExposeDialog(target.currentAccount, target.getDialogId())) return;
             MediaController.getInstance().playMessageAtIndex((int) queueId);
         }
 
         @Override
         public void onSeekTo(long pos) {
+            if (!canBrowse()) return;
             MessageObject object = MediaController.getInstance().getPlayingMessageObject();
-            if (object != null) {
+            if (object != null && canExposeDialog(object.currentAccount, object.getDialogId())) {
                 MediaController.getInstance().seekToProgress(object, (float) (pos / 1000.0 / object.getDuration()));
             }
         }
@@ -710,15 +844,25 @@ public class TelegramMediaSession {
 
         @Override
         public void onPlayFromMediaId(String mediaId, Bundle extras) {
+            if (!canBrowse()) return;
             if (TextUtils.isEmpty(mediaId)) return;
             String[] args = mediaId.split("_");
             if (args.length != 2) return;
             try {
                 long did = Long.parseLong(args[0]);
                 int id = Integer.parseInt(args[1]);
+                if (!canExposeDialog(currentAccount, did)) return;
                 ArrayList<MessageObject> arrayList = musicObjects.get(did);
                 if (arrayList == null) {
-                    loadMusicForDialog(did, () -> onPlayFromMediaId(mediaId, extras));
+                    final int account = currentAccount;
+                    final long owner = currentOwner;
+                    final long generation = browseGeneration;
+                    loadMusicForDialog(did, () -> {
+                        if (isCurrentRequest(account, owner, generation)
+                                && canBrowse() && canExposeDialog(account, did)) {
+                            onPlayFromMediaId(mediaId, extras);
+                        }
+                    });
                     return;
                 }
                 ArrayList<MediaSessionCompat.QueueItem> queueList = musicQueues.get(did);
@@ -744,10 +888,12 @@ public class TelegramMediaSession {
 
         @Override
         public void onPlayFromSearch(String query, Bundle extras) {
+            if (!canBrowse()) return;
             if (query == null || query.length() == 0) return;
             String q = query.toLowerCase();
             for (int a = 0; a < dialogs.size(); a++) {
                 long did = dialogs.get(a);
+                if (!canExposeDialog(currentAccount, did)) continue;
                 if (DialogObject.isUserDialog(did)) {
                     TLRPC.User user = users.get(did);
                     if (user == null) continue;

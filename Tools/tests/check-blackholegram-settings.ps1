@@ -12,6 +12,7 @@ function Method([string]$source, [string]$name, [string]$access = 'private') {
 }
 
 $advanced = Source 'TMessagesProj/src/main/java/org/telegram/ui/ExperimentalFeaturesActivity.java'
+$round = Source 'TMessagesProj/src/main/java/org/telegram/ui/RoundVideoSettingsActivity.java'
 $updates = Source 'TMessagesProj/src/main/java/org/telegram/ui/LumaUpdateActivity.java'
 $updater = Source 'TMessagesProj/src/main/java/org/telegram/messenger/LumaUpdaterController.java'
 $root = Method $advanced 'fillSections'
@@ -30,7 +31,7 @@ $expected = [ordered]@{
     PRIVACY = @{ Method = 'fillPrivacyItems'; Rows = @('ROW_GHOST_ENABLED', 'ROW_GHOST_SCHEDULE_SEND_ENABLED', 'ROW_DELETED_MESSAGES_ENABLED') }
     PROFILE = @{ Method = 'fillProfileItems'; Rows = @('ROW_STAR_RATING_ENABLED', 'ROW_STAR_RATING_LEVEL', 'ROW_ANONYMOUS_NUMBER_ENABLED', 'ROW_ANONYMOUS_NUMBER', 'ROW_PROFILE_VERIFICATION_ENABLED') }
     TYPING = @{ Method = 'fillTypingItems'; Rows = @('ROW_ENABLED', 'ROW_RESET') }
-    SENDING = @{ Method = 'fillSendingItems'; Rows = @('ROW_DELAYED_SEND_ENABLED', 'ROW_ROUND_VIDEO_QUALITY', 'ROW_ROUND_VIDEO_REAR_CAMERA') }
+    SENDING = @{ Method = 'fillSendingItems'; Rows = @('ROW_DELAYED_SEND_ENABLED') }
     CONNECTION = @{ Method = 'fillConnectionItems'; Rows = @('ROW_EMERGENCY_ENABLED', 'ROW_EMERGENCY_CHAT', 'ROW_ACCOUNT_EXPORT') }
 }
 $visibleRows = @()
@@ -43,9 +44,10 @@ foreach ($name in $expected.Keys) {
     Check (@(Compare-Object $entry.Rows $actualRows).Count -eq 0) "Section $name retains all expected controls"
     $visibleRows += $actualRows
 }
-Check ($visibleRows.Count -eq 16 -and $visibleRows.Count -eq $rows.Count -and @(Compare-Object @($rows | ForEach-Object { $_.Groups[1].Value }) $visibleRows).Count -eq 0) 'All fourteen existing controls and both round-video switches are reachable once'
-Check ((Method $advanced 'fillSendingItems').Contains('LumaRoundVideoQuality.isEnabled()') -and $click.Contains('LumaRoundVideoQuality.setEnabled(enabled);')) 'Round-video quality uses its persistent recording preference'
-Check ((Method $advanced 'fillSendingItems').Contains('LumaRoundVideoCamera.isStartWithRearCameraEnabled()') -and $click.Contains('LumaRoundVideoCamera.setStartWithRearCameraEnabled(enabled);')) 'Initial round-video camera uses its persistent preference'
+Check ($visibleRows.Count -eq 14 -and $visibleRows.Count -eq $rows.Count -and @(Compare-Object @($rows | ForEach-Object { $_.Groups[1].Value }) $visibleRows).Count -eq 0) 'All fourteen advanced controls remain reachable once; camera controls have their own screen'
+Check ($advanced -notmatch 'LumaRoundVideo|RoundVideoSettingsActivity|ROW_ROUND_VIDEO') 'Sending no longer includes any camera options or stale camera handlers'
+Check ($round.Contains('LumaRoundVideoQuality.isEnabled()') -and (Method $round 'onRowClicked').Contains('LumaRoundVideoQuality.setEnabled(!LumaRoundVideoQuality.isEnabled());')) 'Moved round-video quality still uses its persistent recording preference'
+Check ($round.Contains('LumaRoundVideoCamera.isStartWithRearCameraEnabled()') -and (Method $round 'onRowClicked').Contains('LumaRoundVideoCamera.setStartWithRearCameraEnabled(!LumaRoundVideoCamera.isStartWithRearCameraEnabled());')) 'Moved initial-camera toggle still uses its persistent preference'
 $typing = Method $advanced 'fillTypingItems'
 foreach ($setting in @('SpeedLevel', 'BlurLevel', 'HeightLevel', 'SwipeMode')) {
     Check ($typing.Contains("LumaTextAnimation.get$setting()") -and $typing.Contains("LumaTextAnimation::set$setting")) "Typing slider $setting keeps its original preference"

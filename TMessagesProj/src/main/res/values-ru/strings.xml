@@ -441,12 +441,14 @@
     <string name="LumaUpdateSourceNoNewVersion">Более новой версии Lunagram пока нет.</string>
     <string name="LumaRoundVideoQualityTitle">Кружки</string>
     <string name="LumaRoundVideoQualityEnable">Запись высокого качества</string>
+    <string name="LumaRoundVideoLegacyQualityTitle">Качество обычной камеры</string>
+    <string name="LumaRoundVideoLegacyQualityInfo">Этот переключатель работает только при выключенном Camera2. В новом режиме качество задаётся разрешением и битрейтом выше. Прежний выбор для обычной камеры сохраняется.</string>
     <string name="LumaRoundVideoStartRearCamera">Начинать с задней камеры</string>
     <string name="LumaFriendsProfilesInfo">Обычный и рабочий профили: оформление и анимация ввода.</string>
     <string name="LumaFriendsProfileInfo">Локальное отображение уровня</string>
     <string name="LumaFriendsSendingInfo">Качество кружков и начальная камера</string>
     <string name="LumaRoundVideoStartRearCameraInfo">Новые кружки записываются сначала на заднюю камеру. Во время записи можно переключиться на переднюю. Продолжение записи после паузы сохраняет выбранную камеру.</string>
-    <string name="LumaRoundVideoQualityInfo">Более чёткие кружки 640 × 640. Файлы больше, отправка может занимать дольше. Без обрезки отправляется записанный файл без повторного сжатия; обрезка всё ещё требует обработки.</string>
+    <string name="LumaRoundVideoQualityInfo">Более чёткие кружки 640 × 640. Файлы больше, отправка может занимать дольше. Без обрезки и в пределах лимита Telegram файл отправляется без повторного сжатия. Слишком большие файлы сжимаются без сокращения записи; обрезка тоже требует обработки.</string>
     <string name="LumaRoundVideoFps">Частота кадров · FPS</string>
     <string name="LumaRoundVideoMeasuredTitle">Последний записанный кружок</string>
     <string name="LumaRoundVideoMeasuredEmpty">Запишите и отправьте кружок длиннее двух секунд. Здесь появятся фактические FPS, разрешение и битрейт видео. Доступно с Android 9; короткий или недоступный файл измерить нельзя.</string>
