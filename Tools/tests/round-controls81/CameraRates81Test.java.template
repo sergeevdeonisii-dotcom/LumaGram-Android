@@ -26,9 +26,10 @@ public final class CameraRates81Test {
     }
     static final class StreamConfigurationMap {
         long duration=16_666_667L;
+        boolean rejectDuration;
         Size[] sizes={new Size(1920,1080)};
         Range<Integer>[] fps=ranges(120,120);
-        long getOutputMinFrameDuration(Class<?> c,Size size){return duration;}
+        long getOutputMinFrameDuration(Class<?> c,Size size){if(rejectDuration)throw new IllegalArgumentException();return duration;}
         Size[] getHighSpeedVideoSizes(){return sizes;}
         Range<Integer>[] getHighSpeedVideoFpsRangesFor(Size size){return fps;}
     }
@@ -44,6 +45,23 @@ public final class CameraRates81Test {
         c.set(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP,map);
         c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(30,30,30,60,60,60));
         check(chooseRecordingFpsRange(c,hd,60).getLower()==60,"Advertised fixed normal range preferred");
+        c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(15,30,15,60));
+        check(chooseRecordingFpsRange(c,hd,60).getLower()==15,"Adaptive60 is not silently downgraded to30");
+        check(chooseNormalFallbackFrameRate(c,hd,120)==60,"Rejected high-speed120 retains advertised normal60 at the same source size");
+        check(chooseNormalFallbackFrameRate(c,hd,90)==60,"Rejected normal90 can fall back to normal60");
+        check(chooseNormalFallbackFrameRate(c,hd,60)==30,"Rejected normal60 decreases strictly to30");
+        check(chooseNormalFallbackFrameRate(c,hd,30)==30,"Fallback never escalates an already30fps source");
+        map.duration=33_333_333L;
+        check(chooseNormalFallbackFrameRate(c,hd,120)==30,"Advertised60 alone does not bypass source frame duration validation");
+        map.duration=0;
+        check(chooseNormalFallbackFrameRate(c,hd,120)==30,"Unknown timing retains safe30 fallback");
+        map.duration=16_666_667L;map.rejectDuration=true;
+        check(chooseNormalFallbackFrameRate(c,hd,120)==30,"Broken HAL timing metadata retains safe30 fallback");
+        map.rejectDuration=false;
+        check(chooseNormalFallbackFrameRate(null,hd,120)==30,"Missing characteristics cannot invent60 fallback");
+        c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(15,30));
+        check(chooseNormalFallbackFrameRate(c,hd,120)==30,"Missing advertised60 uses30 despite fast stream timing");
+        c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(30,30,30,60,60,60));
         check(chooseRecordingFpsRange(c,hd,120)==null,"Normal 60 cannot claim 120");
         c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(30,30,90,90,120,120));
         check(chooseRecordingFpsRange(c,hd,90)==null,"Stream duration rejects normal 90");

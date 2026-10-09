@@ -1,0 +1,62 @@
+package org.telegram.messenger;
+
+public final class RoundExport82RegressionTest {
+    private static int assertions;
+    private static final class Info {
+        boolean roundVideo;
+        boolean shouldLimitFps;
+    }
+
+    private static int actual(int framerate, int resultWidth, int resultHeight,
+                              int rotationValue, boolean round, boolean limited) {
+        Info info = new Info();
+        info.roundVideo = round;
+        info.shouldLimitFps = limited;
+        @@PRODUCTION_RATE_POLICY@@
+        return framerate;
+    }
+
+    private static int originalVideoPolicy(int rate, int width, int height, boolean limited) {
+        if (rate == 0) rate = 25;
+        else if (rate > 59) rate = 59;
+        if (!limited && rate > 40 && Math.min(width, height) <= 480) rate = 30;
+        return rate;
+    }
+
+    private static void equal(long expected, long actual, String description) {
+        assertions++;
+        if (expected != actual) throw new AssertionError(description + ": " + actual + " != " + expected);
+    }
+
+    public static void main(String[] args) {
+        for (int rate : new int[] {0, 15, 24, 25, 29, 30, 40, 41, 59, 60, 90, 120, 240}) {
+            for (int size : new int[] {320, 384, 480, 640, 720, 1080}) {
+                for (int rotation : new int[] {0, 90, 180, 270}) {
+                    for (boolean limited : new boolean[] {false, true}) {
+                        equal(rate == 0 ? 30 : Math.min(120, rate),
+                                actual(rate, size, size / 2, rotation, true, limited),
+                                "round rate survives conversion " + rate + "/" + size);
+                        equal(originalVideoPolicy(rate, size, size / 2, limited),
+                                actual(rate, size, size / 2, rotation, false, limited),
+                                "ordinary-video policy unchanged " + rate + "/" + size);
+                    }
+                }
+            }
+        }
+        // The actual converter's skip threshold must admit every regular
+        // source frame at each supported round-video rate, using real PTS.
+        for (int framerate : new int[] {30, 60, 90, 120}) {
+            @@PRODUCTION_SKIP_THRESHOLD@@
+            long previous = 0;
+            for (int frame = 1; frame <= framerate * 10; frame++) {
+                long pts = frame * 1_000_000L / framerate;
+                assertions++;
+                if (pts - previous < frameDeltaFroSkipFrames) {
+                    throw new AssertionError("Converter drops regular " + framerate + " fps frame");
+                }
+                previous = pts;
+            }
+        }
+        System.out.println("Round export .82: " + assertions + " assertions passed.");
+    }
+}

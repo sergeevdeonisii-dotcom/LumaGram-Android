@@ -39,6 +39,12 @@ public final class LumaRoundVideoQuality {
 
     public static int getFrameRateLevel() { return getPreferredFrameRate() / FRAME_RATE - 1; }
 
+    /** An explicit high-FPS choice must not be silently routed through Camera1. */
+    public static boolean prefersHighFrameRateCapture() {
+        return MessagesController.getGlobalMainSettings().contains(FRAME_RATE_PREFERENCE_KEY)
+            && getPreferredFrameRate() > FRAME_RATE;
+    }
+
     public static void setFrameRateLevel(int level) {
         int fps = (Math.max(0, Math.min(3, level)) + 1) * FRAME_RATE;
         MessagesController.getGlobalMainSettings().edit().putInt(FRAME_RATE_PREFERENCE_KEY, fps).apply();
@@ -124,8 +130,10 @@ public final class LumaRoundVideoQuality {
 
     public static boolean supportsTargetFrameRate(java.util.List<int[]> ranges, int fps, int units) {
         int[] range = chooseFpsRange(ranges, fps, units);
-        return range != null && (long) fps * units == range[1]
-            && range[0] >= (long) Math.min(fps, FRAME_RATE) * units;
+        // A genuine [15,60] AE range can deliver 60 in sufficient light. Its
+        // lower bound is not a capability ceiling; never replace it with a
+        // fabricated [60,60] range. Actual cadence is measured from the MP4.
+        return range != null && (long) fps * units == range[1];
     }
 
     /** Unknown stream timing cannot prove normal-session high-FPS support. */

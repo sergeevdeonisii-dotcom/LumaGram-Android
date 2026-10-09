@@ -5,7 +5,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class Camera2Session {
     static final class Build { static final int SDK_INT = 36; static final class VERSION { static final int SDK_INT = 36; } static final class VERSION_CODES { static final int M = 23; } }
-    static final class LumaRoundVideoQuality { static final int FRAME_RATE = 30; }
+    static final class LumaRoundVideoQuality {
+        static final int FRAME_RATE = 30, HIGH_FRAME_RATE = 60;
+        // PRODUCTION_RATE_POLICY
+    }
     @interface NonNull {}
     static int assertions;
     static void check(boolean value, String label) { assertions++; if (!value) throw new AssertionError(label); }
@@ -31,6 +34,36 @@ public final class Camera2Session {
     static final class SurfaceTexture {
         int resizes, releases;
         void setDefaultBufferSize(int width, int height) { resizes++; }
+    }
+    static final class Size {
+        final int width, height;
+        Size(int width, int height) { this.width = width; this.height = height; }
+    }
+    static final class Range<T> {
+        final T lower, upper;
+        Range(T lower, T upper) { this.lower = lower; this.upper = upper; }
+        T getLower() { return lower; }
+        T getUpper() { return upper; }
+    }
+    static final class Key<T> {}
+    static final class CameraCharacteristics {
+        static final Key<Range<Integer>[]> CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES = new Key<>();
+        static final Key<StreamConfigurationMap> SCALER_STREAM_CONFIGURATION_MAP = new Key<>();
+        Range<Integer>[] ranges = ranges(30, 30);
+        final StreamConfigurationMap map = new StreamConfigurationMap();
+        @SuppressWarnings("unchecked") <T> T get(Key<T> key) {
+            return (T) (key == SCALER_STREAM_CONFIGURATION_MAP ? map : ranges);
+        }
+    }
+    static final class StreamConfigurationMap {
+        long duration = 16_666_667L;
+        Size queriedSize;
+        long getOutputMinFrameDuration(Class<?> type, Size size) { queriedSize = size; return duration; }
+    }
+    @SuppressWarnings("unchecked") static Range<Integer>[] ranges(int... endpoints) {
+        Range<Integer>[] ranges = new Range[endpoints.length / 2];
+        for (int i = 0; i < ranges.length; i++) ranges[i] = new Range<>(endpoints[2 * i], endpoints[2 * i + 1]);
+        return ranges;
     }
     static final class Surface {
         int releases;
@@ -84,6 +117,9 @@ public final class Camera2Session {
     private long lastTime;
     private boolean opened;
     private boolean highSpeedSession;
+    private boolean roundRecording = true;
+    private final CameraCharacteristics cameraCharacteristics = new CameraCharacteristics();
+    private final Size previewSize = new Size(640, 640);
     private int captureGeneration, requestedRecordingFrameRate = 120;
     private int requests;
     private boolean updateCaptureRequest() {
@@ -156,9 +192,57 @@ public final class Camera2Session {
         AndroidUtilities.ui.drain();
         check(reentrant.isClosed && reentrant.cameraDevice == null, "A completion callback may synchronously destroy its owner");
     }
+    static void highFrameRateFallbackLifecycle() {
+        Camera2Session owner = new Camera2Session();
+        owner.highSpeedSession = true;
+        owner.cameraCharacteristics.ranges = ranges(15, 30, 15, 60);
+        owner.open(new SurfaceTexture()); owner.handler.drain();
+        CameraDevice device = new CameraDevice(); owner.cameraStateCallback.onOpened(device);
+        CameraCaptureSession failed120 = new CameraCaptureSession();
+        device.callbacks.get(0).onConfigureFailed(failed120);
+        check(!owner.highSpeedSession && owner.requestedRecordingFrameRate == 60 && device.creates == 2,
+            "Rejected 120 creates a normal 60 session when the same source supports it");
+        check(failed120.closes == 1 && owner.captureSession == null && owner.cameraDevice == device,
+            "120 fallback closes only the rejected session and retains its camera device");
+        check(owner.cameraCharacteristics.map.queriedSize == owner.previewSize,
+            "60 fallback validates the existing preview size, not another camera output");
+        CameraCaptureSession stale120 = new CameraCaptureSession();
+        device.callbacks.get(0).onConfigured(stale120);
+        check(stale120.closes == 1 && owner.requests == 0,
+            "Stale 120 callback cannot publish readiness during a 60 retry");
+        CameraCaptureSession failed60 = new CameraCaptureSession();
+        device.callbacks.get(1).onConfigureFailed(failed60);
+        check(owner.requestedRecordingFrameRate == 30 && device.creates == 3 && failed60.closes == 1,
+            "Rejected normal 60 steps down exactly once to a normal 30 session");
+        CameraCaptureSession stale60 = new CameraCaptureSession();
+        device.callbacks.get(1).onConfigured(stale60);
+        check(stale60.closes == 1 && owner.captureSession == null && owner.requests == 0,
+            "Stale 60 callback cannot replace the 30 fallback");
+        CameraCaptureSession normal30 = new CameraCaptureSession();
+        device.callbacks.get(2).onConfigured(normal30); AndroidUtilities.ui.drain();
+        check(owner.isInitiated() && owner.captureSession == normal30 && owner.requests == 1,
+            "Only the final successfully configured fallback becomes ready");
+        check(!owner.fallbackHighSpeedSession() && device.creates == 3,
+            "A 30 fps session cannot start another fallback cycle");
+        owner.destroy(false, null); AndroidUtilities.ui.drain();
+
+        owner = new Camera2Session(); owner.highSpeedSession = true;
+        owner.cameraCharacteristics.ranges = ranges(15, 30, 15, 60);
+        owner.open(new SurfaceTexture()); owner.handler.drain();
+        device = new CameraDevice(); device.rejectHighSpeed = true;
+        owner.cameraStateCallback.onOpened(device);
+        check(owner.requestedRecordingFrameRate == 60 && device.creates == 1,
+            "Synchronous high-speed rejection also preserves normal 60");
+        device.callbacks.get(0).onConfigureFailed(new CameraCaptureSession());
+        device.callbacks.get(1).onConfigureFailed(new CameraCaptureSession()); AndroidUtilities.ui.drain();
+        check(owner.isError && owner.requestedRecordingFrameRate == 30 && device.creates == 2,
+            "Failure of final normal 30 reports an error without recursion or repeated retries");
+        owner.destroy(false, null); AndroidUtilities.ui.drain();
+    }
     public static void main(String[] args) throws Exception {
         lateCallbacks(false); lateCallbacks(true);
         concurrentCompletion();
+        highFrameRateFallbackLifecycle();
         Camera2Session fast = new Camera2Session(); fast.highSpeedSession = true;
         fast.open(new SurfaceTexture()); fast.handler.drain();
         CameraDevice fastDevice = new CameraDevice(); fast.cameraStateCallback.onOpened(fastDevice);

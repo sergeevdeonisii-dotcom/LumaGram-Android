@@ -85,6 +85,7 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaRoundVideoCamera;
 import org.telegram.messenger.LumaRoundVideoQuality;
+import org.telegram.messenger.LumaRoundVideoStats;
 import org.telegram.messenger.LumaRoundVideoStabilization;
 import org.telegram.messenger.LumaHorizonLock;
 import org.telegram.messenger.LumaHorizonState;
@@ -185,6 +186,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     private long recordedTime;
     private boolean cancelled;
     private volatile LumaRoundVideoQuality.Profile recordingQualityProfile;
+    private int requestedRecordingFps;
     private volatile int cameraStartupGeneration;
     private Runnable cameraStartupTimeout;
 
@@ -194,7 +196,8 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     private Size aspectRatio = SharedConfig.roundCamera16to9 ? new Size(16, 9) : new Size(4, 3);
     private TextureView textureView;
     private BackupImageView textureOverlayView;
-    private final boolean useCamera2 = SharedConfig.isUsingCamera2(currentAccount);
+    private final boolean useCamera2 = SharedConfig.isUsingCamera2(currentAccount)
+        || Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && LumaRoundVideoQuality.prefersHighFrameRateCapture();
     private CameraSession cameraSession;
     private boolean bothCameras;
     private Camera2Session[] camera2Sessions = new Camera2Session[2];
@@ -764,6 +767,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         needDrawFlickerStub = true;
 
         if (!fromPaused || recordingQualityProfile == null) {
+            requestedRecordingFps = LumaRoundVideoQuality.getPreferredFrameRate();
             boolean commonHighQuality = supportsCommonHighQualityCamera();
             recordingQualityProfile = LumaRoundVideoQuality.forCamera(
                 getBaselineRecordingProfile(), commonHighQuality, getSupportedRecordingFrameRate());
@@ -1883,6 +1887,12 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
 
             updateScale();
+
+            // The encoder receives textures from this same thread. A blocking
+            // preview swap must not throttle 60/120 capture to display cadence.
+            if (getRecordingQualityProfile().frameRate > LumaRoundVideoQuality.FRAME_RATE) {
+                EGL14.eglSwapInterval(EGL14.eglGetCurrentDisplay(), 0);
+            }
 
             float tX = 1.0f / scaleX / 2.0f;
             float tY = 1.0f / scaleY / 2.0f;
@@ -3321,6 +3331,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     videoFile.delete();
                 } catch (Throwable ignore) {}
             } else {
+                LumaRoundVideoStats.inspectAsync(videoFile, requestedRecordingFps, "legacy");
                 if (runDone && (send != ENCODER_SEND_SEND || !sentMedia)) {
                     sentMedia = true;
                     AndroidUtilities.runOnUIThread(() -> {

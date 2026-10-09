@@ -137,14 +137,14 @@ public final class RoundFps77RegressionTest {
             profile(LumaRoundVideoQuality.forCamera(base(), true,
                 LumaRoundVideoQuality.supportsTargetFrameRate(options, 60, 1)), 640, 60, 12_000_000, 128_000, true, "60 is nominal recording target, not a low-light cadence guarantee");
         });
-        test("Target 60 accepts only ranges capped at 60 with at least 30 FPS minimum", () -> {
+        test("Target 60 accepts advertised adaptive exposure ranges without promising fixed cadence", () -> {
             check(LumaRoundVideoQuality.supportsTargetFrameRate(ranges(60, 60), 60, 1), "Fixed 60 accepted");
             check(LumaRoundVideoQuality.supportsTargetFrameRate(ranges(30, 60), 60, 1), "Variable target 60 accepted");
-            check(!LumaRoundVideoQuality.supportsTargetFrameRate(ranges(15, 60), 60, 1), "Too-low minimum rejected");
+            check(LumaRoundVideoQuality.supportsTargetFrameRate(ranges(15, 60), 60, 1), "Low-light lower bound does not erase 60 target");
             check(!LumaRoundVideoQuality.supportsTargetFrameRate(ranges(30, 120), 60, 1), "Upper bound above requested target rejected");
             check(!LumaRoundVideoQuality.supportsTargetFrameRate(ranges(30, 30), 60, 1), "30 maximum cannot prove target 60");
             check(LumaRoundVideoQuality.supportsTargetFrameRate(ranges(30_000, 60_000), 60, 1000), "Legacy 30-to-60 target accepted in thousandths");
-            check(!LumaRoundVideoQuality.supportsTargetFrameRate(ranges(15_000, 60_000), 60, 1000), "Legacy low minimum rejected");
+            check(LumaRoundVideoQuality.supportsTargetFrameRate(ranges(15_000, 60_000), 60, 1000), "Legacy adaptive range accepted without synthesizing fixed60");
             check(!LumaRoundVideoQuality.supportsTargetFrameRate(ranges(30_000, 120_000), 60, 1000), "Legacy too-high maximum rejected");
             check(!LumaRoundVideoQuality.supportsTargetFrameRate(null, 60, 1), "Null ranges cannot prove target");
             check(!LumaRoundVideoQuality.supportsTargetFrameRate(ranges(60, 60), 0, 1), "Zero target rejected");

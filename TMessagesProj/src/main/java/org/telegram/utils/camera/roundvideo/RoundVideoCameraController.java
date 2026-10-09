@@ -160,7 +160,6 @@ final class RoundVideoCameraController {
     private volatile boolean previewTransformEnabled;
     private boolean frontConfigurationLogged;
     private boolean backConfigurationLogged;
-    private boolean frameRateFallbackAttempted;
     private long segmentStartedNs;
     private long cameraOpenRequestedNs;
     private long captureSessionRequestedNs;
@@ -631,7 +630,7 @@ final class RoundVideoCameraController {
             }
         } catch (CameraAccessException | IllegalArgumentException e) {
             if (activeFrameRate.getValue() > 30) {
-                fallbackTo30Fps("High frame-rate session creation rejected", e);
+                fallbackToLowerFrameRate("High frame-rate session creation rejected", e);
             } else {
                 reportError(e);
             }
@@ -679,7 +678,7 @@ final class RoundVideoCameraController {
                         if (requestedFacing != activeFacing) switchCameraIfNeeded(requestedFacing);
                     } catch (Exception e) {
                         if (activeFrameRate.getValue() > 30) {
-                            fallbackTo30Fps("High frame-rate request submission rejected", e);
+                            fallbackToLowerFrameRate("High frame-rate request submission rejected", e);
                         } else {
                             reportError(e);
                         }
@@ -698,7 +697,7 @@ final class RoundVideoCameraController {
                         return;
                     }
                     if (activeFrameRate.getValue() > 30) {
-                        fallbackTo30Fps("High frame-rate session configuration failed", null);
+                        fallbackToLowerFrameRate("High frame-rate session configuration failed", null);
                     } else {
                         reportError(new IllegalStateException(
                                 "Camera capture session configuration failed"
@@ -787,7 +786,7 @@ final class RoundVideoCameraController {
             recoverFromClosedCamera(session, e);
         } catch (CameraAccessException | IllegalArgumentException e) {
             if (activeFrameRate.getValue() > 30) {
-                fallbackTo30Fps("High frame-rate updated request rejected", e);
+                fallbackToLowerFrameRate("High frame-rate updated request rejected", e);
             } else {
                 reportError(e);
             }
@@ -1197,7 +1196,6 @@ final class RoundVideoCameraController {
         activeFpsRange = frameRatePlan.fpsRange;
         highSpeed = frameRatePlan.highSpeed;
         stabilizationRejected = false;
-        frameRateFallbackAttempted = false;
         regularFallbackPair = regularPair;
         resetCaptureFpsMeasurement();
         previewSize = pair.preview;
@@ -1409,30 +1407,62 @@ final class RoundVideoCameraController {
         }
     }
 
-    private void fallbackTo30Fps(
+    @NonNull
+    private FrameRatePlan resolveLowerFrameRate(
+            @NonNull String id,
+            @NonNull CameraCharacteristics cameraCharacteristics,
+            @NonNull StreamConfigurationMap map,
+            @NonNull Size[] sizes,
+            @NonNull OutputPair regularPair,
+            int failedFrameRate
+    ) {
+        // A rejected 120/90 stream should still try an advertised regular 60
+        // stream, not the same failed high-speed configuration at another rate.
+        // The ceiling strictly decreases, including if the encoder was already
+        // prepared at a lower rate, so fallback cannot loop or outrun its codec.
+        maximumFrameRate = Math.max(30,
+                Math.min(maximumFrameRate, Math.min(60, failedFrameRate - 30)));
+        return resolveFrameRate(id, cameraCharacteristics, map, sizes, regularPair);
+    }
+
+    private void fallbackToLowerFrameRate(
             @NonNull String reason,
             @Nullable Exception error
     ) {
-        if (frameRateFallbackAttempted) {
+        if (activeFrameRate == null || activeFrameRate.getValue() <= 30) {
             reportError(error != null
                     ? error
                     : new IllegalStateException("30 fps fallback session failed"));
             return;
         }
-        frameRateFallbackAttempted = true;
+        int failedFrameRate = activeFrameRate.getValue();
         closeCaptureSession();
         OutputPair pair = regularFallbackPair;
-        if (pair == null) {
+        if (pair == null || characteristics == null) {
             reportError(new IllegalStateException("Regular camera fallback is unavailable", error));
             return;
         }
-        activeFrameRate = RoundVideoSession.FrameRate.FPS_30;
-        maximumFrameRate = 30;
-        highSpeed = false;
-        Range<Integer>[] ranges = characteristics == null
-                ? null
-                : characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
-        activeFpsRange = findBestFpsRange(ranges, 30);
+        try {
+            StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+            Size[] sizes = map == null ? null : map.getOutputSizes(SurfaceTexture.class);
+            if (map == null || sizes == null || sizes.length == 0) {
+                throw new IllegalStateException("Regular camera output metadata is unavailable");
+            }
+            FrameRatePlan plan = resolveLowerFrameRate(cameraId, characteristics, map, sizes, pair, failedFrameRate);
+            activeFrameRate = plan.frameRate;
+            activeFpsRange = plan.fpsRange;
+            highSpeed = plan.highSpeed;
+            pair = plan.outputPair;
+        } catch (RuntimeException metadataError) {
+            // Metadata failure may not manufacture 60 fps; retain the already
+            // validated normal output pair and request an advertised 30 range.
+            maximumFrameRate = 30;
+            activeFrameRate = RoundVideoSession.FrameRate.FPS_30;
+            activeFpsRange = findBestFpsRange(characteristics.get(
+                    CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES), 30);
+            highSpeed = false;
+            diagnostics.log("frame-rate fallback metadata rejected: " + metadataError);
+        }
         previewSize = pair.preview;
         recordingSize = pair.recording;
         sourceCropSize = pair.cropSize;
@@ -1445,7 +1475,8 @@ final class RoundVideoCameraController {
         if (recording && glProcessor != null) {
             // Preserve the MP4 track and audio timeline on a camera flip or HAL
             // rejection. A slower camera supplies fewer frames, never duplicates.
-            glProcessor.setCameraPolicy(selectedFacing == RoundVideoSession.CameraFacing.FRONT, 30, sourceFrameRate());
+            glProcessor.setCameraPolicy(selectedFacing == RoundVideoSession.CameraFacing.FRONT,
+                    activeFrameRate.getValue(), sourceFrameRate());
             glProcessor.updateInputConfiguration(recordingSize, sourceCropSize, isCameraTimestampRealtime());
         } else {
         if (glProcessor != null) {
@@ -1467,6 +1498,8 @@ final class RoundVideoCameraController {
         resetCaptureFpsMeasurement();
         diagnostics.log("High frame-rate fallback: reason=" + reason
                 + (error == null ? "" : ", error=" + error)
+                + ", rejectedFps=" + failedFrameRate
+                + ", selectedFps=" + activeFrameRate.getValue()
                 + ", preview=" + previewSize
                 + ", recording=" + recordingSize
                 + ", crop=" + sourceCropSize
@@ -1483,7 +1516,12 @@ final class RoundVideoCameraController {
         if (ranges == null) return null;
         Range<Integer> best = null;
         for (Range<Integer> range : ranges) {
-            if (!range.contains(targetFps) || range.getUpper() != targetFps || targetFps > 30 && range.getLower() < 30) continue;
+            // Some HALs advertise high frame rates only as adaptive ranges,
+            // e.g. [15, 60]. Their lower bound describes low-light behaviour,
+            // not a 30 fps ceiling. Preserve the advertised range (never invent
+            // [60, 60]); stream timing is validated separately by the caller.
+            if (range == null || range.getLower() <= 0
+                    || !range.contains(targetFps) || range.getUpper() != targetFps) continue;
             if (best == null
                     || range.getLower() > best.getLower()
                     || range.getLower().equals(best.getLower())
@@ -1782,10 +1820,9 @@ final class RoundVideoCameraController {
         if (cameraResolution == RoundVideoSession.CameraResolution.LOW) {
             return outputResolution.getSize();
         }
-        if (outputResolution == RoundVideoSession.OutputResolution.P480) {
-            return cameraResolution == RoundVideoSession.CameraResolution.HIGH ? 960 : 720;
-        }
-        return cameraResolution == RoundVideoSession.CameraResolution.HIGH ? 720 : 540;
+        int outputSize = outputResolution.getSize();
+        return cameraResolution == RoundVideoSession.CameraResolution.HIGH
+                ? outputSize * 2 : outputSize * 3 / 2;
     }
 
     @NonNull
@@ -1827,7 +1864,8 @@ final class RoundVideoCameraController {
         int maximumLongSide = Math.min(MAXIMUM_SOURCE_LONG_SIDE, cropSize * 2);
         int shortSide = shortSide(size);
         int longSide = Math.max(size.getWidth(), size.getHeight());
-        return shortSide >= cropSize
+        return isWithinAbsoluteLimit(size)
+                && shortSide >= cropSize
                 && shortSide <= maximumShortSide
                 && longSide <= maximumLongSide;
     }

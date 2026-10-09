@@ -202,8 +202,7 @@ public class Camera2Session {
             Range<Integer> range = choice.highSpeed
                 ? chooseHighSpeedFpsRange(choice.characteristics, choice.size, frameRate)
                 : chooseRecordingFpsRange(choice.characteristics, choice.size, frameRate);
-            return range != null && range.getLower() >= Math.min(frameRate, LumaRoundVideoQuality.FRAME_RATE)
-                && range.getUpper() == frameRate;
+            return range != null && range.getLower() > 0 && range.getUpper() == frameRate;
         } catch (Exception e) {
             FileLog.e(e);
             return false;
@@ -245,6 +244,22 @@ public class Camera2Session {
             if (range.getLower() == target && range.getUpper() == target) return range;
         }
         return null;
+    }
+
+    private static int chooseNormalFallbackFrameRate(CameraCharacteristics characteristics, Size size, int rejectedFrameRate) {
+        // Keep the existing SurfaceTexture size and device. A failed high-speed
+        // session can still expose a valid normal 60 fps stream at this size.
+        // Never retry 120/90 through the same rejected high-speed mode.
+        if (rejectedFrameRate > LumaRoundVideoQuality.HIGH_FRAME_RATE) {
+            try {
+                if (chooseRecordingFpsRange(characteristics, size, LumaRoundVideoQuality.HIGH_FRAME_RATE) != null) {
+                    return LumaRoundVideoQuality.HIGH_FRAME_RATE;
+                }
+            } catch (RuntimeException ignored) {
+                // Missing/broken timing metadata cannot establish 60 fps support.
+            }
+        }
+        return LumaRoundVideoQuality.FRAME_RATE;
     }
 
     private static boolean contains(int[] values, int value) {
@@ -449,9 +464,12 @@ public class Camera2Session {
     }
 
     private boolean fallbackHighSpeedSession() {
-        if (!highSpeedSession || isClosed) return false;
+        if (!roundRecording || isClosed || requestedRecordingFrameRate <= LumaRoundVideoQuality.FRAME_RATE) return false;
+        int rejectedFrameRate = requestedRecordingFrameRate;
         highSpeedSession = false;
-        requestedRecordingFrameRate = LumaRoundVideoQuality.FRAME_RATE;
+        requestedRecordingFrameRate = chooseNormalFallbackFrameRate(cameraCharacteristics, previewSize, rejectedFrameRate);
+        FileLog.d("Round camera session fallback: rejectedFps=" + rejectedFrameRate
+                + ", requestedFps=" + requestedRecordingFrameRate + ", source=" + previewSize);
         if (captureSession != null) captureSession.close();
         captureSession = null;
         startCaptureSession();

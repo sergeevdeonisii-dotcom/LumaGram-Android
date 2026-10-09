@@ -27,6 +27,7 @@ import android.graphics.Xfermode;
 import android.graphics.drawable.Animatable;
 import android.graphics.drawable.BitmapDrawable;
 import android.util.Log;
+import android.view.Choreographer;
 import android.view.View;
 
 import androidx.annotation.AnyThread;
@@ -42,6 +43,7 @@ import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
+import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.utils.BitmapsCache;
 import org.telegram.messenger.utils.Choreographer60FpsContent;
@@ -124,6 +126,7 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
     private float scaleFactor = 1f;
     public boolean isWebmSticker;
     private final TLRPC.Document document;
+    private boolean roundVideo;
     private final RectF[] dstRectBackground = new RectF[DrawingInBackgroundThreadDrawable.THREAD_COUNT];
     private final Paint[] backgroundPaint = new Paint[DrawingInBackgroundThreadDrawable.THREAD_COUNT];
 
@@ -478,6 +481,8 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
         this.loop = loop;
         this.precache = cacheOptions != null && renderingWidth > 0 && renderingHeight > 0;
         this.document = document;
+        roundVideo = MessageObject.isRoundVideoDocument(document)
+                || parentObject instanceof MessageObject && ((MessageObject) parentObject).isRoundVideo();
         getPaint().setFlags(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         if (streamSize != 0 && (document != null || location != null)) {
             stream = new AnimatedFileDrawableStream(document, location, parentObject, account, preview, streamLoadingPriority, cacheType);
@@ -575,6 +580,7 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
             if (parents.add(imageReceiver)) {
                 if (isRunning) {
                     scheduleNextGetFrame();
+                    if (roundVideo) checkChoreographer();
                 }
             }
         }
@@ -585,6 +591,7 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
         parents.remove(imageReceiver);
         if (parents.isEmpty()) {
             repeatCount = 0;
+            if (roundVideo) checkChoreographer();
         }
         checkCacheCancel();
     }
@@ -643,6 +650,7 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
     }
 
     public void seekTo(long ms, boolean removeLoading, boolean force) {
+        if (roundVideo) AndroidUtilities.executeOnUIThread(roundVideoPlaybackClock::reset);
         synchronized (sync) {
             pendingSeekTo = ms;
             pendingSeekToUI = ms;
@@ -667,6 +675,7 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
     }
 
     public void seekToSync(long ms) {
+        if (roundVideo) AndroidUtilities.executeOnUIThread(roundVideoPlaybackClock::reset);
         if (mDecoder == null) return;
         mDecoder.seekToMs(ms, true);
     }
@@ -1158,6 +1167,7 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
         }
         drawable.metaData[0] = metaData[0];
         drawable.metaData[1] = metaData[1];
+        drawable.roundVideo = roundVideo;
         return drawable;
     }
 
@@ -1310,6 +1320,25 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
         final boolean canSwapBuffers = swapBuffersAllowedByChoreographer
             || !isRunning && decodeSingleFrame;
 
+        if (isRunning && roundVideoNativeChoreographer) {
+            if (renderingBuffer == null && nextRenderingBuffer == null) {
+                scheduleNextGetFrame();
+            } else if (nextRenderingBuffer != null && !skipFrameUpdate && pendingSeekToUI < 0
+                    && (renderingBuffer == null || canSwapBuffers)) {
+                long frameTimeNs = roundVideoFrameTimeNs > 0 ? roundVideoFrameTimeNs : System.nanoTime();
+                // Follow the MP4's real PTS, not the rounded FPS metadata. A
+                // 120fps file on a 60Hz display consumes up to two ready frames
+                // each tick instead of playing at half speed. Never wait here.
+                for (int remaining = 2; remaining > 0 && nextRenderingBuffer != null; remaining--) {
+                    if (!roundVideoPlaybackClock.isDue(frameTimeNs, nextRenderingBuffer.time)) break;
+                    roundVideoPlaybackClock.presented(frameTimeNs, nextRenderingBuffer.time);
+                    swapBuffers(now);
+                }
+                scheduleNextGetFrame();
+            }
+            return;
+        }
+
         if (isRunning) {
             if (renderingBuffer == null && nextRenderingBuffer == null) {
                 scheduleNextGetFrame();
@@ -1375,7 +1404,46 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
     }
 
     private final Choreographer60FpsContent.FrameCallback mUiThreadChoreographerCallback = this::onChoreographerFrame;
+    private final Choreographer.FrameCallback roundVideoChoreographerCallback = this::onRoundVideoChoreographerFrame;
+    private final RoundVideoPlaybackClock roundVideoPlaybackClock = new RoundVideoPlaybackClock();
+    private boolean roundVideoNativeChoreographer;
+    private long roundVideoFrameTimeNs;
     private boolean swapBuffersAllowedByChoreographer;
+
+    @UiThread
+    private void onRoundVideoChoreographerFrame(long frameTimeNanos) {
+        if (!isChoreographerRegistered || !roundVideoNativeChoreographer) return;
+        checkChoreographerAfterFrameCall();
+        if (!isChoreographerRegistered || !roundVideoNativeChoreographer) return;
+        roundVideoFrameTimeNs = frameTimeNanos;
+        swapBuffersAllowedByChoreographer = true;
+        invalidateInternal();
+        if (isChoreographerRegistered && roundVideoNativeChoreographer) {
+            Choreographer.getInstance().postFrameCallback(roundVideoChoreographerCallback);
+        }
+    }
+
+    /** A source-PTS clock shared by all draws in one VSYNC; no synthetic frames. */
+    private static final class RoundVideoPlaybackClock {
+        private long anchorNs = Long.MIN_VALUE;
+        private long anchorMs;
+        private long previousMs;
+
+        void reset() { anchorNs = Long.MIN_VALUE; }
+
+        boolean isDue(long frameTimeNs, long sourceTimeMs) {
+            return anchorNs == Long.MIN_VALUE || frameTimeNs < anchorNs || sourceTimeMs < previousMs
+                    || (sourceTimeMs - anchorMs) * 1_000_000L <= frameTimeNs - anchorNs;
+        }
+
+        void presented(long frameTimeNs, long sourceTimeMs) {
+            if (anchorNs == Long.MIN_VALUE || frameTimeNs < anchorNs || sourceTimeMs < previousMs) {
+                anchorNs = frameTimeNs;
+                anchorMs = sourceTimeMs;
+            }
+            previousMs = sourceTimeMs;
+        }
+    }
 
     @UiThread
     private void onChoreographerFrame(long frameTimeNanos) {
@@ -1396,7 +1464,7 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
 
     @UiThread
     private void checkChoreographerInternal() {
-        if (isRunning && !isPaused && !isStaticVideoDetected) {
+        if (isRunning && !isPaused && !isStaticVideoDetected && (!roundVideo || !parents.isEmpty())) {
             if (!isChoreographerRegistered) {
                 final int fps = metaData[5];
                 if (fps <= 0) {
@@ -1405,7 +1473,14 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
                 activeChoreographersCount++;
                 isChoreographerRegistered = true;
                 ticksWithoutDraw = 0;
-                Choreographer60FpsContent.getInstance().addFrameCallback(mUiThreadChoreographerCallback, fps);
+                roundVideoNativeChoreographer = roundVideo && fps > 60 && !precache;
+                if (roundVideoNativeChoreographer) {
+                    roundVideoPlaybackClock.reset();
+                    roundVideoFrameTimeNs = 0;
+                    Choreographer.getInstance().postFrameCallback(roundVideoChoreographerCallback);
+                } else {
+                    Choreographer60FpsContent.getInstance().addFrameCallback(mUiThreadChoreographerCallback, fps);
+                }
                 // Log.i("CHOREOGRAPHER_DEBUG", "+ AnimatedFileDrawable " + activeChoreographersCount + " fps: " + fps);
             }
         } else {
@@ -1413,7 +1488,13 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
                 activeChoreographersCount--;
                 isChoreographerRegistered = false;
                 ticksWithoutDraw = 0;
-                Choreographer60FpsContent.getInstance().removeFrameCallback(mUiThreadChoreographerCallback);
+                if (roundVideoNativeChoreographer) {
+                    Choreographer.getInstance().removeFrameCallback(roundVideoChoreographerCallback);
+                    roundVideoNativeChoreographer = false;
+                    roundVideoPlaybackClock.reset();
+                } else {
+                    Choreographer60FpsContent.getInstance().removeFrameCallback(mUiThreadChoreographerCallback);
+                }
                 // Log.i("CHOREOGRAPHER_DEBUG", "- AnimatedFileDrawable " + activeChoreographersCount);
             }
         }

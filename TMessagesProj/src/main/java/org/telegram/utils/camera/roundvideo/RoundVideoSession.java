@@ -36,7 +36,11 @@ public final class RoundVideoSession {
         /** 480 x 480 output. */
         P480(480),
         /** 360 x 360 output. */
-        P360(360);
+        P360(360),
+        /** 720 x 720 output; camera input still has to support the selected FPS. */
+        P720(720),
+        /** 1080 x 1080 output, where supported by the camera and encoder. */
+        P1080(1080);
 
         private final int size;
 

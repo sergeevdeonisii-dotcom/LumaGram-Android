@@ -1,14 +1,20 @@
 param(
     [string]$JavaHome = $env:JAVA_HOME,
-    [string]$OutputRoot = (Join-Path $PSScriptRoot '.runs/camera-lifecycle'),
+    [string]$OutputRoot = 'D:\CodexBuildCache\Lunagram-82-camera-lifecycle-tests',
     [string]$SourceRevision = ''
 )
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $output = [IO.Path]::GetFullPath($OutputRoot)
-$allowed = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '.runs')) + '\'
-if (-not $output.StartsWith($allowed, [StringComparison]::OrdinalIgnoreCase)) {
-    throw 'Lifecycle regression artifacts must remain inside Tools/tests/.runs.'
+$allowed = @(
+    [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '.runs')),
+    [IO.Path]::GetFullPath('D:\CodexBuildCache\Lunagram-82-camera-lifecycle-tests')
+)
+if (-not ($allowed | Where-Object {
+    $output.Equals($_, [StringComparison]::OrdinalIgnoreCase) -or
+    $output.StartsWith(($_ + '\'), [StringComparison]::OrdinalIgnoreCase)
+})) {
+    throw 'Lifecycle regression artifacts must remain inside Tools/tests/.runs or the dedicated D: lifecycle-test directory.'
 }
 if (-not $JavaHome -or -not (Test-Path -LiteralPath (Join-Path $JavaHome 'bin/javac.exe'))) {
     throw 'An existing JavaHome containing javac.exe is required.'
@@ -40,6 +46,7 @@ $signatures = @(
     'public void whenDone(Runnable doneCallback)', 'public void open(SurfaceTexture surfaceTexture)',
     'private void checkOpen()', 'public boolean isInitiated()',
     'private void startCaptureSession()', 'private boolean fallbackHighSpeedSession()',
+    'private static int chooseNormalFallbackFrameRate(', 'private static Range<Integer> chooseRecordingFpsRange(',
     'public void destroy(boolean async, Runnable afterCallback)'
 )
 $methods = ($signatures | ForEach-Object { Method $source $_ }) -join "`n"
@@ -47,7 +54,11 @@ if ($source.Contains('private void closeCameraResources()')) {
     $methods += "`n" + (Method $source 'private void closeCameraResources()')
 }
 $template = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'camera-lifecycle/Camera2LifecycleRegressionTest.java.template'))
+$quality = [IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/messenger/LumaRoundVideoQuality.java'))
+$ratePolicy = (@('public static int[] chooseFpsRange(', 'public static boolean supportsTargetFrameRate(',
+    'public static boolean supportsFrameDuration(') | ForEach-Object { Method $quality $_ }) -join "`n"
 $template = $template.Replace('// PRODUCTION_CALLBACKS', $callbacks).Replace('// PRODUCTION_METHODS', $methods)
+$template = $template.Replace('// PRODUCTION_RATE_POLICY', $ratePolicy)
 $run = Join-Path $output ('run-' + [guid]::NewGuid().ToString())
 $classes = Join-Path $run 'classes'
 New-Item -ItemType Directory -Path $classes -Force | Out-Null

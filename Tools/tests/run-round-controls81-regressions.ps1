@@ -31,7 +31,7 @@ function Method([string]$source,[string]$signature) {
     }
     throw 'Unclosed method'
 }
-$methods=@('private static Range<Integer> chooseRecordingFpsRange(', 'private static Range<Integer> chooseHighSpeedFpsRange(', 'private static boolean contains(') |
+$methods=@('private static Range<Integer> chooseRecordingFpsRange(', 'private static Range<Integer> chooseHighSpeedFpsRange(', 'private static int chooseNormalFallbackFrameRate(', 'private static boolean contains(') |
     ForEach-Object { Method $camera $_ }
 $template=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'round-controls81/CameraRates81Test.java.template'))
 $generated=Join-Path (Split-Path $classes) 'CameraRates81Test.java'
@@ -42,7 +42,7 @@ if($LASTEXITCODE -ne 0){throw 'Camera rate-selection compilation failed.'}
 if($LASTEXITCODE -ne 0){throw 'Camera rate-selection regressions failed.'}
 $modern=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/camera/roundvideo/RoundVideoCameraController.java'))
 $session=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/camera/roundvideo/RoundVideoSession.java'))
-$methods=@('private FrameRatePlan resolveFrameRate(', 'private static boolean supportsFrameDuration(',
+$methods=@('private FrameRatePlan resolveFrameRate(', 'private FrameRatePlan resolveLowerFrameRate(', 'private static boolean supportsFrameDuration(',
     'private static Range<Integer> findBestFpsRange(', 'private static Size[] filterSizesForFrameRate(',
     'private static OutputPair chooseOutputPair(', 'private static OutputPair chooseTierPair(',
     'private static Size chooseFallbackRecordingSize(', 'private static int getSourceCropSize(',
@@ -72,7 +72,7 @@ if($configured.IndexOf('submitRepeatingRequest();') -gt $configured.IndexOf('not
 }
 $gl=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/camera/roundvideo/RoundVideoGlProcessor.java'))
 foreach($guard in @('overlayRenderer.setHorizon(', 'horizonLock.correction(frontCamera, cameraTimestampRealtime ? timestamp : 0L)',
-    'new LumaRoundVideoQuality.FrameGate(60, sourceFps)', 'gate.accept(timestamp, frontCamera ? 1 : 0)',
+    'previewGate = new LumaRoundVideoQuality.FrameGate(targetFps, sourceFps)', 'gate.accept(timestamp, frontCamera ? 1 : 0)',
     'overlayRenderer.renderRawCameraToOutput(textureId, textureMatrix, outputSize, outputSize)',
     'EGL14.eglDestroySurface(eglDisplay, eglPreviewSurface)')) {
     if(!$gl.Contains($guard)){throw "Missing new recorder GL integration: $guard"}
