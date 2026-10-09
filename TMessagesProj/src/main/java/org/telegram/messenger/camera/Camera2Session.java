@@ -393,6 +393,12 @@ public class Camera2Session {
 
     public int getRecordingFrameRate() { return recordingFrameRate; }
 
+    public boolean hasRealtimeTimestamps() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || cameraCharacteristics == null) return false;
+        Integer source = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE);
+        return source != null && source == CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME;
+    }
+
     public void setRecordingFrameRate(int frameRate) {
         synchronized (lifecycleLock) {
             if (!roundRecording || isClosed) return;

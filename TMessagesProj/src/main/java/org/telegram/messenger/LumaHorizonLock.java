@@ -13,7 +13,6 @@ public final class LumaHorizonLock implements SensorEventListener {
     private final WindowManager windows;
     private final LumaHorizonState state = new LumaHorizonState();
     private final float[] rotation = new float[9];
-    private volatile float roll;
     private volatile boolean running;
 
     public LumaHorizonLock(Context context) {
@@ -41,26 +40,25 @@ public final class LumaHorizonLock implements SensorEventListener {
         running = false;
         if (manager != null) manager.unregisterListener(this);
         state.reset();
-        roll = 0;
     }
 
     public boolean isRunning() { return running; }
 
-    public float correction(boolean frontCamera) {
+    public float correction(boolean frontCamera, long frameTimestamp) {
         if (!running) return 0;
         int rotation = windows == null ? 0 : windows.getDefaultDisplay().getRotation() * 90;
         // Both Camera1 preview and Camera2's default MIRROR_MODE_AUTO mirror
         // front SurfaceTexture outputs; neither round-camera path overrides it.
-        return LumaHorizonState.correction(roll, rotation, frontCamera, frontCamera);
+        return LumaHorizonState.correction(state.atTimestamp(frameTimestamp), rotation, frontCamera, frontCamera);
     }
 
     @Override public void onSensorChanged(SensorEvent event) {
         if (!running || event.values.length < 3) return;
         if (event.sensor.getType() == Sensor.TYPE_GAME_ROTATION_VECTOR) {
             SensorManager.getRotationMatrixFromVector(rotation, event.values);
-            roll = state.update(rotation[6], rotation[7], rotation[8], event.timestamp);
+            state.update(rotation[6], rotation[7], rotation[8], event.timestamp);
         } else {
-            roll = state.update(event.values[0], event.values[1], event.values[2], event.timestamp);
+            state.update(event.values[0], event.values[1], event.values[2], event.timestamp);
         }
     }
 

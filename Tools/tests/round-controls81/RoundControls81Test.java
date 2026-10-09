@@ -95,10 +95,17 @@ public final class RoundControls81Test {
             }
         }
         check(Arrays.equals(before,IDENTITY),"Horizon never mutates shared base matrix");
-        near(LumaHorizonState.correction(-90,90,false,false),0,0.001f,"Landscape display compensation");
+        near(LumaHorizonState.correction(90,90,false,false),0,0.001f,"Android ROTATION_90 compensates physical counter-clockwise rotation");
+        near(LumaHorizonState.correction(-90,270,false,false),0,0.001f,"Android ROTATION_270 compensates physical clockwise rotation");
         near(LumaHorizonState.correction(42,0,true,true),42,0.001f,"Android mirrored front preview must not reverse gravity twice");
         horizon.reset(); horizon.update(0.0174524f,-0.999848f,0,ts);
         near(horizon.update(-0.0174524f,-0.999848f,0,ts+10_000_000L),179.7869f,0.02f,"Wrap smoothing takes short path across 180");
+        near(horizon.atTimestamp(ts+5_000_000L),179.39345f,0.02f,"Camera frame uses interpolated capture-time pose");
+        near(horizon.atTimestamp(ts-1),179,0.02f,"Older frame clamps to oldest known pose");
+        near(horizon.atTimestamp(0),179.7869f,0.02f,"Unknown camera clock uses current pose");
+        for(int i=1;i<=600;i++) horizon.update(0,1,0,ts+1_000_000_000L+i*10_000_000L);
+        near(horizon.atTimestamp(ts+6_000_000_000L),0,0.02f,"History ring stays valid after wrapping");
+        horizon.reset(); near(horizon.atTimestamp(ts),0,0,"Pause/destroy clears pose history");
         System.out.println("PASS: " + assertions + " round controls/horizon assertions. Synthetic math, not phone stabilization proof.");
     }
 }

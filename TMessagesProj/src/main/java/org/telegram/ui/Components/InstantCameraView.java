@@ -2089,7 +2089,10 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             if (horizonLock != null && horizonLock.isRunning()) {
                 // Constant crop covers all square corners at every angle; no
                 // breathing zoom, exposed black wedges or stale framebuffer pixels.
-                frameMatrix = LumaHorizonState.transform(mMVPMatrix, horizonLock.correction(isFrontface));
+                Camera2Session activeSession = camera2SessionCurrent;
+                long poseTimestamp = useCamera2 && activeSession != null && activeSession.hasRealtimeTimestamps()
+                    ? cameraSurface[surfaceIndex].getTimestamp() : 0;
+                frameMatrix = LumaHorizonState.transform(mMVPMatrix, horizonLock.correction(isFrontface, poseTimestamp));
             }
             if (videoEncoder != null && (surfaceIndex == 0 && updateTexImage1 || surfaceIndex == 1 && updateTexImage2)) {
                 videoEncoder.frameAvailable(cameraSurface[surfaceIndex], bothCameras ? surfaceIndex : cameraId, System.nanoTime(), frameMatrix);

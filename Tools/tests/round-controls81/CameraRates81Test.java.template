@@ -1,0 +1,74 @@
+package org.telegram.messenger;
+import java.util.*;
+
+public final class CameraRates81Test {
+    static int assertions;
+    static void check(boolean b,String label){assertions++;if(!b)throw new AssertionError(label);}
+    static final class Build { static final class VERSION { static int SDK_INT=36; } static final class VERSION_CODES {static final int M=23;} }
+    static final class SurfaceTexture {}
+    static final class Range<T> {
+        final T lo,hi; Range(T lo,T hi){this.lo=lo;this.hi=hi;} T getLower(){return lo;} T getUpper(){return hi;}
+    }
+    static final class Size {
+        final int w,h; Size(int w,int h){this.w=w;this.h=h;}
+        public boolean equals(Object o){return o instanceof Size && ((Size)o).w==w && ((Size)o).h==h;}
+        public int hashCode(){return w*31+h;}
+    }
+    static final class Key<T> {}
+    static final class CameraCharacteristics {
+        static final Key<Range<Integer>[]> CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES=new Key<>();
+        static final Key<StreamConfigurationMap> SCALER_STREAM_CONFIGURATION_MAP=new Key<>();
+        static final Key<int[]> REQUEST_AVAILABLE_CAPABILITIES=new Key<>();
+        static final int REQUEST_AVAILABLE_CAPABILITIES_CONSTRAINED_HIGH_SPEED_VIDEO=9;
+        final Map<Key<?>,Object> values=new HashMap<>();
+        <T> void set(Key<T> key,T value){values.put(key,value);}
+        @SuppressWarnings("unchecked") <T> T get(Key<T> key){return (T)values.get(key);}
+    }
+    static final class StreamConfigurationMap {
+        long duration=16_666_667L;
+        Size[] sizes={new Size(1920,1080)};
+        Range<Integer>[] fps=ranges(120,120);
+        long getOutputMinFrameDuration(Class<?> c,Size size){return duration;}
+        Size[] getHighSpeedVideoSizes(){return sizes;}
+        Range<Integer>[] getHighSpeedVideoFpsRangesFor(Size size){return fps;}
+    }
+    @SuppressWarnings("unchecked") static Range<Integer>[] ranges(int... endpoints){
+        Range<Integer>[] result=new Range[endpoints.length/2];
+        for(int i=0;i<result.length;i++)result[i]=new Range<>(endpoints[2*i],endpoints[2*i+1]);
+        return result;
+    }
+    // PRODUCTION_RATE_METHODS
+    public static void main(String[] args){
+        CameraCharacteristics c=new CameraCharacteristics(); StreamConfigurationMap map=new StreamConfigurationMap();
+        Size hd=new Size(1920,1080);
+        c.set(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP,map);
+        c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(30,30,30,60,60,60));
+        check(chooseRecordingFpsRange(c,hd,60).getLower()==60,"Advertised fixed normal range preferred");
+        check(chooseRecordingFpsRange(c,hd,120)==null,"Normal 60 cannot claim 120");
+        c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(30,30,90,90,120,120));
+        check(chooseRecordingFpsRange(c,hd,90)==null,"Stream duration rejects normal 90");
+        check(chooseRecordingFpsRange(c,hd,120)==null,"Stream duration rejects normal 120");
+        map.duration=8_333_334;
+        check(chooseRecordingFpsRange(c,hd,120).getUpper()==120,"Normal-session 120 requires range and matching timing");
+        map.duration=0;
+        check(chooseRecordingFpsRange(c,hd,120)==null,"Unknown timing is not proof");
+        check(chooseHighSpeedFpsRange(c,hd,120)==null,"No high-speed capability means no high-speed session");
+        c.set(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES,new int[]{9});
+        check(chooseHighSpeedFpsRange(c,hd,120).getLower()==120,"Separate high-speed map supplies fixed 120");
+        check(chooseHighSpeedFpsRange(c,new Size(1280,720),120)==null,"No unsupported high-speed stream sizes");
+        check(chooseHighSpeedFpsRange(c,hd,90)==null,"Never fake high-speed 90 from a 120 mode");
+        map.fps=ranges(30,120);
+        check(chooseHighSpeedFpsRange(c,hd,120)==null,"Variable high-speed range cannot promise full cadence");
+        map.fps=ranges(240,240,120,120);
+        check(chooseHighSpeedFpsRange(c,hd,120).getUpper()==120,"No accidental 240 FPS mode");
+        Build.VERSION.SDK_INT=22;
+        check(chooseHighSpeedFpsRange(c,hd,120)==null,"API 23 high-speed guard");
+        Build.VERSION.SDK_INT=36;
+        map.sizes=null;
+        check(chooseHighSpeedFpsRange(c,hd,120)==null,"Missing high-speed sizes safely rejected");
+        c.set(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP,null);
+        check(chooseHighSpeedFpsRange(c,hd,120)==null,"Missing stream map safely rejected");
+        check(chooseRecordingFpsRange(null,hd,120)==null,"Missing characteristics safely rejected");
+        System.out.println("PASS: "+assertions+" extracted production Camera2 rate-selection assertions.");
+    }
+}
