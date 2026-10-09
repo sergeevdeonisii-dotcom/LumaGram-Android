@@ -78,10 +78,10 @@ public final class RoundControls81Test {
             double radians=Math.toRadians(degrees);
             float x=(float)-Math.sin(radians), y=(float)Math.cos(radians);
             float roll=(float)Math.toDegrees(Math.atan2(x,y));
-            for(boolean mirrored:new boolean[]{false,true}) {
-                float correction=LumaHorizonState.correction(roll,0,mirrored);
+            for(boolean front:new boolean[]{false,true}) for(boolean mirrored:new boolean[]{false,true}) {
+                float correction=LumaHorizonState.correction(roll,0,front,mirrored);
                 float[] matrix=LumaHorizonState.transform(IDENTITY,correction);
-                float inputX=mirrored?-x:x;
+                float inputX=front!=mirrored?-x:x;
                 near(matrix[0]*inputX+matrix[4]*y,0,0.0001f,"Horizon levels sensor tilt for either camera");
                 near(matrix[1]*inputX+matrix[5]*y,1.414214f,0.0001f,"Horizon stays upright through complete rotations");
                 // Inverse transform of all viewport corners must remain within
@@ -95,7 +95,8 @@ public final class RoundControls81Test {
             }
         }
         check(Arrays.equals(before,IDENTITY),"Horizon never mutates shared base matrix");
-        near(LumaHorizonState.correction(-90,90,false),0,0.001f,"Landscape display compensation");
+        near(LumaHorizonState.correction(-90,90,false,false),0,0.001f,"Landscape display compensation");
+        near(LumaHorizonState.correction(42,0,true,true),42,0.001f,"Android mirrored front preview must not reverse gravity twice");
         horizon.reset(); horizon.update(0.0174524f,-0.999848f,0,ts);
         near(horizon.update(-0.0174524f,-0.999848f,0,ts+10_000_000L),179.7869f,0.02f,"Wrap smoothing takes short path across 180");
         System.out.println("PASS: " + assertions + " round controls/horizon assertions. Synthetic math, not phone stabilization proof.");

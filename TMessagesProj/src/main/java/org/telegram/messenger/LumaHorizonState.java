@@ -24,9 +24,12 @@ public final class LumaHorizonState {
         return roll;
     }
 
-    public static float correction(float roll, int displayRotationDegrees, boolean mirrored) {
+    public static float correction(float roll, int displayRotationDegrees, boolean frontCamera, boolean previewMirrored) {
         float angle = wrap(roll + displayRotationDegrees);
-        return mirrored ? -angle : angle;
+        // A front lens reverses the optical viewing direction; mirroring its
+        // preview reverses it again. Android's default mirrored front preview
+        // therefore uses the same roll sign as a normal rear preview.
+        return frontCamera != previewMirrored ? -angle : angle;
     }
 
     public static float wrap(float angle) {

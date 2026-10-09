@@ -46,10 +46,12 @@ public final class LumaHorizonLock implements SensorEventListener {
 
     public boolean isRunning() { return running; }
 
-    public float correction(boolean mirrored) {
+    public float correction(boolean frontCamera) {
         if (!running) return 0;
         int rotation = windows == null ? 0 : windows.getDefaultDisplay().getRotation() * 90;
-        return LumaHorizonState.correction(roll, rotation, mirrored);
+        // Both Camera1 preview and Camera2's default MIRROR_MODE_AUTO mirror
+        // front SurfaceTexture outputs; neither round-camera path overrides it.
+        return LumaHorizonState.correction(roll, rotation, frontCamera, frontCamera);
     }
 
     @Override public void onSensorChanged(SensorEvent event) {
