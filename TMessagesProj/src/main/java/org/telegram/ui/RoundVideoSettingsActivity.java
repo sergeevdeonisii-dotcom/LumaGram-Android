@@ -12,6 +12,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
+import org.telegram.messenger.LumaRoundVideoQuality;
+import org.telegram.messenger.LumaRoundVideoStabilization;
 import org.telegram.utils.settings.SharedSettings;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -23,6 +25,7 @@ import org.telegram.ui.Cells.TextInfoPrivacyCell;
 import org.telegram.ui.Cells.TextSettingsCell;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.RecyclerListView;
+import org.telegram.ui.Components.SlideChooseView;
 import org.telegram.utils.camera.roundvideo.RoundVideoSession;
 
 /** Configures the Camera2 round-video implementation. */
@@ -31,18 +34,24 @@ public class RoundVideoSettingsActivity extends BaseFragment {
     private static final int TYPE_CHECK = 1;
     private static final int TYPE_VALUE = 2;
     private static final int TYPE_INFO = 3;
+    private static final int TYPE_SLIDER = 4;
 
     private static final int ROW_GENERAL_HEADER = 0;
     private static final int ROW_ENABLED = 1;
     private static final int ROW_OUTPUT_RESOLUTION = 2;
     private static final int ROW_CAMERA_RESOLUTION = 3;
-    private static final int ROW_FRAME_RATE = 4;
-    private static final int ROW_BITRATE = 5;
-    private static final int ROW_GENERAL_INFO = 6;
-    private static final int ROW_COMPOSITION_HEADER = 7;
-    private static final int ROW_COMPOSITION = 8;
-    private static final int ROW_COMPOSITION_INFO = 9;
-    private static final int ROW_COUNT = BuildConfig.DEBUG_PRIVATE_VERSION ? 10 : 7;
+    private static final int ROW_BITRATE = 4;
+    private static final int ROW_GENERAL_INFO = 5;
+    private static final int ROW_FRAME_RATE_HEADER = 6;
+    private static final int ROW_FRAME_RATE = 7;
+    private static final int ROW_FRAME_RATE_INFO = 8;
+    private static final int ROW_STABILIZATION_HEADER = 9;
+    private static final int ROW_STABILIZATION = 10;
+    private static final int ROW_STABILIZATION_INFO = 11;
+    private static final int ROW_COMPOSITION_HEADER = 12;
+    private static final int ROW_COMPOSITION = 13;
+    private static final int ROW_COMPOSITION_INFO = 14;
+    private static final int ROW_COUNT = BuildConfig.DEBUG_PRIVATE_VERSION ? 15 : 12;
 
     private static final int[] BITRATES = {
             750_000,
@@ -115,17 +124,9 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                             RoundVideoSession.CameraResolution.values()[index]
                     )
             );
-        } else if (position == ROW_FRAME_RATE) {
-            showChoice(
-                    R.string.RoundVideoFrameRate,
-                    new CharSequence[]{"30 FPS", "60 FPS"},
-                    index -> SharedSettings.roundVideoFrameRate.set(index == 0
-                            ? RoundVideoSession.FrameRate.FPS_30
-                            : RoundVideoSession.FrameRate.FPS_60)
-            );
         } else if (position == ROW_BITRATE) {
-            CharSequence[] labels = new CharSequence[BITRATES.length];
-            for (int i = 0; i < (BITRATES.length - (BuildConfig.DEBUG_PRIVATE_VERSION ? 0 : 1)); i++) {
+            CharSequence[] labels = new CharSequence[BITRATES.length - (BuildConfig.DEBUG_PRIVATE_VERSION ? 0 : 1)];
+            for (int i = 0; i < labels.length; i++) {
                 labels[i] = formatBitrate(BITRATES[i]);
             }
             showChoice(
@@ -195,7 +196,6 @@ public class RoundVideoSettingsActivity extends BaseFragment {
             }
             return position == ROW_OUTPUT_RESOLUTION
                     || position == ROW_CAMERA_RESOLUTION
-                    || position == ROW_FRAME_RATE
                     || position == ROW_BITRATE
                     || position == ROW_COMPOSITION;
         }
@@ -212,6 +212,8 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 TextSettingsCell cell = new TextSettingsCell(context);
                 cell.setCanDisable(true);
                 view = cell;
+            } else if (viewType == TYPE_SLIDER) {
+                view = new SlideChooseView(context);
             } else {
                 view = new TextInfoPrivacyCell(context);
             }
@@ -229,7 +231,23 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 HeaderCell cell = (HeaderCell) holder.itemView;
                 cell.setText(position == ROW_GENERAL_HEADER
                         ? LocaleController.getString(R.string.RoundVideoGeneral)
+                        : position == ROW_FRAME_RATE_HEADER ? LocaleController.getString(R.string.LumaRoundVideoFps)
+                        : position == ROW_STABILIZATION_HEADER ? LocaleController.getString(R.string.LumaRoundVideoStabilization)
                         : LocaleController.getString(R.string.RoundVideoComposition));
+            } else if (holder.getItemViewType() == TYPE_SLIDER) {
+                SlideChooseView cell = (SlideChooseView) holder.itemView;
+                cell.setCallback(null);
+                if (position == ROW_FRAME_RATE) {
+                    int fallback = enabled ? SharedSettings.roundVideoFrameRate.get().getValue() : LumaRoundVideoQuality.HIGH_FRAME_RATE;
+                    cell.setOptions(LumaRoundVideoQuality.getPreferredFrameRate(fallback) / 30 - 1, "30", "60", "90", "120");
+                    cell.setCallback(LumaRoundVideoQuality::setFrameRateLevel);
+                } else {
+                    cell.setOptions(LumaRoundVideoStabilization.getMode(),
+                            LocaleController.getString(R.string.LumaRoundVideoStabilizationOff),
+                            LocaleController.getString(R.string.LumaRoundVideoStabilizationStandard),
+                            LocaleController.getString(R.string.LumaRoundVideoStabilizationEnhanced));
+                    cell.setCallback(LumaRoundVideoStabilization::setMode);
+                }
             } else if (holder.getItemViewType() == TYPE_CHECK) {
                 TextCheckCell cell = (TextCheckCell) holder.itemView;
                 cell.setEnabled(position == ROW_ENABLED || enabled);
@@ -261,12 +279,6 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                             cameraResolutionLabel(SharedSettings.roundVideoCameraResolution.get()),
                             true
                     );
-                } else if (position == ROW_FRAME_RATE) {
-                    cell.setTextAndValue(
-                            LocaleController.getString(R.string.RoundVideoFrameRate),
-                            SharedSettings.roundVideoFrameRate.get().getValue() + " FPS",
-                            true
-                    );
                 } else {
                     cell.setTextAndValue(
                             LocaleController.getString(R.string.RoundVideoBitrate),
@@ -278,20 +290,25 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 TextInfoPrivacyCell cell = (TextInfoPrivacyCell) holder.itemView;
                 cell.setText(position == ROW_GENERAL_INFO
                         ? LocaleController.getString(R.string.RoundVideoGeneralInfo)
+                        : position == ROW_FRAME_RATE_INFO ? LocaleController.getString(R.string.LumaRoundVideoFpsInfo)
+                        : position == ROW_STABILIZATION_INFO ? LocaleController.getString(R.string.LumaRoundVideoStabilizationInfo)
                         : LocaleController.getString(R.string.RoundVideoCompositionInfo));
             }
         }
 
         @Override
         public int getItemViewType(int position) {
-            if (position == ROW_GENERAL_HEADER || position == ROW_COMPOSITION_HEADER) {
+            if (position == ROW_GENERAL_HEADER || position == ROW_COMPOSITION_HEADER
+                    || position == ROW_FRAME_RATE_HEADER || position == ROW_STABILIZATION_HEADER) {
                 return TYPE_HEADER;
             }
+            if (position == ROW_FRAME_RATE || position == ROW_STABILIZATION) return TYPE_SLIDER;
             if (position == ROW_ENABLED
                     || position == ROW_COMPOSITION) {
                 return TYPE_CHECK;
             }
-            if (position == ROW_GENERAL_INFO || position == ROW_COMPOSITION_INFO) {
+            if (position == ROW_GENERAL_INFO || position == ROW_COMPOSITION_INFO
+                    || position == ROW_FRAME_RATE_INFO || position == ROW_STABILIZATION_INFO) {
                 return TYPE_INFO;
             }
             return TYPE_VALUE;

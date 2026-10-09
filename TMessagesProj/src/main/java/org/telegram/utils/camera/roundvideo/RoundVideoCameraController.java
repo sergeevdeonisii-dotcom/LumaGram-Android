@@ -9,6 +9,7 @@ import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
+import android.hardware.camera2.CameraConstrainedHighSpeedCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
@@ -33,6 +34,13 @@ import androidx.core.content.ContextCompat;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+
+import org.telegram.messenger.LumaHorizonLock;
+import org.telegram.messenger.LumaRoundVideoQuality;
+import org.telegram.messenger.LumaRoundVideoStabilization;
+import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.R;
 
 final class RoundVideoCameraController {
 
@@ -101,6 +109,13 @@ final class RoundVideoCameraController {
     private final boolean compositionEnabled;
     private final RoundVideoDiagnostics diagnostics;
     private final Callback callback;
+    private final int stabilizationMode = LumaRoundVideoStabilization.getMode();
+    private final boolean processedPreview;
+    private final LumaHorizonLock horizonLock;
+    private boolean stabilizationRejected;
+    private boolean highSpeed;
+    private int captureGeneration;
+    private int maximumFrameRate;
     private final Rect zoomCropRect = new Rect();
 
     private HandlerThread cameraThread;
@@ -146,8 +161,6 @@ final class RoundVideoCameraController {
     private boolean frontConfigurationLogged;
     private boolean backConfigurationLogged;
     private boolean frameRateFallbackAttempted;
-    private boolean frameRatePolicyResolved;
-    private boolean force30Fps;
     private long segmentStartedNs;
     private long cameraOpenRequestedNs;
     private long captureSessionRequestedNs;
@@ -214,6 +227,11 @@ final class RoundVideoCameraController {
         this.videoBitrate = videoBitrate;
         this.requestedCameraResolution = cameraResolution;
         this.requestedFrameRate = frameRate;
+        maximumFrameRate = frameRate.getValue();
+        // A constrained high-speed session cannot target two preview surfaces.
+        // Render both the preview and the encoder from one camera SurfaceTexture.
+        processedPreview = frameRate.getValue() > 60 || stabilizationMode == LumaRoundVideoStabilization.ENHANCED;
+        horizonLock = stabilizationMode == LumaRoundVideoStabilization.ENHANCED ? new LumaHorizonLock(context) : null;
         this.compositionEnabled = compositionEnabled;
         this.diagnostics = diagnostics;
         this.callback = callback;
@@ -230,6 +248,9 @@ final class RoundVideoCameraController {
         this.timelineOffsetUs = timelineOffsetUs;
         requestedFacing = facing;
         active = true;
+        if (horizonLock != null && !horizonLock.start()) {
+            android.widget.Toast.makeText(context, LocaleController.getString(R.string.LumaRoundVideoHorizonUnavailable), android.widget.Toast.LENGTH_LONG).show();
+        }
         stopping = false;
         commonStartRecorder = null;
         previewTransformEnabled = true;
@@ -311,7 +332,10 @@ final class RoundVideoCameraController {
         HandlerThread thread = cameraThread;
         cameraHandler = null;
         cameraThread = null;
-        if (handler == null || thread == null) return;
+        if (handler == null || thread == null) {
+            if (horizonLock != null) horizonLock.stop();
+            return;
+        }
         handler.post(() -> {
             cancelCommonStartWait();
             if (recorder != null) {
@@ -434,11 +458,13 @@ final class RoundVideoCameraController {
             selectCameraAndSizes(requestedFacing);
             SurfaceTexture previewTexture = previewView.getSurfaceTexture();
             if (previewTexture == null) return;
-            previewTexture.setDefaultBufferSize(previewSize.getWidth(), previewSize.getHeight());
+            previewTexture.setDefaultBufferSize(processedPreview ? outputSize : previewSize.getWidth(), processedPreview ? outputSize : previewSize.getHeight());
             if (previewSurface == null) previewSurface = new Surface(previewTexture);
             if (recorder == null) {
                 createRecordingPipeline();
             } else if (glProcessor != null) {
+                glProcessor.setCameraPolicy(selectedFacing == RoundVideoSession.CameraFacing.FRONT,
+                        activeFrameRate.getValue(), sourceFrameRate());
                 glProcessor.updateInputConfiguration(
                         recordingSize,
                         sourceCropSize,
@@ -460,16 +486,33 @@ final class RoundVideoCameraController {
     }
 
     private void createRecordingPipeline() throws IOException {
-        recorder = new RoundVideoCodecRecorder(
+        Surface encoderSurface;
+        while (true) {
+            recorder = new RoundVideoCodecRecorder(
                 writer,
                 timelineOffsetUs,
                 outputSize,
-                videoBitrate,
+                videoBitrate * Math.max(1, activeFrameRate.getValue() / 30),
                 activeFrameRate.getValue(),
                 diagnostics,
                 callback::onError
-        );
-        Surface encoderSurface = recorder.prepare();
+            );
+            try {
+                encoderSurface = recorder.prepare();
+                maximumFrameRate = Math.min(maximumFrameRate, activeFrameRate.getValue());
+                break;
+            } catch (IOException | RuntimeException error) {
+                recorder = null; // prepare() already releases failed codecs.
+                if (activeFrameRate.getValue() <= 30) throw new IOException("Round-video encoder unavailable", error);
+                maximumFrameRate = activeFrameRate.getValue() - 30;
+                diagnostics.log("encoder frame-rate fallback: maximum=" + maximumFrameRate + ", error=" + error);
+                try { selectCameraAndSizes(requestedFacing); }
+                catch (CameraAccessException e) { throw new IOException(e); }
+            }
+        }
+        SurfaceTexture previewTexture = previewView.getSurfaceTexture();
+        if (previewTexture != null) previewTexture.setDefaultBufferSize(
+                processedPreview ? outputSize : previewSize.getWidth(), processedPreview ? outputSize : previewSize.getHeight());
         glProcessor = new RoundVideoGlProcessor(
                 recordingSize,
                 encoderSurface,
@@ -480,8 +523,12 @@ final class RoundVideoCameraController {
                 diagnostics,
                 0,
                 recorder,
-                callback::onError
+                callback::onError,
+                processedPreview ? previewSurface : null,
+                horizonLock
         );
+        glProcessor.setCameraPolicy(selectedFacing == RoundVideoSession.CameraFacing.FRONT,
+                activeFrameRate.getValue(), sourceFrameRate());
         glProcessor.setFirstFrameListener(() -> {
             Handler handler = cameraHandler;
             if (handler != null) handler.post(this::startRecordingAfterFirstFrame);
@@ -575,25 +622,27 @@ final class RoundVideoCameraController {
             diagnostics.log("capture session requested: preview=" + previewSize
                     + ", recording=" + recordingSize
                     + ", fpsRange=" + activeFpsRange);
-            device.createCaptureSession(
-                    Arrays.asList(previewSurface, recordingSurface),
-                    sessionCallback,
-                    cameraHandler
-            );
+            CameraCaptureSession.StateCallback callback = createSessionCallback(device, ++captureGeneration);
+            if (highSpeed && Build.VERSION.SDK_INT >= 23) {
+                device.createConstrainedHighSpeedCaptureSession(Collections.singletonList(recordingSurface), callback, cameraHandler);
+            } else {
+                device.createCaptureSession(processedPreview ? Collections.singletonList(recordingSurface)
+                        : Arrays.asList(previewSurface, recordingSurface), callback, cameraHandler);
+            }
         } catch (CameraAccessException | IllegalArgumentException e) {
-            if (activeFrameRate == RoundVideoSession.FrameRate.FPS_60) {
-                fallbackTo30Fps("60 fps session creation rejected", e);
+            if (activeFrameRate.getValue() > 30) {
+                fallbackTo30Fps("High frame-rate session creation rejected", e);
             } else {
                 reportError(e);
             }
         }
     }
 
-    private final CameraCaptureSession.StateCallback sessionCallback =
-            new CameraCaptureSession.StateCallback() {
+    private CameraCaptureSession.StateCallback createSessionCallback(CameraDevice expectedDevice, int generation) {
+        return new CameraCaptureSession.StateCallback() {
                 @Override
                 public void onConfigured(@NonNull CameraCaptureSession session) {
-                    if (!active || cameraDevice == null) {
+                    if (!active || stopping || switchingCamera || cameraDevice != expectedDevice || generation != captureGeneration) {
                         session.close();
                         return;
                     }
@@ -601,11 +650,13 @@ final class RoundVideoCameraController {
                     try {
                         activeFacing = selectedFacing;
                         repeatingBuilder = createRepeatingRequestBuilder(true);
-                        if (glProcessor != null) glProcessor.onCameraSessionConfigured();
                         boolean wasSwitch = notifySwitchCompletion;
+                        submitRepeatingRequest();
+                        // A rejected high-FPS request can recreate the session.
+                        // Keep the switch pending until that retry really starts.
+                        if (glProcessor != null) glProcessor.onCameraSessionConfigured();
                         notifySwitchCompletion = false;
                         awaitingSwitchPreviewFrame = wasSwitch;
-                        submitRepeatingRequest();
                         diagnostics.log("capture session configured: facing=" + activeFacing
                                 + ", fpsRange=" + activeFpsRange
                                 + ", elapsedMs=" + elapsedMs(captureSessionRequestedNs)
@@ -627,8 +678,8 @@ final class RoundVideoCameraController {
                         );
                         if (requestedFacing != activeFacing) switchCameraIfNeeded(requestedFacing);
                     } catch (Exception e) {
-                        if (activeFrameRate == RoundVideoSession.FrameRate.FPS_60) {
-                            fallbackTo30Fps("60 fps request submission rejected", e);
+                        if (activeFrameRate.getValue() > 30) {
+                            fallbackTo30Fps("High frame-rate request submission rejected", e);
                         } else {
                             reportError(e);
                         }
@@ -642,12 +693,12 @@ final class RoundVideoCameraController {
                         captureSession = null;
                         repeatingBuilder = null;
                     }
-                    if (!active || cameraDevice == null || switchingCamera || stopping) {
+                    if (!active || cameraDevice != expectedDevice || generation != captureGeneration || switchingCamera || stopping) {
                         diagnostics.log("stale capture session configuration failure ignored");
                         return;
                     }
-                    if (activeFrameRate == RoundVideoSession.FrameRate.FPS_60) {
-                        fallbackTo30Fps("60 fps session configuration failed", null);
+                    if (activeFrameRate.getValue() > 30) {
+                        fallbackTo30Fps("High frame-rate session configuration failed", null);
                     } else {
                         reportError(new IllegalStateException(
                                 "Camera capture session configuration failed"
@@ -664,6 +715,7 @@ final class RoundVideoCameraController {
                     diagnostics.log("capture session closed");
                 }
             };
+    }
 
     private void startRecordingAfterFirstFrame() {
         if (!active || captureSession == null || recorder == null || recorder.isStarted()) return;
@@ -734,8 +786,8 @@ final class RoundVideoCameraController {
         } catch (IllegalStateException e) {
             recoverFromClosedCamera(session, e);
         } catch (CameraAccessException | IllegalArgumentException e) {
-            if (activeFrameRate == RoundVideoSession.FrameRate.FPS_60) {
-                fallbackTo30Fps("60 fps updated request rejected", e);
+            if (activeFrameRate.getValue() > 30) {
+                fallbackTo30Fps("High frame-rate updated request rejected", e);
             } else {
                 reportError(e);
             }
@@ -773,7 +825,7 @@ final class RoundVideoCameraController {
             throw new IllegalStateException("Camera request surfaces are unavailable");
         }
         CaptureRequest.Builder builder = device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
-        builder.addTarget(previewSurface);
+        if (!processedPreview) builder.addTarget(previewSurface);
         builder.addTarget(recordingSurface);
         builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
         builder.set(
@@ -784,6 +836,7 @@ final class RoundVideoCameraController {
         setPreferredFps(builder, logConfiguration);
         applyZoom(builder);
         applyTorch(builder);
+        applyStabilization(builder);
         requestGeneration++;
         builder.setTag(requestGeneration);
         if (torchVerificationPending) torchVerificationGeneration = requestGeneration;
@@ -794,8 +847,40 @@ final class RoundVideoCameraController {
         CameraCaptureSession session = captureSession;
         CaptureRequest.Builder builder = repeatingBuilder;
         if (session == null || builder == null) return;
-        CaptureRequest request = builder.build();
-        session.setRepeatingRequest(request, captureCallback, cameraHandler);
+        try {
+            submitRequest(session, builder.build());
+        } catch (CameraAccessException | IllegalArgumentException error) {
+            if (stabilizationRejected || stabilizationMode == LumaRoundVideoStabilization.OFF) throw error;
+            stabilizationRejected = true;
+            diagnostics.log("stabilization rejected; retry without camera stabilization: " + error);
+            repeatingBuilder = createRepeatingRequestBuilder(false);
+            submitRequest(session, repeatingBuilder.build());
+        }
+    }
+
+    private void submitRequest(CameraCaptureSession session, CaptureRequest request) throws CameraAccessException {
+        if (Build.VERSION.SDK_INT >= 23 && session instanceof CameraConstrainedHighSpeedCaptureSession) {
+            CameraConstrainedHighSpeedCaptureSession fast = (CameraConstrainedHighSpeedCaptureSession) session;
+            fast.setRepeatingBurst(fast.createHighSpeedRequestList(request), captureCallback, cameraHandler);
+        } else {
+            session.setRepeatingRequest(request, captureCallback, cameraHandler);
+        }
+    }
+
+    private int sourceFrameRate() { return activeFpsRange == null ? 30 : activeFpsRange.getUpper(); }
+
+    private void applyStabilization(CaptureRequest.Builder builder) {
+        int[] video = characteristics.get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES);
+        int[] optical = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION);
+        boolean ois = contains(optical, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON);
+        int preference = stabilizationRejected ? LumaRoundVideoStabilization.OFF : stabilizationMode;
+        int mode = LumaRoundVideoStabilization.videoMode(preference,
+                contains(video, CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON),
+                Build.VERSION.SDK_INT >= 33 && contains(video, CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_PREVIEW_STABILIZATION), ois, highSpeed);
+        if (video != null && video.length > 0) builder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, mode);
+        if (optical != null && optical.length > 0) builder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+                LumaRoundVideoStabilization.opticalMode(preference, mode, ois)
+                        ? CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON : CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF);
     }
 
     private final CameraCaptureSession.CaptureCallback captureCallback =
@@ -806,6 +891,7 @@ final class RoundVideoCameraController {
                         @NonNull CaptureRequest request,
                         @NonNull TotalCaptureResult result
                 ) {
+                    if (session != captureSession || !active) return;
                     verifyTorchResult(request, result);
                     Long timestampNs = result.get(CaptureResult.SENSOR_TIMESTAMP);
                     if (timestampNs == null || timestampNs <= captureFpsLastTimestampNs) return;
@@ -1022,7 +1108,6 @@ final class RoundVideoCameraController {
 
     private void selectCameraAndSizes(@NonNull RoundVideoSession.CameraFacing facing)
             throws CameraAccessException {
-        resolveSessionFrameRatePolicy();
         int requiredFacing = facing == RoundVideoSession.CameraFacing.FRONT
                 ? CameraCharacteristics.LENS_FACING_FRONT
                 : CameraCharacteristics.LENS_FACING_BACK;
@@ -1110,6 +1195,8 @@ final class RoundVideoCameraController {
         characteristics = selectedCharacteristics;
         activeFrameRate = frameRatePlan.frameRate;
         activeFpsRange = frameRatePlan.fpsRange;
+        highSpeed = frameRatePlan.highSpeed;
+        stabilizationRejected = false;
         frameRateFallbackAttempted = false;
         regularFallbackPair = regularPair;
         resetCaptureFpsMeasurement();
@@ -1144,49 +1231,6 @@ final class RoundVideoCameraController {
         logCameraConfigurationOnce(facing, selectedId, selectedCharacteristics, sizes);
     }
 
-    private void resolveSessionFrameRatePolicy() throws CameraAccessException {
-        if (frameRatePolicyResolved) return;
-        frameRatePolicyResolved = true;
-        if (requestedFrameRate != RoundVideoSession.FrameRate.FPS_60) return;
-        boolean front = supports60FpsForFacing(RoundVideoSession.CameraFacing.FRONT);
-        boolean back = supports60FpsForFacing(RoundVideoSession.CameraFacing.BACK);
-        force30Fps = !front || !back;
-        diagnostics.log("60 fps session capability: front=" + front
-                + ", back=" + back
-                + ", selected=" + (force30Fps ? 30 : 60));
-    }
-
-    private boolean supports60FpsForFacing(@NonNull RoundVideoSession.CameraFacing facing)
-            throws CameraAccessException {
-        int requiredFacing = facing == RoundVideoSession.CameraFacing.FRONT
-                ? CameraCharacteristics.LENS_FACING_FRONT
-                : CameraCharacteristics.LENS_FACING_BACK;
-        for (String id : cameraManager.getCameraIdList()) {
-            CameraCharacteristics candidate = cameraManager.getCameraCharacteristics(id);
-            Integer candidateFacing = candidate.get(CameraCharacteristics.LENS_FACING);
-            if (candidateFacing == null || candidateFacing != requiredFacing) continue;
-            StreamConfigurationMap map = candidate.get(
-                    CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
-            );
-            if (map == null) continue;
-            Size[] sizes = map.getOutputSizes(SurfaceTexture.class);
-            if (sizes == null || sizes.length == 0) continue;
-            try {
-                OutputPair regularPair = chooseOutputPair(
-                        sizes,
-                        outputResolution,
-                        requestedCameraResolution
-                );
-                if (resolveFrameRate(id, candidate, map, sizes, regularPair).frameRate
-                        == RoundVideoSession.FrameRate.FPS_60) {
-                    return true;
-                }
-            } catch (RuntimeException ignore) {
-            }
-        }
-        return false;
-    }
-
     private float readMaximumZoomRatio(@NonNull CameraCharacteristics cameraCharacteristics) {
         float maximum = 1f;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -1217,6 +1261,9 @@ final class RoundVideoCameraController {
             @NonNull CameraCandidate current,
             @NonNull RoundVideoSession.CameraFacing facing
     ) {
+        if (candidate.frameRatePlan.frameRate != current.frameRatePlan.frameRate) {
+            return candidate.frameRatePlan.frameRate.getValue() > current.frameRatePlan.frameRate.getValue();
+        }
         return facing == RoundVideoSession.CameraFacing.BACK
                 && hasFlashUnit(candidate.characteristics)
                 && !hasFlashUnit(current.characteristics);
@@ -1248,19 +1295,8 @@ final class RoundVideoCameraController {
         Range<Integer>[] ranges = cameraCharacteristics.get(
                 CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES
         );
-        if (requestedFrameRate == RoundVideoSession.FrameRate.FPS_30 || force30Fps) {
-            Range<Integer> range = findBestFpsRange(ranges, 30);
-            diagnostics.log("fps selection: id=" + id
-                    + ", requested=" + requestedFrameRate.getValue()
-                    + ", mode=REGULAR, range=" + range
-                    + (force30Fps ? ", reason=session-wide fallback" : ""));
-            return new FrameRatePlan(
-                    RoundVideoSession.FrameRate.FPS_30,
-                    range,
-                    regularPair
-            );
-        }
-        final int targetFps = requestedFrameRate.getValue();
+        final int requestedFps = Math.min(maximumFrameRate, requestedFrameRate.getValue());
+        for (int targetFps = requestedFps; targetFps > 30; targetFps -= 30) {
         Range<Integer> normalRange = findBestFpsRange(ranges, targetFps);
         if (normalRange != null) {
             Size[] fastSizes = filterSizesForFrameRate(map, sizes, targetFps);
@@ -1275,7 +1311,7 @@ final class RoundVideoCameraController {
                         + ", mode=REGULAR, range=" + normalRange
                         + ", compatibleSizes=" + Arrays.toString(fastSizes));
                 return new FrameRatePlan(
-                        RoundVideoSession.FrameRate.FPS_60,
+                        RoundVideoSession.FrameRate.fromValue(targetFps),
                         normalRange,
                         pair
                 );
@@ -1289,10 +1325,40 @@ final class RoundVideoCameraController {
                     + ", regular " + targetFps + " fps rejected: advertisedRanges="
                     + Arrays.toString(ranges));
         }
+        // 90 fps may be produced by retaining 3 out of 4 genuine 120 fps frames.
+        // No duplicated frames and no slow-motion timestamps.
+        if (processedPreview && targetFps >= 90 && Build.VERSION.SDK_INT >= 23
+                && contains(cameraCharacteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES),
+                    CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_CONSTRAINED_HIGH_SPEED_VIDEO)) {
+            Size best = null;
+            Size[] fastSizes;
+            try { fastSizes = map.getHighSpeedVideoSizes(); }
+            catch (RuntimeException e) { fastSizes = null; }
+            if (fastSizes == null) continue;
+            for (Size size : fastSizes) {
+                if (!isWithinAbsoluteLimit(size) || shortSide(size) < outputSize) continue;
+                if (!Arrays.asList(sizes).contains(size)) continue;
+                boolean fixed120 = false;
+                Range<Integer>[] fastRanges;
+                try { fastRanges = map.getHighSpeedVideoFpsRangesFor(size); }
+                catch (RuntimeException e) { continue; }
+                if (fastRanges == null) continue;
+                for (Range<Integer> range : fastRanges) {
+                    if (range.getLower() == 120 && range.getUpper() == 120) fixed120 = true;
+                }
+                if (fixed120 && (best == null || area(size) > area(best))) best = size;
+            }
+            if (best != null) {
+                int crop = Math.min(shortSide(best), getSourceCropSize(outputResolution, requestedCameraResolution));
+                return new FrameRatePlan(RoundVideoSession.FrameRate.fromValue(targetFps), new Range<>(120, 120),
+                        new OutputPair(best, best, requestedCameraResolution, crop), true);
+            }
+        }
+        }
 
         Range<Integer> fallbackRange = findBestFpsRange(ranges, 30);
         diagnostics.log("fps selection: id=" + id
-                + ", requested=" + targetFps
+                + ", requested=" + requestedFps
                 + ", fallback=30, range=" + fallbackRange);
         return new FrameRatePlan(
                 RoundVideoSession.FrameRate.FPS_30,
@@ -1306,8 +1372,12 @@ final class RoundVideoCameraController {
             @NonNull Size size,
             int targetFps
     ) {
-        long minimumDurationNs = map.getOutputMinFrameDuration(SurfaceTexture.class, size);
-        return minimumDurationNs <= 0L || minimumDurationNs <= 1_000_000_000L / targetFps;
+        try {
+            long minimumDurationNs = map.getOutputMinFrameDuration(SurfaceTexture.class, size);
+            return LumaRoundVideoQuality.supportsFrameDuration(minimumDurationNs, targetFps);
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     private static long getMinimumFrameDurationNs(
@@ -1357,6 +1427,8 @@ final class RoundVideoCameraController {
             return;
         }
         activeFrameRate = RoundVideoSession.FrameRate.FPS_30;
+        maximumFrameRate = 30;
+        highSpeed = false;
         Range<Integer>[] ranges = characteristics == null
                 ? null
                 : characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
@@ -1367,15 +1439,15 @@ final class RoundVideoCameraController {
         activeCameraResolution = pair.cameraResolution;
         SurfaceTexture previewTexture = previewView.getSurfaceTexture();
         if (previewTexture != null) {
-            previewTexture.setDefaultBufferSize(previewSize.getWidth(), previewSize.getHeight());
+            previewTexture.setDefaultBufferSize(processedPreview ? outputSize : previewSize.getWidth(), processedPreview ? outputSize : previewSize.getHeight());
         }
-        if (recorder != null && recorder.isStarted()) {
-            reportError(new IllegalStateException(
-                    "Unable to change encoder frame rate after recording started",
-                    error
-            ));
-            return;
-        }
+        boolean recording = recorder != null && recorder.isStarted();
+        if (recording && glProcessor != null) {
+            // Preserve the MP4 track and audio timeline on a camera flip or HAL
+            // rejection. A slower camera supplies fewer frames, never duplicates.
+            glProcessor.setCameraPolicy(selectedFacing == RoundVideoSession.CameraFacing.FRONT, 30, sourceFrameRate());
+            glProcessor.updateInputConfiguration(recordingSize, sourceCropSize, isCameraTimestampRealtime());
+        } else {
         if (glProcessor != null) {
             glProcessor.stop();
             glProcessor = null;
@@ -1391,8 +1463,9 @@ final class RoundVideoCameraController {
             reportError(pipelineError);
             return;
         }
+        }
         resetCaptureFpsMeasurement();
-        diagnostics.log("60 fps fallback: reason=" + reason
+        diagnostics.log("High frame-rate fallback: reason=" + reason
                 + (error == null ? "" : ", error=" + error)
                 + ", preview=" + previewSize
                 + ", recording=" + recordingSize
@@ -1410,7 +1483,7 @@ final class RoundVideoCameraController {
         if (ranges == null) return null;
         Range<Integer> best = null;
         for (Range<Integer> range : ranges) {
-            if (!range.contains(targetFps)) continue;
+            if (!range.contains(targetFps) || range.getUpper() != targetFps || targetFps > 30 && range.getLower() < 30) continue;
             if (best == null
                     || range.getLower() > best.getLower()
                     || range.getLower().equals(best.getLower())
@@ -1468,6 +1541,11 @@ final class RoundVideoCameraController {
 
     private void updatePreviewTransform() {
         if (!previewTransformEnabled) return;
+        if (processedPreview) {
+            // Already cropped and stabilized by the same GL path as the MP4.
+            previewView.setTransform(new Matrix());
+            return;
+        }
         Size size = recordingSize;
         if (size == null || previewView.getWidth() == 0 || previewView.getHeight() == 0) return;
         int cropSize = Math.min(sourceCropSize, Math.min(size.getWidth(), size.getHeight()));
@@ -1511,18 +1589,20 @@ final class RoundVideoCameraController {
             cameraDevice.close();
             cameraDevice = null;
         }
-        if (previewSurface != null) {
-            previewSurface.release();
-            previewSurface = null;
-        }
         if (glProcessor != null) {
             glProcessor.stop();
             glProcessor = null;
         }
+        if (previewSurface != null) {
+            previewSurface.release();
+            previewSurface = null;
+        }
+        if (horizonLock != null) horizonLock.stop();
         recordingSurface = null;
     }
 
     private void closeCaptureSession() {
+        captureGeneration++;
         if (captureSession != null) {
             captureSession.close();
             captureSession = null;
@@ -1779,15 +1859,21 @@ final class RoundVideoCameraController {
         final RoundVideoSession.FrameRate frameRate;
         final Range<Integer> fpsRange;
         final OutputPair outputPair;
+        final boolean highSpeed;
 
         FrameRatePlan(
                 @NonNull RoundVideoSession.FrameRate frameRate,
                 @Nullable Range<Integer> fpsRange,
                 @NonNull OutputPair outputPair
         ) {
+            this(frameRate, fpsRange, outputPair, false);
+        }
+
+        FrameRatePlan(RoundVideoSession.FrameRate frameRate, Range<Integer> fpsRange, OutputPair outputPair, boolean highSpeed) {
             this.frameRate = frameRate;
             this.fpsRange = fpsRange;
             this.outputPair = outputPair;
+            this.highSpeed = highSpeed;
         }
     }
 

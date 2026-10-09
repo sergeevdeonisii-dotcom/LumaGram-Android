@@ -39,6 +39,7 @@ $signatures = @(
     'private void publishError()', 'public void whenError(Runnable callback)',
     'public void whenDone(Runnable doneCallback)', 'public void open(SurfaceTexture surfaceTexture)',
     'private void checkOpen()', 'public boolean isInitiated()',
+    'private void startCaptureSession()', 'private boolean fallbackHighSpeedSession()',
     'public void destroy(boolean async, Runnable afterCallback)'
 )
 $methods = ($signatures | ForEach-Object { Method $source $_ }) -join "`n"

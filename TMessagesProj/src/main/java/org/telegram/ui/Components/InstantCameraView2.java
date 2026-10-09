@@ -43,6 +43,7 @@ import org.telegram.messenger.MediaController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.utils.settings.SharedSettings;
+import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.VideoEditedInfo;
@@ -378,7 +379,8 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
                 .setOutputResolution(activeOutputResolution)
                 .setVideoBitrate(SharedSettings.roundVideoVideoBitrate.get())
                 .setCameraResolution(SharedSettings.roundVideoCameraResolution.get())
-                .setFrameRate(SharedSettings.roundVideoFrameRate.get())
+                .setFrameRate(RoundVideoSession.FrameRate.fromValue(LumaRoundVideoQuality.getPreferredFrameRate(
+                        SharedSettings.roundVideoFrameRate.get().getValue())))
                 .setCompositionEnabled(SharedSettings.roundVideoComposition.get())
                 .setListener(sessionListener)
                 .setOutputListener(upload)

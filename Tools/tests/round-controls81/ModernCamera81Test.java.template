@@ -1,0 +1,94 @@
+package org.telegram.messenger;
+import java.util.*;
+
+/** Runs extracted production camera-selection methods, not a second implementation. */
+public final class ModernCamera81Test {
+    @interface NonNull {} @interface Nullable {}
+    static int assertions;
+    static void check(boolean b,String label){assertions++;if(!b)throw new AssertionError(label);}
+    static final int PREVIEW_SHORT_SIDE=720, MAXIMUM_SOURCE_SHORT_SIDE=1088, MAXIMUM_SOURCE_LONG_SIDE=1920, MAXIMUM_CROP_OVERSIZE_PERCENT=15;
+    final RoundVideoSession.OutputResolution outputResolution=RoundVideoSession.OutputResolution.P480;
+    final RoundVideoSession.CameraResolution requestedCameraResolution=RoundVideoSession.CameraResolution.HIGH;
+    RoundVideoSession.FrameRate requestedFrameRate=RoundVideoSession.FrameRate.FPS_120;
+    int maximumFrameRate=120, outputSize=480;
+    boolean processedPreview=true;
+    final Diagnostics diagnostics=new Diagnostics();
+    static final class Diagnostics { void log(String text) {} }
+    static final class Build { static final class VERSION { static int SDK_INT=36; } }
+    static final class SurfaceTexture {}
+    static final class Range<T extends Comparable<T>> {
+        final T lo,hi; Range(T lo,T hi){this.lo=lo;this.hi=hi;} T getLower(){return lo;} T getUpper(){return hi;}
+        boolean contains(T v){return lo.compareTo(v)<=0 && hi.compareTo(v)>=0;}
+    }
+    static final class Size {
+        final int w,h; Size(int w,int h){this.w=w;this.h=h;}
+        int getWidth(){return w;} int getHeight(){return h;}
+        public boolean equals(Object o){return o instanceof Size && ((Size)o).w==w && ((Size)o).h==h;}
+        public int hashCode(){return w*31+h;}
+    }
+    static final class Key<T> {}
+    static final class CameraCharacteristics {
+        static final Key<Range<Integer>[]> CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES=new Key<>();
+        static final Key<int[]> REQUEST_AVAILABLE_CAPABILITIES=new Key<>();
+        static final int REQUEST_AVAILABLE_CAPABILITIES_CONSTRAINED_HIGH_SPEED_VIDEO=9;
+        final Map<Key<?>,Object> values=new HashMap<>();
+        <T> void set(Key<T> key,T value){values.put(key,value);}
+        @SuppressWarnings("unchecked") <T> T get(Key<T> key){return (T)values.get(key);}
+    }
+    static final class StreamConfigurationMap {
+        long duration=16_666_667L;
+        Size[] sizes={new Size(1920,1080)};
+        Range<Integer>[] fps=ranges(120,120);
+        boolean reject;
+        long getOutputMinFrameDuration(Class<?> c,Size size){return duration;}
+        Size[] getHighSpeedVideoSizes(){if(reject)throw new IllegalArgumentException();return sizes;}
+        Range<Integer>[] getHighSpeedVideoFpsRangesFor(Size size){return fps;}
+    }
+    static class RoundVideoSession {
+        enum OutputResolution {P480(480),P360(360); final int size;OutputResolution(int s){size=s;}int getSize(){return size;}}
+        enum CameraResolution {HIGH,MEDIUM,LOW}
+        // PRODUCTION_ENUM
+    }
+    @SuppressWarnings("unchecked") static Range<Integer>[] ranges(int... e){
+        Range<Integer>[] a=new Range[e.length/2];for(int i=0;i<a.length;i++)a[i]=new Range<>(e[2*i],e[2*i+1]);return a;
+    }
+    // PRODUCTION_METHODS
+    public static void main(String[] args){
+        ModernCamera81Test p=new ModernCamera81Test();
+        CameraCharacteristics c=new CameraCharacteristics();StreamConfigurationMap map=new StreamConfigurationMap();
+        Size[] sizes={new Size(1920,1080),new Size(1280,720)};
+        OutputPair pair=chooseOutputPair(sizes,p.outputResolution,p.requestedCameraResolution);
+        c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(30,30,30,60,60,60));
+        FrameRatePlan plan=p.resolveFrameRate("0",c,map,sizes,pair);
+        check(plan.frameRate.getValue()==60 && !plan.highSpeed,"Without high-speed capability fall back to genuine normal 60, including rounded duration");
+        c.set(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES,new int[]{9});
+        plan=p.resolveFrameRate("0",c,map,sizes,pair);
+        check(plan.frameRate.getValue()==120 && plan.highSpeed && plan.fpsRange.getLower()==120,"Advertised single-output high-speed 120");
+        check(plan.outputPair.recording.equals(new Size(1920,1080)),"Use an actually advertised high-speed size");
+        p.requestedFrameRate=RoundVideoSession.FrameRate.FPS_90;
+        plan=p.resolveFrameRate("0",c,map,sizes,pair);
+        check(plan.frameRate.getValue()==90 && plan.highSpeed && plan.fpsRange.getUpper()==120,"90 target decimates a real 120 source");
+        p.maximumFrameRate=60;
+        check(p.resolveFrameRate("0",c,map,sizes,pair).frameRate.getValue()==60,"Codec fallback caps subsequent camera switches");
+        p.maximumFrameRate=120;p.requestedFrameRate=RoundVideoSession.FrameRate.FPS_120;
+        map.fps=ranges(30,120);
+        check(!p.resolveFrameRate("0",c,map,sizes,pair).highSpeed,"Variable high-speed range is not a fixed 120 recording mode");
+        map.fps=ranges(120,120);map.sizes=null;
+        check(p.resolveFrameRate("0",c,map,sizes,pair).frameRate.getValue()==60,"Broken high-speed metadata retains normal-camera fallback");
+        map.reject=true;
+        check(p.resolveFrameRate("0",c,map,sizes,pair).frameRate.getValue()==60,"HAL metadata rejection retains normal-camera fallback");
+        map.reject=false;map.sizes=sizes;Build.VERSION.SDK_INT=22;
+        check(!p.resolveFrameRate("0",c,map,sizes,pair).highSpeed,"API guard");
+        Build.VERSION.SDK_INT=36;
+        c.set(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES,new int[]{});
+        c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(30,30,90,90,120,120));
+        map.duration=8_333_334L;
+        check(p.resolveFrameRate("0",c,map,sizes,pair).frameRate.getValue()==120,"Normal 120 needs stream timing and range");
+        map.duration=0;
+        check(p.resolveFrameRate("0",c,map,sizes,pair).frameRate.getValue()==30,"Unknown stream duration is not high-FPS evidence");
+        check(findBestFpsRange(ranges(30,120),60)==null,"Do not overshoot encoder rate with a wider range");
+        check(findBestFpsRange(ranges(15,30),30)!=null,"Ordinary 30 can adapt to low light");
+        for(int fps:new int[]{30,60,90,120})check(RoundVideoSession.FrameRate.fromValue(fps).getValue()==fps,"Frame-rate enum maps slider value");
+        System.out.println("PASS: "+assertions+" extracted new-recorder camera/codec policy assertions.");
+    }
+}

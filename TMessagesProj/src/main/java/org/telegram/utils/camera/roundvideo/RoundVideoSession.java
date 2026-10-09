@@ -72,8 +72,12 @@ public final class RoundVideoSession {
     public enum FrameRate {
         /** Records at 30 frames per second. */
         FPS_30(30),
-        /** Requests 60 fps through regular AE ranges and falls back when either camera lacks it. */
-        FPS_60(60);
+        /** Requests regular-session 60 fps, with a capability-based fallback. */
+        FPS_60(60),
+        /** Requests 90 fps or decimates a supported fixed 120 fps stream. */
+        FPS_90(90),
+        /** Requests normal or constrained high-speed 120 fps where advertised. */
+        FPS_120(120);
 
         private final int value;
 
@@ -84,6 +88,10 @@ public final class RoundVideoSession {
         /** Returns the requested frames per second. */
         public int getValue() {
             return value;
+        }
+
+        public static FrameRate fromValue(int value) {
+            return values()[Math.max(0, Math.min(3, value / 30 - 1))];
         }
     }
 

@@ -10,6 +10,7 @@ import androidx.annotation.NonNull;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.R;
+import org.telegram.messenger.LumaHorizonState;
 import org.telegram.ui.Components.RLottieNative;
 
 import java.nio.ByteBuffer;
@@ -257,6 +258,7 @@ final class RoundVideoOverlayRenderer {
     private final FloatBuffer textureBuffer;
     private FloatBuffer cameraTextureBuffer;
     private FloatBuffer rotatedCameraTextureBuffer;
+    private final float[] horizonCoordinates = new float[8];
     private final int[] frameBuffers = new int[8];
     private final int[] textures = new int[10];
 
@@ -604,7 +606,7 @@ final class RoundVideoOverlayRenderer {
         unbindProgram(cameraProgram);
     }
 
-    private void renderRawCameraToOutput(
+    void renderRawCameraToOutput(
             int cameraTexture,
             float[] textureMatrix,
             int width,
@@ -1075,6 +1077,18 @@ final class RoundVideoOverlayRenderer {
                 0.5f - halfWidth, 0.5f + halfHeight,
                 0.5f + halfWidth, 0.5f + halfHeight
         });
+    }
+
+    void setHorizon(float angle, boolean enabled) {
+        int crop = getCropSize();
+        LumaHorizonState.textureCoordinates(horizonCoordinates, crop / (2f * inputSize.getWidth()),
+                crop / (2f * inputSize.getHeight()), angle, enabled);
+        cameraTextureBuffer.position(0);
+        cameraTextureBuffer.put(horizonCoordinates).position(0);
+        LumaHorizonState.textureCoordinates(horizonCoordinates, crop / (2f * inputSize.getHeight()),
+                crop / (2f * inputSize.getWidth()), angle, enabled);
+        rotatedCameraTextureBuffer.position(0);
+        rotatedCameraTextureBuffer.put(horizonCoordinates).position(0);
     }
 
     private int getCropSize() {
