@@ -22,6 +22,7 @@ import org.telegram.messenger.LumaProfileVerification;
 import org.telegram.messenger.LumaStarRating;
 import org.telegram.messenger.LumaTextAnimation;
 import org.telegram.messenger.LumaRoundVideoQuality;
+import org.telegram.messenger.LumaRoundVideoStabilization;
 import org.telegram.messenger.LumaRoundVideoCamera;
 import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.messenger.LocaleController;
@@ -237,6 +238,18 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         items.add(UItem.asCheck(ROW_ROUND_VIDEO_QUALITY, getString(R.string.LumaRoundVideoQualityEnable))
                 .setChecked(LumaRoundVideoQuality.isEnabled()));
         items.add(UItem.asShadow(getString(R.string.LumaRoundVideoQualityInfo)));
+        items.add(UItem.asHeader(getString(R.string.LumaRoundVideoFps)));
+        items.add(UItem.asSlideView(new String[] {"30", "60", "90", "120"},
+                LumaRoundVideoQuality.getFrameRateLevel(), LumaRoundVideoQuality::setFrameRateLevel)
+                .setEnabled(LumaRoundVideoQuality.isEnabled()));
+        items.add(UItem.asShadow(getString(R.string.LumaRoundVideoFpsInfo)));
+        items.add(UItem.asHeader(getString(R.string.LumaRoundVideoStabilization)));
+        items.add(UItem.asSlideView(new String[] {
+                getString(R.string.LumaRoundVideoStabilizationOff),
+                getString(R.string.LumaRoundVideoStabilizationStandard),
+                getString(R.string.LumaRoundVideoStabilizationEnhanced)
+        }, LumaRoundVideoStabilization.getMode(), LumaRoundVideoStabilization::setMode));
+        items.add(UItem.asShadow(getString(R.string.LumaRoundVideoStabilizationInfo)));
         items.add(UItem.asCheck(ROW_ROUND_VIDEO_REAR_CAMERA, getString(R.string.LumaRoundVideoStartRearCamera))
                 .setChecked(LumaRoundVideoCamera.isStartWithRearCameraEnabled()));
         items.add(UItem.asShadow(getString(R.string.LumaRoundVideoStartRearCameraInfo)));

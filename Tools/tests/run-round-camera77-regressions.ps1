@@ -162,7 +162,7 @@ $capture = Method $camera2 'private boolean updateCaptureRequest()'
 if ($capture.IndexOf('recordingFrameRate = requestedRecordingFrameRate') -lt $capture.IndexOf('captureSession.setRepeatingRequest(')) {
     throw 'Camera2 recording FPS must be acknowledged only after a successful repeating request.'
 }
-if (-not $camera1.Contains('camera.getParameters().getPreviewFpsRange(accepted)') -or -not $camera1.Contains('accepted[0] >= 30_000 && accepted[1] == 60_000')) {
+if (-not $camera1.Contains('camera.getParameters().getPreviewFpsRange(accepted)') -or -not $camera1.Contains('accepted[0] >= 30_000 && accepted[1] == requestedRecordingFrameRate * 1000')) {
     throw 'Camera1 target must reflect driver-accepted range in legacy thousandths.'
 }
 if (-not $controller.Contains('getString("cameraCacheRoundFps77", null)') -or -not $controller.Contains('putString("cameraCacheRoundFps77"') -or $controller.Contains('getString("cameraCache", null)')) {

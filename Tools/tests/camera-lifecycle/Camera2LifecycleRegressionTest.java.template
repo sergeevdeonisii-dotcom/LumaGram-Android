@@ -4,6 +4,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class Camera2Session {
+    static final class Build { static final int SDK_INT = 36; static final class VERSION { static final int SDK_INT = 36; } static final class VERSION_CODES { static final int M = 23; } }
+    static final class LumaRoundVideoQuality { static final int FRAME_RATE = 30; }
     @interface NonNull {}
     static int assertions;
     static void check(boolean value, String label) { assertions++; if (!value) throw new AssertionError(label); }
@@ -42,8 +44,14 @@ public final class Camera2Session {
     }
     static final class CameraDevice {
         int closes, creates;
+        boolean rejectHighSpeed;
+        final ArrayList<CameraCaptureSession.StateCallback> callbacks = new ArrayList<>();
         void close() { closes++; }
-        void createCaptureSession(ArrayList<Surface> surfaces, CameraCaptureSession.StateCallback callback, Object handler) { creates++; }
+        void createCaptureSession(ArrayList<Surface> surfaces, CameraCaptureSession.StateCallback callback, Object handler) { creates++; callbacks.add(callback); }
+        void createConstrainedHighSpeedCaptureSession(ArrayList<Surface> surfaces, CameraCaptureSession.StateCallback callback, Object handler) {
+            if (rejectHighSpeed) throw new IllegalArgumentException("High speed unavailable");
+            createCaptureSession(surfaces, callback, handler);
+        }
         abstract static class StateCallback {
             public abstract void onOpened(CameraDevice camera);
             public abstract void onDisconnected(CameraDevice camera);
@@ -75,6 +83,8 @@ public final class Camera2Session {
     private Runnable doneCallback, errorCallback;
     private long lastTime;
     private boolean opened;
+    private boolean highSpeedSession;
+    private int captureGeneration, requestedRecordingFrameRate = 120;
     private int requests;
     private boolean updateCaptureRequest() {
         requests++;
@@ -149,6 +159,23 @@ public final class Camera2Session {
     public static void main(String[] args) throws Exception {
         lateCallbacks(false); lateCallbacks(true);
         concurrentCompletion();
+        Camera2Session fast = new Camera2Session(); fast.highSpeedSession = true;
+        fast.open(new SurfaceTexture()); fast.handler.drain();
+        CameraDevice fastDevice = new CameraDevice(); fast.cameraStateCallback.onOpened(fastDevice);
+        CameraCaptureSession failedFast = new CameraCaptureSession();
+        fastDevice.callbacks.get(0).onConfigureFailed(failedFast);
+        check(!fast.highSpeedSession && fast.requestedRecordingFrameRate == 30 && fastDevice.creates == 2,
+            "High-speed configure failure retries once as a normal 30fps session");
+        check(failedFast.closes == 1 && fast.captureSession == null, "Rejected high-speed capture is closed");
+        CameraCaptureSession stale = new CameraCaptureSession(); fastDevice.callbacks.get(0).onConfigured(stale);
+        check(stale.closes == 1 && fast.captureSession == null && fast.requests == 0, "Stale high-speed callback cannot replace normal fallback");
+        CameraCaptureSession normal = new CameraCaptureSession(); fastDevice.callbacks.get(1).onConfigured(normal);
+        AndroidUtilities.ui.drain(); check(fast.isInitiated() && fast.captureSession == normal, "Fallback becomes ready only after normal configuration");
+        fast.destroy(false, null); AndroidUtilities.ui.drain();
+        fast = new Camera2Session(); fast.highSpeedSession = true; fast.open(new SurfaceTexture()); fast.handler.drain();
+        fastDevice = new CameraDevice(); fastDevice.rejectHighSpeed = true; fast.cameraStateCallback.onOpened(fastDevice);
+        check(!fast.highSpeedSession && fastDevice.creates == 1 && !fast.isError, "Synchronous high-speed rejection also falls back");
+        fast.destroy(false, null); AndroidUtilities.ui.drain();
         Camera2Session owner = openedSession(); int[] ready = {0};
         owner.whenDone(() -> ready[0]++); owner.captureStateCallback.onConfigured(new CameraCaptureSession());
         check(owner.requests == 1 && ready[0] == 0, "Configuration queues readiness on the UI thread");

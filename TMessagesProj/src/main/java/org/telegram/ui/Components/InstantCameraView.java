@@ -85,6 +85,9 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaRoundVideoCamera;
 import org.telegram.messenger.LumaRoundVideoQuality;
+import org.telegram.messenger.LumaRoundVideoStabilization;
+import org.telegram.messenger.LumaHorizonLock;
+import org.telegram.messenger.LumaHorizonState;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
@@ -212,6 +215,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     private final float[] mMVPMatrix = new float[16];
     private final float[] mSTMatrix = new float[16];
     private final float[] moldSTMatrix = new float[16];
+    private LumaHorizonLock horizonLock;
     private static final String VERTEX_SHADER =
             "uniform mat4 uMVPMatrix;\n" +
                     "uniform mat4 uSTMatrix;\n" +
@@ -579,6 +583,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        if (horizonLock != null) horizonLock.stop();
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.fileUploaded);
         if (flashViews != null) {
             flashViews.flashOut();
@@ -602,6 +607,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     }
 
     public void destroy(boolean async) {
+        if (horizonLock != null) horizonLock.stop();
         cancelCameraStartupTimeout();
         ++cameraStartupGeneration;
         if (useCamera2) {
@@ -760,13 +766,19 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         if (!fromPaused || recordingQualityProfile == null) {
             boolean commonHighQuality = supportsCommonHighQualityCamera();
             recordingQualityProfile = LumaRoundVideoQuality.forCamera(
-                getBaselineRecordingProfile(), commonHighQuality, commonHighQuality && supportsCommonHighFrameRateCamera());
+                getBaselineRecordingProfile(), commonHighQuality, getSupportedRecordingFrameRate());
         }
 
         if (!initCamera()) {
             abortCameraStartup(startupGeneration);
             return;
         }
+        if (horizonLock == null) horizonLock = new LumaHorizonLock(getContext());
+        if (LumaRoundVideoStabilization.getMode() == LumaRoundVideoStabilization.ENHANCED) {
+            if (!horizonLock.start()) {
+                Toast.makeText(getContext(), LocaleController.getString(R.string.LumaRoundVideoHorizonUnavailable), Toast.LENGTH_LONG).show();
+            }
+        } else horizonLock.stop();
         if (MediaController.getInstance().getPlayingMessageObject() != null) {
             if (MediaController.getInstance().getPlayingMessageObject().isVideo() || MediaController.getInstance().getPlayingMessageObject().isRoundVideo()) {
                 MediaController.getInstance().cleanupPlayer(true, true);
@@ -796,8 +808,8 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
 
         if (useCamera2) {
             // Concurrent front/back sessions often impose a 30fps ceiling.
-            // Use one normal session targeting 60; sequential camera flips remain.
-            bothCameras = getRecordingQualityProfile().frameRate != LumaRoundVideoQuality.HIGH_FRAME_RATE
+            // High-FPS recording uses one session; sequential camera flips remain.
+            bothCameras = getRecordingQualityProfile().frameRate <= LumaRoundVideoQuality.FRAME_RATE
                 && DualCameraView.roundDualAvailableStatic(getContext());
             if (bothCameras) {
                 for (int a = 0; a < 2; ++a) {
@@ -1292,21 +1304,21 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             && findHighQualityCamera1Size(back.getPreviewSizes(), back.getPictureSizes()) != null;
     }
 
-    private boolean supportsCommonHighFrameRateCamera() {
-        if (useCamera2) {
-            return Camera2Session.supportsRoundFrameRate(true, 640, 640, LumaRoundVideoQuality.HIGH_FRAME_RATE)
-                && Camera2Session.supportsRoundFrameRate(false, 640, 640, LumaRoundVideoQuality.HIGH_FRAME_RATE);
+    private int getSupportedRecordingFrameRate() {
+        // Do not limit a rear 120fps camera to the front camera's 30/60fps.
+        // Flips keep the same encoder track and use the new camera's real cadence.
+        for (int fps = LumaRoundVideoQuality.getPreferredFrameRate(); fps > 30; fps -= 30) {
+            if (useCamera2) {
+                if (Camera2Session.supportsRoundFrameRate(isFrontface, 640, 640, fps)) return fps;
+            } else {
+                ArrayList<CameraInfo> cameras = CameraController.getInstance().getCameras();
+                if (cameras != null) for (CameraInfo camera : cameras) {
+                    if (camera.isFrontface() == isFrontface
+                        && LumaRoundVideoQuality.supportsTargetFrameRate(camera.getPreviewFpsRanges(), fps, 1000)) return fps;
+                }
+            }
         }
-        ArrayList<CameraInfo> cameras = CameraController.getInstance().getCameras();
-        if (cameras == null) return false;
-        CameraInfo front = null, back = null;
-        for (CameraInfo camera : cameras) {
-            if (camera.isFrontface() && front == null) front = camera;
-            if (!camera.isFrontface() && back == null) back = camera;
-        }
-        return front != null && back != null
-            && LumaRoundVideoQuality.supportsTargetFrameRate(front.getPreviewFpsRanges(), LumaRoundVideoQuality.HIGH_FRAME_RATE, 1000)
-            && LumaRoundVideoQuality.supportsTargetFrameRate(back.getPreviewFpsRanges(), LumaRoundVideoQuality.HIGH_FRAME_RATE, 1000);
+        return LumaRoundVideoQuality.FRAME_RATE;
     }
 
     private void applyCameraRecordingFrameRate(int frameRate) {
@@ -2072,11 +2084,16 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 updateFlash();
             }
 
-            if (videoEncoder != null && (surfaceIndex == 0 && updateTexImage1 || surfaceIndex == 1 && updateTexImage2)) {
-                videoEncoder.frameAvailable(cameraSurface[surfaceIndex], bothCameras ? surfaceIndex : cameraId, System.nanoTime());
-            }
-
             cameraSurface[surfaceIndex].getTransformMatrix(mSTMatrix);
+            float[] frameMatrix = mMVPMatrix.clone();
+            if (horizonLock != null && horizonLock.isRunning()) {
+                // Constant crop covers all square corners at every angle; no
+                // breathing zoom, exposed black wedges or stale framebuffer pixels.
+                frameMatrix = LumaHorizonState.transform(mMVPMatrix, horizonLock.correction(isFrontface));
+            }
+            if (videoEncoder != null && (surfaceIndex == 0 && updateTexImage1 || surfaceIndex == 1 && updateTexImage2)) {
+                videoEncoder.frameAvailable(cameraSurface[surfaceIndex], bothCameras ? surfaceIndex : cameraId, System.nanoTime(), frameMatrix);
+            }
 
             GLES20.glUseProgram(drawProgram);
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
@@ -2089,7 +2106,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             GLES20.glEnableVertexAttribArray(textureHandle);
 
             GLES20.glUniformMatrix4fv(textureMatrixHandle, 1, false, mSTMatrix, 0);
-            GLES20.glUniformMatrix4fv(vertexMatrixHandle, 1, false, mMVPMatrix, 0);
+            GLES20.glUniformMatrix4fv(vertexMatrixHandle, 1, false, frameMatrix, 0);
 
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
 
@@ -2254,6 +2271,12 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     private static final int MSG_RESUME_RECORDING = 5;
     private static final int MSG_ABORT_RECORDING = 6;
 
+    private static final class RoundFrame {
+        final Integer cameraId;
+        final float[] matrix;
+        RoundFrame(Integer cameraId, float[] matrix) { this.cameraId = cameraId; this.matrix = matrix; }
+    }
+
     private static class EncoderHandler extends Handler {
         private WeakReference<VideoRecorder> mWeakEncoder;
 
@@ -2324,8 +2347,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 }
                 case MSG_VIDEOFRAME_AVAILABLE: {
                     long timestamp = (((long) inputMessage.arg1) << 32) | (((long) inputMessage.arg2) & 0xffffffffL);
-                    Integer cameraId = (Integer) inputMessage.obj;
-                    encoder.handleVideoFrameAvailable(timestamp, cameraId);
+                    RoundFrame frame = (RoundFrame) inputMessage.obj;
+                    encoder.frameMatrix = frame.matrix;
+                    encoder.handleVideoFrameAvailable(timestamp, frame.cameraId);
                     break;
                 }
                 case MSG_AUDIOFRAME_AVAILABLE: {
@@ -2599,9 +2623,8 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     || bothCameras && !hasHighQualityPreview(previewSize[1]))) {
                     encodingProfile = recordingQualityProfile = baselineEncodingProfile;
                 }
-                if (encodingProfile.frameRate == LumaRoundVideoQuality.HIGH_FRAME_RATE
-                    && getCameraRecordingFrameRate() != LumaRoundVideoQuality.HIGH_FRAME_RATE) {
-                    encodingProfile = recordingQualityProfile = LumaRoundVideoQuality.fallback(encodingProfile, baselineEncodingProfile);
+                if (encodingProfile.frameRate > getCameraRecordingFrameRate()) {
+                    encodingProfile = recordingQualityProfile = LumaRoundVideoQuality.atFrameRate(encodingProfile, getCameraRecordingFrameRate());
                     applyCameraRecordingFrameRate(encodingProfile.frameRate);
                 }
             }
@@ -2663,7 +2686,8 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         }
 
         long prevTimestamp;
-        public void frameAvailable(SurfaceTexture st, Integer cameraId, long timestampInternal) {
+        private float[] frameMatrix;
+        public void frameAvailable(SurfaceTexture st, Integer cameraId, long timestampInternal, float[] matrix) {
             synchronized (sync) {
                 if (!ready) {
                     return;
@@ -2685,7 +2709,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 zeroTimeStamps = 0;
             }
             prevTimestamp = timestamp;
-            handler.sendMessage(handler.obtainMessage(MSG_VIDEOFRAME_AVAILABLE, (int) (timestamp >> 32), (int) timestamp, cameraId));
+            handler.sendMessage(handler.obtainMessage(MSG_VIDEOFRAME_AVAILABLE, (int) (timestamp >> 32), (int) timestamp, new RoundFrame(cameraId, matrix)));
         }
 
         @Override
@@ -2916,7 +2940,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             GLES20.glEnableVertexAttribArray(positionHandle);
             GLES20.glVertexAttribPointer(textureHandle, 2, GLES20.GL_FLOAT, false, 8, textureBuffer);
             GLES20.glEnableVertexAttribArray(textureHandle);
-            GLES20.glUniformMatrix4fv(vertexMatrixHandle, 1, false, mMVPMatrix, 0);
+            GLES20.glUniformMatrix4fv(vertexMatrixHandle, 1, false, frameMatrix, 0);
 
             GLES20.glUniform2f(resolutionHandle, videoWidth, videoHeight);
 
@@ -2988,7 +3012,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
 
         private void createKeyframeThumb() {
             if (generateKeyframeThumbsQueue != null && SharedConfig.getDevicePerformanceClass() == SharedConfig.PERFORMANCE_CLASS_HIGH
-                && frameCount % (encodingProfile.frameRate == LumaRoundVideoQuality.HIGH_FRAME_RATE ? 66 : 33) == 0) {
+                && frameCount % (encodingProfile.frameRate * 11 / 10) == 0) {
                 GenerateKeyframeThumbTask task = new GenerateKeyframeThumbTask();
                 generateKeyframeThumbsQueue.postRunnable(task);
             }
@@ -3477,7 +3501,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             // Pause drains the old codecs but deliberately retains them while
             // the preview is open. Release those before replacing their refs.
             if (fromPause) releaseRecordingCodecs();
-            for (int attempt = 0; attempt < 3; attempt++) {
+            for (int attempt = 0; attempt < 5; attempt++) {
                 try {
                     videoEncoder = MediaCodec.createEncoderByType(VIDEO_MIME_TYPE);
                     audioEncoder = MediaCodec.createEncoderByType(AUDIO_MIME_TYPE);
@@ -3507,7 +3531,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     return;
                 } catch (Exception e) {
                     releaseRecordingCodecs();
-                    if (!fromPause && attempt < 2 && encodingProfile.highQuality) {
+                    if (!fromPause && attempt < 4 && encodingProfile.highQuality) {
                         FileLog.e(e);
                         encodingProfile = LumaRoundVideoQuality.fallback(encodingProfile, baselineEncodingProfile);
                         recordingQualityProfile = encodingProfile;
@@ -3525,12 +3549,10 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             setBluetoothScoOn(true);
 
             try {
-                if (fromPause && encodingProfile.frameRate == LumaRoundVideoQuality.HIGH_FRAME_RATE
-                    && getCameraRecordingFrameRate() != LumaRoundVideoQuality.HIGH_FRAME_RATE) {
-                    throw new IOException("The resumed camera cannot retain the 60fps recording target");
-                }
+                // A slower camera after a flip/resume supplies fewer real frames;
+                // retain the existing muxer track and timestamps, never invent frames.
                 prepareRecordingCodecs(fromPause);
-                frameGate = new LumaRoundVideoQuality.FrameGate(encodingProfile.frameRate);
+                frameGate = new LumaRoundVideoQuality.FrameGate(encodingProfile.frameRate, getCameraRecordingFrameRate());
                 firstEncode = true;
                 int recordBufferSize = AudioRecord.getMinBufferSize(audioSampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
                 if (recordBufferSize <= 0) {

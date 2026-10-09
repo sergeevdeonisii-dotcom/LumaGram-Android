@@ -8,6 +8,7 @@ const PACKAGE = 'org.luma.liquid.web';
 const RELEASES = {
   '79': { version: '12.10.6-lunagram.79', code: 71589 },
   '80': { version: '12.10.6-lunagram.80', code: 71599 },
+  '81': { version: '12.10.6-lunagram.81', code: 71609 },
 };
 
 function requireValue(condition, message) {

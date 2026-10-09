@@ -9,6 +9,8 @@ public final class LumaRoundVideoQuality {
     public static final int HIGH_FRAME_RATE = 60;
     public static final int HIGH_FRAME_RATE_VIDEO_BITRATE = 12_000_000;
     public static final int FRAME_RATE = 30;
+    public static final int MAX_FRAME_RATE = 120;
+    public static final String FRAME_RATE_PREFERENCE_KEY = "lunagram_round_video_fps";
     public static final long MAX_DURATION_MS = 60_000L;
 
     private LumaRoundVideoQuality() {}
@@ -19,6 +21,22 @@ public final class LumaRoundVideoQuality {
 
     public static void setEnabled(boolean enabled) {
         MessagesController.getGlobalMainSettings().edit().putBoolean(PREFERENCE_KEY, enabled).apply();
+    }
+
+    public static int normalizeFrameRate(int fps) {
+        return Math.max(FRAME_RATE, Math.min(MAX_FRAME_RATE, fps)) / FRAME_RATE * FRAME_RATE;
+    }
+
+    public static int getPreferredFrameRate() {
+        return normalizeFrameRate(MessagesController.getGlobalMainSettings()
+            .getInt(FRAME_RATE_PREFERENCE_KEY, HIGH_FRAME_RATE));
+    }
+
+    public static int getFrameRateLevel() { return getPreferredFrameRate() / FRAME_RATE - 1; }
+
+    public static void setFrameRateLevel(int level) {
+        int fps = (Math.max(0, Math.min(3, level)) + 1) * FRAME_RATE;
+        MessagesController.getGlobalMainSettings().edit().putInt(FRAME_RATE_PREFERENCE_KEY, fps).apply();
     }
 
     /** Immutable for a recording, including pause/resume and camera flips. */
@@ -52,16 +70,26 @@ public final class LumaRoundVideoQuality {
     }
 
     public static Profile forCamera(Profile baseline, boolean commonCameraSupport, boolean common60Support) {
+        return forCamera(baseline, commonCameraSupport, common60Support ? HIGH_FRAME_RATE : FRAME_RATE);
+    }
+
+    public static Profile forCamera(Profile baseline, boolean commonCameraSupport, int supportedFrameRate) {
+        int fps = normalizeFrameRate(Math.min(getPreferredFrameRate(), supportedFrameRate));
         return isEnabled() && commonCameraSupport
             ? new Profile(HIGH_QUALITY_SIZE,
-                common60Support ? HIGH_FRAME_RATE_VIDEO_BITRATE : HIGH_QUALITY_VIDEO_BITRATE,
-                HIGH_QUALITY_AUDIO_BITRATE, common60Support ? HIGH_FRAME_RATE : FRAME_RATE, true)
+                HIGH_QUALITY_VIDEO_BITRATE * (fps / FRAME_RATE), HIGH_QUALITY_AUDIO_BITRATE, fps, true)
             : baseline;
     }
 
+    public static Profile atFrameRate(Profile profile, int fps) {
+        int rate = normalizeFrameRate(Math.min(profile.frameRate, fps));
+        return new Profile(profile.size, profile.highQuality ? HIGH_QUALITY_VIDEO_BITRATE * (rate / FRAME_RATE)
+            : profile.videoBitrate, profile.audioBitrate, rate, profile.highQuality);
+    }
+
     public static Profile fallback(Profile profile, Profile baseline) {
-        return profile.highQuality && profile.frameRate == HIGH_FRAME_RATE
-            ? new Profile(HIGH_QUALITY_SIZE, HIGH_QUALITY_VIDEO_BITRATE, HIGH_QUALITY_AUDIO_BITRATE, true)
+        return profile.highQuality && profile.frameRate > FRAME_RATE
+            ? atFrameRate(profile, profile.frameRate - FRAME_RATE)
             : baseline;
     }
 
@@ -95,7 +123,7 @@ public final class LumaRoundVideoQuality {
             && range[0] >= (long) Math.min(fps, FRAME_RATE) * units;
     }
 
-    /** Unknown stream timing cannot prove normal-session 60fps support. */
+    /** Unknown stream timing cannot prove normal-session high-FPS support. */
     public static boolean supportsFrameDuration(long durationNanos, int fps) {
         return fps > 0 && durationNanos > 0 && durationNanos <= (1_000_000_000L + fps - 1L) / fps;
     }
@@ -110,12 +138,15 @@ public final class LumaRoundVideoQuality {
         private Integer lastCamera;
         private long phaseCredit;
         public FrameGate(int fps) {
+            this(fps, fps);
+        }
+        public FrameGate(int fps, int sourceFps) {
             int target = Math.max(1, fps);
             minimumInterval = Math.max(1L, 1_000_000_000L / target);
             // Stay strictly inside the half-period window: an exact midpoint
             // in a regular 60-to-30 stream belongs to the next real frame.
             jitterAllowance = fps > 0 ? Math.max(0L, minimumInterval / 2L - 1L) : 0;
-            fullCameraCadence = target == HIGH_FRAME_RATE;
+            fullCameraCadence = target >= HIGH_FRAME_RATE && sourceFps <= target;
         }
         public boolean accept(long timestamp, Integer camera) {
             if (timestamp <= 0) return false;

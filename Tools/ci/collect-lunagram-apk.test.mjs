@@ -52,6 +52,21 @@ test('personal .80 has its own version and rejects .79 or Friends metadata', () 
   validateApkBadging(manifest, 'full', '80');
   assert.throws(() => validateApkBadging(manifest, 'friends', '80'));
   assert.throws(() => validateApkBadging(manifest, 'full'));
-  assert.throws(() => expectedArtifact('full', '81'));
+  assert.throws(() => expectedArtifact('full', '82'));
   assert.throws(() => expectedArtifact('full', 'toString'));
+});
+
+test('personal .81 rejects previous release and Friends APKs', () => {
+  const expected = expectedArtifact('full', '81');
+  assert.equal(expected.versionCode, 71609);
+  assert.equal(expected.versionName, '12.10.6-lunagram.81');
+  const metadata = output('full');
+  assert.throws(() => validateOutputMetadata(metadata, 'full', '81'));
+  metadata.elements[0].versionCode = 71609;
+  metadata.elements[0].versionName = expected.versionName;
+  assert.equal(validateOutputMetadata(metadata, 'full', '81'), 'app.apk');
+  const manifest = "package: name='org.luma.liquid.web' versionCode='71609' versionName='12.10.6-lunagram.81'\nnative-code: 'arm64-v8a'\n";
+  validateApkBadging(manifest, 'full', '81');
+  assert.throws(() => validateApkBadging(manifest, 'full', '80'));
+  assert.throws(() => validateApkBadging(manifest, 'friends', '81'));
 });

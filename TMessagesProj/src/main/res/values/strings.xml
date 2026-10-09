@@ -11389,7 +11389,15 @@
     <string name="LumaFriendsProfileInfo">Local display of your level</string>
     <string name="LumaFriendsSendingInfo">Round video quality and initial camera</string>
     <string name="LumaRoundVideoStartRearCameraInfo">New video messages start with the rear camera. You can still switch cameras while recording. A paused recording keeps its current camera.</string>
-    <string name="LumaRoundVideoQualityInfo">Sharper HD video messages with a target of 60 frames per second on supported cameras and encoders. Files are larger and uploads may take longer. Low light may reduce the camera frame rate. If 60 FPS is not supported, recording falls back to 30 FPS or standard quality. Unedited recordings are sent without re-encoding; trimming still requires processing.</string>
+    <string name="LumaRoundVideoQualityInfo">Sharper 640 × 640 video messages. Files are larger and uploads may take longer. Unedited recordings are sent without re-encoding; trimming still requires processing.</string>
+    <string name="LumaRoundVideoFps">Frame rate · FPS</string>
+    <string name="LumaRoundVideoFpsInfo">Preferred rate: 30–120 FPS. Depends on the selected camera and encoder; unsupported rates fall back to the nearest lower rate. Switching cameras or low light may reduce smoothness. Higher rates increase heat and battery usage. Enable Camera2 in camera settings for 120 FPS.</string>
+    <string name="LumaRoundVideoStabilization">Video message stabilization</string>
+    <string name="LumaRoundVideoStabilizationOff">Off</string>
+    <string name="LumaRoundVideoStabilizationStandard">Standard</string>
+    <string name="LumaRoundVideoStabilizationEnhanced">Enhanced</string>
+    <string name="LumaRoundVideoStabilizationInfo">Enhanced adds experimental Lunagram horizon lock using motion sensors, alongside available camera stabilization. This is not Samsung’s Super Steady: strong jolts and motion blur may remain. The view is cropped by about 1.4×; when pointing straight up or down, the last roll is retained. High-speed mode disables camera electronic stabilization but retains horizon correction. Without suitable sensors, only available camera stabilization is used.</string>
+    <string name="LumaRoundVideoHorizonUnavailable">Horizon sensor unavailable. Using available camera stabilization.</string>
     <string name="LumaUpdateManifestInvalid">The update manifest is missing required security information or has an invalid format.</string>
     <string name="LumaUpdateDownloadFailed">The update could not be downloaded. Check your connection and try again.</string>
     <string name="LumaUpdateHashMismatch">The downloaded APK failed its SHA-256 check and was deleted.</string>
