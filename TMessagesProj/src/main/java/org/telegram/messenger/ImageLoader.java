@@ -1134,7 +1134,7 @@ public class ImageLoader {
                     if (cacheImage.cacheType > 1) {
                         cacheType = cacheImage.cacheType;
                     }
-                    fileDrawable = new AnimatedFileDrawable(cacheImage.finalFilePath, createDecoder, 0, cacheImage.priority, notCreateStream ? null : cacheImage.imageLocation.document, null, null, seekTo, cacheImage.currentAccount, false, w, h, cacheOptions, cacheType, true);
+                    fileDrawable = new AnimatedFileDrawable(cacheImage.finalFilePath, createDecoder, 0, cacheImage.priority, notCreateStream ? null : cacheImage.imageLocation.document, null, cacheImage.parentObject, seekTo, cacheImage.currentAccount, false, w, h, cacheOptions, cacheType, true);
                     fileDrawable.setIsWebmSticker(MessageObject.isWebM(cacheImage.imageLocation.document) || MessageObject.isVideoSticker(cacheImage.imageLocation.document) || isAnimatedAvatar(cacheImage.filter));
                 }
                 if (fistFrame) {

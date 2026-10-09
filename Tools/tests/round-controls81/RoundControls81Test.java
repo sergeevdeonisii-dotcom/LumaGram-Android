@@ -12,6 +12,7 @@ public final class RoundControls81Test {
     static final float[] IDENTITY = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
     public static void main(String[] args) {
         MessagesController.values.clear();
+        check(!LumaRoundVideoQuality.prefersHighFrameRateCapture(), "No camera API override before explicit FPS choice");
         check(LumaRoundVideoQuality.getPreferredFrameRate() == 60, "Existing 60fps default retained");
         check(LumaRoundVideoQuality.getPreferredFrameRate(30) == 30, "New recorder's old default retained before slider change");
         LumaRoundVideoQuality.Profile base = LumaRoundVideoQuality.baseline(384, 1000, 64);
@@ -19,6 +20,7 @@ public final class RoundControls81Test {
             LumaRoundVideoQuality.setFrameRateLevel(level);
             int fps = (level + 1) * 30;
             check(LumaRoundVideoQuality.getPreferredFrameRate() == fps && LumaRoundVideoQuality.getFrameRateLevel() == level, "Slider persists " + fps);
+            check(LumaRoundVideoQuality.prefersHighFrameRateCapture() == (fps > 30), "High FPS selects a capable Camera2 path, 30 keeps default API");
             check(LumaRoundVideoQuality.getPreferredFrameRate(30) == fps, "Common slider overrides either recorder default");
             LumaRoundVideoQuality.Profile p = LumaRoundVideoQuality.forCamera(base, true, fps);
             check(p.frameRate == fps && p.videoBitrate == 6_000_000 * (level + 1), "Frame rate/bitrate agree");
@@ -45,6 +47,9 @@ public final class RoundControls81Test {
         check(LumaRoundVideoQuality.getPreferredFrameRate() == 30, "Corrupt lower slider input clamped");
         check(!LumaRoundVideoQuality.supportsTargetFrameRate(Collections.singletonList(new int[]{30,60}),120,1), "60 range cannot claim 120");
         check(LumaRoundVideoQuality.supportsTargetFrameRate(Arrays.asList(new int[]{30,30},new int[]{120,120}),120,1), "Real 120 range accepted");
+        check(LumaRoundVideoQuality.supportsTargetFrameRate(Collections.singletonList(new int[]{15,60}),60,1), "Adaptive normal60 accepted");
+        check(LumaRoundVideoQuality.supportsTargetFrameRate(Collections.singletonList(new int[]{15,120}),120,1), "Adaptive normal120 accepted");
+        check(!LumaRoundVideoQuality.supportsTargetFrameRate(Collections.singletonList(new int[]{0,120}),120,1), "Malformed adaptive range rejected");
         for (int target : new int[]{30,60,90}) {
             LumaRoundVideoQuality.FrameGate gate = new LumaRoundVideoQuality.FrameGate(target,120);
             int count = 0;

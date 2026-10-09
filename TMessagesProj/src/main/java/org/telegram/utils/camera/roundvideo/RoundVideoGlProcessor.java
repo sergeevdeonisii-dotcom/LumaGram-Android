@@ -153,7 +153,9 @@ final class RoundVideoGlProcessor {
     public void setCameraPolicy(boolean frontCamera, int targetFps, int sourceFps) {
         this.frontCamera = frontCamera;
         frameGate = new LumaRoundVideoQuality.FrameGate(targetFps, sourceFps);
-        previewGate = new LumaRoundVideoQuality.FrameGate(60, sourceFps);
+        // A 120 fps recording must not have an artificial 60 fps preview cap.
+        // EGL preview swaps are non-blocking; the display may still be slower.
+        previewGate = new LumaRoundVideoQuality.FrameGate(targetFps, sourceFps);
     }
 
     @NonNull

@@ -6633,10 +6633,13 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             duration = info.originalDuration;
         }
 
+        // Round videos already carry the recorder's validated rate. Trimming
+        // must not quietly turn 60/90/120 fps recordings into 59 or 30 fps.
+        final int maximumFrameRate = info.roundVideo ? LumaRoundVideoQuality.MAX_FRAME_RATE : 59;
         if (framerate == 0) {
-            framerate = 25;
-        } else if (framerate > 59) {
-            framerate = 59;
+            framerate = info.roundVideo ? LumaRoundVideoQuality.FRAME_RATE : 25;
+        } else if (framerate > maximumFrameRate) {
+            framerate = maximumFrameRate;
         }
 
         if (rotationValue == 90 || rotationValue == 270) {
@@ -6645,7 +6648,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             resultWidth = temp;
         }
 
-        if (!info.shouldLimitFps && framerate > 40 && (Math.min(resultHeight, resultWidth) <= 480)) {
+        if (!info.roundVideo && !info.shouldLimitFps && framerate > 40 && (Math.min(resultHeight, resultWidth) <= 480)) {
             framerate = 30;
         }
 

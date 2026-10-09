@@ -45,7 +45,7 @@ public final class ModernCamera81Test {
         Range<Integer>[] getHighSpeedVideoFpsRangesFor(Size size){return fps;}
     }
     static class RoundVideoSession {
-        enum OutputResolution {P480(480),P360(360); final int size;OutputResolution(int s){size=s;}int getSize(){return size;}}
+        enum OutputResolution {P480(480),P360(360),P720(720),P1080(1080); final int size;OutputResolution(int s){size=s;}int getSize(){return size;}}
         enum CameraResolution {HIGH,MEDIUM,LOW}
         // PRODUCTION_ENUM
     }
@@ -86,8 +86,51 @@ public final class ModernCamera81Test {
         check(p.resolveFrameRate("0",c,map,sizes,pair).frameRate.getValue()==120,"Normal 120 needs stream timing and range");
         map.duration=0;
         check(p.resolveFrameRate("0",c,map,sizes,pair).frameRate.getValue()==30,"Unknown stream duration is not high-FPS evidence");
+        c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(15,30,15,60));
+        map.duration=16_666_667L;
+        plan=p.resolveFrameRate("0",c,map,sizes,pair);
+        check(plan.frameRate.getValue()==60 && !plan.highSpeed,"Advertised adaptive 15-60 can select normal 60 without high-speed support");
+        check(plan.fpsRange.getLower()==15 && plan.fpsRange.getUpper()==60,"Keep the actual adaptive range instead of synthesizing fixed 60");
+        map.duration=33_333_333L;
+        check(p.resolveFrameRate("0",c,map,sizes,pair).frameRate.getValue()==30,"Adaptive 60 still requires a fast-enough source stream");
+        c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(15,30,15,120));
+        map.duration=8_333_334L;
+        plan=p.resolveFrameRate("0",c,map,sizes,pair);
+        check(plan.frameRate.getValue()==120 && !plan.highSpeed && plan.fpsRange.getLower()==15,"Advertised adaptive 15-120 can select normal 120");
+        Range<Integer>[] adaptiveAndFixed=ranges(15,60,60,60,30,60);
+        check(findBestFpsRange(adaptiveAndFixed,60)==adaptiveAndFixed[1],"Prefer the actual fixed range when advertised");
+        Range<Integer>[] adaptive=ranges(15,60,30,60);
+        check(findBestFpsRange(adaptive,60)==adaptive[1],"Prefer the highest supported lower bound among adaptive ranges");
+        check(findBestFpsRange(ranges(0,60,-1,60),60)==null,"Invalid adaptive lower bounds are not accepted");
+        check(findBestFpsRange(null,60)==null,"Missing range metadata retains fallback");
         check(findBestFpsRange(ranges(30,120),60)==null,"Do not overshoot encoder rate with a wider range");
         check(findBestFpsRange(ranges(15,30),30)!=null,"Ordinary 30 can adapt to low light");
+        c.set(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES,new int[]{9});
+        c.set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,ranges(15,30,15,60));
+        map.duration=16_666_667L;
+        p.maximumFrameRate=120;
+        plan=p.resolveLowerFrameRate("0",c,map,sizes,pair,120);
+        check(plan.frameRate.getValue()==60 && !plan.highSpeed,"Rejected 120 keeps usable regular 60 instead of jumping to 30");
+        check(p.maximumFrameRate==60,"Rejected 120 cannot retry the same high-speed stream");
+        plan=p.resolveLowerFrameRate("0",c,map,sizes,pair,60);
+        check(plan.frameRate.getValue()==30 && !plan.highSpeed && p.maximumFrameRate==30,"Rejected 60 steps down once to normal 30");
+        p.maximumFrameRate=120;
+        plan=p.resolveLowerFrameRate("0",c,map,sizes,pair,90);
+        check(plan.frameRate.getValue()==60 && !plan.highSpeed,"Rejected decimated 90 skips the failed 120 source");
+        p.maximumFrameRate=30;
+        check(p.resolveLowerFrameRate("0",c,map,sizes,pair,120).frameRate.getValue()==30,"Fallback cannot exceed already prepared codec ceiling");
+        p.maximumFrameRate=120;
+        map.duration=33_333_333L;
+        check(p.resolveLowerFrameRate("0",c,map,sizes,pair,120).frameRate.getValue()==30,"Rejected high-speed still validates stream timing before normal 60");
+        for(RoundVideoSession.OutputResolution output:RoundVideoSession.OutputResolution.values()){
+            check(getSourceCropSize(output,RoundVideoSession.CameraResolution.LOW)==output.getSize(),"Native crop follows selected output");
+            check(getSourceCropSize(output,RoundVideoSession.CameraResolution.MEDIUM)==output.getSize()*3/2,"Medium crop scales for every output resolution");
+            check(getSourceCropSize(output,RoundVideoSession.CameraResolution.HIGH)==output.getSize()*2,"High crop scales for every output resolution");
+            OutputPair highResolutionPair=chooseOutputPair(sizes,output,RoundVideoSession.CameraResolution.HIGH);
+            check(Arrays.asList(sizes).contains(highResolutionPair.recording),"High output resolution never fabricates a camera source");
+            check(highResolutionPair.cropSize<=Math.min(highResolutionPair.recording.getWidth(),highResolutionPair.recording.getHeight()),"Crop fits an advertised source when preferred tier is unavailable");
+        }
+        check(!isValidTierSize(new Size(1920,1440),1440),"Larger output tiers still obey the source bandwidth cap");
         for(int fps:new int[]{30,60,90,120})check(RoundVideoSession.FrameRate.fromValue(fps).getValue()==fps,"Frame-rate enum maps slider value");
         System.out.println("PASS: "+assertions+" extracted new-recorder camera/codec policy assertions.");
     }

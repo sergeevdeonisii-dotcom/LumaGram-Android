@@ -47,6 +47,7 @@ import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.VideoEditedInfo;
+import org.telegram.messenger.LumaRoundVideoStats;
 import org.telegram.messenger.utils.Choreographer60FpsContent;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
@@ -98,6 +99,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
     private RoundVideoSession.CameraCapabilities capabilities;
     private TelegramRoundVideoUpload upload;
     private VideoEditedInfo videoEditedInfo;
+    private int requestedRecordingFps;
     private SendOptions pendingSend;
     private AnimatorSet visibilityAnimator;
     private ValueAnimator zoomResetAnimator;
@@ -373,14 +375,14 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         showInitialPlaceholder();
         upload = new TelegramRoundVideoUpload(currentAccount, secretChat);
         activeOutputResolution = SharedSettings.roundVideoOutputResolution.get();
+        requestedRecordingFps = LumaRoundVideoQuality.getPreferredFrameRate(SharedSettings.roundVideoFrameRate.get().getValue());
         session = new RoundVideoSession.Builder(getContext(), textureView)
                 .setOutputDirectory(new File(ApplicationLoader.getFilesDirFixed(), "cache"))
                 .setInitialFacing(getInitialCameraFacing(fromPaused))
                 .setOutputResolution(activeOutputResolution)
                 .setVideoBitrate(SharedSettings.roundVideoVideoBitrate.get())
                 .setCameraResolution(SharedSettings.roundVideoCameraResolution.get())
-                .setFrameRate(RoundVideoSession.FrameRate.fromValue(LumaRoundVideoQuality.getPreferredFrameRate(
-                        SharedSettings.roundVideoFrameRate.get().getValue())))
+                .setFrameRate(RoundVideoSession.FrameRate.fromValue(requestedRecordingFps))
                 .setCompositionEnabled(SharedSettings.roundVideoComposition.get())
                 .setListener(sessionListener)
                 .setOutputListener(upload)
@@ -850,6 +852,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
     private void completeSend(@NonNull RoundVideoSession.Result result) {
         SendOptions options = pendingSend;
         if (options == null) return;
+        LumaRoundVideoStats.inspectAsync(result.getFile(), requestedRecordingFps, "camera2");
         pendingSend = null;
         sent = true;
         TelegramRoundVideoUpload.UploadInfo uploadInfo = upload == null

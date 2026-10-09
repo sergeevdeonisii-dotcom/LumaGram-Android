@@ -1,0 +1,103 @@
+package org.telegram.ui.Components;
+
+import java.util.ArrayList;
+
+public final class RoundPlayback82RegressionTest {
+    private @interface UiThread {}
+    private static int assertions;
+    @@PRODUCTION_CLOCK@@
+
+    private static final class Buffer {
+        final int time;
+        Buffer(int time) { this.time = time; }
+    }
+
+    private static final class Player {
+        boolean isRunning = true;
+        boolean roundVideoNativeChoreographer = true;
+        boolean swapBuffersAllowedByChoreographer;
+        boolean decodeSingleFrame;
+        boolean skipFrameUpdate;
+        long pendingSeekToUI = -1;
+        long roundVideoFrameTimeNs;
+        long lastFrameTime;
+        Buffer renderingBuffer, nextRenderingBuffer, nextRenderingBuffer2;
+        final ArrayList<Buffer> unusedBuffers = new ArrayList<>();
+        final RoundVideoPlaybackClock roundVideoPlaybackClock = new RoundVideoPlaybackClock();
+        int decodeRequests;
+        private void scheduleNextGetFrame() { decodeRequests++; }
+
+        @@PRODUCTION_UPDATE@@
+        @@PRODUCTION_SWAP@@
+
+        void enqueue(int time) {
+            if (nextRenderingBuffer == null) nextRenderingBuffer = new Buffer(time);
+            else if (nextRenderingBuffer2 == null) nextRenderingBuffer2 = new Buffer(time);
+        }
+
+        void tick(long timeNs) {
+            roundVideoFrameTimeNs = timeNs;
+            swapBuffersAllowedByChoreographer = true;
+            updateCurrentFrameInternal(timeNs / 1_000_000L, false);
+        }
+    }
+
+    private static void check(boolean result, String description) {
+        assertions++;
+        if (!result) throw new AssertionError(description);
+    }
+
+    private static void simulate(int sourceFps, int displayHz) {
+        Player player = new Player();
+        int nextFrame = 0;
+        int swaps = 0;
+        for (int tick = 0; tick <= displayHz * 10; tick++) {
+            while (player.nextRenderingBuffer == null || player.nextRenderingBuffer2 == null) {
+                player.enqueue((int) (nextFrame++ * 1000L / sourceFps));
+            }
+            Buffer before = player.renderingBuffer;
+            long timeNs = 1_000_000_000L + tick * 1_000_000_000L / displayHz;
+            player.tick(timeNs);
+            if (before != player.renderingBuffer) swaps++;
+            check(player.renderingBuffer != null, "first frame must render");
+            long elapsedMs = (timeNs - 1_000_000_000L) / 1_000_000L;
+            check(player.renderingBuffer.time <= elapsedMs, "source frame must never run ahead of real PTS");
+            check(elapsedMs - player.renderingBuffer.time <= 1000 / sourceFps + 1,
+                    "playback must keep real speed " + sourceFps + "fps on " + displayHz + "Hz");
+            Buffer current = player.renderingBuffer;
+            player.updateCurrentFrameInternal(timeNs / 1_000_000L, false);
+            check(current == player.renderingBuffer, "second draw in a VSYNC must not advance again");
+            player.unusedBuffers.clear();
+        }
+        check(swaps >= Math.min(sourceFps, displayHz) * 10 - 2,
+                "high refresh playback must not be capped at 60");
+    }
+
+    public static void main(String[] args) {
+        for (int source : new int[] {30, 60, 90, 120}) {
+            for (int display : new int[] {60, 90, 120, 144}) simulate(source, display);
+        }
+        RoundVideoPlaybackClock clock = new RoundVideoPlaybackClock();
+        clock.presented(1_000_000_000L, 100);
+        check(!clock.isDue(1_004_000_000L, 108), "8ms source frame waits until due");
+        check(clock.isDue(1_008_000_000L, 108), "exact source PTS becomes due");
+        clock.presented(1_008_000_000L, 108);
+        check(clock.isDue(1_009_000_000L, 0), "loop resets source clock");
+        clock.presented(1_009_000_000L, 0);
+        check(!clock.isDue(1_010_000_000L, 8), "loop must not immediately drain next frame");
+        clock.reset();
+        check(clock.isDue(1_010_000_000L, 50_000), "forward seek reanchors immediately");
+        clock.presented(1_010_000_000L, 50_000);
+        check(clock.isDue(900_000_000L, 50_008), "clock rollback reanchors safely");
+        Player paused = new Player();
+        paused.enqueue(0);
+        paused.skipFrameUpdate = true;
+        paused.tick(1_000_000_000L);
+        check(paused.renderingBuffer == null, "skipFrameUpdate respected");
+        paused.skipFrameUpdate = false;
+        paused.pendingSeekToUI = 100;
+        paused.tick(1_010_000_000L);
+        check(paused.renderingBuffer == null, "pending seek must not display stale data");
+        System.out.println("Round playback .82: " + assertions + " assertions passed.");
+    }
+}

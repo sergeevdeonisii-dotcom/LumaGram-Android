@@ -14,6 +14,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.LumaRoundVideoStabilization;
+import org.telegram.messenger.LumaRoundVideoStats;
 import org.telegram.utils.settings.SharedSettings;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -48,20 +49,47 @@ public class RoundVideoSettingsActivity extends BaseFragment {
     private static final int ROW_STABILIZATION_HEADER = 9;
     private static final int ROW_STABILIZATION = 10;
     private static final int ROW_STABILIZATION_INFO = 11;
-    private static final int ROW_COMPOSITION_HEADER = 12;
-    private static final int ROW_COMPOSITION = 13;
-    private static final int ROW_COMPOSITION_INFO = 14;
-    private static final int ROW_COUNT = BuildConfig.DEBUG_PRIVATE_VERSION ? 15 : 12;
+    private static final int ROW_LAST_RECORDING_HEADER = 12;
+    private static final int ROW_LAST_RECORDING_INFO = 13;
+    private static final int ROW_COMPOSITION_HEADER = 14;
+    private static final int ROW_COMPOSITION = 15;
+    private static final int ROW_COMPOSITION_INFO = 16;
+    private static final int ROW_COUNT = BuildConfig.DEBUG_PRIVATE_VERSION ? 17 : 14;
 
     private static final int[] BITRATES = {
             750_000,
             1_000_000,
             1_200_000,
-            2_000_000
+            2_000_000,
+            4_000_000,
+            6_000_000,
+            8_000_000
+    };
+
+    private static final RoundVideoSession.OutputResolution[] OUTPUT_RESOLUTIONS = {
+            RoundVideoSession.OutputResolution.P360,
+            RoundVideoSession.OutputResolution.P480,
+            RoundVideoSession.OutputResolution.P720,
+            RoundVideoSession.OutputResolution.P1080
     };
 
     private RecyclerListView listView;
     private ListAdapter adapter;
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (adapter != null) adapter.notifyItemChanged(ROW_LAST_RECORDING_INFO);
+    }
+
+    private String lastRecordingInfo() {
+        LumaRoundVideoStats.Result result = LumaRoundVideoStats.lastResult();
+        if (result == null) return LocaleController.getString(R.string.LumaRoundVideoMeasuredEmpty);
+        return LocaleController.formatString(R.string.LumaRoundVideoMeasuredInfo,
+                result.width, result.height, result.measuredFps,
+                result.videoBitrate / 1_000_000.0, result.requestedFps)
+                + "\n" + LocaleController.getString(R.string.LumaRoundVideoMeasuredNote);
+    }
 
     @Override
     public View createView(Context context) {
@@ -107,10 +135,8 @@ public class RoundVideoSettingsActivity extends BaseFragment {
         if (position == ROW_OUTPUT_RESOLUTION) {
             showChoice(
                     R.string.RoundVideoOutputResolution,
-                    new CharSequence[]{"480p", "360p"},
-                    index -> SharedSettings.roundVideoOutputResolution.set(index == 0
-                            ? RoundVideoSession.OutputResolution.P480
-                            : RoundVideoSession.OutputResolution.P360)
+                    new CharSequence[]{"360 × 360", "480 × 480", "720 × 720", "1080 × 1080"},
+                    index -> SharedSettings.roundVideoOutputResolution.set(OUTPUT_RESOLUTIONS[index])
             );
         } else if (position == ROW_CAMERA_RESOLUTION) {
             showChoice(
@@ -125,7 +151,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                     )
             );
         } else if (position == ROW_BITRATE) {
-            CharSequence[] labels = new CharSequence[BITRATES.length - (BuildConfig.DEBUG_PRIVATE_VERSION ? 0 : 1)];
+            CharSequence[] labels = new CharSequence[BITRATES.length];
             for (int i = 0; i < labels.length; i++) {
                 labels[i] = formatBitrate(BITRATES[i]);
             }
@@ -233,6 +259,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                         ? LocaleController.getString(R.string.RoundVideoGeneral)
                         : position == ROW_FRAME_RATE_HEADER ? LocaleController.getString(R.string.LumaRoundVideoFps)
                         : position == ROW_STABILIZATION_HEADER ? LocaleController.getString(R.string.LumaRoundVideoStabilization)
+                        : position == ROW_LAST_RECORDING_HEADER ? LocaleController.getString(R.string.LumaRoundVideoMeasuredTitle)
                         : LocaleController.getString(R.string.RoundVideoComposition));
             } else if (holder.getItemViewType() == TYPE_SLIDER) {
                 SlideChooseView cell = (SlideChooseView) holder.itemView;
@@ -290,6 +317,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 TextInfoPrivacyCell cell = (TextInfoPrivacyCell) holder.itemView;
                 cell.setText(position == ROW_GENERAL_INFO
                         ? LocaleController.getString(R.string.RoundVideoGeneralInfo)
+                        : position == ROW_LAST_RECORDING_INFO ? lastRecordingInfo()
                         : position == ROW_FRAME_RATE_INFO ? LocaleController.getString(R.string.LumaRoundVideoFpsInfo)
                         : position == ROW_STABILIZATION_INFO ? LocaleController.getString(R.string.LumaRoundVideoStabilizationInfo)
                         : LocaleController.getString(R.string.RoundVideoCompositionInfo));
@@ -299,6 +327,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
         @Override
         public int getItemViewType(int position) {
             if (position == ROW_GENERAL_HEADER || position == ROW_COMPOSITION_HEADER
+                    || position == ROW_LAST_RECORDING_HEADER
                     || position == ROW_FRAME_RATE_HEADER || position == ROW_STABILIZATION_HEADER) {
                 return TYPE_HEADER;
             }
@@ -308,6 +337,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 return TYPE_CHECK;
             }
             if (position == ROW_GENERAL_INFO || position == ROW_COMPOSITION_INFO
+                    || position == ROW_LAST_RECORDING_INFO
                     || position == ROW_FRAME_RATE_INFO || position == ROW_STABILIZATION_INFO) {
                 return TYPE_INFO;
             }
