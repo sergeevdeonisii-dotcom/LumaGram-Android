@@ -11,6 +11,7 @@ const RELEASES = {
   '81': { version: '12.10.6-lunagram.81', code: 71609 },
   '82': { version: '12.10.6-lunagram.82', code: 71619 },
   '100': { version: '1.0.0', code: 71629, unifiedVersionName: true },
+  '101': { version: '1.0.1', code: 71639, unifiedVersionName: true },
 };
 
 function requireValue(condition, message) {

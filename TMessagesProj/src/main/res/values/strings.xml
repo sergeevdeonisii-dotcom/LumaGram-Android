@@ -11214,7 +11214,7 @@
     <string name="LiquidGlassAdvancedTitle">Advanced Liquid Glass</string>
     <string name="LiquidGlassAppearance">Appearance</string>
     <string name="LiquidGlassEnable">Enable Liquid Glass</string>
-    <string name="LiquidGlassEnableInfo">Applies the glass effect to Telegram panels, chats, and the message field.</string>
+    <string name="LiquidGlassEnableInfo">Liquid Glass is the built-in Lunagram appearance. Adjust panel opacity, refraction and colors here.</string>
     <string name="LiquidGlassPowerSaver">Keep enabled in power saving</string>
     <string name="LiquidGlassPanelOpacity">Panel transparency</string>
     <string name="LiquidGlassRefraction">Refraction intensity</string>

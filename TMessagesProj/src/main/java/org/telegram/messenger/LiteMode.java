@@ -54,8 +54,6 @@ public class LiteMode {
     private static final String LIQUID_GLASS_COLOR_STRENGTH = "liquid_glass_color_strength";
     private static final String LIQUID_GLASS_SEPARATE_COLORS = "liquid_glass_separate_colors";
     private static final String LIQUID_GLASS_COLOR_TRANSITION = "liquid_glass_color_transition";
-    private static Boolean liquidGlassEnabled;
-    private static Boolean liquidGlassKeepInPowerSaver;
     private static Boolean liquidGlassAdaptiveColor;
     private static Boolean liquidGlassWallpaperRefraction;
     private static Boolean liquidGlassSeparateColors;
@@ -169,13 +167,9 @@ public class LiteMode {
 
     public static boolean isEnabled(int flag) {
         if (flag == FLAG_LIQUID_GLASS) {
-            if (!getLiquidGlassEnabled()) {
-                return false;
-            }
-            // Keep this custom setting independent from Telegram's remotely
-            // updated animation presets. Only the explicit battery option may
-            // temporarily suppress it.
-            return getLiquidGlassKeepInPowerSaver() || !isPowerSaverApplied();
+            // Liquid Glass is Lunagram's built-in appearance, independent of
+            // legacy switches, animation presets and the battery threshold.
+            return true;
         }
         if (flag == FLAG_CHAT_FORUM_TWOCOLUMN && AndroidUtilities.isTablet()) {
             // always enabled for tablets
@@ -192,27 +186,11 @@ public class LiteMode {
     }
 
     public static boolean getLiquidGlassEnabled() {
-        if (liquidGlassEnabled == null) {
-            liquidGlassEnabled = MessagesController.getGlobalMainSettings().getBoolean(LIQUID_GLASS_ENABLED, true);
-        }
-        return liquidGlassEnabled;
-    }
-
-    private static void setLiquidGlassEnabled(boolean value) {
-        liquidGlassEnabled = value;
-        MessagesController.getGlobalMainSettings().edit().putBoolean(LIQUID_GLASS_ENABLED, value).apply();
+        return true;
     }
 
     public static boolean getLiquidGlassKeepInPowerSaver() {
-        if (liquidGlassKeepInPowerSaver == null) {
-            liquidGlassKeepInPowerSaver = MessagesController.getGlobalMainSettings().getBoolean(LIQUID_GLASS_KEEP_IN_POWER_SAVER, true);
-        }
-        return liquidGlassKeepInPowerSaver;
-    }
-
-    public static void setLiquidGlassKeepInPowerSaver(boolean value) {
-        liquidGlassKeepInPowerSaver = value;
-        MessagesController.getGlobalMainSettings().edit().putBoolean(LIQUID_GLASS_KEEP_IN_POWER_SAVER, value).apply();
+        return true;
     }
 
     public static int getLiquidGlassOpacityLevel() {
@@ -375,8 +353,6 @@ public class LiteMode {
     }
 
     public static void resetLiquidGlassSettings() {
-        liquidGlassEnabled = true;
-        liquidGlassKeepInPowerSaver = true;
         liquidGlassAdaptiveColor = true;
         liquidGlassWallpaperRefraction = false;
         liquidGlassSeparateColors = true;
@@ -397,7 +373,6 @@ public class LiteMode {
             .remove(LIQUID_GLASS_SEPARATE_COLORS)
             .remove(LIQUID_GLASS_COLOR_TRANSITION)
             .apply();
-        setLiquidGlassEnabled(true);
     }
 
     public static void toggleFlag(int flag) {
@@ -406,7 +381,6 @@ public class LiteMode {
 
     public static void toggleFlag(int flag, boolean enabled) {
         if (flag == FLAG_LIQUID_GLASS) {
-            setLiquidGlassEnabled(enabled);
             return;
         }
         setAllFlags(enabled ? getValue(true) | flag : getValue(true) & ~flag);
@@ -456,6 +430,9 @@ public class LiteMode {
         }
 
         final SharedPreferences preferences = MessagesController.getGlobalMainSettings();
+        if (preferences.contains(LIQUID_GLASS_ENABLED) || preferences.contains(LIQUID_GLASS_KEEP_IN_POWER_SAVER)) {
+            preferences.edit().remove(LIQUID_GLASS_ENABLED).remove(LIQUID_GLASS_KEEP_IN_POWER_SAVER).apply();
+        }
         if (!preferences.contains("lite_mode6")) {
             if (preferences.contains("lite_mode5")) {
                 defaultValue = preferences.getInt("lite_mode5", defaultValue);

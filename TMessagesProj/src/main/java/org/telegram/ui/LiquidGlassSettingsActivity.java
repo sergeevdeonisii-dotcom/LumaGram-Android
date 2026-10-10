@@ -25,8 +25,6 @@ import java.util.ArrayList;
 
 public class LiquidGlassSettingsActivity extends BaseFragment {
 
-    private static final int ROW_ENABLED = 1;
-    private static final int ROW_POWER_SAVER = 2;
     private static final int ROW_RESET = 3;
     private static final int ROW_ADAPTIVE_COLOR = 4;
     private static final int ROW_SEPARATE_COLORS = 5;
@@ -74,23 +72,17 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
     }
 
     private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
-        final boolean enabled = LiteMode.isEnabledSetting(LiteMode.FLAG_LIQUID_GLASS);
         final boolean adaptiveColor = LiteMode.getLiquidGlassAdaptiveColorEnabled();
         final boolean wallpaperRefraction = LiteMode.getLiquidGlassWallpaperRefractionEnabled();
 
         if (!advancedMode) {
             items.add(UItem.asHeader(getString(R.string.LiquidGlassAppearance)));
-            items.add(UItem.asCheck(ROW_ENABLED, getString(R.string.LiquidGlassEnable))
-                .setChecked(enabled));
-            items.add(UItem.asCheck(ROW_POWER_SAVER, getString(R.string.LiquidGlassPowerSaver))
-                .setChecked(LiteMode.getLiquidGlassKeepInPowerSaver()));
-            items.add(UItem.asShadow(getString(R.string.LiquidGlassEnableInfo)));
             items.add(UItem.asButton(
                 ROW_ADVANCED,
                 getString(R.string.LiquidGlassAdvancedSettings),
                 getString(R.string.LiquidGlassAdvancedSettingsInfo)
             ));
-            items.add(UItem.asShadow(null));
+            items.add(UItem.asShadow(getString(R.string.LiquidGlassEnableInfo)));
             return;
         }
 
@@ -102,7 +94,7 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
         }, LiteMode.getLiquidGlassOpacityLevel(), value -> {
             LiteMode.setLiquidGlassOpacityLevel(value);
             settingsChanged = true;
-        }).setEnabled(enabled));
+        }));
 
         items.add(UItem.asHeader(getString(R.string.LiquidGlassRefraction)));
         items.add(UItem.asSlideView(new String[] {
@@ -112,7 +104,7 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
         }, LiteMode.getLiquidGlassIntensityLevel(), value -> {
             LiteMode.setLiquidGlassIntensityLevel(value);
             settingsChanged = true;
-        }).setEnabled(enabled));
+        }));
 
         items.add(UItem.asHeader(getString(R.string.LiquidGlassInputSize)));
         items.add(UItem.asSlideView(new String[] {
@@ -122,22 +114,20 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
         }, LiteMode.getLiquidGlassInputSizeLevel(), value -> {
             LiteMode.setLiquidGlassInputSizeLevel(value);
             settingsChanged = true;
-        }).setEnabled(enabled));
+        }));
         items.add(UItem.asShadow(getString(R.string.LiquidGlassAdvancedInfo)));
 
         items.add(UItem.asHeader(getString(R.string.LiquidGlassWallpaperRefraction)));
         items.add(UItem.asCheck(ROW_WALLPAPER_REFRACTION, getString(R.string.LiquidGlassWallpaperRefractionEnable))
-            .setChecked(wallpaperRefraction)
-            .setEnabled(enabled));
+            .setChecked(wallpaperRefraction));
         items.add(UItem.asShadow(getString(R.string.LiquidGlassWallpaperRefractionInfo)));
 
         items.add(UItem.asHeader(getString(R.string.LiquidGlassAdaptiveColor)));
         items.add(UItem.asCheck(ROW_ADAPTIVE_COLOR, getString(R.string.LiquidGlassAdaptiveColorEnable))
-            .setChecked(adaptiveColor)
-            .setEnabled(enabled));
+            .setChecked(adaptiveColor));
         items.add(UItem.asCheck(ROW_SEPARATE_COLORS, getString(R.string.LiquidGlassSeparateColors))
             .setChecked(LiteMode.getLiquidGlassSeparateColors())
-            .setEnabled(enabled && adaptiveColor));
+            .setEnabled(adaptiveColor));
         items.add(UItem.asShadow(getString(R.string.LiquidGlassAdaptiveColorInfo)));
 
         items.add(UItem.asHeader(getString(R.string.LiquidGlassColorStrength)));
@@ -148,7 +138,7 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
         }, LiteMode.getLiquidGlassColorStrengthLevel(), value -> {
             LiteMode.setLiquidGlassColorStrengthLevel(value);
             settingsChanged = true;
-        }).setEnabled(enabled && adaptiveColor));
+        }).setEnabled(adaptiveColor));
 
         items.add(UItem.asHeader(getString(R.string.LiquidGlassColorTransition)));
         items.add(UItem.asSlideView(new String[] {
@@ -158,7 +148,7 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
         }, LiteMode.getLiquidGlassColorTransitionLevel(), value -> {
             LiteMode.setLiquidGlassColorTransitionLevel(value);
             settingsChanged = true;
-        }).setEnabled(enabled && adaptiveColor));
+        }).setEnabled(adaptiveColor));
         items.add(UItem.asShadow(getString(R.string.LiquidGlassColorTransitionInfo)));
         items.add(UItem.asButton(ROW_RESET, getString(R.string.LiquidGlassReset)));
         items.add(UItem.asShadow(null));
@@ -167,21 +157,6 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
     private void onItemClick(UItem item, View view, int position, float x, float y) {
         if (item.id == ROW_ADVANCED) {
             presentFragment(new LiquidGlassSettingsActivity(true));
-        } else if (item.id == ROW_ENABLED) {
-            final boolean enabled = !LiteMode.isEnabledSetting(LiteMode.FLAG_LIQUID_GLASS);
-            LiteMode.toggleFlag(LiteMode.FLAG_LIQUID_GLASS, enabled);
-            settingsChanged = true;
-            if (view instanceof TextCheckCell) {
-                ((TextCheckCell) view).setChecked(enabled);
-            }
-            listView.adapter.update(false);
-        } else if (item.id == ROW_POWER_SAVER) {
-            final boolean enabled = !LiteMode.getLiquidGlassKeepInPowerSaver();
-            LiteMode.setLiquidGlassKeepInPowerSaver(enabled);
-            settingsChanged = true;
-            if (view instanceof TextCheckCell) {
-                ((TextCheckCell) view).setChecked(enabled);
-            }
         } else if (item.id == ROW_ADAPTIVE_COLOR) {
             final boolean enabled = !LiteMode.getLiquidGlassAdaptiveColorEnabled();
             if (enabled && LiteMode.getLiquidGlassWallpaperRefractionEnabled()) {

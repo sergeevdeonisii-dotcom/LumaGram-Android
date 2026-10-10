@@ -1,4 +1,4 @@
-name: Lunagram 1.0.0 release candidate APK pair
+name: Lunagram 1.0.1 APK pair
 
 on:
   push:
@@ -47,6 +47,7 @@ jobs:
           ./Tools/tests/run-round-stats82-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-stats-tests')
           ./Tools/tests/run-round-export82-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-export-tests')
           ./Tools/tests/check-release100-security.ps1
+          ./Tools/tests/run-svg101-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'svg-tests')
           ./Tools/tests/run-http-url100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'http-url-tests')
           ./Tools/tests/run-media-browser100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'media-browser-tests')
           ./Tools/tests/run-playback-privacy100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'playback-privacy-tests')
@@ -62,10 +63,10 @@ jobs:
       - name: Upload temporary APK pair and public provenance
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: lunagram-100-temporary-signed
+          name: lunagram-101-temporary-signed
           path: |
-            ${{ runner.temp }}/lunagram100-artifacts/*.apk
-            ${{ runner.temp }}/lunagram100-artifacts/build-metadata.json
+            ${{ runner.temp }}/lunagram101-artifacts/*.apk
+            ${{ runner.temp }}/lunagram101-artifacts/build-metadata.json
           if-no-files-found: error
           retention-days: 3
           compression-level: 0

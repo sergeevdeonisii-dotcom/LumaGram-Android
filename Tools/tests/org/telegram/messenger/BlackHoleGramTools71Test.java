@@ -48,6 +48,10 @@ public final class BlackHoleGramTools71Test {
   bad.clear();bad.put("manifest_url","https://evil.invalid");expectFailure(()->BlackHoleSettings.validate(bad));
   bad.clear();bad.put("number.digits","1234567x");expectFailure(()->BlackHoleSettings.validate(bad));
   bad.clear();bad.put("glass.adaptive",true);bad.put("glass.wallpaper",true);expectFailure(()->BlackHoleSettings.apply(0,bad));
+  bad.clear();bad.put("glass.enabled",false);bad.put("glass.powerSaver",false);bad.put("glass.opacity",2);
+  BlackHoleSettings.apply(0,bad);
+  check(LiteMode.getLiquidGlassEnabled()&&LiteMode.getLiquidGlassKeepInPowerSaver(),"legacy off switches cannot disable built-in glass");
+  check(LiteMode.getLiquidGlassOpacityLevel()==2,"legacy import still restores glass appearance");
   bad.clear();bad.put("ghost.enabled",true);bad.put("ghost.schedule",true);BlackHoleSettings.apply(0,bad);
   check(LumaGhostMode.isEnabled(0)&&LumaGhostMode.isScheduledSendEnabled(0),"ghost switches restored for chosen account");
   check(!LumaGhostMode.isEnabled(1),"other account unchanged");
@@ -64,7 +68,11 @@ public final class BlackHoleGramTools71Test {
    Map<String,Object> normal=BlackHoleSettings.profile(0,BlackHoleSettings.PROFILE_NORMAL);
    check(Boolean.FALSE.equals(normal.get("ghost.enabled")),"normal preset exits ghost mode");
    Map<String,Object> work=BlackHoleSettings.profile(0,BlackHoleSettings.PROFILE_WORK);
-   check(Boolean.FALSE.equals(work.get("typing.enabled"))&&Boolean.FALSE.equals(work.get("glass.enabled")),"work preset quiet visuals");
+   check(Boolean.FALSE.equals(work.get("typing.enabled"))&&Boolean.TRUE.equals(work.get("glass.enabled")),"work preset keeps built-in glass, disables typing effects");
+   work.put("glass.enabled",false);work.put("glass.powerSaver",false);
+   LumaAccountData.preferences(0).edit().putString("bhg_profile_"+BlackHoleSettings.PROFILE_WORK,BlackHoleSettings.encode(work)).apply();
+   Map<String,Object> migrated=BlackHoleSettings.profile(0,BlackHoleSettings.PROFILE_WORK);
+   check(Boolean.TRUE.equals(migrated.get("glass.enabled"))&&Boolean.TRUE.equals(migrated.get("glass.powerSaver")),"stored legacy profile exposes effective built-in glass state");
    BlackHoleSettings.saveProfile(0,BlackHoleSettings.PROFILE_WORK);
    check(BlackHoleSettings.profile(0,BlackHoleSettings.PROFILE_WORK).equals(BlackHoleSettings.capture(0)),"custom profile persistence using controlled serialization");
   } catch(Exception e){throw new AssertionError(e);}

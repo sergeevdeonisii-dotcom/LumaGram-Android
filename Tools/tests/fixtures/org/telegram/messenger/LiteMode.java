@@ -5,10 +5,8 @@ public final class LiteMode {
  private static final java.util.Map<String,Object> v=new java.util.HashMap<>();
  private static boolean b(String k){return (Boolean)v.getOrDefault(k,true);}
  private static int i(String k){return (Integer)v.getOrDefault(k,1);}
- public static boolean getLiquidGlassEnabled(){return b("enabled");}
- public static void toggleFlag(int flag,boolean enabled){v.put("enabled",enabled);}
- public static boolean getLiquidGlassKeepInPowerSaver(){return b("power");}
- public static void setLiquidGlassKeepInPowerSaver(boolean x){v.put("power",x);}
+ public static boolean getLiquidGlassEnabled(){return true;}
+ public static boolean getLiquidGlassKeepInPowerSaver(){return true;}
  public static int getLiquidGlassOpacityLevel(){return i("opacity");}
  public static void setLiquidGlassOpacityLevel(int x){v.put("opacity",x);}
  public static int getLiquidGlassIntensityLevel(){return i("intensity");}

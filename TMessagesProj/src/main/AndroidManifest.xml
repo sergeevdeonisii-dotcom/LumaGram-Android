@@ -95,9 +95,9 @@
 
     <application
         android:name="org.telegram.messenger.ApplicationLoader"
-        android:allowBackup="true"
-        android:restoreAnyVersion="true"
-        android:backupAgent=".BackupAgent"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/lunagram_backup_rules"
+        android:dataExtractionRules="@xml/lunagram_data_extraction_rules"
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:theme="@style/Theme.TMessages.Start"

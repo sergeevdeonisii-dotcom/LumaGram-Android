@@ -271,7 +271,7 @@
     <string name="LiquidGlassAdvancedTitle">Расширенные настройки Liquid Glass</string>
     <string name="LiquidGlassAppearance">Оформление</string>
     <string name="LiquidGlassEnable">Включить Liquid Glass</string>
-    <string name="LiquidGlassEnableInfo">Эффект применяется к панелям Telegram, чатам и строке сообщения.</string>
+    <string name="LiquidGlassEnableInfo">Liquid Glass — встроенное оформление Lunagram. Здесь можно настроить прозрачность, преломление и цвета панелей.</string>
     <string name="LiquidGlassPowerSaver">Не отключать при энергосбережении</string>
     <string name="LiquidGlassPanelOpacity">Прозрачность панелей</string>
     <string name="LiquidGlassRefraction">Интенсивность преломления</string>

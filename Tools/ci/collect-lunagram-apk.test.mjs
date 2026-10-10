@@ -35,6 +35,18 @@ for (const edition of ['full', 'friends']) {
     assert.throws(() => validateApkBadging(badging(edition === 'full' ? 'friends' : 'full'), edition));
   });
 }
+
+test('1.0.1 rejects old APKs and retains distinct public/personal flags', () => {
+  for (const edition of ['full', 'friends']) {
+    const expected = expectedArtifact(edition, '101');
+    assert.equal(expected.versionName, '1.0.1');
+    assert.equal(expected.versionCode, 71639);
+    assert.equal(expected.friendsEdition, edition === 'friends');
+    validateOutputMetadata({ applicationId: 'org.luma.liquid.web', elements: [{ versionName: '1.0.1', versionCode: 71639, outputFile: 'app.apk' }] }, edition, '101');
+    validateApkBadging("package: name='org.luma.liquid.web' versionCode='71639' versionName='1.0.1'\nnative-code: 'arm64-v8a'\n", edition, '101');
+    assert.throws(() => validateApkBadging("package: name='org.luma.liquid.web' versionCode='71629' versionName='1.0.0'\nnative-code: 'arm64-v8a'\n", edition, '101'));
+  }
+});
 test('wrong package, version, ABI, multiple outputs and path traversal rejected', () => {
   const metadata = output('full');
   metadata.applicationId = 'org.telegram.messenger';

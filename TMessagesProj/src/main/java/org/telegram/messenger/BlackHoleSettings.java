@@ -92,8 +92,7 @@ public final class BlackHoleSettings {
         LumaTextAnimation.setSwipeMode(i(v, "typing.swipe"));
         LumaMessageFormatting.setAutomaticStyle(i(v, "format.style"));
         LumaDelayedSend.setEnabled(b(v, "send.delayed")); LumaDelayedSend.setDelayStep(i(v, "send.step"));
-        LiteMode.toggleFlag(LiteMode.FLAG_LIQUID_GLASS, b(v, "glass.enabled"));
-        LiteMode.setLiquidGlassKeepInPowerSaver(b(v, "glass.powerSaver"));
+        // Accept legacy switches in imports, but keep the built-in appearance.
         LiteMode.setLiquidGlassOpacityLevel(i(v, "glass.opacity"));
         LiteMode.setLiquidGlassIntensityLevel(i(v, "glass.intensity"));
         LiteMode.setLiquidGlassInputSizeLevel(i(v, "glass.inputSize"));
@@ -144,7 +143,7 @@ public final class BlackHoleSettings {
         values.put("ghost.enabled", id == PROFILE_GHOST);
         values.put("ghost.schedule", id == PROFILE_GHOST);
         if (id == PROFILE_WORK) {
-            values.put("typing.enabled", false); values.put("glass.enabled", false);
+            values.put("typing.enabled", false);
             values.put("format.style", 0);
             if (LumaBuildPolicy.allowsPrivacyTools()) {
                 values.put("send.delayed", true); values.put("send.step", 10);
@@ -160,6 +159,8 @@ public final class BlackHoleSettings {
         Map<String, Object> current = capture(account);
         Map<String, Object> result = new LinkedHashMap<>(current);
         result.putAll(saved);
+        result.put("glass.enabled", true);
+        result.put("glass.powerSaver", true);
         if (!LumaBuildPolicy.allowsPrivacyTools()) {
             for (String key : new String[]{"ghost.enabled", "ghost.schedule", "deleted.keep", "send.delayed", "send.step"}) {
                 result.put(key, current.get(key));

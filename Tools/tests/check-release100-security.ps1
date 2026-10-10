@@ -11,6 +11,22 @@ function Check([bool]$ok, [string]$label) {
 function Source([string]$relative) { [IO.File]::ReadAllText((Join-Path $RepoRoot $relative)) }
 
 [xml]$manifest = Source 'TMessagesProj/src/main/AndroidManifest.xml'
+Check ($manifest.manifest.application.GetAttribute('allowBackup', $android) -eq 'false') 'OS backups disabled for private sessions, histories and authentication tokens'
+Check (-not $manifest.manifest.application.HasAttribute('backupAgent', $android)) 'Legacy authentication-token backup agent is not registered'
+Check ($manifest.manifest.application.GetAttribute('fullBackupContent', $android) -eq '@xml/lunagram_backup_rules' -and
+    $manifest.manifest.application.GetAttribute('dataExtractionRules', $android) -eq '@xml/lunagram_data_extraction_rules') 'Legacy and Android 12+ extraction rules are explicitly connected'
+foreach ($file in @('lunagram_backup_rules', 'lunagram_data_extraction_rules')) {
+    [xml]$rules = Source ('TMessagesProj/src/main/res/xml/' + $file + '.xml')
+    $sections = if ($file -eq 'lunagram_backup_rules') { @($rules.'full-backup-content') } else {
+        @($rules.'data-extraction-rules'.'cloud-backup', $rules.'data-extraction-rules'.'device-transfer')
+    }
+    foreach ($section in $sections) {
+        Check ($null -ne $section -and @($section.SelectNodes('include')).Count -eq 0) 'OS extraction has no allowed data paths'
+        foreach ($domain in @('root', 'file', 'database', 'sharedpref', 'external', 'device_root', 'device_file', 'device_database', 'device_sharedpref')) {
+            Check (@($section.exclude | Where-Object { $_.domain -eq $domain -and $_.path -eq '.' }).Count -eq 1) ("OS extraction excludes $domain in $file")
+        }
+    }
+}
 $sms = @($manifest.manifest.application.receiver | Where-Object { $_.GetAttribute('name', $android) -eq '.SmsReceiver' })
 Check ($sms.Count -eq 1) 'Exactly one SMS Retriever entry'
 Check ($sms[0].GetAttribute('exported', $android) -eq 'true') 'SMS Retriever remains reachable by Play services'
@@ -26,6 +42,10 @@ foreach ($relative in @('release/AndroidManifest.xml', 'release/AndroidManifest_
 }
 
 $base = 'TMessagesProj/src/main/java/org/telegram/messenger/'
+$backup = Source ($base + 'BackupAgent.java')
+Check (-not ($backup -match 'SharedPreferencesBackupHelper|BackupManager|addHelper\(|dataChanged\(')) 'Compatibility backup call cannot export credentials'
+$tokens = Source ($base + 'AuthTokensHelper.java')
+Check (-not [regex]::IsMatch($tokens, '(?s)FileLog\.(?:d|e|w)\s*\((?:(?!;).)*future_auth_token')) 'Future authentication tokens are never logged, including debug builds'
 $push = Source ($base + 'PushListenerController.java')
 $gcm = Source ($base + 'GcmPushListenerService.java')
 $sensitiveLogs = '(?s)FileLog\.(?:d|e|w)\s*\((?:(?!;).)*\b(?:pushAuthKey|pushAuthKeyId|inAuthKeyId|jsonString|currentPushString)\b(?:(?!;).)*;'
@@ -43,4 +63,4 @@ $sealed = Source ($base + 'BlackHoleSealedData.java')
 Check ($sealed.Contains('AES/GCM/NoPadding') -and $sealed.Contains('cipher.updateAAD(binding.getBytes')) 'Encrypted local data remains authenticated and identity-bound'
 $officialUpdate = Source ($base + 'BetaUpdate.java')
 Check ($officialUpdate.Contains('SharedConfig.versionBiggerOrEqual(version, update.version) && versionCode > update.versionCode')) 'Official upstream version-name policy is unchanged'
-Write-Output "Release 1.0.0 security source guards passed: $script:checks checks. Not an Android runtime penetration test or account-security guarantee."
+Write-Output "Release security source guards passed: $script:checks checks. Not an Android runtime penetration test or account-security guarantee."

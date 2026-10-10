@@ -23160,10 +23160,10 @@ public class ChatActivity extends BaseFragment implements
         } else if (id == NotificationCenter.fileNewChunkAvailable) {
             MessageObject messageObject = (MessageObject) args[0];
             long finalSize = (Long) args[3];
-            if (finalSize != 0 && dialog_id == messageObject.getDialogId()) {
+            if (finalSize > 0 && dialog_id == messageObject.getDialogId()) {
                 MessageObject currentObject = messagesDict[0].get(messageObject.getId());
                 if (currentObject != null && currentObject.messageOwner.media.document != null) {
-                    currentObject.messageOwner.media.document.size = (int) finalSize;
+                    currentObject.messageOwner.media.document.size = finalSize;
                     updateVisibleRows();
                 }
             }
