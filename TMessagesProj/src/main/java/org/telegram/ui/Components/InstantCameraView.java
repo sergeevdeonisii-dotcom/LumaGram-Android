@@ -344,57 +344,21 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         switchCameraButton.setContentDescription(LocaleController.getString(R.string.AccDescrSwitchCamera));
         buttonsLayout.addView(switchCameraButton, LayoutHelper.createLinear(44, 44));
         switchCameraButton.setOnClickListener(v -> {
-            if (!cameraReady || !isCameraSessionInitiated() || cameraThread == null) {
+            if (!cameraReady || flipAnimationInProgress || !isCameraSessionInitiated() || cameraThread == null) {
                 return;
             }
-            if (!bothCameras) {
-                switchCamera();
-            }
+            switchCamera();
             if (switchCameraDrawable != null) {
                 switchCameraDrawable.setCurrentFrame(0);
                 switchCameraDrawable.start();
             }
             flipAnimationInProgress = true;
-            ValueAnimator valueAnimator = ValueAnimator.ofFloat(0, 1f);
-            valueAnimator.setDuration(580);
-            valueAnimator.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
-            final boolean[] didSwap = new boolean[1];
-            Runnable doSwap = () -> {
-                if (bothCameras) {
-                    switchCamera();
-                }
-            };
-            cameraContainer.setCameraDistance(cameraContainer.getMeasuredHeight() * 8f);
-            textureOverlayView.setCameraDistance(textureOverlayView.getMeasuredHeight() * 8f);
-            valueAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-                @Override
-                public void onAnimationUpdate(ValueAnimator valueAnimator) {
-                    float p = (float) valueAnimator.getAnimatedValue();
-                    if (p > 0.5f && !didSwap[0]) {
-                        didSwap[0] = true;
-                        doSwap.run();
-                    }
-                    float rotation = p < 0.5f ? p : p - 1f;
-                    rotation *= 180;
-                    cameraContainer.setRotationY(rotation);
-                    textureOverlayView.setRotationY(rotation);
-                }
-            });
-            valueAnimator.addListener(new AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationEnd(Animator animation) {
-                    super.onAnimationEnd(animation);
-                    if (!didSwap[0]) {
-                        didSwap[0] = true;
-                        doSwap.run();
-                    }
-                    cameraContainer.setRotationY(0f);
-                    textureOverlayView.setRotationY(0f);
-                    flipAnimationInProgress = false;
-                    invalidate();
-                }
-            });
-            valueAnimator.start();
+            cameraContainer.setRotationY(0f);
+            textureOverlayView.setRotationY(0f);
+            AndroidUtilities.runOnUIThread(() -> {
+                flipAnimationInProgress = false;
+                invalidate();
+            }, 120L);
         });
 
         flashButton = new FlashViews.ImageViewInvertable(context);

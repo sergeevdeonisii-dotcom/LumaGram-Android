@@ -1,0 +1,23 @@
+package org.telegram.messenger;
+import android.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+
+/** Real adapter write/read/owner checks, with JVM keys instead of Android Keystore. */
+public final class BlackHolePrivateData {
+    private static final Map<Long,SecretKey> keys = new HashMap<>();
+    private static synchronized SecretKey key(long owner) throws Exception {
+        if (owner <= 0) throw new IllegalStateException("Invalid owner");
+        if (!keys.containsKey(owner)) { KeyGenerator g = KeyGenerator.getInstance("AES"); g.init(128); keys.put(owner,g.generateKey()); }
+        return keys.get(owner);
+    }
+    public static boolean isAvailable() { return true; }
+    @@READ@@
+    @@WRITE_CURRENT@@
+    @@WRITE_OWNER@@
+    @@REMOVE_CURRENT@@
+    @@REMOVE_OWNER@@
+    @@REQUIRE_OWNER@@
+}

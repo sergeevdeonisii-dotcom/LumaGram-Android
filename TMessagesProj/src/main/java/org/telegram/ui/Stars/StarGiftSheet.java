@@ -96,6 +96,7 @@ import org.telegram.messenger.Emoji;
 import org.telegram.messenger.GiftAuctionController;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaLocalGifts;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
@@ -1014,10 +1015,13 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private ResaleGiftsFragment.SelectGiftSheet.State giftsToCraft;
+    private boolean localGiftAdding;
     private void onMenuPressed(View btn) {
         final String link = getLink();
         final TL_stars.TL_starGiftUnique giftUnique = getUniqueGift();
         ItemOptions.makeOptions(container, resourcesProvider, btn)
+            .addIf(giftUnique != null && UserConfig.getInstance(currentAccount).getClientUserId() > 0,
+                    R.drawable.msg_add, getString(R.string.LumaLocalGiftAdd), () -> addGiftLocally(giftUnique))
             .addIf(getUniqueGift() != null && isMineWithActions(currentAccount, DialogObject.getPeerDialogId(getUniqueGift().owner_id)) && giftsList instanceof StarsController.GiftsList && savedStarGift != null && getInputStarGift() != null, (savedStarGift != null && savedStarGift.pinned_to_top) ? R.drawable.msg_unpin : R.drawable.msg_pin, getString((savedStarGift != null && savedStarGift.pinned_to_top) ? R.string.Gift2Unpin : R.string.Gift2Pin), () -> {
                 if (savedStarGift.unsaved) {
                     savedStarGift.unsaved = false;
@@ -1070,6 +1074,24 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
             .setDimAlpha(0)
             .translate(0, -dp(2))
             .show();
+    }
+
+    private void addGiftLocally(TL_stars.TL_starGiftUnique gift) {
+        final long owner = UserConfig.getInstance(currentAccount).getClientUserId();
+        if (gift == null || owner <= 0 || localGiftAdding) return;
+        localGiftAdding = true;
+        Utilities.globalQueue.postRunnable(() -> {
+            boolean added = owner == UserConfig.getInstance(currentAccount).getClientUserId()
+                    && (LumaLocalGifts.contains(currentAccount, gift) || LumaLocalGifts.add(currentAccount, owner, gift));
+            AndroidUtilities.runOnUIThread(() -> {
+                localGiftAdding = false;
+                if (owner != UserConfig.getInstance(currentAccount).getClientUserId()) return;
+                if (added) NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.lumaLocalGiftsChanged, owner);
+                if (!isShowing()) return;
+                getBulletinFactory().createSimpleBulletin(added ? R.raw.done : R.raw.chats_infotip,
+                        getString(added ? R.string.LumaLocalGiftAdded : R.string.LumaLocalGiftFailed)).show();
+            });
+        });
     }
 
     private void showGiftOfferSheet() {

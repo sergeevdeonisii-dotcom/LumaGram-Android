@@ -84,6 +84,7 @@ import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaLocalGifts;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
@@ -1617,7 +1618,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             this.initialTab = TAB_STORIES;
         } else if (main_tab instanceof TLRPC.TL_profileTabPosts && (userInfo != null && userInfo.stories_pinned_available || chatInfo != null && chatInfo.stories_pinned_available || isStoriesView())) {
             this.initialTab = TAB_STORIES;
-        } else if (main_tab instanceof TLRPC.TL_profileTabGifts && (userInfo != null && userInfo.stargifts_count > 0 || chatInfo != null && chatInfo.stargifts_count > 0)) {
+        } else if (main_tab instanceof TLRPC.TL_profileTabGifts && (userInfo != null && userInfo.stargifts_count > 0 || chatInfo != null && chatInfo.stargifts_count > 0 || hasLocalGiftsForDialog(parent.getCurrentAccount(), did))) {
             this.initialTab = TAB_GIFTS;
         } else if (main_tab instanceof TLRPC.TL_profileTabFiles && (hasMedia[1] == -1 || hasMedia[1] > 0)) {
             this.initialTab = TAB_FILES;
@@ -1631,7 +1632,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             this.initialTab = TAB_VOICE;
         } else if (userInfo != null && userInfo.stories_pinned_available || chatInfo != null && chatInfo.stories_pinned_available || isStoriesView()) {
             this.initialTab = getInitialTab();
-        } else if (userInfo != null && userInfo.stargifts_count > 0 || chatInfo != null && chatInfo.stargifts_count > 0) {
+        } else if (userInfo != null && userInfo.stargifts_count > 0 || chatInfo != null && chatInfo.stargifts_count > 0 || hasLocalGiftsForDialog(parent.getCurrentAccount(), did)) {
             this.initialTab = TAB_GIFTS;
         } else if (initialTab != -1 && topicId == 0) {
             this.initialTab = initialTab;
@@ -1681,6 +1682,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             .add(NotificationCenter.savedMessagesDialogsUpdate)
             .add(NotificationCenter.dialogsNeedReload)
             .add(NotificationCenter.starUserGiftsLoaded)
+            .add(NotificationCenter.lumaLocalGiftsChanged)
             .add(NotificationCenter.updatedChatRanks)
             .add(NotificationCenter.didUpdatePollResults);
 
@@ -6500,6 +6502,15 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             }
         } else if (id == NotificationCenter.dialogsNeedReload) {
             savedDialogsAdapter.update(true);
+        } else if (id == NotificationCenter.lumaLocalGiftsChanged) {
+            if (profileActivity == null || account != profileActivity.getCurrentAccount() || args == null || args.length != 1 || !(args[0] instanceof Long)) return;
+            final long owner = (Long) args[0];
+            if (owner <= 0 || owner != profileActivity.getUserConfig().getClientUserId() || owner != dialog_id) return;
+            // Handles both first local gift and removal of the last one, without
+            // changing Telegram's gift count or borrowing another account's data.
+            updateTabs(true);
+            checkCurrentTabValid();
+            onSelectedTabChanged();
         } else if (id == NotificationCenter.starUserGiftsLoaded) {
             long dialogId = (long) args[0];
             if (dialogId == dialog_id) {
@@ -6846,6 +6857,11 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
     }
 
     private long giftsLastHash;
+    private static boolean hasLocalGiftsForDialog(int account, long did) {
+        final long owner = UserConfig.getInstance(account).getClientUserId();
+        return owner > 0 && did == owner && LumaLocalGifts.hasAnyForUi(account);
+    }
+
     private boolean wasReordering;
     private int firstTab = -1;
     public void updateTabs(boolean animated) {
@@ -6862,7 +6878,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         boolean hasEditBotPreviews = user != null && user.bot && user.bot_has_main_app && user.bot_can_edit;
         boolean hasBotPreviews = user != null && user.bot && !user.bot_can_edit && (userInfo != null && userInfo.bot_info != null && userInfo.bot_info.has_preview_medias) && !hasEditBotPreviews;
         boolean hasStories = (DialogObject.isUserDialog(dialog_id) || DialogObject.isChatDialog(dialog_id)) && !DialogObject.isEncryptedDialog(dialog_id) && (userInfo != null && userInfo.stories_pinned_available || info != null && info.stories_pinned_available || isStoriesView()) && includeStories();
-        boolean hasGifts = giftsContainer != null && (userInfo != null && userInfo.stargifts_count > 0 || info != null && info.stargifts_count > 0);
+        boolean hasGifts = giftsContainer != null && (userInfo != null && userInfo.stargifts_count > 0 || info != null && info.stargifts_count > 0 || hasLocalGiftsForDialog(profileActivity.getCurrentAccount(), dialog_id));
         final TLRPC.ProfileTab main_tab = info != null ? info.main_tab : userInfo != null ? userInfo.main_tab : null;
         int changed = 0;
         if (wasReordering != scrollSlidingTextTabStrip.isReordering()) {

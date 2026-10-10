@@ -11437,6 +11437,15 @@
     <string name="LumaLocalUnpinGift">Unpin locally</string>
     <string name="LumaLocalGiftPinned">Gift pinned locally</string>
     <string name="LumaLocalGiftUnpinned">Gift unpinned locally</string>
+    <string name="LumaLocalGiftAdd">Add to profile locally</string>
+    <string name="LumaLocalGiftAdded">Added to your local profile. No Stars or TON spent.</string>
+    <string name="LumaLocalGiftFailed">Could not update local gifts. Secure storage may be unavailable or full.</string>
+    <string name="LumaLocalGiftsHeader">Local gifts</string>
+    <string name="LumaLocalGiftPreviewInfo">Local appearance only. This is not an NFT purchase or a change of its real owner.</string>
+    <string name="LumaLocalGiftOwnAccount">Your account</string>
+    <string name="LumaLocalGiftRemove">Remove local gift</string>
+    <string name="LumaLocalGiftRemoveInfo">Remove this local display from your profile? No real gift or NFT will be affected.</string>
+    <string name="LumaLocalGiftRemoved">Local gift removed</string>
 
     <string name="WelcomeMessage">Welcome Message</string>
     <string name="WelcomeMessageOff">Off</string>
@@ -11465,6 +11474,9 @@
     <string name="UnsupportedUpdate">Update</string>
     <string name="RoundVideoSettings">Round Video</string>
     <string name="LumaRoundVideoControlsInfo">Recording quality, frame rate and camera stabilization.</string>
+    <string name="LumaRoundVideoFastSwitchTitle">Fast camera switching</string>
+    <string name="LumaRoundVideoFastSwitchEnable">Keep both cameras ready</string>
+    <string name="LumaRoundVideoFastSwitchInfo">With the new recorder at 30 FPS, keeps the front and rear cameras active if Android confirms this pair and stream configuration. Only the selected camera is saved to the video. Switching waits for its next real frame, without reopening the camera. Uses more power. At 60 FPS or on unsupported devices, uses ordinary switching without silently lowering the selected frame rate.</string>
     <string name="RoundVideoGeneral">Recorder</string>
     <string name="RoundVideoUseNewRecorder">Use Camera2 recorder</string>
     <string name="RoundVideoOutputResolution">Output resolution</string>
@@ -11489,7 +11501,7 @@
     <string name="BHGProfileWork">Work</string>
     <string name="BHGApplyProfile">Apply</string>
     <string name="BHGSaveProfile">Save current settings to a profile</string>
-    <string name="BHGProfilesInfo">Tap a profile to apply it. Save your current settings to customise any profile. Ghost initially enables ghost mode and scheduled sending. Work disables glass and typing animation and enables a 2-second sending delay. Appearance and input settings affect all accounts; personal switches affect only this account.</string>
+    <string name="BHGProfilesInfo">Tap a profile to apply it. Save your current settings to customise any profile. Ghost initially enables ghost mode and scheduled sending. Work disables typing animation and automatic formatting and enables a 2-second sending delay. Glass remains built in. Appearance and input settings affect all accounts; personal switches affect only this account.</string>
     <string name="BHGNotes">Local notes</string>
     <string name="BHGNoteAdd">Add a note about a chat</string>
     <string name="BHGNotesInfo">Visible only to you, never sent to the other person. Stored encrypted on this device. An empty note removes it. Long press a note to delete it.</string>

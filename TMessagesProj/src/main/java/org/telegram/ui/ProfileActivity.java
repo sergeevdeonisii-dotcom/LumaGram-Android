@@ -151,6 +151,7 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LanguageDetector;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaLocalGifts;
 import org.telegram.messenger.LumaStarRating;
 import org.telegram.messenger.LumaAnonymousNumber;
 import org.telegram.messenger.LumaProfileVerification;
@@ -2248,6 +2249,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         getNotificationCenter().addObserver(this, NotificationCenter.dialogDeleted);
         getNotificationCenter().addObserver(this, NotificationCenter.channelRecommendationsLoaded);
         getNotificationCenter().addObserver(this, NotificationCenter.starUserGiftsLoaded);
+        getNotificationCenter().addObserver(this, NotificationCenter.lumaLocalGiftsChanged);
         getNotificationCenter().addObserver(this, NotificationCenter.profileMusicUpdated);
         getNotificationCenter().addObserver(this, NotificationCenter.updatedChatRanks);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.emojiLoaded);
@@ -2389,6 +2391,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         getNotificationCenter().removeObserver(this, NotificationCenter.dialogDeleted);
         getNotificationCenter().removeObserver(this, NotificationCenter.channelRecommendationsLoaded);
         getNotificationCenter().removeObserver(this, NotificationCenter.starUserGiftsLoaded);
+        getNotificationCenter().removeObserver(this, NotificationCenter.lumaLocalGiftsChanged);
         getNotificationCenter().removeObserver(this, NotificationCenter.profileMusicUpdated);
         getNotificationCenter().removeObserver(this, NotificationCenter.updatedChatRanks);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);
@@ -3684,7 +3687,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         int initialTab = -1;
         if (openCommonChats) {
             initialTab = SharedMediaLayout.TAB_COMMON_GROUPS;
-        } else if (openGifts && (userInfo != null && userInfo.stargifts_count > 0 || chatInfo != null && chatInfo.stargifts_count > 0)) {
+        } else if (openGifts && (userInfo != null && userInfo.stargifts_count > 0 || chatInfo != null && chatInfo.stargifts_count > 0 || hasLocalGiftsForProfile())) {
             initialTab = SharedMediaLayout.TAB_GIFTS;
             openedGifts = true;
         } else if (openSimilar) {
@@ -6460,6 +6463,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             }
         }
         AndroidUtilities.updateViewVisibilityAnimated(ttlIconView, visible, 0.8f, fragmentOpened);
+    }
+
+    private boolean hasLocalGiftsForProfile() {
+        final long owner = getUserConfig().getClientUserId();
+        return owner > 0 && getDialogId() == owner && LumaLocalGifts.hasAnyForUi(currentAccount);
     }
 
     public long getDialogId() {
@@ -9405,6 +9413,20 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     listAdapter.notifyDataSetChanged();
                 }
             }
+        } else if (id == NotificationCenter.lumaLocalGiftsChanged) {
+            if (account != currentAccount || args == null || args.length != 1 || !(args[0] instanceof Long)) return;
+            final long owner = (Long) args[0];
+            if (owner <= 0 || owner != getUserConfig().getClientUserId() || owner != getDialogId() || isSettings()) return;
+            // A local-only gift must make the media row reachable even when
+            // Telegram still reports zero gifts. Do not invent a server count.
+            updateRowsIds();
+            updateSelectedMediaTabText();
+            if (listAdapter != null) {
+                listAdapter.notifyDataSetChanged();
+            }
+            if (sharedMediaLayout != null) {
+                sharedMediaLayout.updateTabs(true);
+            }
         } else if (id == NotificationCenter.starUserGiftsLoaded) {
             final long dialogId = (long) args[0];
             if (dialogId == getDialogId() && !isSettings()) {
@@ -10618,7 +10640,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         if (!hasMedia && userInfo != null && userInfo.bot_info != null) {
             hasMedia = userInfo.bot_info.has_preview_medias;
         }
-        if (!hasMedia && (userInfo != null && userInfo.stargifts_count > 0 || chatInfo != null && chatInfo.stargifts_count > 0)) {
+        if (!hasMedia && (userInfo != null && userInfo.stargifts_count > 0 || chatInfo != null && chatInfo.stargifts_count > 0 || hasLocalGiftsForProfile())) {
             hasMedia = true;
         }
         if (!hasMedia && chatInfo != null) {

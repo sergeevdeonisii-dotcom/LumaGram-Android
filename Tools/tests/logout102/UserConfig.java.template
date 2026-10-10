@@ -1,0 +1,44 @@
+package org.telegram.messenger;
+import android.content.Context;
+import android.content.SharedPreferences;
+import org.telegram.tgnet.TLRPC;
+import java.util.Arrays;
+
+/** Production identity accessors/reset methods; platform save/notifications are test adapters. */
+public final class UserConfig {
+    public static final int MAX_ACCOUNT_COUNT = 4;
+    private static final UserConfig[] instances = new UserConfig[MAX_ACCOUNT_COUNT];
+    public static UserConfig getInstance(int account) {
+        synchronized (instances) {
+            if (instances[account] == null) instances[account] = new UserConfig(account);
+            return instances[account];
+        }
+    }
+    private final int currentAccount;
+    private final Object sync = new Object();
+    private TLRPC.User currentUser;
+    public long clientUserId;
+    public int sharingMyLocationUntil, lastMyLocationShareTime, contactsSavedCount, lastSendMessageId, lastBroadcastId;
+    public int migrateOffsetId, migrateOffsetDate, ratingLoadTime, botRatingLoadTime, botGuestRatingLoadTime, webappRatingLoadTime;
+    public long migrateOffsetUserId, migrateOffsetChatId, migrateOffsetChannelId, migrateOffsetAccess;
+    public int loginTime, lastContactsSyncTime, lastHintsSyncTime;
+    public boolean registeredForPush, notificationsSettingsLoaded, notificationsSignUpSettingsLoaded, draftsLoaded;
+    public boolean contactsReimported, syncContacts, showCallsTab, suggestContacts, unreadDialogsLoaded, hasValidDialogLoadIds;
+    public Object unacceptedTermsOfService;
+    public boolean filtersLoaded, hasSecureData;
+    public volatile byte[] savedPasswordHash, savedSaltedPassword;
+    public volatile long savedPasswordTime;
+    public int saves;
+    public boolean savedWithFile;
+    public long savedOwner;
+    private UserConfig(int account) { currentAccount = account; }
+    private void checkPremiumSelf(TLRPC.User oldUser, TLRPC.User newUser) { }
+    public void saveConfig(boolean withFile) { saves++; savedWithFile = withFile; savedOwner = getClientUserId(); }
+    @@GET_OWNER@@
+    @@GET_USER@@
+    @@IS_ACTIVATED@@
+    @@SET_USER@@
+    @@PREFERENCES@@
+    @@RESET_PASSWORD@@
+    @@CLEAR_CONFIG@@
+}

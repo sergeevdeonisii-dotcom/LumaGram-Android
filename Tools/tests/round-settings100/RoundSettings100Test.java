@@ -3,6 +3,7 @@ package org.telegram.utils.settings;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import org.telegram.messenger.BuildConfig;
+import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.LumaRoundVideoStabilization;
 import org.telegram.messenger.MessagesController;
@@ -89,11 +90,11 @@ public final class RoundSettings100Test {
         for(int mode:new int[]{0,1,2,100}) {
             LumaRoundVideoStabilization.setMode(mode);
             RoundSettingsUiProbe.SlideChooseView ui=RoundSettingsUiProbe.stabilization();
-            check(ui.choices.length==(BuildConfig.LUMA_FRIENDS_EDITION?2:3),"Only personal edition shows enhanced stabilization");
-            check(ui.index<= (BuildConfig.LUMA_FRIENDS_EDITION?1:2),"Saved/imported enhanced mode cannot overflow public slider");
+            check(ui.choices.length==(LumaBuildPolicy.isPersonalEdition()?3:2),"Only personal edition shows enhanced stabilization");
+            check(ui.index<= (LumaBuildPolicy.isPersonalEdition()?2:1),"Saved/imported enhanced mode cannot overflow public slider");
         }
-        check(RoundSettingsUiProbe.info()==(BuildConfig.LUMA_FRIENDS_EDITION?4:3),"Edition-specific stabilization help follows UI gate");
+        check(RoundSettingsUiProbe.info()==(LumaBuildPolicy.isPersonalEdition()?3:4),"Edition-specific stabilization help follows UI gate");
         assertions += RoundSettingsNavigationProbe.run();
-        System.out.println("PASS "+(BuildConfig.LUMA_FRIENDS_EDITION?"public":"personal")+": "+assertions+" real settings/enums/Builder/UI assertions.");
+        System.out.println("PASS "+(BuildConfig.LUMA_FRIENDS_EDITION?"friends":BuildConfig.LUMA_PUBLIC_EDITION?"public":"personal")+": "+assertions+" real settings/enums/Builder/UI assertions.");
     }
 }

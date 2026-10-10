@@ -17,13 +17,13 @@ $sources = @(
     'Tools/tests/round-editions100/RoundEditions100Test.java'
 ) | ForEach-Object { Join-Path $repo $_ }
 $sources += (Get-ChildItem (Join-Path $PSScriptRoot 'round-editions100/fixtures') -Recurse -Filter '*.java').FullName
-foreach ($edition in @('full', 'friends')) {
+foreach ($edition in @('full', 'public', 'friends')) {
     $classes = Join-Path $OutputRoot ($edition + '-' + [guid]::NewGuid().ToString('N') + '/classes')
     New-Item -ItemType Directory -Path $classes -Force | Out-Null
     $editionSources = $sources + (Join-Path $PSScriptRoot ('friends531/fixtures-' + $edition + '/org/telegram/messenger/BuildConfig.java'))
     & $javac -J-Xmx128m -encoding UTF-8 -d $classes $editionSources
     if ($LASTEXITCODE -ne 0) { throw "$edition round-edition compilation failed." }
-    & $java -Xmx128m -cp $classes org.telegram.messenger.RoundEditions100Test ($edition -eq 'friends').ToString().ToLowerInvariant()
+    & $java -Xmx128m -cp $classes org.telegram.messenger.RoundEditions100Test $edition
     if ($LASTEXITCODE -ne 0) { throw "$edition round-edition tests failed." }
 }
 foreach ($path in @(

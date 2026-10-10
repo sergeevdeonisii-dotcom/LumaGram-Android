@@ -16,12 +16,16 @@ public final class RoundEditions100Test {
     }
 
     public static void main(String[] args) {
-        boolean personal = !Boolean.parseBoolean(args[0]);
+        boolean personal = "full".equals(args[0]);
+        boolean unrestricted = !"friends".equals(args[0]);
         int maximum = personal ? LumaRoundVideoStabilization.ENHANCED : LumaRoundVideoStabilization.STANDARD;
         check(LumaBuildPolicy.allowsEnhancedRoundVideoStabilization() == personal, "Compile-time horizon entitlement");
-        check(LumaBuildPolicy.allowsPrivacyTools() == personal, "Unrelated privacy policy unchanged");
-        check(LumaBuildPolicy.allowsAnonymousNumber() == personal, "Unrelated anonymous-number policy unchanged");
-        check(LumaBuildPolicy.allowsProfileVerification() == personal, "Unrelated profile-verification policy unchanged");
+        check(LumaBuildPolicy.isFriendsEdition() == !unrestricted, "Friends is not public");
+        check(LumaBuildPolicy.isPublicEdition() == "public".equals(args[0]), "Separate public edition");
+        check(LumaBuildPolicy.isPersonalEdition() == personal, "Separate personal edition");
+        check(LumaBuildPolicy.allowsPrivacyTools() == unrestricted, "Public retains ghost, deletion retention and edit history");
+        check(LumaBuildPolicy.allowsAnonymousNumber() == unrestricted, "Public retains local anonymous-number display");
+        check(LumaBuildPolicy.allowsProfileVerification() == unrestricted, "Public retains local profile display");
         check(LumaBuildPolicy.allowsBuiltInUpdates() == personal, "Personal update feed remains isolated");
         MessagesController.values.clear();
         check(LumaRoundVideoStabilization.getMode() == LumaRoundVideoStabilization.OFF, "Stabilization remains opt-in");
@@ -88,6 +92,6 @@ public final class RoundEditions100Test {
         check(horizon.start() == personal, "Restart cannot bypass entitlement");
         check(sensors.registrations == (personal ? 2 : 0), "No public sensor registration after restart");
         horizon.stop();
-        System.out.println("PASS: " + checks + " round-video edition assertions (" + (personal ? "personal" : "public") + ").");
+        System.out.println("PASS: " + checks + " round-video edition assertions (" + (personal ? "personal" : args[0]) + ").");
     }
 }

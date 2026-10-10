@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { expectedArtifact, validateOutputMetadata, validateGeneratedFlag, validateApkBadging } from './collect-lunagram-apk.mjs';
+import { expectedArtifact, expectedEditions, validateArtifactMetadata, validateOutputMetadata, validateGeneratedFlag, validateApkBadging } from './collect-lunagram-apk.mjs';
 
 function output(edition) {
   const expected = expectedArtifact(edition);
@@ -46,6 +46,69 @@ test('1.0.1 rejects old APKs and retains distinct public/personal flags', () => 
     validateApkBadging("package: name='org.luma.liquid.web' versionCode='71639' versionName='1.0.1'\nnative-code: 'arm64-v8a'\n", edition, '101');
     assert.throws(() => validateApkBadging("package: name='org.luma.liquid.web' versionCode='71629' versionName='1.0.0'\nnative-code: 'arm64-v8a'\n", edition, '101'));
   }
+});
+
+const commit102 = 'c'.repeat(40);
+function metadata102(editions = ['full', 'public']) {
+  return { schemaVersion: 2, release: '102', sourceCommit: commit102, packageName: 'org.luma.liquid.web', architecture: 'arm64-v8a',
+    artifacts: editions.map(edition => ({ ...expectedArtifact(edition, '102'), sha256: 'a'.repeat(64) })) };
+}
+function flags102(edition) {
+  return `public static final boolean LUMA_FRIENDS_EDITION = ${edition === 'friends'};\npublic static final boolean LUMA_PUBLIC_EDITION = ${edition === 'public'};\n`;
+}
+test('1.0.2 genuinely separates personal, general release and restricted Friends', () => {
+  assert.deepEqual(expectedEditions('102'), ['full', 'public']);
+  assert.deepEqual(expectedEditions('102', true), ['full', 'public', 'friends']);
+  for (const edition of ['full', 'public', 'friends']) {
+    const expected = expectedArtifact(edition, '102');
+    assert.equal(expected.versionName, '1.0.2');
+    assert.equal(expected.versionCode, 71649);
+    assert.equal(expected.friendsEdition, edition === 'friends');
+    assert.equal(expected.publicEdition, edition === 'public');
+    assert.equal(expected.fileName, `Lunagram-1.0.2-${edition}-temporary.apk`);
+    validateGeneratedFlag(flags102(edition), edition, '102');
+    validateOutputMetadata({ applicationId: 'org.luma.liquid.web', elements: [{ versionName: '1.0.2', versionCode: 71649, outputFile: 'app.apk' }] }, edition, '102');
+    validateApkBadging("package: name='org.luma.liquid.web' versionCode='71649' versionName='1.0.2'\nnative-code: 'arm64-v8a'\n", edition, '102');
+    for (const other of ['full', 'public', 'friends'].filter(value => value !== edition)) {
+      assert.throws(() => validateGeneratedFlag(flags102(other), edition, '102'));
+    }
+  }
+  assert.throws(() => expectedArtifact('public', '101'));
+  assert.throws(() => expectedEditions('101', true));
+  assert.throws(() => expectedEditions('102', 'false'));
+  assert.throws(() => validateApkBadging("package: name='org.luma.liquid.web' versionCode='71639' versionName='1.0.1'\nnative-code: 'arm64-v8a'\n", 'public', '102'));
+});
+test('1.0.2 requires both edition flags; contradictory, missing and duplicate flags fail closed', () => {
+  for (const source of [
+    'public static final boolean LUMA_FRIENDS_EDITION = false;',
+    'public static final boolean LUMA_PUBLIC_EDITION = true;',
+    flags102('public') + 'public static final boolean LUMA_PUBLIC_EDITION = true;',
+    flags102('public').replace('LUMA_FRIENDS_EDITION = false', 'LUMA_FRIENDS_EDITION = true'),
+    flags102('public').replace('LUMA_PUBLIC_EDITION = true', 'LUMA_PUBLIC_EDITION = false'),
+  ]) assert.throws(() => validateGeneratedFlag(source, 'public', '102'));
+});
+test('1.0.2 validates exact provenance, both flags and all selected editions', () => {
+  validateArtifactMetadata(metadata102(), '102', commit102, expectedEditions('102'));
+  validateArtifactMetadata(metadata102(['full']), '102', commit102, ['full']);
+  validateArtifactMetadata(metadata102(['full', 'public', 'friends']), '102', commit102, expectedEditions('102', true));
+  for (const mutate of [
+    m => m.schemaVersion = 1, m => m.release = '101', m => delete m.release,
+    m => m.sourceCommit = 'd'.repeat(40), m => m.packageName = 'org.telegram.messenger', m => m.architecture = 'x86',
+    m => m.artifacts.pop(), m => m.artifacts.push({ ...m.artifacts[1] }),
+    m => m.artifacts[1] = { ...m.artifacts[0] },
+    m => m.artifacts[1] = { ...expectedArtifact('friends', '102'), sha256: 'b'.repeat(64) },
+    m => m.artifacts[1].friendsEdition = true, m => m.artifacts[1].publicEdition = false,
+    m => delete m.artifacts[1].publicEdition, m => m.artifacts[1].publicEdition = 'true',
+    m => m.artifacts[1].fileName = '../friends.apk', m => m.artifacts[1].versionCode = 71639,
+    m => m.artifacts[1].sha256 = 'fixture', m => m.artifacts[1].sha256 = 'A'.repeat(64),
+  ]) {
+    const metadata = metadata102();
+    mutate(metadata);
+    assert.throws(() => validateArtifactMetadata(metadata, '102', commit102, expectedEditions('102')));
+  }
+  assert.throws(() => validateArtifactMetadata(metadata102(), '102', 'main', expectedEditions('102')));
+  assert.throws(() => validateArtifactMetadata(metadata102(['full', 'public', 'friends']), '102', commit102, expectedEditions('102')));
+  assert.throws(() => validateArtifactMetadata(metadata102(), '102', commit102, expectedEditions('102', true)));
 });
 test('wrong package, version, ABI, multiple outputs and path traversal rejected', () => {
   const metadata = output('full');

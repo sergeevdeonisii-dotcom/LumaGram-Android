@@ -4073,8 +4073,9 @@ public class StarsController {
 
             final TL_stars.SavedStarGift g = gifts.remove(fromPosition);
 
-            toPosition = Utilities.clamp(toPosition, gifts.size() - 1, 0);
-            if (toPosition < 0 || toPosition >= gifts.size()) return;
+            // An insertion at the end is valid after removing the dragged gift.
+            toPosition = Utilities.clamp(toPosition, gifts.size(), 0);
+            if (toPosition < 0 || toPosition > gifts.size()) return;
 
             gifts.add(toPosition, g);
         }

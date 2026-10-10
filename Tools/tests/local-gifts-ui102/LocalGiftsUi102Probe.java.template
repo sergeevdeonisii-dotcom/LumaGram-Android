@@ -1,0 +1,278 @@
+import java.util.*;
+
+/** Production methods below are extracted verbatim. Stubs only model the view/data edges. */
+public final class LocalGiftsUi102Probe {
+    @interface NonNull {}
+    static int checks;
+    static void check(boolean value, String description) { checks++; if (!value) throw new AssertionError(description); }
+    static int dp(int value) { return value; }
+    static String getString(int id) { return "resource:" + id; }
+    static final class TextUtils { static boolean isEmpty(String s) { return s == null || s.isEmpty(); } }
+    static final class Queue {
+        boolean automatic = true;
+        final ArrayList<Runnable> work = new ArrayList<>();
+        void postRunnable(Runnable r) { if (automatic) r.run(); else work.add(r); }
+        void drain() { while (!work.isEmpty()) work.remove(0).run(); }
+    }
+    static final class AndroidUtilities {
+        static final Queue ui = new Queue();
+        static void runOnUIThread(Runnable r) { ui.postRunnable(r); }
+    }
+    static final class LocaleController { static String getString(int id) { return LocalGiftsUi102Probe.getString(id); } }
+    static final class Gravity { static final int CENTER = 1; }
+    static final class Theme { static final int key_windowBackgroundWhiteGrayText2 = 1; static int getColor(int k, Object r) { return k; } }
+    static final class FlickerLoadingView { static final int STAR_GIFT = 1; }
+    static final class R {
+        static final class string { static final int LumaShowAllGifts = 1, LumaHideAllGifts = 2,
+            LumaLocalGiftsHeader = 3, ProfileGifts = 4, LumaLocalGiftPreviewInfo = 5, ProfileGiftsInfo = 6; }
+        static final class drawable { static final int msg_message = 1, menu_hide_gift = 2; }
+    }
+    static final class UserConfig {
+        static long identity = 1001;
+        static UserConfig getInstance(int account) { return new UserConfig(); }
+        long getClientUserId() { return identity; }
+    }
+    static final class TLRPC {
+        static final class UserFull { int stargifts_count; }
+        static final class ChatFull { int stargifts_count; }
+    }
+    static final class MessagesController {
+        static final MessagesController INSTANCE = new MessagesController();
+        static MessagesController getInstance(int a) { return INSTANCE; }
+        TLRPC.UserFull user = new TLRPC.UserFull();
+        TLRPC.ChatFull chat = new TLRPC.ChatFull();
+        TLRPC.UserFull getUserFull(long id) { return user; }
+        TLRPC.ChatFull getChatFull(long id) { return chat; }
+    }
+    static final class TL_stars {
+        static class StarGift { long id; String slug; }
+        static class SavedStarGift { int flags, msg_id, date, gift_num; long saved_id; boolean pinned_to_top, unsaved; StarGift gift; }
+    }
+    static final class LumaLocalGifts {
+        static final ArrayList<LocalSavedGift> entries = new ArrayList<>();
+        static int availabilityCalls;
+        static List<LocalSavedGift> entries(int account) { return entries; }
+        static boolean hasAny(int account) { availabilityCalls++; return !entries.isEmpty(); }
+        static boolean hasAnyForUi(int account) { return hasAny(account); }
+        static final class LocalSavedGift extends TL_stars.SavedStarGift {
+            final String localKey; final long ownerUserId;
+            LocalSavedGift(long owner, long id) {
+                ownerUserId = owner; localKey = "unique:" + id;
+                gift = new TL_stars.StarGift(); gift.id = id;
+            }
+        }
+    }
+    static final class LumaAccountData {
+        static int writes;
+        static Preferences preferences(int account) { return new Preferences(); }
+        static final class Preferences {
+            Preferences edit() { return this; }
+            Preferences putStringSet(String key, Set<String> value) { writes++; return this; }
+            void apply() {}
+        }
+    }
+    static final class Utilities {
+        static final Queue globalQueue = new Queue();
+        // PRODUCTION_CLAMP
+    }
+    static final class StarsController {
+        static final class GiftsList {
+            final ArrayList<TL_stars.SavedStarGift> gifts = new ArrayList<>();
+            int totalCount;
+            boolean loading, endReached = true, filtered;
+            long collectionId;
+            boolean hasFilters() { return filtered; }
+            void reorderPinned(int from, int to) { reorder(from, to); }
+            // PRODUCTION_REORDER
+        }
+    }
+    static final class UItem {
+        Object object, object2;
+        int spanCount = Integer.MAX_VALUE, id;
+        String kind;
+        boolean reordering, accent, collapsed, red;
+        int intValue;
+        static UItem make(String kind) { UItem i = new UItem(); i.kind = kind; return i; }
+        static UItem asHeader(String text) { return make(text.equals(getString(R.string.LumaLocalGiftsHeader)) ? "local-header" : "real-header"); }
+        static UItem asButton(int id, int icon, String text) { UItem i = make("toggle"); i.id = id; return i; }
+        static UItem asFlicker(int id, int type) { return make("flicker"); }
+        static UItem asSpace(int height) { return make("space"); }
+        static UItem ofFactory(Class<?> factory) { return make("gift"); }
+        UItem setSpanCount(int count) { spanCount = count; return this; }
+        UItem setReordering(boolean enabled) { reordering = enabled; return this; }
+    }
+    static final class GiftSheet {
+        static final class GiftCell {
+            final TL_stars.SavedStarGift saved;
+            GiftCell(TL_stars.SavedStarGift saved) { this.saved = saved; }
+            TL_stars.SavedStarGift getSavedGift() { return saved; }
+            static final class Factory {
+                // PRODUCTION_FACTORY
+            }
+        }
+    }
+    static final class TextFactory { static UItem asText(int c, int g, int s, String t, boolean b, int p, int m) { return UItem.make("text"); } }
+    static final class UniversalAdapter {
+        int from = -9, to = -9;
+        void notifyItemMoved(int from, int to) { this.from = from; this.to = to; }
+        void updateWithoutNotify() {}
+    }
+    static final class ListView {
+        int spans = 3;
+        final UniversalAdapter adapter = new UniversalAdapter();
+        int getSpanCount() { return spans; }
+        void setSpanCount(int value) { spans = value; }
+    }
+    static final class RecyclerView {
+        static final class ViewHolder {
+            Object itemView; int position;
+            ViewHolder(TL_stars.SavedStarGift gift, int position) { this.itemView = new GiftSheet.GiftCell(gift); this.position = position; }
+            int getAdapterPosition() { return position; }
+        }
+    }
+    static class BaseFragment {}
+    static final class ProfileActivity extends BaseFragment {
+        final GiftsView giftsView = new GiftsView();
+        long dialogId = 1001;
+        int currentAccount;
+        UserConfig getUserConfig() { return UserConfig.getInstance(currentAccount); }
+        long getDialogId() { return dialogId; }
+        // PRODUCTION_PROFILE_SELF_HELPER
+        static final class GiftsView { void update() {} }
+    }
+    static final class LaunchActivity { static BaseFragment getSafeLastFragment() { return null; } }
+    static final class Parent {
+        long dialogId = 1001;
+        int currentAccount;
+        final long localPinsOwner = UserConfig.getInstance(currentAccount).getClientUserId();
+        int localGiftsLoadGeneration;
+        StarsController.GiftsList list = new StarsController.GiftsList();
+        HashSet<String> localPinnedGiftIds = new HashSet<>();
+        ArrayList<LumaLocalGifts.LocalSavedGift> localProfileGifts = new ArrayList<>();
+        final CollectionsSpy collections = new CollectionsSpy();
+        Page currentPage;
+        final Pager viewPager = new Pager();
+        final class Pager { List<View> getViewPages() { return currentPage == null ? Collections.emptyList() : Collections.singletonList(currentPage); } }
+        static final class CollectionsSpy { void updateIcon(long id) {} }
+        boolean canFilterHidden() { return true; }
+        boolean areAllGiftsHidden() { return false; }
+        void updateTabsY() {}
+        void post(Runnable r) { r.run(); }
+        void fillTabs(boolean animated) {}
+        StarsController.GiftsList getCurrentList() { return currentPage == null ? list : currentPage.list; }
+        Page getCurrentPage() { return currentPage; }
+        // PRODUCTION_PARENT_METHODS
+    }
+    static class View {}
+    static final class Page extends View {
+        final Parent parent;
+        StarsController.GiftsList list;
+        boolean reordering, isCollection, hasTabs;
+        final Object resourcesProvider = new Object();
+        int currentAccount;
+        static final int ITEM_TOGGLE_ALL_GIFTS = -9902;
+        final ListView listView = new ListView();
+        Page(Parent parent) { this.parent = parent; this.list = parent.list; parent.currentPage = this; }
+        void update(boolean animated) {}
+        // PRODUCTION_PAGE_METHODS
+    }
+    static TL_stars.SavedStarGift server(long id) {
+        TL_stars.SavedStarGift g = new TL_stars.SavedStarGift();
+        g.saved_id = id; g.gift = new TL_stars.StarGift(); g.gift.id = id; g.pinned_to_top = true;
+        return g;
+    }
+    static ArrayList<UItem> display(Page p) { ArrayList<UItem> items = new ArrayList<>(); p.fillItems(items, p.listView.adapter); return items; }
+    // PRODUCTION_SHARED_SELF_HELPER
+    public static void main(String[] args) {
+        UserConfig.identity = 1001;
+        Parent p = new Parent(); Page page = new Page(p);
+        LumaLocalGifts.LocalSavedGift l1 = new LumaLocalGifts.LocalSavedGift(1001, 11);
+        LumaLocalGifts.LocalSavedGift l2 = new LumaLocalGifts.LocalSavedGift(1001, 12);
+        LumaLocalGifts.entries.add(l1); LumaLocalGifts.entries.add(l2); p.reloadLocalGifts();
+        check(p.localProfileGifts.size() == 2 && p.localDisplayGifts(p.list).size() == 2, "Own main tab includes local entries");
+        check(p.localDisplayGifts(new StarsController.GiftsList()).isEmpty(), "Collection tabs exclude local entries");
+        p.dialogId = 2002;
+        check(p.localDisplayGifts(p.list).isEmpty(), "Other user profile excludes local entries");
+        p.reloadLocalGifts(); check(p.localProfileGifts.isEmpty(), "Other user reload does not copy own local data");
+        p.dialogId = -2002;
+        check(p.localDisplayGifts(p.list).isEmpty(), "Channel profile excludes local entries");
+        p.dialogId = 1001; p.reloadLocalGifts();
+        LumaAccountData.writes = 0;
+        p.setGiftPinnedLocally(new LumaLocalGifts.LocalSavedGift(9002, 99), true);
+        check(p.localPinnedGiftIds.isEmpty() && LumaAccountData.writes == 0, "Foreign-owner local marker cannot be pinned even in the right current slot");
+        ProfileActivity profile = new ProfileActivity();
+        check(profile.hasLocalGiftsForProfile() && hasLocalGiftsForDialog(0, 1001), "Self-only helpers include available local collection");
+        LumaLocalGifts.availabilityCalls = 0;
+        profile.dialogId = 2002;
+        check(!profile.hasLocalGiftsForProfile() && !hasLocalGiftsForDialog(0, 2002) && !hasLocalGiftsForDialog(0, -1001), "Self-only tab helpers exclude other users and channels");
+        check(LumaLocalGifts.availabilityCalls == 0, "Other-profile tab calculation cannot read own private local store");
+        p.setGiftPinnedLocally(l2, true);
+        ArrayList<UItem> ui = display(page);
+        ArrayList<Object> tiles = new ArrayList<>();
+        for (UItem item : ui) if (item.object instanceof TL_stars.SavedStarGift) tiles.add(item.object);
+        check(tiles.equals(Arrays.asList(l2, l1)), "Local pinned pass preserves stable display order");
+        check(page.listView.getSpanCount() == 2, "Two local-only gifts negotiate two columns");
+        for (UItem item : ui) if (item.kind.endsWith("header") || item.kind.equals("toggle")) check(item.spanCount == 2, "Header/action spans the entire local-only grid");
+        check(p.list.gifts.isEmpty() && p.list.totalCount == 0, "Local UI never mutates real server inventory");
+        check(p.getGiftsCount() == 2, "Local-only gifts count remains visible in own profile");
+        check(!p.hasMissingLocalPins(p.list), "A missing local gift pin never asks the server for more inventory pages");
+        p.localPinnedGiftIds.add("saved:9999");
+        check(p.hasMissingLocalPins(p.list), "Missing real server pin still participates in real inventory loading");
+        p.localPinnedGiftIds.remove("saved:9999");
+        p.localProfileGifts.clear(); p.localProfileGifts.add(l1); p.list.loading = true;
+        ui = display(page);
+        int placeholders = 0;
+        for (UItem item : ui) { if (item.kind.equals("flicker")) placeholders++; if (item.kind.endsWith("header")) check(item.spanCount == 1, "Single local header spans one-column grid"); }
+        check(page.listView.getSpanCount() == 1 && placeholders == 1, "Loading placeholder respects real one-column grid, not a hardcoded three");
+        p.list.loading = false; p.reloadLocalGifts();
+        TL_stars.SavedStarGift a = server(100), b = server(200), c = server(300);
+        p.list.gifts.add(a); p.list.gifts.add(b); p.list.totalCount = 2; page.reordering = true;
+        ui = display(page);
+        check(page.listView.getSpanCount() == 3, "Mixed normal/local gifts keep three grid columns");
+        for (UItem item : ui) if (item.kind.endsWith("header")) check(item.spanCount == 3, "Both section headers are full-width in mixed grid");
+        check(!page.canReorder(l1) && page.canReorder(a), "Local marker is never server-reorderable");
+        StarsController.GiftsList originalList = page.list;
+        page.list = new StarsController.GiftsList(); page.isCollection = true;
+        check(!page.canReorder(null), "Collection header/spacer without a gift never gains drag movement flags");
+        page.list = originalList; page.isCollection = false;
+        int aPosition = -1, bPosition = -1;
+        for (int i = 0; i < ui.size(); i++) { if (ui.get(i).object == a) aPosition = i; if (ui.get(i).object == b) bPosition = i; }
+        check(aPosition > 0 && bPosition > aPosition, "UI holders carry header/local gift offset");
+        check(page.onMove(new RecyclerView(), new RecyclerView.ViewHolder(b, bPosition), new RecyclerView.ViewHolder(a, aPosition)), "Allowed raw gifts reorder despite UI offset");
+        check(p.list.gifts.equals(Arrays.asList(b, a)), "Raw identity mapping reorders intended real gift, not header index");
+        check(page.listView.adapter.from == bPosition && page.listView.adapter.to == aPosition, "Adapter notification keeps the corresponding visual positions");
+        p.list.gifts.clear(); p.list.gifts.add(a); p.list.gifts.add(b); p.list.gifts.add(c); p.list.totalCount = 3;
+        p.list.reorder(0, 2);
+        check(p.list.gifts.equals(Arrays.asList(b, c, a)), "Actual server-list reorder can insert the dragged first gift at the end");
+        p.list.gifts.clear(); p.list.gifts.add(a); p.list.reorder(0, 0);
+        check(p.list.gifts.equals(Collections.singletonList(a)), "Actual single-element reorder never drops the only gift");
+        p.list.gifts.clear(); p.list.gifts.add(a); p.list.gifts.add(b); p.list.gifts.add(c);
+        p.setGiftPinnedLocally(a, true);
+        check(!page.onMove(new RecyclerView(), new RecyclerView.ViewHolder(c, 8), new RecyclerView.ViewHolder(a, 6)),
+                "Drag across local-pin display groups must not contradict notifyItemMoved");
+        check(!page.onMove(new RecyclerView(), new RecyclerView.ViewHolder(b, -1), new RecyclerView.ViewHolder(c, 8)),
+                "Detached holder NO_POSITION cannot reach notifyItemMoved");
+        p.localPinnedGiftIds.clear(); LumaAccountData.writes = 0;
+        UserConfig.identity = 9002;
+        p.setGiftPinnedLocally(l1, true);
+        check(p.localPinnedGiftIds.isEmpty() && LumaAccountData.writes == 0, "Stale local pin callback cannot write into a reused account slot");
+        check(p.localDisplayGifts(p.list).isEmpty(), "Account reuse immediately hides cached previous-owner tiles");
+        UserConfig.identity = 0; LumaLocalGifts.availabilityCalls = 0;
+        profile.dialogId = 0;
+        check(!profile.hasLocalGiftsForProfile() && !hasLocalGiftsForDialog(0, 0) && LumaLocalGifts.availabilityCalls == 0,
+                "Logged-out zero identity does not query private collection");
+        UserConfig.identity = 1001;
+        Utilities.globalQueue.automatic = false; AndroidUtilities.ui.automatic = false;
+        p.reloadLocalGifts(); Utilities.globalQueue.drain();
+        LumaLocalGifts.entries.clear(); LumaLocalGifts.entries.add(l2);
+        p.reloadLocalGifts(); Utilities.globalQueue.drain(); AndroidUtilities.ui.drain();
+        check(p.localProfileGifts.equals(Collections.singletonList(l2)), "Newest asynchronous reload wins over stale queued UI apply");
+        LumaLocalGifts.entries.clear(); LumaLocalGifts.entries.add(l1);
+        p.reloadLocalGifts(); Utilities.globalQueue.drain(); UserConfig.identity = 9002; AndroidUtilities.ui.drain();
+        check(p.localProfileGifts.equals(Collections.singletonList(l2)), "Account switch after worker snapshot discards prior-owner UI apply");
+        UserConfig.identity = 1001;
+        p.reloadLocalGifts(); Utilities.globalQueue.drain(); p.localGiftsLoadGeneration++; AndroidUtilities.ui.drain();
+        check(p.localProfileGifts.equals(Collections.singletonList(l2)), "Detach generation invalidates an outstanding UI apply");
+        System.out.println("PASS: " + checks + " production-derived local gift grid/self/reorder/stale-owner UI checks (JVM edges, not rendered device UI).");
+    }
+}

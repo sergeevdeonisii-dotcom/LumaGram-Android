@@ -58,10 +58,13 @@ public class RoundVideoSettingsActivity extends BaseFragment {
     private static final int ROW_STABILIZATION_INFO = 16;
     private static final int ROW_LAST_RECORDING_HEADER = 17;
     private static final int ROW_LAST_RECORDING_INFO = 18;
-    private static final int ROW_COMPOSITION_HEADER = 19;
-    private static final int ROW_COMPOSITION = 20;
-    private static final int ROW_COMPOSITION_INFO = 21;
-    private static final int ROW_COUNT = BuildConfig.DEBUG_PRIVATE_VERSION ? 22 : 19;
+    private static final int ROW_CONCURRENT_HEADER = 19;
+    private static final int ROW_CONCURRENT_ENABLED = 20;
+    private static final int ROW_CONCURRENT_INFO = 21;
+    private static final int ROW_COMPOSITION_HEADER = 22;
+    private static final int ROW_COMPOSITION = 23;
+    private static final int ROW_COMPOSITION_INFO = 24;
+    private static final int ROW_COUNT = BuildConfig.DEBUG_PRIVATE_VERSION ? 25 : 22;
 
     private static final int[] BITRATES = {
             750_000,
@@ -148,6 +151,11 @@ public class RoundVideoSettingsActivity extends BaseFragment {
             return;
         }
         if (!SharedSettings.roundVideoCamera2Enabled.get()) {
+            return;
+        }
+        if (position == ROW_CONCURRENT_ENABLED) {
+            LumaRoundVideoCamera.setFastSwitchEnabled(!LumaRoundVideoCamera.isFastSwitchEnabled());
+            adapter.notifyItemChanged(position);
             return;
         }
         if (position == ROW_OUTPUT_RESOLUTION) {
@@ -257,6 +265,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
             return position == ROW_OUTPUT_RESOLUTION
                     || position == ROW_CAMERA_RESOLUTION
                     || position == ROW_BITRATE
+                    || position == ROW_CONCURRENT_ENABLED
                     || position == ROW_COMPOSITION;
         }
 
@@ -295,6 +304,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                         : position == ROW_FRAME_RATE_HEADER ? LocaleController.getString(R.string.LumaRoundVideoFps)
                         : position == ROW_STABILIZATION_HEADER ? LocaleController.getString(R.string.LumaRoundVideoStabilization)
                         : position == ROW_LAST_RECORDING_HEADER ? LocaleController.getString(R.string.LumaRoundVideoMeasuredTitle)
+                        : position == ROW_CONCURRENT_HEADER ? LocaleController.getString(R.string.LumaRoundVideoFastSwitchTitle)
                         : LocaleController.getString(R.string.RoundVideoComposition));
             } else if (holder.getItemViewType() == TYPE_SLIDER) {
                 SlideChooseView cell = (SlideChooseView) holder.itemView;
@@ -322,6 +332,9 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 } else if (position == ROW_REAR_CAMERA) {
                     cell.setTextAndCheck(LocaleController.getString(R.string.LumaRoundVideoStartRearCamera),
                             LumaRoundVideoCamera.isStartWithRearCameraEnabled(), false);
+                } else if (position == ROW_CONCURRENT_ENABLED) {
+                    cell.setTextAndCheck(LocaleController.getString(R.string.LumaRoundVideoFastSwitchEnable),
+                            LumaRoundVideoCamera.isFastSwitchEnabled(), false);
                 } else {
                     cell.setTextAndCheck(
                             LocaleController.getString(R.string.RoundVideoCompositionEnabled),
@@ -360,6 +373,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                                 + "\n\n" + LocaleController.getString(R.string.LumaRoundVideoQualityInfo)
                         : position == ROW_REAR_CAMERA_INFO ? LocaleController.getString(R.string.LumaRoundVideoStartRearCameraInfo)
                         : position == ROW_LAST_RECORDING_INFO ? lastRecordingInfo()
+                        : position == ROW_CONCURRENT_INFO ? LocaleController.getString(R.string.LumaRoundVideoFastSwitchInfo)
                         : position == ROW_FRAME_RATE_INFO ? LocaleController.getString(R.string.LumaRoundVideoFpsInfo)
                         : position == ROW_STABILIZATION_INFO ? LocaleController.getString(stabilizationInfoResource())
                         : LocaleController.getString(R.string.RoundVideoCompositionInfo));
@@ -371,17 +385,20 @@ public class RoundVideoSettingsActivity extends BaseFragment {
             if (position == ROW_GENERAL_HEADER || position == ROW_COMPOSITION_HEADER
                     || position == ROW_QUALITY_HEADER
                     || position == ROW_LAST_RECORDING_HEADER
+                    || position == ROW_CONCURRENT_HEADER
                     || position == ROW_FRAME_RATE_HEADER || position == ROW_STABILIZATION_HEADER) {
                 return TYPE_HEADER;
             }
             if (position == ROW_FRAME_RATE || position == ROW_STABILIZATION) return TYPE_SLIDER;
             if (position == ROW_ENABLED || position == ROW_QUALITY || position == ROW_REAR_CAMERA
+                    || position == ROW_CONCURRENT_ENABLED
                     || position == ROW_COMPOSITION) {
                 return TYPE_CHECK;
             }
             if (position == ROW_GENERAL_INFO || position == ROW_COMPOSITION_INFO
                     || position == ROW_QUALITY_INFO || position == ROW_REAR_CAMERA_INFO
                     || position == ROW_LAST_RECORDING_INFO
+                    || position == ROW_CONCURRENT_INFO
                     || position == ROW_FRAME_RATE_INFO || position == ROW_STABILIZATION_INFO) {
                 return TYPE_INFO;
             }

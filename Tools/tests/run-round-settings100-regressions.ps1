@@ -58,13 +58,14 @@ $fixtures=@(
     'round-settings100/org/telegram/utils/settings/SettingsPreferences.java',
     'round-settings100/RoundSettings100Test.java'
 )|ForEach-Object{Join-Path $PSScriptRoot $_}
-foreach($edition in @('personal','public')) {
+foreach($edition in @('personal','public','friends')) {
     $editionRoot=Join-Path $run $edition
     $classes=Join-Path $editionRoot 'classes'
     New-Item -ItemType Directory -Path $classes -Force | Out-Null
     $buildConfig=Join-Path $editionRoot 'BuildConfig.java'
-    $friends=if($edition -eq 'public'){'true'}else{'false'}
-    [IO.File]::WriteAllText($buildConfig,"package org.telegram.messenger; public final class BuildConfig { public static final boolean DEBUG_VERSION=false; public static final boolean DEBUG_PRIVATE_VERSION=false; public static final boolean LUMA_FRIENDS_EDITION=$friends; }",[Text.UTF8Encoding]::new($false))
+    $friends=if($edition -eq 'friends'){'true'}else{'false'}
+    $public=if($edition -eq 'public'){'true'}else{'false'}
+    [IO.File]::WriteAllText($buildConfig,"package org.telegram.messenger; public final class BuildConfig { public static final boolean DEBUG_VERSION=false; public static final boolean DEBUG_PRIVATE_VERSION=false; public static final boolean LUMA_FRIENDS_EDITION=$friends; public static final boolean LUMA_PUBLIC_EDITION=$public; }",[Text.UTF8Encoding]::new($false))
     $sources=@($production[0..6]) + @($production[9],$generatedSession,$generatedUi,$generatedNavigation,$buildConfig) + $fixtures
     & $javac -J-Xmx128m -encoding UTF-8 -d $classes $sources
     if($LASTEXITCODE -ne 0){throw "$edition round settings compilation failed."}

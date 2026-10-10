@@ -1,0 +1,47 @@
+package org.telegram.tgnet;
+import java.util.ArrayList;
+
+/** Minimal routing/base fields; marked concrete classes below use production TL methods. */
+public class TLRPC {
+    public static class Peer extends TLObject {
+        public long user_id, chat_id, channel_id;
+        public static Peer TLdeserialize(InputSerializedData s,int c,boolean e) {
+            return TLdeserialize(Peer.class,c == TL_peerUser.constructor ? new TL_peerUser() : null,s,c,e);
+        }
+    }
+    @@TL_peerUser@@
+    public static class PeerColor extends TLObject {
+        public static PeerColor TLdeserialize(InputSerializedData s,int c,boolean e) { throw new IllegalArgumentException("fixture unsupported peer color"); }
+    }
+    public static class Document extends TLObject {
+        public int flags, date, dc_id;
+        public long id, access_hash, size;
+        public byte[] file_reference;
+        public String mime_type;
+        public ArrayList<PhotoSize> thumbs = new ArrayList<>();
+        public ArrayList<VideoSize> video_thumbs = new ArrayList<>();
+        public ArrayList<DocumentAttribute> attributes = new ArrayList<>();
+        public static Document TLdeserialize(InputSerializedData s,int c,boolean e) {
+            Document d = c == TL_document.constructor ? new TL_document() : c == TL_documentEmpty.constructor ? new TL_documentEmpty() : null;
+            return TLdeserialize(Document.class,d,s,c,e);
+        }
+    }
+    @@TL_document@@
+    @@TL_documentEmpty@@
+    public static class PhotoSize extends TLObject {
+        public static PhotoSize TLdeserialize(int a,long b,int d,InputSerializedData s,int c,boolean e) { throw new IllegalArgumentException("fixture unsupported photo"); }
+    }
+    public static class VideoSize extends TLObject {
+        public static VideoSize TLdeserialize(int a,long b,InputSerializedData s,int c,boolean e) { throw new IllegalArgumentException("fixture unsupported video thumb"); }
+    }
+    public static class DocumentAttribute extends TLObject {
+        public String file_name;
+        public static DocumentAttribute TLdeserialize(InputSerializedData s,int c,boolean e) {
+            return TLdeserialize(DocumentAttribute.class,c == TL_documentAttributeFilename.constructor ? new TL_documentAttributeFilename() : null,s,c,e);
+        }
+    }
+    @@TL_documentAttributeFilename@@
+    public static class TL_textWithEntities extends TLObject {
+        public static TL_textWithEntities TLdeserialize(InputSerializedData s,int c,boolean e) { throw new IllegalArgumentException("fixture unsupported text"); }
+    }
+}

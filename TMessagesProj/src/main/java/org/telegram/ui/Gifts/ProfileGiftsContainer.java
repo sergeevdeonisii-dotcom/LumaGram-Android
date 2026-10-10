@@ -60,6 +60,7 @@ import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.LumaAccountData;
+import org.telegram.messenger.LumaLocalGifts;
 import org.telegram.messenger.LumaGiftVisibilityOperation;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -131,6 +132,9 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
     public final StarsController.GiftsCollections collections;
     private final Theme.ResourcesProvider resourcesProvider;
     private final HashSet<String> localPinnedGiftIds = new HashSet<>();
+    private final long localPinsOwner;
+    private final ArrayList<LumaLocalGifts.LocalSavedGift> localProfileGifts = new ArrayList<>();
+    private int localGiftsLoadGeneration;
     private LumaGiftVisibilityOperation visibilityOperation;
     private AlertDialog visibilityProgress;
     private int backgroundColor;
@@ -283,6 +287,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                 }
 
                 private boolean canReorder(TL_stars.SavedStarGift gift) {
+                    if (gift == null || gift instanceof LumaLocalGifts.LocalSavedGift) return false;
                     if (!reordering) return false;
                     if (list == parent.list) {
                         return gift != null && gift.pinned_to_top;
@@ -318,13 +323,22 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                     if (!canReorder(getSavedGift(viewHolder)) || !canReorder(getSavedGift(target))) {
                         return false;
                     }
+                    // The display keeps local pins in a separate sorted group.
+                    // A single notifyItemMoved cannot cross that group boundary.
+                    if (parent.isGiftPinnedLocally(getSavedGift(viewHolder))
+                            != parent.isGiftPinnedLocally(getSavedGift(target))) return false;
                     final int fromPosition = viewHolder.getAdapterPosition();
                     final int toPosition = target.getAdapterPosition();
+                    if (fromPosition < 0 || toPosition < 0) return false;
+                    // UI headers, local gifts and locally sorted pins are not server inventory indices.
+                    final int fromGift = list.gifts.indexOf(getSavedGift(viewHolder));
+                    final int toGift = list.gifts.indexOf(getSavedGift(target));
+                    if (fromGift < 0 || toGift < 0) return false;
                     if (isCollection) {
-                        list.reorder(fromPosition, toPosition);
+                        list.reorder(fromGift, toGift);
                         parent.collections.updateIcon(list.collectionId);
                     } else {
-                        list.reorderPinned(fromPosition, toPosition);
+                        list.reorderPinned(fromGift, toGift);
                     }
                     listView.adapter.notifyItemMoved(fromPosition, toPosition);
                     listView.adapter.updateWithoutNotify();
@@ -552,7 +566,8 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
             for (int i = 0; i < listView.getChildCount(); ++i) {
                 final View child = listView.getChildAt(i);
                 if (child instanceof GiftSheet.GiftCell) {
-                    ((GiftSheet.GiftCell) child).setReordering(reordering, true);
+                    final GiftSheet.GiftCell cell = (GiftSheet.GiftCell) child;
+                    cell.setReordering(reordering && !(cell.getSavedGift() instanceof LumaLocalGifts.LocalSavedGift), true);
                 }
             }
             if (listView.adapter != null) {
@@ -613,9 +628,11 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         public void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
             if (list == null)
                 return;
-            if (list.hasFilters() && list.gifts.size() <= 0 && list.endReached && !list.loading)
+            final ArrayList<LumaLocalGifts.LocalSavedGift> localGifts = parent.localDisplayGifts(list);
+            if (localGifts.isEmpty() && list.hasFilters() && list.gifts.size() <= 0 && list.endReached && !list.loading)
                 return;
-            final int spanCount = Math.max(1, list == null || list.totalCount == 0 ? 3 : Math.min(3, list.totalCount));
+            final int displayCount = Math.max(0, list.totalCount) + localGifts.size();
+            final int spanCount = Math.max(1, displayCount == 0 ? 3 : Math.min(3, displayCount));
             if (parent.list == list && parent.canFilterHidden()) {
                 final boolean allGiftsHidden = parent.areAllGiftsHidden();
                 items.add(UItem.asButton(
@@ -624,8 +641,21 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                     getString(allGiftsHidden ? R.string.LumaShowAllGifts : R.string.LumaHideAllGifts)
                 ).setSpanCount(spanCount));
             }
+            if (!localGifts.isEmpty()) {
+                items.add(UItem.asHeader(getString(R.string.LumaLocalGiftsHeader)).setSpanCount(spanCount));
+                for (int pinnedPass = 1; pinnedPass >= 0; pinnedPass--) {
+                    for (LumaLocalGifts.LocalSavedGift gift : localGifts) {
+                        if (parent.isGiftPinnedLocally(gift) != (pinnedPass == 1)) continue;
+                        UItem localItem = GiftSheet.GiftCell.Factory.asStarGift(0, gift, true, false, false)
+                                .setReordering(false);
+                        localItem.object2 = parent.isGiftPinnedLocally(gift);
+                        items.add(localItem);
+                    }
+                }
+                if (!list.gifts.isEmpty()) items.add(UItem.asHeader(getString(R.string.ProfileGifts)).setSpanCount(spanCount));
+            }
             if (list != null) {
-                int spanCountLeft = 3;
+                int spanCountLeft = spanCount;
                 for (int localPinnedPass = 1; localPinnedPass >= 0; localPinnedPass--) {
                     for (TL_stars.SavedStarGift userGift : list.gifts) {
                         if (parent.isGiftPinnedLocally(userGift) != (localPinnedPass == 1)) {
@@ -640,12 +670,12 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                         items.add(giftItem);
                         spanCountLeft--;
                         if (spanCountLeft == 0) {
-                            spanCountLeft = 3;
+                            spanCountLeft = spanCount;
                         }
                     }
                 }
                 if (list.loading || !list.endReached) {
-                    for (int i = 0; i < (spanCountLeft <= 0 ? 3 : spanCountLeft); ++i) {
+                    for (int i = 0; i < (spanCountLeft <= 0 ? spanCount : spanCountLeft); ++i) {
                         items.add(UItem.asFlicker(1 + i, FlickerLoadingView.STAR_GIFT).setSpanCount(1));
                     }
                 }
@@ -653,7 +683,8 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
             if (parent.list == list) {
                 items.add(UItem.asSpace(dp(20)));
                 if (parent.dialogId == UserConfig.getInstance(currentAccount).getClientUserId()) {
-                    items.add(TextFactory.asText(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, resourcesProvider), Gravity.CENTER, 14, LocaleController.getString(R.string.ProfileGiftsInfo), false, dp(24), 0));
+                    items.add(TextFactory.asText(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, resourcesProvider), Gravity.CENTER, 14,
+                            getString(list.gifts.isEmpty() && !localGifts.isEmpty() ? R.string.LumaLocalGiftPreviewInfo : R.string.ProfileGiftsInfo), false, dp(24), 0));
                 }
                 items.add(UItem.asSpace(dp(24 + 48 + 10)));
             } else if (!items.isEmpty()) {
@@ -680,6 +711,10 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
 
         public void onItemClick(UItem item, View view, int position, float x, float y) {
             if (list == null) return;
+            if (item.object instanceof LumaLocalGifts.LocalSavedGift) {
+                LumaLocalGiftPreview.show(parent.fragment, (LumaLocalGifts.LocalSavedGift) item.object);
+                return;
+            }
             if (item.id == ITEM_TOGGLE_ALL_GIFTS) {
                 parent.confirmToggleAllGifts();
                 return;
@@ -740,6 +775,22 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
 
         public boolean onItemLongPress(UItem item, View view, int position, float x, float y) {
             if (list == null) return false;
+            if (item.object instanceof LumaLocalGifts.LocalSavedGift) {
+                LumaLocalGifts.LocalSavedGift gift = (LumaLocalGifts.LocalSavedGift) item.object;
+                if (gift.ownerUserId != UserConfig.getInstance(currentAccount).getClientUserId()) return false;
+                boolean pinned = parent.isGiftPinnedLocally(gift);
+                ItemOptions options = ItemOptions.makeOptions(parent.fragment, view, true);
+                parent.currentMenu = options;
+                options.add(pinned ? R.drawable.msg_unpin : R.drawable.msg_pin,
+                        getString(pinned ? R.string.LumaLocalUnpinGift : R.string.LumaLocalPinGift), () -> {
+                            parent.setGiftPinnedLocally(gift, !pinned);
+                            update(true);
+                        })
+                        .add(R.drawable.msg_delete, getString(R.string.LumaLocalGiftRemove),
+                                () -> LumaLocalGiftPreview.confirmRemove(parent.fragment, gift))
+                        .show();
+                return true;
+            }
             if (view instanceof GiftSheet.GiftCell && item.object instanceof TL_stars.SavedStarGift) {
                 final GiftSheet.GiftCell cell = (GiftSheet.GiftCell) view;
                 final TL_stars.SavedStarGift savedStarGift = (TL_stars.SavedStarGift) item.object;
@@ -1039,6 +1090,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         this.fragment = fragment;
 
         this.currentAccount = currentAccount;
+        this.localPinsOwner = UserConfig.getInstance(currentAccount).getClientUserId();
         if (DialogObject.isEncryptedDialog(did)) {
             TLRPC.EncryptedChat encryptedChat = MessagesController.getInstance(currentAccount).getEncryptedChat(DialogObject.getEncryptedChatId(did));
             if (encryptedChat != null) {
@@ -1051,6 +1103,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         }
         final SharedPreferences preferences = LumaAccountData.preferences(currentAccount);
         localPinnedGiftIds.addAll(new HashSet<>(preferences.getStringSet(getLocalPinsKey(), new HashSet<>())));
+        reloadLocalGifts();
         StarsController.getInstance(currentAccount).invalidateProfileGifts(dialogId);
         this.list = StarsController.getInstance(currentAccount).getProfileGiftsList(dialogId);
         this.collections = StarsController.getInstance(currentAccount).getProfileGiftCollectionsList(dialogId, true);
@@ -1660,6 +1713,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
 
     private String getLocalGiftId(TL_stars.SavedStarGift gift) {
         if (gift == null) return null;
+        if (gift instanceof LumaLocalGifts.LocalSavedGift) return "local:" + ((LumaLocalGifts.LocalSavedGift) gift).localKey;
         if ((gift.flags & 8) != 0 && gift.msg_id != 0) {
             return "message:" + gift.msg_id;
         }
@@ -1683,6 +1737,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
     private boolean hasMissingLocalPins(StarsController.GiftsList giftsList) {
         if (localPinnedGiftIds.isEmpty() || giftsList == null) return false;
         final HashSet<String> missing = new HashSet<>(localPinnedGiftIds);
+        missing.removeIf(key -> key.startsWith("local:")); // Virtual gifts cannot be loaded from server pages.
         for (TL_stars.SavedStarGift gift : giftsList.gifts) {
             missing.remove(getLocalGiftId(gift));
         }
@@ -1690,6 +1745,9 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
     }
 
     private void setGiftPinnedLocally(TL_stars.SavedStarGift gift, boolean pinned) {
+        if (localPinsOwner <= 0 || localPinsOwner != UserConfig.getInstance(currentAccount).getClientUserId()
+                || (gift instanceof LumaLocalGifts.LocalSavedGift
+                && ((LumaLocalGifts.LocalSavedGift) gift).ownerUserId != localPinsOwner)) return;
         final String id = getLocalGiftId(gift);
         if (id == null) return;
         if (pinned) {
@@ -1849,7 +1907,13 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
-        if (id == NotificationCenter.starUserGiftsLoaded) {
+        if (id == NotificationCenter.lumaLocalGiftsChanged) {
+            if (account != currentAccount || args == null || args.length != 1 || !(args[0] instanceof Long)
+                    || dialogId <= 0 || (Long) args[0] != dialogId
+                    || dialogId != UserConfig.getInstance(currentAccount).getClientUserId()) return;
+            reloadLocalGifts();
+            return;
+        } else if (id == NotificationCenter.starUserGiftsLoaded) {
             if ((Long) args[0] != dialogId) return;
 
             button.setVisibility(canSwitchNotify() ? View.GONE : View.VISIBLE);
@@ -1881,6 +1945,8 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        reloadLocalGifts();
+        NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.lumaLocalGiftsChanged);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.starUserGiftsLoaded);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.starUserGiftCollectionsLoaded);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.updateInterfaces);
@@ -1913,6 +1979,8 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
             currentPage.resetReordering();
         }
         super.onDetachedFromWindow();
+        localGiftsLoadGeneration++;
+        NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.lumaLocalGiftsChanged);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.starUserGiftsLoaded);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.starUserGiftCollectionsLoaded);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.updateInterfaces);
@@ -1933,19 +2001,45 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
     }
 
     public int getGiftsCount() {
+        int localCount = localDisplayGifts(getCurrentList()).size();
         final Page page = getCurrentPage();
         if (page == null || page.list == list) {
-            if (list != null && list.totalCount > 0) return list.totalCount;
+            if (list != null && list.totalCount > 0) return list.totalCount + localCount;
         } else {
             if (page.list != null && page.list.totalCount > 0) return page.list.totalCount;
         }
         if (dialogId >= 0) {
             final TLRPC.UserFull userFull = MessagesController.getInstance(currentAccount).getUserFull(dialogId);
-            return userFull != null ? userFull.stargifts_count : 0;
+            return (userFull != null ? userFull.stargifts_count : 0) + localCount;
         } else {
             final TLRPC.ChatFull chatFull = MessagesController.getInstance(currentAccount).getChatFull(-dialogId);
             return chatFull != null ? chatFull.stargifts_count : 0;
         }
+    }
+
+    private void reloadLocalGifts() {
+        final int generation = ++localGiftsLoadGeneration;
+        final long owner = UserConfig.getInstance(currentAccount).getClientUserId();
+        if (dialogId <= 0 || dialogId != owner || owner != localPinsOwner) {
+            localProfileGifts.clear();
+            return;
+        }
+        Utilities.globalQueue.postRunnable(() -> {
+            final ArrayList<LumaLocalGifts.LocalSavedGift> loaded = new ArrayList<>(LumaLocalGifts.entries(currentAccount));
+            AndroidUtilities.runOnUIThread(() -> {
+                if (generation != localGiftsLoadGeneration
+                        || owner != UserConfig.getInstance(currentAccount).getClientUserId()) return;
+                localProfileGifts.clear();
+                localProfileGifts.addAll(loaded);
+                for (View view : viewPager.getViewPages()) if (view instanceof Page) ((Page) view).update(true);
+            });
+        });
+    }
+
+    private ArrayList<LumaLocalGifts.LocalSavedGift> localDisplayGifts(StarsController.GiftsList pageList) {
+        if (pageList == list && dialogId > 0 && dialogId == UserConfig.getInstance(currentAccount).getClientUserId())
+            return localProfileGifts;
+        return new ArrayList<>();
     }
 
     private final static HashMap<Pair<Integer, Long>, CharSequence> cachedLastEmojis = new HashMap<>();

@@ -459,13 +459,27 @@ public class UserConfig extends BaseController {
     }
 
     public void clearConfig() {
-        LumaAccountData.clearOnLogout(currentAccount, getClientUserId());
+        final long logoutOwner;
+        synchronized (sync) {
+            logoutOwner = currentUser != null ? currentUser.id : 0;
+            // Publish logout to the same monitor used by getClientUserId before any
+            // local cleanup. Queued work must not see the outgoing identity as active.
+            currentUser = null;
+            clientUserId = 0;
+        }
+        // Wait for existing encrypted writes that may already have passed their final
+        // owner check. Do not hold sync while waiting: those helpers themselves call
+        // getClientUserId, and holding it here would reverse the lock order.
+        synchronized (BlackHoleNotes.class) { }
+        synchronized (BlackHoleNotificationJournal.class) { }
+        synchronized (LumaLocalGifts.class) {
+            LumaLocalGifts.clearCache(currentAccount);
+            LumaAccountData.clearOnLogout(currentAccount, logoutOwner);
+        }
         getPreferences().edit().clear().apply();
 
         sharingMyLocationUntil = 0;
         lastMyLocationShareTime = 0;
-        currentUser = null;
-        clientUserId = 0;
         registeredForPush = false;
         contactsSavedCount = 0;
         lastSendMessageId = -210000;

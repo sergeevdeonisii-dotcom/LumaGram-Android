@@ -265,6 +265,7 @@ public class NotificationCenter {
     public static final int updateAllMessages = totalEvents++;
     public static final int starGiftsLoaded = totalEvents++;
     public static final int starUserGiftsLoaded = totalEvents++;
+    public static final int lumaLocalGiftsChanged = totalEvents++;
     public static final int starUserGiftCollectionsLoaded = totalEvents++;
     public static final int starGiftSoldOut = totalEvents++;
     public static final int updateStories = totalEvents++;

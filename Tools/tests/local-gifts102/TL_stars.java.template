@@ -1,0 +1,53 @@
+package org.telegram.tgnet.tl;
+import java.util.ArrayList;
+import org.telegram.tgnet.*;
+import org.telegram.messenger.utils.tlutils.AmountUtils;
+
+/** Fields/factories are JVM fixture routing. @@...@@ classes below are extracted verbatim. */
+public class TL_stars {
+    public static class StarGift extends TLObject {
+        public int flags, num, availability_issued, availability_total, offer_min_stars, craft_chance_permille;
+        public long id, gift_id, value_amount, value_usd_amount;
+        public boolean require_premium, resale_ton_only, theme_available, burned, crafted;
+        public String title, slug, owner_name, owner_address, gift_address, value_currency;
+        public TLRPC.Peer owner_id, released_by, theme_peer, host_id;
+        public TLRPC.PeerColor peer_color;
+        public ArrayList<StarGiftAttribute> attributes = new ArrayList<>();
+        public ArrayList<StarsAmount> resell_amount;
+        public static StarGift TLdeserialize(InputSerializedData s, int c, boolean e) {
+            StarGift gift = null;
+            switch (c) {
+                case TL_starGiftUnique.constructor: gift = new TL_starGiftUnique(); break;
+                case TL_starGiftUnique_layer221.constructor: gift = new TL_starGiftUnique_layer221(); break;
+            }
+            return TLdeserialize(StarGift.class, gift, s, c, e);
+        }
+    }
+    @@TL_starGiftUnique@@
+    @@TL_starGiftUnique_layer221@@
+    @@StarGiftAttribute@@
+    @@starGiftAttributeModel@@
+    @@starGiftAttributeModel_layer221@@
+    @@starGiftAttributePattern@@
+    @@starGiftAttributePattern_layer221@@
+    @@starGiftAttributeBackdrop@@
+    @@starGiftAttributeBackdrop_layer221@@
+    @@starGiftAttributeBackdrop_layer202@@
+    @@starGiftAttributeOriginalDetails@@
+    @@starGiftAttributeOriginalDetails_layer197@@
+    @@StarGiftAttributeRarity@@
+    @@TL_starGiftAttributeRarity@@
+    @@TL_starGiftAttributeRarityRare@@
+    @@TL_starGiftAttributeRarityEpic@@
+    @@TL_starGiftAttributeRarityLegendary@@
+    @@TL_starGiftAttributeRarityUncommon@@
+    @@StarsAmount@@
+    @@TL_starsAmount@@
+    @@TL_starsTonAmount@@
+    public static class TL_savedStarGift extends TLObject {
+        public int flags, date, gift_num;
+        public long saved_id;
+        public StarGift gift;
+        public boolean pinned_to_top;
+    }
+}

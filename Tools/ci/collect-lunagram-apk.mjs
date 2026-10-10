@@ -12,6 +12,7 @@ const RELEASES = {
   '82': { version: '12.10.6-lunagram.82', code: 71619 },
   '100': { version: '1.0.0', code: 71629, unifiedVersionName: true },
   '101': { version: '1.0.1', code: 71639, unifiedVersionName: true },
+  '102': { version: '1.0.2', code: 71649, unifiedVersionName: true, separatePublicEdition: true },
 };
 
 function requireValue(condition, message) {
@@ -19,15 +20,16 @@ function requireValue(condition, message) {
 }
 
 export function expectedArtifact(edition, release = '79') {
-  requireValue(edition === 'full' || edition === 'friends', 'Unknown APK edition.');
   requireValue(Object.hasOwn(RELEASES, release), 'Unknown APK release.');
-  const { version, code, unifiedVersionName } = RELEASES[release];
+  const { version, code, unifiedVersionName, separatePublicEdition } = RELEASES[release];
+  requireValue(edition === 'full' || edition === 'friends' || (separatePublicEdition && edition === 'public'), 'Unknown APK edition for this release.');
   return {
     edition,
     fileName: `Lunagram-${version}-${edition}-temporary.apk`,
     versionName: version + (edition === 'friends' && !unifiedVersionName ? '-friends' : ''),
     versionCode: code,
     friendsEdition: edition === 'friends',
+    ...(separatePublicEdition ? { publicEdition: edition === 'public' } : {}),
   };
 }
 
@@ -43,10 +45,37 @@ export function validateOutputMetadata(metadata, edition, release = '79') {
   return element.outputFile;
 }
 
-export function validateGeneratedFlag(source, edition) {
+export function validateGeneratedFlag(source, edition, release = '79') {
+  const expected = expectedArtifact(edition, release);
   const flags = [...source.matchAll(/^\s*public static final boolean LUMA_FRIENDS_EDITION = (true|false);\s*$/gm)];
-  requireValue(flags.length === 1 && (flags[0][1] === 'true') === expectedArtifact(edition).friendsEdition, 'Generated library edition flag is missing or incorrect.');
+  requireValue(flags.length === 1 && (flags[0][1] === 'true') === expected.friendsEdition, 'Generated library Friends flag is missing or incorrect.');
+  if (Object.hasOwn(expected, 'publicEdition')) {
+    const publicFlags = [...source.matchAll(/^\s*public static final boolean LUMA_PUBLIC_EDITION = (true|false);\s*$/gm)];
+    requireValue(publicFlags.length === 1 && (publicFlags[0][1] === 'true') === expected.publicEdition, 'Generated library Public flag is missing or incorrect.');
+  }
   // Never print any part of BuildConfig: adjacent fields contain API credentials.
+}
+
+export function expectedEditions(release = '79', includeFriends = false) {
+  requireValue(Object.hasOwn(RELEASES, release), 'Unknown APK release.');
+  requireValue(typeof includeFriends === 'boolean', 'Invalid Friends build selection.');
+  requireValue(!includeFriends || release === '102', 'Optional Friends builds require separate Public edition support.');
+  return release === '102' ? ['full', 'public', ...(includeFriends ? ['friends'] : [])] : ['full', 'friends'];
+}
+
+export function validateArtifactMetadata(metadata, release, commit, editions) {
+  const schemaVersion = release === '102' ? 2 : 1;
+  requireValue(typeof commit === 'string' && /^[0-9a-f]{40}$/.test(commit), 'An exact source commit is required.');
+  requireValue(metadata?.schemaVersion === schemaVersion && metadata.packageName === PACKAGE
+    && metadata.architecture === 'arm64-v8a' && metadata.sourceCommit === commit
+    && Array.isArray(metadata.artifacts) && metadata.artifacts.length === editions.length
+    && (schemaVersion !== 2 || metadata.release === release), 'APK artifact metadata is inconsistent.');
+  for (const edition of editions) {
+    const entries = metadata.artifacts.filter(item => item?.edition === edition);
+    const expected = expectedArtifact(edition, release);
+    requireValue(entries.length === 1 && Object.entries(expected).every(([key, value]) => entries[0][key] === value)
+      && typeof entries[0].sha256 === 'string' && /^[0-9a-f]{64}$/.test(entries[0].sha256), 'APK artifact metadata has an inconsistent edition.');
+  }
 }
 
 export function validateApkBadging(badging, edition, release = '79') {
@@ -78,7 +107,7 @@ async function collect(args) {
   const outputMetadata = JSON.parse(fs.readFileSync(path.join(outputDirectory, 'output-metadata.json'), 'utf8'));
   const sourceApk = path.join(outputDirectory, validateOutputMetadata(outputMetadata, args.edition, args.release));
   const buildConfig = path.join(repo, 'TMessagesProj/build/generated/source/buildConfig/standalone/org/telegram/messenger/BuildConfig.java');
-  validateGeneratedFlag(fs.readFileSync(buildConfig, 'utf8'), args.edition);
+  validateGeneratedFlag(fs.readFileSync(buildConfig, 'utf8'), args.edition, args.release);
   const badging = spawnSync(args.aapt, ['dump', 'badging', sourceApk], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
   requireValue(!badging.error && badging.status === 0, 'Android APK inspection failed.');
   validateApkBadging(badging.stdout, args.edition, args.release);
@@ -86,37 +115,40 @@ async function collect(args) {
   const commit = revision.stdout?.trim();
   requireValue(revision.status === 0 && /^[0-9a-f]{40}$/.test(commit), 'Source commit is unavailable.');
   requireValue(commit === process.env.GITHUB_SHA, 'Source commit differs from the workflow commit.');
+  const editions = expectedEditions(args.release, args['include-friends'] === true);
+  const editionIndex = editions.indexOf(args.edition);
+  requireValue(editionIndex >= 0, 'This edition is not selected for the APK set.');
+  const metadataPath = path.join(directory, 'build-metadata.json');
+  let metadata = { schemaVersion: args.release === '102' ? 2 : 1,
+    ...(args.release === '102' ? { release: '102' } : {}),
+    sourceCommit: commit, packageName: PACKAGE, architecture: 'arm64-v8a', artifacts: [] };
+  if (fs.existsSync(metadataPath)) {
+    metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+    requireValue(editionIndex > 0, 'The first edition cannot append to an existing APK set.');
+    validateArtifactMetadata(metadata, args.release, commit, editions.slice(0, editionIndex));
+  } else {
+    requireValue(editionIndex === 0, 'Full APK must be collected before other editions.');
+  }
   const destination = safeArtifactPath(directory, expected.fileName);
   fs.copyFileSync(sourceApk, destination, fs.constants.COPYFILE_EXCL);
   const hash = await sha256(destination);
-  const metadataPath = path.join(directory, 'build-metadata.json');
-  let metadata = { schemaVersion: 1, sourceCommit: commit, packageName: PACKAGE, architecture: 'arm64-v8a', artifacts: [] };
-  if (fs.existsSync(metadataPath)) {
-    metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
-    requireValue(args.edition === 'friends' && metadata.sourceCommit === commit
-      && metadata.schemaVersion === 1 && metadata.packageName === PACKAGE
-      && metadata.architecture === 'arm64-v8a'
-      && metadata.artifacts?.length === 1 && metadata.artifacts[0].edition === 'full', 'Existing build metadata is inconsistent.');
-  } else {
-    requireValue(args.edition === 'full', 'Full APK must be collected before Friends.');
-  }
   metadata.artifacts.push({ ...expected, sha256: hash });
   fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2) + '\n', { mode: 0o600 });
   console.log(`Collected ${args.edition} APK; public SHA-256 ${hash}.`);
 }
 
-async function verifyPair(directory, release) {
+async function verifyPair(directory, release, includeFriends) {
   const metadata = JSON.parse(fs.readFileSync(path.join(directory, 'build-metadata.json'), 'utf8'));
-  requireValue(metadata.schemaVersion === 1 && metadata.packageName === PACKAGE && metadata.architecture === 'arm64-v8a'
-    && metadata.sourceCommit === process.env.GITHUB_SHA && metadata.artifacts?.length === 2, 'Incomplete APK pair metadata.');
-  for (const edition of ['full', 'friends']) {
+  const editions = expectedEditions(release, includeFriends);
+  validateArtifactMetadata(metadata, release, process.env.GITHUB_SHA, editions);
+  for (const edition of editions) {
     const entry = metadata.artifacts.find(item => item.edition === edition);
     const expected = expectedArtifact(edition, release);
     requireValue(entry && Object.entries(expected).every(([key, value]) => entry[key] === value), 'APK pair has an inconsistent edition.');
     requireValue(/^[0-9a-f]{64}$/.test(entry.sha256)
       && await sha256(safeArtifactPath(directory, entry.fileName)) === entry.sha256, 'Artifact SHA-256 does not match.');
   }
-  console.log('Verified Full/Friends APK pair and public metadata.');
+  console.log(`Verified ${editions.join('/')} APK set and non-secret provenance.`);
 }
 
 async function main() {
@@ -124,11 +156,11 @@ async function main() {
   for (let i = 2; i < process.argv.length; i++) {
     const key = process.argv[i];
     requireValue(key.startsWith('--'), 'Unexpected collector argument.');
-    if (key === '--verify-pair') args['verify-pair'] = true;
+    if (key === '--verify-pair' || key === '--include-friends') args[key.slice(2)] = true;
     else args[key.slice(2)] = process.argv[++i];
   }
   requireValue(typeof args['artifact-dir'] === 'string', 'Artifact directory is required.');
-  if (args['verify-pair']) return verifyPair(path.resolve(args['artifact-dir']), args.release);
+  if (args['verify-pair']) return verifyPair(path.resolve(args['artifact-dir']), args.release, args['include-friends'] === true);
   requireValue(typeof args['repo-root'] === 'string' && typeof args.aapt === 'string', 'Repository and Android inspection tool are required.');
   return collect(args);
 }

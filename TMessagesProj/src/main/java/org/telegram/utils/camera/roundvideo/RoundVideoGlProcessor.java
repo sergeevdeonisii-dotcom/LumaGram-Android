@@ -18,6 +18,7 @@ import org.telegram.messenger.LumaHorizonLock;
 import org.telegram.messenger.LumaRoundVideoQuality;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 final class RoundVideoGlProcessor {
 
@@ -68,6 +69,33 @@ final class RoundVideoGlProcessor {
     private Handler handler;
     private SurfaceTexture inputSurfaceTexture;
     private Surface cameraSurface;
+    private CameraInput primaryInput, secondaryInput, activeInput, pendingInput;
+    private Runnable pendingSelection, pendingSelectionFailure;
+    private final Runnable selectionTimeout = () -> {
+        Runnable failure = pendingSelectionFailure;
+        pendingInput = null;
+        pendingSelection = pendingSelectionFailure = null;
+        if (failure != null) failure.run();
+    };
+
+    private static final class CameraInput {
+        final int id;
+        final SurfaceTexture texture;
+        final Surface surface;
+        Size size;
+        int crop;
+        boolean realtime, front;
+        long lastTimestamp = -1L;
+        CameraInput(int id, SurfaceTexture texture, Surface surface, Size size, int crop, boolean realtime, boolean front) {
+            this.id = id; this.texture = texture; this.surface = surface;
+            this.size = size; this.crop = crop; this.realtime = realtime; this.front = front;
+        }
+        void release() {
+            texture.setOnFrameAvailableListener(null);
+            surface.release(); texture.release();
+            GLES20.glDeleteTextures(1, new int[]{id}, 0);
+        }
+    }
 
     private android.opengl.EGLDisplay eglDisplay = EGL14.EGL_NO_DISPLAY;
     private android.opengl.EGLContext eglContext = EGL14.EGL_NO_CONTEXT;
@@ -114,7 +142,7 @@ final class RoundVideoGlProcessor {
     private volatile boolean started;
     private volatile boolean recordingStarted;
     private volatile Runnable firstFrameListener;
-    private boolean firstFrameReported;
+    private volatile boolean firstFrameReported;
     private volatile RuntimeException initializationError;
 
     private final Runnable switchFrameRunnable = this::drawSwitchFrame;
@@ -208,6 +236,7 @@ final class RoundVideoGlProcessor {
         HandlerThread currentThread = thread;
         if (currentHandler != null) {
             currentHandler.removeCallbacks(switchFrameRunnable);
+            currentHandler.removeCallbacks(selectionTimeout);
         }
         handler = null;
         thread = null;
@@ -217,16 +246,28 @@ final class RoundVideoGlProcessor {
             return;
         }
         CountDownLatch latch = new CountDownLatch(1);
-        currentHandler.post(() -> {
+        if (Thread.currentThread() == currentThread) {
+            releaseGl();
+            currentThread.quitSafely();
+            return;
+        }
+        if (!currentHandler.post(() -> {
             try {
                 releaseGl();
             } finally {
                 currentThread.quitSafely();
                 latch.countDown();
             }
-        });
+        })) {
+            currentThread.quitSafely();
+            diagnostics.log("GL thread stopped before cleanup could be queued");
+            return;
+        }
         try {
-            latch.await();
+            if (!latch.await(3L, TimeUnit.SECONDS)) {
+                diagnostics.log("GL cleanup still waiting for a stalled driver; release remains queued");
+                currentThread.quitSafely();
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -238,6 +279,119 @@ final class RoundVideoGlProcessor {
             throw new IllegalStateException("GL processor is not started");
         }
         return cameraSurface;
+    }
+
+    boolean hasFirstFrame() { return firstFrameReported; }
+
+    Surface addConcurrentInput(Size size, int crop, boolean realtime, boolean front) {
+        Handler currentHandler = handler;
+        if (!started || currentHandler == null) throw new IllegalStateException("GL is not started");
+        CountDownLatch latch = new CountDownLatch(1);
+        RuntimeException[] error = new RuntimeException[1];
+        if (!currentHandler.post(() -> {
+            try {
+                if (!started) throw new IllegalStateException("GL stopped before concurrent input creation");
+                makeCurrent();
+                if (secondaryInput != null) throw new IllegalStateException("Second GL input already exists");
+                secondaryInput = createCameraInput(size, crop, realtime, front);
+            } catch (RuntimeException failure) { error[0] = failure; }
+            finally { latch.countDown(); }
+        })) throw new IllegalStateException("GL input thread is no longer accepting work");
+        try {
+            if (!latch.await(3L, TimeUnit.SECONDS)) throw new IllegalStateException("Concurrent GL input creation timed out");
+        }
+        catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Concurrent GL input interrupted", interrupted);
+        }
+        if (error[0] != null) throw error[0];
+        return secondaryInput.surface;
+    }
+
+    void selectConcurrentInput(boolean secondary, Runnable selected, Runnable unavailable) {
+        Handler currentHandler = handler;
+        if (!started || currentHandler == null) { unavailable.run(); return; }
+        if (!currentHandler.post(() -> {
+            CameraInput target = secondary ? secondaryInput : primaryInput;
+            if (!started || target == null) { unavailable.run(); return; }
+            try {
+                makeCurrent();
+                // Consume the latest queued standby frame before arming the switch.
+                // A callback queued earlier must not qualify as a new camera frame.
+                target.texture.updateTexImage();
+                target.lastTimestamp = target.texture.getTimestamp();
+                pendingInput = target; pendingSelection = selected; pendingSelectionFailure = unavailable;
+                currentHandler.removeCallbacks(selectionTimeout);
+                currentHandler.postDelayed(selectionTimeout, 750L);
+            } catch (RuntimeException error) {
+                diagnostics.error("Concurrent camera selection failed", error);
+                unavailable.run();
+            }
+        })) unavailable.run();
+    }
+
+    void resetToPrimaryInput() {
+        Handler currentHandler = handler;
+        if (!started || currentHandler == null) return;
+        CountDownLatch latch = new CountDownLatch(1);
+        RuntimeException[] error = new RuntimeException[1];
+        if (!currentHandler.post(() -> {
+            try {
+                if (!started) return;
+                makeCurrent();
+                currentHandler.removeCallbacks(selectionTimeout);
+                pendingInput = null; pendingSelection = pendingSelectionFailure = null;
+                if (primaryInput != null) activateInput(primaryInput);
+                if (secondaryInput != null) {
+                    secondaryInput.release();
+                    secondaryInput = null;
+                }
+            } catch (RuntimeException failure) {
+                error[0] = failure;
+            } finally { latch.countDown(); }
+        })) throw new IllegalStateException("GL reset thread is no longer accepting work");
+        try {
+            if (!latch.await(3L, TimeUnit.SECONDS)) throw new IllegalStateException("Concurrent GL reset timed out");
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Concurrent GL reset interrupted", interrupted);
+        }
+        if (error[0] != null) throw error[0];
+    }
+
+    private void activateInput(CameraInput input) {
+        makeCurrent();
+        activeInput = input;
+        textureId = input.id; inputSurfaceTexture = input.texture; cameraSurface = input.surface;
+        inputSize = input.size; sourceCropSize = input.crop; cameraTimestampRealtime = input.realtime;
+        frontCamera = input.front;
+        firstCameraTimestamp = -1;
+        if (overlayRenderer != null) overlayRenderer.updateInputConfiguration(input.size, input.crop);
+        setInputTextureFilter();
+    }
+
+    private void onInputFrame(CameraInput input) {
+        if (!started || input != primaryInput && input != secondaryInput) return;
+        try {
+            makeCurrent();
+            input.texture.updateTexImage();
+            long timestamp = input.texture.getTimestamp();
+            if (timestamp <= input.lastTimestamp) return;
+            input.lastTimestamp = timestamp;
+            Runnable selection = null;
+            if (input == pendingInput) {
+                activateInput(input);
+                pendingInput = null;
+                selection = pendingSelection;
+                pendingSelection = pendingSelectionFailure = null;
+                Handler currentHandler = handler;
+                if (currentHandler != null) currentHandler.removeCallbacks(selectionTimeout);
+                frameGate = null; previewGate = null; // Both validated inputs run at 30 FPS.
+            }
+            if (input == activeInput) drawFrame(timestamp);
+            // Standby was drained above; never submit its frames to MP4.
+            if (selection != null) selection.run();
+        } catch (RuntimeException error) { reportError(error); }
     }
 
     public void beginCameraSwitch(
@@ -319,11 +473,18 @@ final class RoundVideoGlProcessor {
         }
         CountDownLatch latch = new CountDownLatch(1);
         RuntimeException[] error = new RuntimeException[1];
-        currentHandler.post(() -> {
+        if (!currentHandler.post(() -> {
             try {
+                if (!started) throw new IllegalStateException("GL stopped before input configuration");
+                makeCurrent();
                 inputSize = size;
                 sourceCropSize = cropSize;
                 cameraTimestampRealtime = timestampRealtime;
+                if (activeInput != null) {
+                    activeInput.size = size; activeInput.crop = cropSize;
+                    activeInput.realtime = timestampRealtime; activeInput.front = frontCamera;
+                    activeInput.lastTimestamp = -1L;
+                }
                 if (inputSurfaceTexture != null) {
                     inputSurfaceTexture.setDefaultBufferSize(size.getWidth(), size.getHeight());
                 }
@@ -339,9 +500,9 @@ final class RoundVideoGlProcessor {
             } finally {
                 latch.countDown();
             }
-        });
+        })) throw new IllegalStateException("GL input thread is no longer accepting work");
         try {
-            latch.await();
+            if (!latch.await(3L, TimeUnit.SECONDS)) throw new IllegalStateException("GL input configuration timed out");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Input size update was interrupted", e);
@@ -430,11 +591,20 @@ final class RoundVideoGlProcessor {
     }
 
     private void createInputSurface() {
+        primaryInput = createCameraInput(inputSize, sourceCropSize, cameraTimestampRealtime, frontCamera);
+        activeInput = primaryInput;
+        textureId = primaryInput.id;
+        inputSurfaceTexture = primaryInput.texture;
+        cameraSurface = primaryInput.surface;
+    }
+
+    private CameraInput createCameraInput(Size size, int crop, boolean realtime, boolean front) {
         int[] textures = new int[1];
         GLES20.glGenTextures(1, textures, 0);
-        textureId = textures[0];
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId);
-        setInputTextureFilter();
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textures[0]);
+        int filter = crop == outputSize ? GLES20.GL_NEAREST : GLES20.GL_LINEAR;
+        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MIN_FILTER, filter);
+        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MAG_FILTER, filter);
         GLES20.glTexParameteri(
                 GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
                 GLES20.GL_TEXTURE_WRAP_S,
@@ -446,10 +616,21 @@ final class RoundVideoGlProcessor {
                 GLES20.GL_CLAMP_TO_EDGE
         );
 
-        inputSurfaceTexture = new SurfaceTexture(textureId);
-        inputSurfaceTexture.setDefaultBufferSize(inputSize.getWidth(), inputSize.getHeight());
-        inputSurfaceTexture.setOnFrameAvailableListener(surfaceTexture -> drawFrame(), handler);
-        cameraSurface = new Surface(inputSurfaceTexture);
+        SurfaceTexture texture = null;
+        Surface surface = null;
+        try {
+            texture = new SurfaceTexture(textures[0]);
+            texture.setDefaultBufferSize(size.getWidth(), size.getHeight());
+            surface = new Surface(texture);
+            CameraInput input = new CameraInput(textures[0], texture, surface, size, crop, realtime, front);
+            texture.setOnFrameAvailableListener(surfaceTexture -> onInputFrame(input), handler);
+            return input;
+        } catch (RuntimeException error) {
+            if (surface != null) surface.release();
+            if (texture != null) texture.release();
+            GLES20.glDeleteTextures(1, textures, 0);
+            throw error;
+        }
     }
 
     private void setInputTextureFilter() {
@@ -467,132 +648,126 @@ final class RoundVideoGlProcessor {
         );
     }
 
-    private void drawFrame() {
+    private void drawFrame(long timestamp) {
         if (!started || inputSurfaceTexture == null) {
             return;
         }
-        try {
-            inputSurfaceTexture.updateTexImage();
-            inputSurfaceTexture.getTransformMatrix(textureMatrix);
-            long timestamp = inputSurfaceTexture.getTimestamp();
-            boolean horizon = horizonLock != null && horizonLock.isRunning();
-            overlayRenderer.setHorizon(horizon ? horizonLock.correction(frontCamera, cameraTimestampRealtime ? timestamp : 0L) : 0f, horizon);
-            LumaRoundVideoQuality.FrameGate uiGate = previewGate;
-            if (eglPreviewSurface != EGL14.EGL_NO_SURFACE && (uiGate == null || uiGate.accept(timestamp, frontCamera ? 1 : 0))) {
-                // Draw the same sensor pose and source crop to the UI before
-                // returning to the encoder surface. UI stalls never duplicate MP4 frames.
-                if (!EGL14.eglMakeCurrent(eglDisplay, eglPreviewSurface, eglPreviewSurface, eglContext)) {
-                    throw new IllegalStateException("Unable to make round-video preview current");
-                }
-                EGL14.eglSwapInterval(eglDisplay, 0);
-                overlayRenderer.renderRawCameraToOutput(textureId, textureMatrix, outputSize, outputSize);
-                if (!EGL14.eglSwapBuffers(eglDisplay, eglPreviewSurface)) {
-                    throw new IllegalStateException("Unable to render round-video preview");
-                }
-                makeCurrent();
+        inputSurfaceTexture.getTransformMatrix(textureMatrix);
+        boolean horizon = horizonLock != null && horizonLock.isRunning();
+        overlayRenderer.setHorizon(horizon ? horizonLock.correction(frontCamera, cameraTimestampRealtime ? timestamp : 0L) : 0f, horizon);
+        LumaRoundVideoQuality.FrameGate uiGate = previewGate;
+        if (eglPreviewSurface != EGL14.EGL_NO_SURFACE && (uiGate == null || uiGate.accept(timestamp, frontCamera ? 1 : 0))) {
+            // Draw the same sensor pose and source crop to the UI before
+            // returning to the encoder surface. UI stalls never duplicate MP4 frames.
+            if (!EGL14.eglMakeCurrent(eglDisplay, eglPreviewSurface, eglPreviewSurface, eglContext)) {
+                throw new IllegalStateException("Unable to make round-video preview current");
             }
-            inputFrames++;
-            if (inputFrames == 1) {
-                diagnostics.log("first GL input frame: cameraTimestampNs=" + timestamp
-                        + ", elapsedMs=" + elapsedMs(glStartedNs));
+            EGL14.eglSwapInterval(eglDisplay, 0);
+            overlayRenderer.renderRawCameraToOutput(textureId, textureMatrix, outputSize, outputSize);
+            if (!EGL14.eglSwapBuffers(eglDisplay, eglPreviewSurface)) {
+                throw new IllegalStateException("Unable to render round-video preview");
             }
-            if (!recordingStarted) {
-                Runnable listener = firstFrameListener;
-                if (!firstFrameReported && listener != null) {
-                    firstFrameReported = true;
-                    listener.run();
-                }
+            makeCurrent();
+        }
+        inputFrames++;
+        if (inputFrames == 1) {
+            diagnostics.log("first GL input frame: cameraTimestampNs=" + timestamp
+                    + ", elapsedMs=" + elapsedMs(glStartedNs));
+        }
+        if (!recordingStarted) {
+            Runnable listener = firstFrameListener;
+            if (!firstFrameReported && listener != null) {
+                firstFrameReported = true;
+                listener.run();
+            }
+            return;
+        }
+        if (cameraTimestampRealtime && timestamp < presentationTimeOriginNs) {
+            preOriginFrames++;
+            if (preOriginFrames == 1) {
+                diagnostics.log("dropping pre-origin camera frame: deltaUs="
+                        + (timestamp - presentationTimeOriginNs) / 1000L);
+            }
+            return;
+        }
+        LumaRoundVideoQuality.FrameGate gate = frameGate;
+        if (switchState == SWITCH_NONE && gate != null && !gate.accept(timestamp, frontCamera ? 1 : 0)) return;
+        long frameTime = SystemClock.elapsedRealtimeNanos();
+        if (lastFrameTime != 0) {
+            long gapNs = frameTime - lastFrameTime;
+            maximumFrameGapNs = Math.max(maximumFrameGapNs, gapNs);
+            if (gapNs > FRAME_GAP_SIZE_CHECK_NS) largeFrameGaps++;
+        }
+        if (lastFrameTime == 0
+                || frameTime - lastFrameTime > FRAME_GAP_SIZE_CHECK_NS
+                || outputSizeCheckFrame++ % OUTPUT_SIZE_CHECK_INTERVAL == 0) {
+            updateOutputSize();
+        }
+        lastFrameTime = frameTime;
+        if (switchState != SWITCH_NONE) {
+            if (!newCameraSessionReady) {
                 return;
             }
-            if (cameraTimestampRealtime && timestamp < presentationTimeOriginNs) {
-                preOriginFrames++;
-                if (preOriginFrames == 1) {
-                    diagnostics.log("dropping pre-origin camera frame: deltaUs="
-                            + (timestamp - presentationTimeOriginNs) / 1000L);
+            boolean firstNewFrame = !hasNewCameraFrame;
+            overlayRenderer.captureSwitchFrame(textureId, textureMatrix, true);
+            hasNewCameraFrame = true;
+            if (firstNewFrame) {
+                long now = SystemClock.elapsedRealtimeNanos();
+                long waitNs = now - cameraSwitchStartNs;
+                int updatedAverageMs = RoundVideoSwitchTimingStore.recordAndGetAverageMs(
+                        switchFromFacing,
+                        switchToFacing,
+                        Math.round(waitNs / 1_000_000f)
+                );
+                diagnostics.log("camera switch first new frame: waitMs="
+                        + waitNs / 1_000_000f
+                        + ", rollingAverageMs=" + updatedAverageMs);
+                switchState = SWITCH_CROSSFADE;
+                switchStageStartNs = now;
+            }
+            if (switchState == SWITCH_CROSSFADE || switchState == SWITCH_UNBLUR_NEW) {
+                Handler currentHandler = handler;
+                if (currentHandler != null) {
+                    currentHandler.removeCallbacks(switchFrameRunnable);
                 }
-                return;
+                drawSwitchFrame();
             }
-            LumaRoundVideoQuality.FrameGate gate = frameGate;
-            if (switchState == SWITCH_NONE && gate != null && !gate.accept(timestamp, frontCamera ? 1 : 0)) return;
-            long frameTime = SystemClock.elapsedRealtimeNanos();
-            if (lastFrameTime != 0) {
-                long gapNs = frameTime - lastFrameTime;
-                maximumFrameGapNs = Math.max(maximumFrameGapNs, gapNs);
-                if (gapNs > FRAME_GAP_SIZE_CHECK_NS) largeFrameGaps++;
-            }
-            if (lastFrameTime == 0
-                    || frameTime - lastFrameTime > FRAME_GAP_SIZE_CHECK_NS
-                    || outputSizeCheckFrame++ % OUTPUT_SIZE_CHECK_INTERVAL == 0) {
-                updateOutputSize();
-            }
-            lastFrameTime = frameTime;
-            if (switchState != SWITCH_NONE) {
-                if (!newCameraSessionReady) {
-                    return;
-                }
-                boolean firstNewFrame = !hasNewCameraFrame;
-                overlayRenderer.captureSwitchFrame(textureId, textureMatrix, true);
-                hasNewCameraFrame = true;
-                if (firstNewFrame) {
-                    long now = SystemClock.elapsedRealtimeNanos();
-                    long waitNs = now - cameraSwitchStartNs;
-                    int updatedAverageMs = RoundVideoSwitchTimingStore.recordAndGetAverageMs(
-                            switchFromFacing,
-                            switchToFacing,
-                            Math.round(waitNs / 1_000_000f)
-                    );
-                    diagnostics.log("camera switch first new frame: waitMs="
-                            + waitNs / 1_000_000f
-                            + ", rollingAverageMs=" + updatedAverageMs);
-                    switchState = SWITCH_CROSSFADE;
-                    switchStageStartNs = now;
-                }
-                if (switchState == SWITCH_CROSSFADE || switchState == SWITCH_UNBLUR_NEW) {
-                    Handler currentHandler = handler;
-                    if (currentHandler != null) {
-                        currentHandler.removeCallbacks(switchFrameRunnable);
-                    }
-                    drawSwitchFrame();
-                }
-                return;
-            }
+            return;
+        }
 
-            hasCameraFrame = true;
-            boolean measureGpu = ENABLE_BLOCKING_GPU_TIMING
-                    && diagnostics.isEnabled()
-                    && gpuTimingFrame++ % GPU_TIMING_SAMPLE_INTERVAL == 0;
-            long gpuStartTime = 0;
-            if (measureGpu) {
-                GLES20.glFinish();
-                gpuStartTime = System.nanoTime();
-            }
+        hasCameraFrame = true;
+        boolean measureGpu = ENABLE_BLOCKING_GPU_TIMING
+                && diagnostics.isEnabled()
+                && gpuTimingFrame++ % GPU_TIMING_SAMPLE_INTERVAL == 0;
+        long gpuStartTime = 0;
+        if (measureGpu) {
+            GLES20.glFinish();
+            gpuStartTime = System.nanoTime();
+        }
 
-            overlayRenderer.render(
-                    textureId,
-                    textureMatrix,
-                    frameTime,
-                    outputWidth,
-                    outputHeight
-            );
+        overlayRenderer.render(
+                textureId,
+                textureMatrix,
+                frameTime,
+                outputWidth,
+                outputHeight
+        );
 
-            if (measureGpu) {
-                GLES20.glFinish();
-                long gpuTimeNs = System.nanoTime() - gpuStartTime;
-                gpuTimingSamples++;
-                gpuTimingTotalNs += gpuTimeNs;
-                gpuTimingMaxNs = Math.max(gpuTimingMaxNs, gpuTimeNs);
-                diagnostics.log("GPU pipeline sample: currentMs=" + gpuTimeNs / 1_000_000f
-                        + ", averageMs="
-                        + gpuTimingTotalNs / (float) gpuTimingSamples / 1_000_000f
-                        + ", maxMs=" + gpuTimingMaxNs / 1_000_000f);
-            }
+        if (measureGpu) {
+            GLES20.glFinish();
+            long gpuTimeNs = System.nanoTime() - gpuStartTime;
+            gpuTimingSamples++;
+            gpuTimingTotalNs += gpuTimeNs;
+            gpuTimingMaxNs = Math.max(gpuTimingMaxNs, gpuTimeNs);
+            diagnostics.log("GPU pipeline sample: currentMs=" + gpuTimeNs / 1_000_000f
+                    + ", averageMs="
+                    + gpuTimingTotalNs / (float) gpuTimingSamples / 1_000_000f
+                    + ", maxMs=" + gpuTimingMaxNs / 1_000_000f);
+        }
 
-            long presentationTime = getCameraPresentationTime(timestamp);
-            if (presentationTime < presentationTimeLimitNs) {
-                submitFrame(presentationTime);
-            }
-        } catch (RuntimeException e) {
-            reportError(e);
+        long presentationTime = getCameraPresentationTime(timestamp);
+        if (presentationTime < presentationTimeLimitNs) {
+            submitFrame(presentationTime);
         }
     }
 
@@ -677,6 +852,7 @@ final class RoundVideoGlProcessor {
     }
 
     private void reportError(@NonNull RuntimeException error) {
+        if (!started) return; // A pending camera callback may outlive explicit stop.
         diagnostics.error("GL error", error);
         if (errorListener != null) errorListener.onError(error);
     }
@@ -849,25 +1025,16 @@ final class RoundVideoGlProcessor {
             EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext);
         }
 
-        if (inputSurfaceTexture != null) {
-            inputSurfaceTexture.setOnFrameAvailableListener(null);
-        }
-        if (cameraSurface != null) {
-            cameraSurface.release();
-            cameraSurface = null;
-        }
-        if (inputSurfaceTexture != null) {
-            inputSurfaceTexture.release();
-            inputSurfaceTexture = null;
-        }
+        if (primaryInput != null) primaryInput.release();
+        if (secondaryInput != null) secondaryInput.release();
+        primaryInput = secondaryInput = activeInput = pendingInput = null;
+        pendingSelection = pendingSelectionFailure = null;
+        cameraSurface = null; inputSurfaceTexture = null;
         if (overlayRenderer != null) {
             overlayRenderer.release();
             overlayRenderer = null;
         }
-        if (textureId != 0) {
-            GLES20.glDeleteTextures(1, new int[]{textureId}, 0);
-            textureId = 0;
-        }
+        textureId = 0;
 
         if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
             EGL14.eglMakeCurrent(

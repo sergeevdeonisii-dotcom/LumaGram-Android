@@ -9,6 +9,14 @@ public final class LumaBuildPolicy {
         return BuildConfig.LUMA_FRIENDS_EDITION;
     }
 
+    public static boolean isPublicEdition() {
+        return BuildConfig.LUMA_PUBLIC_EDITION;
+    }
+
+    public static boolean isPersonalEdition() {
+        return !BuildConfig.LUMA_FRIENDS_EDITION && !BuildConfig.LUMA_PUBLIC_EDITION;
+    }
+
     /** Ghost mode, automatic delay, retained deletions and local edit history. */
     public static boolean allowsPrivacyTools() {
         return !BuildConfig.LUMA_FRIENDS_EDITION;
@@ -24,11 +32,11 @@ public final class LumaBuildPolicy {
 
     /** Sensor-based horizon lock is personal-only; ordinary stabilization and FPS are public. */
     public static boolean allowsEnhancedRoundVideoStabilization() {
-        return !BuildConfig.LUMA_FRIENDS_EDITION;
+        return !BuildConfig.LUMA_FRIENDS_EDITION && !BuildConfig.LUMA_PUBLIC_EDITION;
     }
 
-    /** The full edition's feed must never replace a restricted Friends APK. */
+    /** Neither public nor restricted Friends installs may receive the personal APK feed. */
     public static boolean allowsBuiltInUpdates() {
-        return !BuildConfig.LUMA_FRIENDS_EDITION;
+        return !BuildConfig.LUMA_FRIENDS_EDITION && !BuildConfig.LUMA_PUBLIC_EDITION;
     }
 }

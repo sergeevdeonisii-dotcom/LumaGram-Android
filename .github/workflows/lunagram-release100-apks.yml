@@ -1,9 +1,15 @@
-name: Lunagram 1.0.1 APK pair
+name: Lunagram 1.0.2 personal and genuine public APKs
 
 on:
   push:
     branches: ["agent/lunagram-release100"]
   workflow_dispatch:
+    inputs:
+      build_friends:
+        description: Also compile the restricted Friends edition (not the public release)
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: read
@@ -41,6 +47,10 @@ jobs:
         shell: pwsh
         run: |
           ./Tools/tests/run-round-controls81-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-controls-tests')
+          ./Tools/tests/run-round-concurrent102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-concurrent-tests')
+          ./Tools/tests/run-local-gifts102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'local-gifts-tests')
+          ./Tools/tests/run-local-gifts-ui102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'local-gifts-ui-tests')
+          ./Tools/tests/run-logout102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'logout-tests')
           ./Tools/tests/run-round-editions100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-editions-tests')
           ./Tools/tests/run-round-settings100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-settings-tests')
           ./Tools/tests/run-round-limits100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-limits-tests')
@@ -59,14 +69,15 @@ jobs:
         env:
           LUMA_API_ID: ${{ secrets.LUMA_API_ID }}
           LUMA_API_HASH: ${{ secrets.LUMA_API_HASH }}
+          LUMA_BUILD_FRIENDS_EDITION: ${{ inputs.build_friends || 'false' }}
         run: bash Tools/ci/build-lunagram-release100.sh
       - name: Upload temporary APK pair and public provenance
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: lunagram-101-temporary-signed
+          name: lunagram-102-temporary-signed
           path: |
-            ${{ runner.temp }}/lunagram101-artifacts/*.apk
-            ${{ runner.temp }}/lunagram101-artifacts/build-metadata.json
+            ${{ runner.temp }}/lunagram102-artifacts/*.apk
+            ${{ runner.temp }}/lunagram102-artifacts/build-metadata.json
           if-no-files-found: error
           retention-days: 3
           compression-level: 0

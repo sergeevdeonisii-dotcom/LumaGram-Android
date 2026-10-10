@@ -323,6 +323,9 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
     @Override
     public void destroy(boolean async) {
         setRecordingUiFrameClockActive(false);
+        previewContainer.animate().cancel();
+        previewContainer.setRotationY(0f);
+        textureOverlayView.animate().cancel();
         if (zoomResetAnimator != null) zoomResetAnimator.cancel();
         if (session != null) {
             session.release();
@@ -733,15 +736,15 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         public void onCameraSwitchStarted(@NonNull RoundVideoSession.CameraFacing facing) {
             showCameraSwitchPlaceholder();
             previewContainer.animate().cancel();
-            previewContainer.setCameraDistance(previewContainer.getMeasuredHeight() * 8f);
-            previewContainer.animate().rotationY(90f).setDuration(120L).start();
+            // A HAL reopen can take seconds. Keep a full-sized last frame instead
+            // of parking the round preview edge-on until the new device opens.
+            previewContainer.setRotationY(0f);
         }
 
         @Override
         public void onCameraSwitchCompleted(@NonNull RoundVideoSession.CameraFacing facing) {
             previewContainer.animate().cancel();
-            previewContainer.setRotationY(-90f);
-            previewContainer.animate().rotationY(0f).setDuration(140L).start();
+            previewContainer.setRotationY(0f);
         }
 
         @Override

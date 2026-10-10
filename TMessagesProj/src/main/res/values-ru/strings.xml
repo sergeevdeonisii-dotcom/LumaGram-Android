@@ -464,6 +464,9 @@
     <string name="RoundVideoGeneralInfo">Включите новый режим записи, чтобы выбрать разрешение и битрейт. Для совместимости кружки сохраняются в размере до 640 × 640; прежние 720/1080 заменяются на 640. Битрейт указан для 30 FPS и увеличивается с частотой. При превышении лимита размера кружок сжимается без обрезки длительности. Ползунки FPS и стабилизации общие для обоих режимов. После отправки ниже появятся измеренные параметры файла.</string>
     <string name="RoundVideoSettings">Настройки кружков</string>
     <string name="LumaRoundVideoControlsInfo">Качество записи, частота кадров и стабилизация камеры.</string>
+    <string name="LumaRoundVideoFastSwitchTitle">Быстрое переключение камер</string>
+    <string name="LumaRoundVideoFastSwitchEnable">Держать обе камеры готовыми</string>
+    <string name="LumaRoundVideoFastSwitchInfo">В новом рекордере при 30 FPS держит фронтальную и заднюю камеры включёнными, если Android подтверждает эту пару и конфигурацию потоков. В видео сохраняется только выбранная камера. Переключение ждёт её следующий настоящий кадр, без переоткрытия камеры. Расходует больше энергии. При 60 FPS или отсутствии поддержки работает обычное переключение, без скрытого снижения выбранной частоты кадров.</string>
     <string name="RoundVideoGeneral">Запись</string>
     <string name="RoundVideoUseNewRecorder">Новый режим записи Camera2</string>
     <string name="RoundVideoOutputResolution">Разрешение кружка</string>
@@ -509,6 +512,15 @@
     <string name="LumaLocalUnpinGift">Открепить локально</string>
     <string name="LumaLocalGiftPinned">Подарок закреплён локально</string>
     <string name="LumaLocalGiftUnpinned">Локальное закрепление снято</string>
+    <string name="LumaLocalGiftAdd">Добавить в профиль локально</string>
+    <string name="LumaLocalGiftAdded">Добавлено в твой локальный профиль. Stars и TON не списаны.</string>
+    <string name="LumaLocalGiftFailed">Не удалось изменить локальные подарки. Защищённое хранилище может быть недоступно или заполнено.</string>
+    <string name="LumaLocalGiftsHeader">Локальные подарки</string>
+    <string name="LumaLocalGiftPreviewInfo">Только локальное оформление. Это не покупка NFT и не смена его настоящего владельца.</string>
+    <string name="LumaLocalGiftOwnAccount">Твой аккаунт</string>
+    <string name="LumaLocalGiftRemove">Удалить локальный подарок</string>
+    <string name="LumaLocalGiftRemoveInfo">Убрать это локальное отображение из профиля? Настоящие подарки и NFT не изменятся.</string>
+    <string name="LumaLocalGiftRemoved">Локальный подарок удалён</string>
     <string name="LumaEditHistoryTitle">История изменений</string>
     <string name="LumaEditHistoryPrevious">Предыдущая версия</string>
     <string name="LumaEditHistoryCurrent">Текущая версия</string>
@@ -526,7 +538,7 @@
     <string name="BHGProfileWork">Работа</string>
     <string name="BHGApplyProfile">Применить</string>
     <string name="BHGSaveProfile">Сохранить текущие настройки в профиль</string>
-    <string name="BHGProfilesInfo">Нажмите на профиль, чтобы применить его. Любой профиль можно настроить, сохранив в него текущие настройки. «Призрак» изначально включает призрака и отправку по расписанию. «Работа» отключает стекло и анимацию набора, включает задержку отправки на 2 секунды. Оформление и ввод общие для всех аккаунтов; личные переключатели меняются только у этого аккаунта.</string>
+    <string name="BHGProfilesInfo">Нажмите на профиль, чтобы применить его. Любой профиль можно настроить, сохранив в него текущие настройки. «Призрак» изначально включает призрака и отправку по расписанию. «Работа» отключает анимацию набора и автоматическое оформление, включает задержку отправки на 2 секунды. Стекло остаётся встроенным. Оформление и ввод общие для всех аккаунтов; личные переключатели меняются только у этого аккаунта.</string>
     <string name="BHGNotes">Локальные заметки</string>
     <string name="BHGNoteAdd">Добавить заметку о чате</string>
     <string name="BHGNotesInfo">Видны только вам, не отправляются собеседнику. Хранятся зашифрованными на этом устройстве. Пустая заметка удаляет запись. Долгое нажатие на заметку — удалить.</string>
