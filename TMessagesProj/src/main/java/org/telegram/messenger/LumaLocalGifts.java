@@ -15,6 +15,7 @@ import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -325,7 +326,26 @@ public final class LumaLocalGifts {
         }
         BlackHolePrivateData.write(account, owner, STORE, text.toString());
         caches.remove(account);
-        invalidateAvailability(account);
+        final String encrypted;
+        try {
+            encrypted = encryptedSnapshot(account, owner);
+            if (encrypted == null || encrypted.length() > MAX_ENCRYPTED_CHARS) {
+                throw new IllegalStateException("Local gift write snapshot unavailable");
+            }
+        } catch (Exception error) {
+            invalidateAvailability(account);
+            throw error;
+        }
+        // These private records were already validated before the encrypted write.
+        // Bind that known result to its new owner/ciphertext snapshot immediately:
+        // a successful some -> some edit must not briefly hide a local-only Gifts tab.
+        List<Record> written = Collections.unmodifiableList(new ArrayList<>(records));
+        synchronized (availabilityLock) {
+            invalidateAvailabilityLocked(account);
+            requireOwner(account, owner);
+            uiAvailability.put(account, new UiAvailability(owner, encrypted, !written.isEmpty()));
+        }
+        caches.put(account, new Cache(owner, encrypted, written));
         requireOwner(account, owner);
     }
 

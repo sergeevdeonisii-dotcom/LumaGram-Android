@@ -2032,6 +2032,9 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                 localProfileGifts.clear();
                 localProfileGifts.addAll(loaded);
                 for (View view : viewPager.getViewPages()) if (view instanceof Page) ((Page) view).update(true);
+                if (fragment instanceof ProfileActivity) {
+                    ((ProfileActivity) fragment).updateSelectedMediaTabText();
+                }
             });
         });
     }

@@ -133,6 +133,9 @@ public final class LocalGiftsUi102Probe {
     static class BaseFragment {}
     static final class ProfileActivity extends BaseFragment {
         final GiftsView giftsView = new GiftsView();
+        Parent observed;
+        int displayedCount, headerUpdates;
+        void updateSelectedMediaTabText() { headerUpdates++; if (observed != null) displayedCount = observed.getGiftsCount(); }
         long dialogId = 1001;
         int currentAccount;
         UserConfig getUserConfig() { return UserConfig.getInstance(currentAccount); }
@@ -142,6 +145,7 @@ public final class LocalGiftsUi102Probe {
     }
     static final class LaunchActivity { static BaseFragment getSafeLastFragment() { return null; } }
     static final class Parent {
+        BaseFragment fragment;
         long dialogId = 1001;
         int currentAccount;
         final long localPinsOwner = UserConfig.getInstance(currentAccount).getClientUserId();

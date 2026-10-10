@@ -102,13 +102,12 @@ public final class LocalGifts102Test {
         reads = BlackHolePrivateData.reads;
         for (int i=0;i<10;i++) check(LumaLocalGifts.hasAnyForUi(0), "hot UI snapshot is cheap " + i);
         check(BlackHolePrivateData.reads==reads && Utilities.globalQueue.size()==0, "cached UI does not decrypt/requeue");
-        check(LumaLocalGifts.remove(0,LumaLocalGifts.entries(0).get(0)), "remove real local entry for UI invalidation");
-        check(!LumaLocalGifts.hasAnyForUi(0) && Utilities.globalQueue.size()==1, "write/remove invalidates availability");
-        runValidation();
-        check(!LumaLocalGifts.hasAnyForUi(0) && Utilities.globalQueue.size()==0 && NotificationCenter.events==2,
-                "verified empty false cached without refresh loop");
+        check(LumaLocalGifts.remove(0,LumaLocalGifts.entries(0).get(0)), "remove real local entry for UI write-through");
+        check(!LumaLocalGifts.hasAnyForUi(0) && Utilities.globalQueue.size()==0, "last removal immediately publishes verified false");
+        check(NotificationCenter.events==1, "known write result needs no redundant validation event");
 
         reset(); check(LumaLocalGifts.add(0,gift(501)), "stale preference setup");
+        LumaLocalGifts.clearCache(0);
         check(!LumaLocalGifts.hasAnyForUi(0), "stale preference initial request");
         Utilities.globalQueue.runNext();
         LumaAccountData.clearOnLogout(0,1001); // Keep the same fixture owner to test snapshot rather than identity rejection.
@@ -119,6 +118,7 @@ public final class LocalGifts102Test {
                 "same-owner cleared data becomes validated empty snapshot");
 
         reset(); check(LumaLocalGifts.add(0,gift(502)), "owner-change UI setup");
+        LumaLocalGifts.clearCache(0);
         check(!LumaLocalGifts.hasAnyForUi(0), "owner-change initial request");
         Utilities.globalQueue.runNext();
         UserConfig.ids[0] = 4321;
@@ -130,6 +130,7 @@ public final class LocalGifts102Test {
                 "only replacement owner's empty availability is published");
 
         reset(); check(LumaLocalGifts.add(0,gift(503)), "clear-epoch UI setup");
+        LumaLocalGifts.clearCache(0);
         check(!LumaLocalGifts.hasAnyForUi(0), "clear-epoch first request");
         Utilities.globalQueue.runNext();
         LumaLocalGifts.clearCache(0);
@@ -179,6 +180,46 @@ public final class LocalGifts102Test {
         check(!LumaLocalGifts.hasAnyForUi(-1) && !LumaLocalGifts.hasAnyForUi(4), "invalid UI account indices safe");
         UserConfig.ids[0] = 0;
         check(!LumaLocalGifts.hasAnyForUi(0) && Utilities.globalQueue.size()==0, "logged-out UI invalidates queued availability");
+    }
+
+    private static void writeThroughAvailabilityTests() throws Exception {
+        reset();
+        check(!LumaLocalGifts.hasAnyForUi(0) && Utilities.globalQueue.size()==1, "empty cold validation queued before add");
+        check(LumaLocalGifts.add(0,1001,gift(700)), "write-through first add");
+        int reads = BlackHolePrivateData.reads;
+        check(LumaLocalGifts.hasAnyForUi(0) && Utilities.globalQueue.size()==0 && BlackHolePrivateData.reads==reads,
+                "successful add immediately exposes verified availability without UI decryption or pending worker");
+        check(LumaLocalGifts.add(0,1001,gift(701)), "write-through second add");
+        check(LumaLocalGifts.remove(0,LumaLocalGifts.entries(0).get(0)), "write-through remove one of two");
+        reads = BlackHolePrivateData.reads;
+        check(LumaLocalGifts.hasAnyForUi(0) && Utilities.globalQueue.size()==0 && BlackHolePrivateData.reads==reads,
+                "some -> some removal never cold-hides Gifts tab");
+        check(LumaLocalGifts.remove(0,LumaLocalGifts.entries(0).get(0)), "write-through last removal");
+        reads = BlackHolePrivateData.reads;
+        check(!LumaLocalGifts.hasAnyForUi(0) && Utilities.globalQueue.size()==0 && BlackHolePrivateData.reads==reads,
+                "last removal immediately exposes verified empty with no UI decryption");
+
+        // A previously validated/callback-pending false may not overwrite a later true write.
+        LumaLocalGifts.clearCache(0);
+        check(!LumaLocalGifts.hasAnyForUi(0), "write-through stale callback setup");
+        Utilities.globalQueue.runNext();
+        check(LumaLocalGifts.add(0,1001,gift(702)), "add while old empty UI callback pending");
+        AndroidUtilities.uiQueue.runNext();
+        check(LumaLocalGifts.hasAnyForUi(0) && NotificationCenter.events==0 && Utilities.globalQueue.size()==0,
+                "old epoch false completion cannot replace known successful write true");
+
+        // Direct preference changes still invalidate this write-through snapshot; no plaintext count hint is used.
+        LumaAccountData.preferences(0).edit().putString(STORE,"externally-corrupted-after-known-write").apply();
+        reads = BlackHolePrivateData.reads;
+        check(!LumaLocalGifts.hasAnyForUi(0) && Utilities.globalQueue.size()==1 && BlackHolePrivateData.reads==reads,
+                "external corrupt ciphertext never trusts previously-known record count");
+        runValidation();
+        check(!LumaLocalGifts.hasAnyForUi(0) && Utilities.globalQueue.size()==0, "external corruption stays verified false without loops");
+        reset();
+        BlackHolePrivateData.beforeWrite = () -> UserConfig.ids[0] = 2345;
+        check(!LumaLocalGifts.add(0,1001,gift(703)), "failed owner-stamped write-through add");
+        check(!LumaLocalGifts.hasAnyForUi(0), "failed/stale write never publishes optimistic availability to replacement owner");
+        reset();
     }
 
     public static void main(String[] arguments) throws Exception {
@@ -293,9 +334,17 @@ public final class LocalGifts102Test {
         check(LumaLocalGifts.count(0) == 200 && !LumaLocalGifts.add(0,gift(201)), "collection capacity enforced without eviction");
         List<LumaLocalGifts.LocalSavedGift> all = LumaLocalGifts.entries(0);
         check(all.get(0).localKey.equals("unique:200") && all.get(199).localKey.equals("unique:1"), "newest first ordering stable");
-        check(LumaLocalGifts.remove(0,all.get(50)) && LumaLocalGifts.add(0,gift(201)) && LumaLocalGifts.count(0) == 200,
+        int beforeUiReads = BlackHolePrivateData.reads;
+        check(LumaLocalGifts.hasAnyForUi(0) && Utilities.globalQueue.size()==0 && BlackHolePrivateData.reads==beforeUiReads,
+                "full 200-item successful collection immediately UI-available");
+        check(LumaLocalGifts.remove(0,all.get(50)) && LumaLocalGifts.count(0)==199, "full collection remove to 199");
+        beforeUiReads = BlackHolePrivateData.reads;
+        check(LumaLocalGifts.hasAnyForUi(0) && Utilities.globalQueue.size()==0 && BlackHolePrivateData.reads==beforeUiReads,
+                "200 -> 199 remains immediately UI-available, no tab jump/no decryption");
+        check(LumaLocalGifts.add(0,gift(201)) && LumaLocalGifts.count(0) == 200,
                 "removal frees capacity without touching any other gift");
         availabilityUiTests();
+        writeThroughAvailabilityTests();
         System.out.println("PASS: " + checks + " local gift checks, real TL serialization/AES-GCM/isolation/bounds, with JVM Android and key adapters.");
     }
 }

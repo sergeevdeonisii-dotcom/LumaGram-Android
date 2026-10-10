@@ -1,0 +1,65 @@
+package org.telegram.messenger;
+import java.lang.reflect.Method;
+import org.telegram.tgnet.tl.TL_stars;
+
+/** Diagnostic proof using the actual data helper and extracted shared-media branch/selection. */
+public final class LocalGiftState102Regression {
+    static final int TAB_GIFTS = 9;
+    static void check(boolean condition, String description) { if (!condition) throw new AssertionError(description); }
+    static final class Full { int stargifts_count; }
+    static final class GiftContainer {}
+    static final class Profile {
+        int getCurrentAccount() { return 0; }
+        UserConfig getUserConfig() { return UserConfig.getInstance(0); }
+    }
+    static final class Strip {
+        boolean hasGifts;
+        int current = TAB_GIFTS;
+        int getCurrentTabId() { return current; }
+        boolean hasTab(int id) { return id == 0 || id == TAB_GIFTS && hasGifts; }
+        int getFirstTabId() { return 0; }
+        void setInitialTabId(int id) { current = id; }
+    }
+    static final class MediaPage { int selectedType = TAB_GIFTS; }
+    static final class Shared {
+        final GiftContainer giftsContainer = new GiftContainer();
+        final Full userInfo = new Full(), info = new Full();
+        final Profile profileActivity = new Profile();
+        long dialog_id = 1001;
+        final Strip scrollSlidingTextTabStrip = new Strip();
+        final MediaPage[] mediaPages = {new MediaPage()};
+        int modeChanges;
+        void switchToCurrentSelectedMode(boolean animated) { modeChanges++; }
+        // PRODUCTION_SELF_HELPER
+        // PRODUCTION_CHECK_CURRENT_TAB
+        void updateTabsPredicate() {
+            // PRODUCTION_HAS_GIFTS
+            // The real updateTabs rebuild includes TAB_GIFTS if and only if hasGifts.
+            // This fixture represents that tab view state; selection uses the real method.
+            scrollSlidingTextTabStrip.hasGifts = hasGifts;
+        }
+    }
+    public static void main(String[] args) throws Exception {
+        Method reset = LocalGifts102Test.class.getDeclaredMethod("reset"); reset.setAccessible(true); reset.invoke(null);
+        Method makeGift = LocalGifts102Test.class.getDeclaredMethod("gift", long.class); makeGift.setAccessible(true);
+        check(LumaLocalGifts.add(0,1001,(TL_stars.TL_starGiftUnique)makeGift.invoke(null,601L)), "First actual gift added");
+        check(LumaLocalGifts.add(0,1001,(TL_stars.TL_starGiftUnique)makeGift.invoke(null,602L)), "Second actual gift added");
+        if (!LumaLocalGifts.hasAnyForUi(0)) {
+            Utilities.globalQueue.runNext(); AndroidUtilities.uiQueue.runNext();
+        }
+        check(LumaLocalGifts.hasAnyForUi(0), "Initial available collection is warmed before editing an existing tab");
+        Shared shared = new Shared(); shared.updateTabsPredicate();
+        check(shared.scrollSlidingTextTabStrip.hasGifts, "Warm actual availability exposes local-only gift tab");
+        check(LumaLocalGifts.remove(0,LumaLocalGifts.entries(0).get(0)) && LumaLocalGifts.count(0)==1, "Actual 2-to-1 removal leaves a gift");
+        shared.updateTabsPredicate();
+        check(shared.scrollSlidingTextTabStrip.hasGifts, "Non-empty validated write keeps actual local-only gift tab visible");
+        shared.checkCurrentTabValid();
+        check(shared.mediaPages[0].selectedType==TAB_GIFTS && shared.modeChanges==0, "Actual selection method preserves gift tab on2-to-1 removal");
+        check(LumaLocalGifts.remove(0,LumaLocalGifts.entries(0).get(0)) && LumaLocalGifts.count(0)==0, "Actual last gift removal leaves validated empty store");
+        shared.updateTabsPredicate(); shared.checkCurrentTabValid();
+        check(!shared.scrollSlidingTextTabStrip.hasGifts && shared.mediaPages[0].selectedType==0 && shared.modeChanges==1,
+                "Last gift removal hides tab exactly once and switches to an existing tab");
+        check(Utilities.globalQueue.size()==0, "Successful 2-to-1/last removal needs no UI validation worker or cold decode");
+        System.out.println("PASS: actual encrypted local-store 2->1 removal preserves selected TAB_GIFTS; last removal hides it correctly via production shared-media predicate/selection.");
+    }
+}

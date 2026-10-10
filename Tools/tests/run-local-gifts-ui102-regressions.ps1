@@ -105,3 +105,4 @@ foreach ($guard in @('Utilities.globalQueue.postRunnable(', 'generation != local
 }
 Write-Output 'PASS: local click routing, current owner/avatar/type, read-only preview, async identity, no network/payment and balanced local-change observers source guards.'
 Write-Output "Test artifacts: $run"
+& (Join-Path $PSScriptRoot 'run-local-gifts-state102-regressions.ps1') -JavaHome $JavaHome -OutputRoot (Join-Path $OutputRoot 'state')
