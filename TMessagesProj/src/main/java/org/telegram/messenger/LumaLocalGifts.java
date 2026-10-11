@@ -2,6 +2,7 @@ package org.telegram.messenger;
 
 import android.content.SharedPreferences;
 import android.util.Base64;
+import android.util.Log;
 
 import org.telegram.tgnet.NativeByteBuffer;
 import org.telegram.tgnet.OutputSerializedData;
@@ -67,6 +68,7 @@ public final class LumaLocalGifts {
     public static synchronized boolean add(int account, long expectedOwner, TL_stars.TL_starGiftUnique source) {
         final long owner = expectedOwner;
         if (owner <= 0 || owner(account) != owner || !valid(source)) return false;
+        String phase = "storage-read";
         try {
             ArrayList<Record> records = new ArrayList<>(readRecords(account, owner));
             String wanted = key(source);
@@ -75,16 +77,22 @@ public final class LumaLocalGifts {
 
             // Telegram serializers update flags and nested attribute fields. Clone the complete
             // public TL graph first, so serializing cannot change a real market/server object.
+            phase = "clone";
             TL_stars.TL_starGiftUnique unique = (TL_stars.TL_starGiftUnique)
                     cloneGraph(source, new IdentityHashMap<>(), new int[] { 0 }, 0);
             adaptOwner(unique, owner);
+            phase = "serialize";
             byte[] bytes = serialize(unique);
+            phase = "decode";
             decode(bytes, owner); // Validate the exact persisted bytes with the real TL decoder.
             records.add(0, new Record(wanted, bytes));
+            phase = "storage-write";
             writeRecords(account, owner, records);
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception error) {
             // Fail closed on Keystore failure, corrupt storage, oversized data or account reuse.
+            // Never log the exception message/stack: either may include decrypted data or IDs.
+            Log.w("LumaLocalGifts", "Local add failed phase=" + phase + " class=" + error.getClass().getSimpleName());
             return false;
         }
     }
@@ -410,6 +418,13 @@ public final class LumaLocalGifts {
         copied.put(value, clone);
         for (Field field : value.getClass().getFields()) {
             if (Modifier.isStatic(field.getModifiers()) || Modifier.isFinal(field.getModifiers())) continue;
+            // A standard SVG thumbnail has a runtime Path cache, not a TL wire field.
+            // Clone its bytes normally; the real TL decoder regenerates a fresh Path.
+            // Do not whitelist arbitrary mutable fields or share the source renderer cache.
+            if (value instanceof TLRPC.TL_photoPathSize
+                    && field.getDeclaringClass() == TLRPC.TL_photoPathSize.class
+                    && field.getName().equals("svgPath")
+                    && field.getType() == android.graphics.Path.class) continue;
             field.set(clone, cloneGraph(field.get(value), copied, objects, depth + 1));
         }
         return clone;

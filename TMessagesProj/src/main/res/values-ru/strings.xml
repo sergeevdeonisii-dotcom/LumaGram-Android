@@ -514,7 +514,7 @@
     <string name="LumaLocalGiftUnpinned">Локальное закрепление снято</string>
     <string name="LumaLocalGiftAdd">Добавить в профиль локально</string>
     <string name="LumaLocalGiftAdded">Добавлено в твой локальный профиль. Stars и TON не списаны.</string>
-    <string name="LumaLocalGiftFailed">Не удалось изменить локальные подарки. Защищённое хранилище может быть недоступно или заполнено.</string>
+    <string name="LumaLocalGiftFailed">Не удалось изменить локальные подарки. Stars и TON не списаны.</string>
     <string name="LumaLocalGiftsHeader">Локальные подарки</string>
     <string name="LumaLocalGiftPreviewInfo">Только локальное оформление. Это не покупка NFT и не смена его настоящего владельца.</string>
     <string name="LumaLocalGiftOwnAccount">Твой аккаунт</string>

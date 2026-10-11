@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { expectedArtifact, expectedEditions, validateArtifactMetadata, validateOutputMetadata, validateGeneratedFlag, validateApkBadging } from './collect-lunagram-apk.mjs';
 
 function output(edition) {
-  const expected = expectedArtifact(edition);
+  const expected = expectedArtifact(edition, '79');
   return { applicationId: 'org.luma.liquid.web', elements: [{ versionName: expected.versionName, versionCode: 71589, outputFile: 'app.apk' }] };
 }
 function badging(edition) {
-  return `package: name='org.luma.liquid.web' versionCode='71589' versionName='${expectedArtifact(edition).versionName}'\nnative-code: 'arm64-v8a'\n`;
+  return `package: name='org.luma.liquid.web' versionCode='71589' versionName='${expectedArtifact(edition, '79').versionName}'\nnative-code: 'arm64-v8a'\n`;
 }
 
 test('1.0.0 keeps one public version name, a monotonic code and distinct verified editions', () => {
@@ -19,20 +19,20 @@ test('1.0.0 keeps one public version name, a monotonic code and distinct verifie
     assert.ok(expected.fileName.includes(`-${edition}-`));
     validateOutputMetadata({ applicationId: 'org.luma.liquid.web', elements: [{ versionName: '1.0.0', versionCode: 71629, outputFile: 'app.apk' }] }, edition, '100');
     validateApkBadging("package: name='org.luma.liquid.web' versionCode='71629' versionName='1.0.0'\nnative-code: 'arm64-v8a'\n", edition, '100');
-    validateGeneratedFlag(`public static final boolean LUMA_FRIENDS_EDITION = ${edition === 'friends'};`, edition);
-    assert.throws(() => validateGeneratedFlag(`public static final boolean LUMA_FRIENDS_EDITION = ${edition !== 'friends'};`, edition));
+    validateGeneratedFlag(`public static final boolean LUMA_FRIENDS_EDITION = ${edition === 'friends'};`, edition, '100');
+    assert.throws(() => validateGeneratedFlag(`public static final boolean LUMA_FRIENDS_EDITION = ${edition !== 'friends'};`, edition, '100'));
     assert.throws(() => validateApkBadging("package: name='org.luma.liquid.web' versionCode='71619' versionName='1.0.0'\nnative-code: 'arm64-v8a'\n", edition, '100'));
   }
 });
 for (const edition of ['full', 'friends']) {
   test(`${edition}: output metadata, library flag and APK manifest must agree`, () => {
-    assert.equal(validateOutputMetadata(output(edition), edition), 'app.apk');
-    validateGeneratedFlag(`package org.telegram.messenger;\n  public static final boolean LUMA_FRIENDS_EDITION = ${edition === 'friends'};\n`, edition);
-    validateApkBadging(badging(edition), edition);
+    assert.equal(validateOutputMetadata(output(edition), edition, '79'), 'app.apk');
+    validateGeneratedFlag(`package org.telegram.messenger;\n  public static final boolean LUMA_FRIENDS_EDITION = ${edition === 'friends'};\n`, edition, '79');
+    validateApkBadging(badging(edition), edition, '79');
   });
   test(`${edition}: opposite flag or manifest rejected`, () => {
-    assert.throws(() => validateGeneratedFlag(`public static final boolean LUMA_FRIENDS_EDITION = ${edition !== 'friends'};`, edition));
-    assert.throws(() => validateApkBadging(badging(edition === 'full' ? 'friends' : 'full'), edition));
+    assert.throws(() => validateGeneratedFlag(`public static final boolean LUMA_FRIENDS_EDITION = ${edition !== 'friends'};`, edition, '79'));
+    assert.throws(() => validateApkBadging(badging(edition === 'full' ? 'friends' : 'full'), edition, '79'));
   });
 }
 
@@ -110,20 +110,70 @@ test('1.0.2 validates exact provenance, both flags and all selected editions', (
   assert.throws(() => validateArtifactMetadata(metadata102(['full', 'public', 'friends']), '102', commit102, expectedEditions('102')));
   assert.throws(() => validateArtifactMetadata(metadata102(), '102', commit102, expectedEditions('102', true)));
 });
+function metadata103(editions = ['full', 'public']) {
+  return { schemaVersion: 2, release: '103', sourceCommit: commit102, packageName: 'org.luma.liquid.web', architecture: 'arm64-v8a',
+    artifacts: editions.map(edition => ({ ...expectedArtifact(edition, '103'), sha256: 'b'.repeat(64) })) };
+}
+test('1.0.3 hotfix keeps all three edition contracts and rejects 1.0.2 outputs', () => {
+  assert.deepEqual(expectedArtifact('public'), expectedArtifact('public', '103'));
+  assert.deepEqual(expectedEditions(), ['full', 'public']);
+  assert.deepEqual(expectedEditions('103'), ['full', 'public']);
+  assert.deepEqual(expectedEditions('103', true), ['full', 'public', 'friends']);
+  for (const edition of ['full', 'public', 'friends']) {
+    const expected = expectedArtifact(edition, '103');
+    assert.equal(expected.versionName, '1.0.3');
+    assert.equal(expected.versionCode, 71659);
+    assert.equal(expected.fileName, `Lunagram-1.0.3-${edition}-temporary.apk`);
+    assert.equal(expected.friendsEdition, edition === 'friends');
+    assert.equal(expected.publicEdition, edition === 'public');
+    validateGeneratedFlag(flags102(edition), edition, '103');
+    validateGeneratedFlag(flags102(edition), edition);
+    validateOutputMetadata({ applicationId: 'org.luma.liquid.web', elements: [{ versionName: '1.0.3', versionCode: 71659, outputFile: 'app.apk' }] }, edition, '103');
+    validateApkBadging("package: name='org.luma.liquid.web' versionCode='71659' versionName='1.0.3'\nnative-code: 'arm64-v8a'\n", edition, '103');
+    assert.throws(() => validateOutputMetadata({ applicationId: 'org.luma.liquid.web', elements: [{ versionName: '1.0.2', versionCode: 71649, outputFile: 'app.apk' }] }, edition, '103'));
+    assert.throws(() => validateApkBadging("package: name='org.luma.liquid.web' versionCode='71649' versionName='1.0.2'\nnative-code: 'arm64-v8a'\n", edition, '103'));
+    for (const other of ['full', 'public', 'friends'].filter(value => value !== edition)) {
+      assert.throws(() => validateGeneratedFlag(flags102(other), edition, '103'));
+    }
+  }
+  assert.throws(() => validateGeneratedFlag('public static final boolean LUMA_FRIENDS_EDITION = false;', 'public', '103'));
+  assert.throws(() => validateGeneratedFlag(flags102('public') + 'public static final boolean LUMA_PUBLIC_EDITION = true;', 'public', '103'));
+});
+test('1.0.3 has exact schema-2 release provenance; historical metadata is never relabelled', () => {
+  validateArtifactMetadata(metadata103(), '103', commit102, expectedEditions('103'));
+  validateArtifactMetadata(metadata103(['full']), '103', commit102, ['full']);
+  validateArtifactMetadata(metadata103(['full', 'public', 'friends']), '103', commit102, expectedEditions('103', true));
+  assert.throws(() => validateArtifactMetadata(metadata102(), '103', commit102, expectedEditions('103')));
+  assert.throws(() => validateArtifactMetadata(metadata103(), '102', commit102, expectedEditions('102')));
+  for (const mutate of [
+    m => m.schemaVersion = 1, m => m.release = '102', m => m.release = 103, m => delete m.release,
+    m => m.artifacts[1] = { ...expectedArtifact('friends', '103'), sha256: 'b'.repeat(64) },
+    m => m.artifacts[1].friendsEdition = true, m => m.artifacts[1].publicEdition = false,
+    m => m.artifacts[1].publicEdition = 'true', m => delete m.artifacts[1].publicEdition,
+    m => m.artifacts[1].versionCode = 71649, m => m.artifacts[1].fileName = 'Lunagram-1.0.2-public-temporary.apk',
+  ]) {
+    const metadata = metadata103();
+    mutate(metadata);
+    assert.throws(() => validateArtifactMetadata(metadata, '103', commit102, expectedEditions('103')));
+  }
+  assert.throws(() => validateArtifactMetadata(metadata103(['full', 'public', 'friends']), '103', commit102, expectedEditions('103')));
+  assert.throws(() => validateArtifactMetadata(metadata103(), '103', commit102, expectedEditions('103', true)));
+  assert.throws(() => validateArtifactMetadata({ schemaVersion: 1, sourceCommit: commit102, packageName: 'org.luma.liquid.web', architecture: 'arm64-v8a', artifacts: [] }, '999', commit102, []));
+});
 test('wrong package, version, ABI, multiple outputs and path traversal rejected', () => {
   const metadata = output('full');
   metadata.applicationId = 'org.telegram.messenger';
-  assert.throws(() => validateOutputMetadata(metadata, 'full'));
+  assert.throws(() => validateOutputMetadata(metadata, 'full', '79'));
   metadata.applicationId = 'org.luma.liquid.web';
   metadata.elements[0].versionCode = 71579;
-  assert.throws(() => validateOutputMetadata(metadata, 'full'));
+  assert.throws(() => validateOutputMetadata(metadata, 'full', '79'));
   metadata.elements[0].versionCode = 71589;
   metadata.elements[0].outputFile = '../app.apk';
-  assert.throws(() => validateOutputMetadata(metadata, 'full'));
+  assert.throws(() => validateOutputMetadata(metadata, 'full', '79'));
   metadata.elements[0].outputFile = 'app.apk';
   metadata.elements.push({ ...metadata.elements[0] });
-  assert.throws(() => validateOutputMetadata(metadata, 'full'));
-  assert.throws(() => validateApkBadging(badging('full').replace("'arm64-v8a'", "'arm64-v8a' 'x86'"), 'full'));
+  assert.throws(() => validateOutputMetadata(metadata, 'full', '79'));
+  assert.throws(() => validateApkBadging(badging('full').replace("'arm64-v8a'", "'arm64-v8a' 'x86'"), 'full', '79'));
 });
 test('missing or duplicate edition declarations rejected without printing BuildConfig', () => {
   assert.throws(() => validateGeneratedFlag('public static final String APP_HASH = "private fixture";', 'full'));

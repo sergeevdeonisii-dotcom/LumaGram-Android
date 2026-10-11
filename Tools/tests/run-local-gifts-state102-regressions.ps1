@@ -120,7 +120,8 @@ foreach($name in @('TL_stars','TLRPC')){
     foreach($match in [regex]::Matches($template,'@@([A-Za-z0-9_]+)@@')){$template=$template.Replace($match.Value,(ProductionClass $production $match.Groups[1].Value))}
     $file=Join-Path $run ($name+'.java');[IO.File]::WriteAllText($file,$template,[Text.UTF8Encoding]::new($false));$generated+=$file
 }
-$sources=$generated+@((Join-Path $run 'LocalGiftState102Regression.java'),(Join-Path $PSScriptRoot 'local-gifts102/LocalGifts102Test.java'))
+$sources=$generated+@((Join-Path $run 'LocalGiftState102Regression.java'),(Join-Path $PSScriptRoot 'local-gifts102/LocalGifts102Test.java'),
+    (Join-Path $PSScriptRoot 'local-gifts102/LegacyClone103Probe.java'))
 $sources+=(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'local-gifts102/fixtures') -Recurse -Filter '*.java').FullName
 $sources+=@('SerializedData','AbstractSerializedData','InputSerializedData','OutputSerializedData','TLDataSourceType','TLObject','Vector')|ForEach-Object{Join-Path $src ('tgnet/'+$_+'.java')}
 $sources+=@('messenger/LumaLocalGifts.java','messenger/LumaAccountData.java','messenger/BlackHoleSealedData.java')|ForEach-Object{Join-Path $src $_}

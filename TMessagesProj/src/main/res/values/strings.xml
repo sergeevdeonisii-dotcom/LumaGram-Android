@@ -11439,7 +11439,7 @@
     <string name="LumaLocalGiftUnpinned">Gift unpinned locally</string>
     <string name="LumaLocalGiftAdd">Add to profile locally</string>
     <string name="LumaLocalGiftAdded">Added to your local profile. No Stars or TON spent.</string>
-    <string name="LumaLocalGiftFailed">Could not update local gifts. Secure storage may be unavailable or full.</string>
+    <string name="LumaLocalGiftFailed">Could not update local gifts. No Stars or TON were spent.</string>
     <string name="LumaLocalGiftsHeader">Local gifts</string>
     <string name="LumaLocalGiftPreviewInfo">Local appearance only. This is not an NFT purchase or a change of its real owner.</string>
     <string name="LumaLocalGiftOwnAccount">Your account</string>

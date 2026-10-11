@@ -1,6 +1,8 @@
 package org.telegram.messenger;
 
 import android.util.Base64;
+import android.util.Log;
+import android.graphics.Path;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
@@ -8,6 +10,7 @@ import org.telegram.tgnet.tl.TL_stars;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -222,6 +225,68 @@ public final class LocalGifts102Test {
         reset();
     }
 
+    public static final class UniqueWithUnknownCache extends TL_stars.TL_starGiftUnique {
+        public Object unknownCache;
+    }
+
+    private static void svgThumbnailCloneRegression() throws Exception {
+        reset();
+        TL_stars.TL_starGiftUnique source = gift(750);
+        TL_stars.starGiftAttributeModel model = (TL_stars.starGiftAttributeModel)source.attributes.get(0);
+        SerializedData thumbnailData = new SerializedData();
+        byte[] shapeBytes = "M0 0L12 12Z".getBytes(StandardCharsets.UTF_8);
+        thumbnailData.writeString("j"); thumbnailData.writeByteArray(shapeBytes);
+        SerializedData thumbnailInput = new SerializedData(thumbnailData.toByteArray());
+        TLRPC.TL_photoPathSize thumbnail = new TLRPC.TL_photoPathSize();
+        // Actual production readParams populates svgPath via the JVM SVG renderer adapter.
+        thumbnail.readParams(thumbnailInput,true);
+        thumbnailInput.cleanup(); thumbnailData.cleanup();
+        Path originalPath = thumbnail.svgPath;
+        byte[] originalBytes = thumbnail.bytes;
+        model.document.flags |= 1; model.document.thumbs.add(thumbnail);
+        check(originalPath != null && thumbnail.w==512 && thumbnail.h==512, "real TL SVG thumbnail read populates runtime Path");
+        boolean oldFailure = false;
+        try { LegacyClone103Probe.copy(source); }
+        catch(IllegalArgumentException error) { oldFailure = "Unsupported mutable TL field".equals(error.getMessage()); }
+        check(oldFailure, "shipped 1.0.2 clone fails on normal non-null SVG runtime Path negative control");
+        Log.warnings.clear();
+        int originalFlags = source.flags;
+        check(LumaLocalGifts.add(0,1001,source), "fixed clone accepts standard SVG-thumbnail NFT without disabling encryption");
+        check(Log.warnings.isEmpty(), "successful standard SVG add emits no failure diagnostic");
+        check(source.flags==originalFlags && source.owner_id.user_id==9999 && thumbnail.svgPath==originalPath
+                && thumbnail.bytes==originalBytes && Arrays.equals(originalBytes,shapeBytes)
+                && originalPath.testShape().equals("M0 0L12 12Z"), "real source/Path/bytes remain unchanged");
+        TL_stars.TL_starGiftUnique displayed = (TL_stars.TL_starGiftUnique)LumaLocalGifts.entries(0).get(0).gift;
+        TLRPC.TL_photoPathSize displayedThumb = (TLRPC.TL_photoPathSize)
+                ((TL_stars.starGiftAttributeModel)displayed.attributes.get(0)).document.thumbs.get(0);
+        check(displayed.owner_id.user_id==1001 && displayedThumb != thumbnail && displayedThumb.bytes != originalBytes
+                && Arrays.equals(displayedThumb.bytes,originalBytes), "SVG wire bytes deep-cloned and own-owner display retained");
+        check(displayedThumb.svgPath != null && displayedThumb.svgPath != originalPath
+                && displayedThumb.svgPath.testShape().equals(originalPath.testShape()), "real decoder rebuilds detached renderer Path from saved bytes");
+        displayedThumb.bytes[0] = 'X';
+        LumaLocalGifts.clearCache(0);
+        TL_stars.TL_starGiftUnique reloaded = (TL_stars.TL_starGiftUnique)LumaLocalGifts.entries(0).get(0).gift;
+        TLRPC.TL_photoPathSize reloadedThumb = (TLRPC.TL_photoPathSize)
+                ((TL_stars.starGiftAttributeModel)reloaded.attributes.get(0)).document.thumbs.get(0);
+        check(reloadedThumb.bytes[0]=='M' && reloadedThumb.svgPath != originalPath && reloadedThumb.svgPath != displayedThumb.svgPath,
+                "encrypted reload restores fresh SVG bytes and a fresh Path");
+
+        UniqueWithUnknownCache unknown = new UniqueWithUnknownCache(); populate(unknown,751);
+        unknown.unknownCache = new Path("PRIVATE_PAYLOAD_NEVER_LOG");
+        Log.warnings.clear();
+        check(!LumaLocalGifts.add(0,1001,unknown), "Path on any unknown field still fails closed, no blanket mutable-type allowance");
+        check(Log.warnings.size()==1 && Log.warnings.get(0).equals("LumaLocalGifts:Local add failed phase=clone class=IllegalArgumentException"),
+                "clone diagnostic has only fixed phase and exception class, no IDs/messages/content");
+        check(LumaLocalGifts.count(0)==1, "unknown mutable cache never leaves a partial record");
+        reset(); BlackHolePrivateData.fail=true;
+        Log.warnings.clear();
+        check(!LumaLocalGifts.add(0,1001,gift(752)), "Keystore remains fail closed after SVG fix");
+        check(Log.warnings.size()==1 && Log.warnings.get(0).equals("LumaLocalGifts:Local add failed phase=storage-write class=IllegalStateException"),
+                "Keystore diagnostic sanitized independently from reflection diagnostic");
+        check(!LumaAccountData.preferences(0).contains(STORE), "SVG workaround never downgrades encrypted storage");
+        reset();
+    }
+
     public static void main(String[] arguments) throws Exception {
         reset();
         TL_stars.TL_starGiftUnique source = gift(11);
@@ -345,6 +410,7 @@ public final class LocalGifts102Test {
                 "removal frees capacity without touching any other gift");
         availabilityUiTests();
         writeThroughAvailabilityTests();
+        svgThumbnailCloneRegression();
         System.out.println("PASS: " + checks + " local gift checks, real TL serialization/AES-GCM/isolation/bounds, with JVM Android and key adapters.");
     }
 }

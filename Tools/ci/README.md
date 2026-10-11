@@ -1,29 +1,33 @@
-# Temporary cloud compilation for Lunagram 1.0.2
+# Temporary cloud compilation for Lunagram 1.0.3
 
 Current workflow: `.github/workflows/lunagram-release100-apks.yml` (historical
 filename retained), owner repository only, branch `agent/lunagram-release100`.
-Version name is `1.0.2`, standalone arm64 version code is `71649`.
+Version name is `1.0.3`, standalone arm64 version code is `71659`.
 
 | Edition | `lumaFriendsEdition` | `lumaPublicEdition` | Delivery name | Privacy/local-number tools | Enhanced horizon / personal updater |
 | --- | --- | --- | --- | --- | --- |
-| Personal (`full`) | false | false | `Lunagram-1.0.2-personal-arm64.apk` | Yes | Yes |
-| General release (`public`) | false | true | `Lunagram-1.0.2-public-arm64.apk` | Yes | No |
-| Restricted Friends (`friends`) | true | false | `Lunagram-1.0.2-friends-arm64.apk` | No | No |
+| Personal (`full`) | false | false | `Lunagram-1.0.3-personal-arm64.apk` | Yes | Yes |
+| General release (`public`) | false | true | `Lunagram-1.0.3-public-arm64.apk` | Yes | No |
+| Restricted Friends (`friends`) | true | false | `Lunagram-1.0.3-friends-arm64.apk` | No | No |
 
 The general release is NOT the restricted Friends edition. The mistaken
-historical `.100`/`.101` friends-to-public naming must never be applied to `.102`.
+historical `.100`/`.101` friends-to-public naming must never be applied to `.102` or later.
 Both edition flags true is invalid. Default CI compiles `full` then `public`;
 manual dispatch can add the third Friends APK with `build_friends=true`.
 Each APK is copied and inspected before Gradle reuses the shared output path.
 
-CI has no production signing key. Artifact `lunagram-102-temporary-signed`
+CI has no production signing key. Artifact `lunagram-103-temporary-signed`
 contains the selected temporary APKs and schema-2 `build-metadata.json` with
-explicit release `102`, exact workflow commit, identity, ABI, both edition flags
+explicit release `103`, exact workflow commit, identity, ABI, both edition flags
 and hashes. Collector tests and camera/local-gift/security regressions run first.
 Local signing must validate the exact DEX capability policy as well as metadata,
 signature, manifest, hashes and unchanged application payload. Genuine public
 must never receive the private updater feed or the personal enhanced horizon.
 Neither signing nor CI compilation publishes a release or modifies an update feed.
+The collector retains the immutable `.102` metadata/version contract for existing
+artifacts; a `.102` APK is never accepted or relabelled as the `.103` hotfix.
+Collector and local signing/payload helpers now default to `.103`; inspecting
+historical `.102` artifacts requires an explicit `--release 102` / `-Release 102`.
 
 Pure collector/workflow tests (no Gradle, signing or network):
 

@@ -33,7 +33,8 @@ foreach ($name in @('TL_stars','TLRPC')) {
     [IO.File]::WriteAllText($file, $template, [Text.UTF8Encoding]::new($false))
     $generated += $file
 }
-$sources = $generated + @((Join-Path $PSScriptRoot 'local-gifts102/LocalGifts102Test.java'))
+$sources = $generated + @((Join-Path $PSScriptRoot 'local-gifts102/LocalGifts102Test.java'),
+    (Join-Path $PSScriptRoot 'local-gifts102/LegacyClone103Probe.java'))
 $sources += (Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'local-gifts102/fixtures') -Recurse -Filter '*.java').FullName
 $sources += @('SerializedData','AbstractSerializedData','InputSerializedData','OutputSerializedData','TLDataSourceType','TLObject','Vector') | ForEach-Object { Join-Path $repo ('TMessagesProj/src/main/java/org/telegram/tgnet/' + $_ + '.java') }
 $sources += @('TMessagesProj/src/main/java/org/telegram/messenger/LumaLocalGifts.java',
@@ -49,5 +50,10 @@ if ($local -match 'ConnectionsManager|StarsController|sendRequest\(|TL_payments|
 $private = [IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/messenger/BlackHolePrivateData.java'))
 if (!$local.Contains('BlackHolePrivateData.write(account, owner, STORE') -or !$private.Contains('BlackHoleSealedData.seal(')) { throw 'Persistence must go through the encrypted identity-bound adapter.' }
 Write-Output 'PASS: no network/payment/server gift-list dependency; production encrypted persistence integration.'
-Write-Output 'Scope: real local data helper, real identity-scoped logout, AES-GCM and production gift/attribute/document serializers; JVM Android/Keystore adapters and minimal TL factory routing, not device UI.'
+if (!$local.Contains('field.getDeclaringClass() == TLRPC.TL_photoPathSize.class') -or !$local.Contains('field.getName().equals("svgPath")')) {
+    throw 'SVG runtime cache exclusion must remain scoped to the exact protocol-derived field.'
+}
+if ($local -match 'Log\.w\([^;]*(getMessage\(|getLocalizedMessage\(|printStackTrace\(|,\s*error\))') { throw 'Add diagnostics must never log exception messages/stack traces.' }
+Write-Output 'PASS: narrow derived SVG Path exclusion and sanitized phase/class-only failure diagnostics.'
+Write-Output 'Scope: real local data helper, real identity-scoped logout, AES-GCM and production gift/attribute/document/SVG-thumbnail serializers; JVM Android/Keystore/SVG-renderer adapters and minimal TL factory routing, not device UI or the specific market gift.'
 Write-Output "Test artifacts: $run"

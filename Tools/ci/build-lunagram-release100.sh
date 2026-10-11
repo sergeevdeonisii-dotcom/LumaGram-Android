@@ -20,8 +20,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 source_commit="$(git rev-parse HEAD)"
 [[ "$source_commit" == "${GITHUB_SHA:-}" ]] || fail 'Checkout does not match the workflow source commit.'
-[[ "$(sed -n 's/^APP_VERSION_NAME=//p' gradle.properties | tr -d '\r')" == 1.0.2 ]] || fail 'Version 1.0.2 only.'
-[[ "$(sed -n 's/^APP_VERSION_CODE=//p' gradle.properties | tr -d '\r')" == 7164 ]] || fail 'Unexpected monotonic Android version code.'
+[[ "$(sed -n 's/^APP_VERSION_NAME=//p' gradle.properties | tr -d '\r')" == 1.0.3 ]] || fail 'Version 1.0.3 only.'
+[[ "$(sed -n 's/^APP_VERSION_CODE=//p' gradle.properties | tr -d '\r')" == 7165 ]] || fail 'Unexpected monotonic Android version code.'
 [[ "${LUMA_BUILD_FRIENDS_EDITION:-false}" == true || "${LUMA_BUILD_FRIENDS_EDITION:-false}" == false ]] || fail 'Friends build selection must be exactly true or false.'
 submodule_status="$(git submodule status --recursive)"
 if grep -q '^[+U-]' <<< "$submodule_status"; then fail 'Pinned submodules are missing or mismatched.'; fi
@@ -43,13 +43,13 @@ sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
 build_tools="$sdk_root/build-tools/36.0.0"
 [[ -x "$build_tools/aapt" && -x "$build_tools/apksigner" ]] || fail 'Android build tools are unavailable.'
 
-artifact_dir="$RUNNER_TEMP/lunagram102-artifacts"
+artifact_dir="$RUNNER_TEMP/lunagram103-artifacts"
 [[ ! -e "$artifact_dir" ]] || fail 'Artifact directory already exists; inspect the previous attempt.'
 mkdir -p "$artifact_dir"
 [[ ! -e local-luma.properties && ! -e local-signing/luma-signing.properties ]] || fail 'Private local configuration unexpectedly exists on the runner.'
 git check-ignore -q local-luma.properties || fail 'API configuration must stay Git-ignored.'
 git check-ignore -q local-signing/luma-signing.properties || fail 'Signing configuration must stay Git-ignored.'
-signing_dir="$(mktemp -d "$RUNNER_TEMP/lunagram102-signing.XXXXXX")"
+signing_dir="$(mktemp -d "$RUNNER_TEMP/lunagram103-signing.XXXXXX")"
 # Exact files created below only; no recursive removal or production key access.
 cleanup() {
     rm -f -- "$repo_root/local-luma.properties" "$repo_root/local-signing/luma-signing.properties" "$signing_dir/temporary.jks"
@@ -79,7 +79,7 @@ for edition in "${editions[@]}"; do
     public_flag=false
     [[ "$edition" != friends ]] || friends_flag=true
     [[ "$edition" != public ]] || public_flag=true
-    printf 'Building %s edition of Lunagram 1.0.2 from %s.\n' "$edition" "$source_commit"
+    printf 'Building %s edition of Lunagram 1.0.3 from %s.\n' "$edition" "$source_commit"
     "$JAVA_HOME/bin/java" -Xms32m -Xmx128m \
         -classpath gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain \
         ':TMessagesProj_AppStandalone:assembleAfatStandalone' \
@@ -87,9 +87,9 @@ for edition in "${editions[@]}"; do
         "-Dorg.gradle.jvmargs=$jvm_args" '-Pkotlin.compiler.execution.strategy=in-process' \
         "-PlumaFriendsEdition=$friends_flag" "-PlumaPublicEdition=$public_flag"
     # Preserve/verify personal bytes before public compilation reuses the same output path.
-    node Tools/ci/collect-lunagram-apk.mjs --release 102 --repo-root "$repo_root" \
+    node Tools/ci/collect-lunagram-apk.mjs --release 103 --repo-root "$repo_root" \
         --artifact-dir "$artifact_dir" --edition "$edition" --aapt "$build_tools/aapt" "${collector_flags[@]}"
-    "$build_tools/apksigner" verify "$artifact_dir/Lunagram-1.0.2-$edition-temporary.apk"
+    "$build_tools/apksigner" verify "$artifact_dir/Lunagram-1.0.3-$edition-temporary.apk"
 done
-node Tools/ci/collect-lunagram-apk.mjs --release 102 --verify-pair --artifact-dir "$artifact_dir" "${collector_flags[@]}"
-printf 'Selected temporary-signed 1.0.2 APKs are verified. No production release or update feed was published.\n'
+node Tools/ci/collect-lunagram-apk.mjs --release 103 --verify-pair --artifact-dir "$artifact_dir" "${collector_flags[@]}"
+printf 'Selected temporary-signed 1.0.3 APKs are verified. No production release or update feed was published.\n'

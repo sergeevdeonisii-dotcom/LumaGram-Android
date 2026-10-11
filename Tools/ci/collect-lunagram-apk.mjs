@@ -13,13 +13,14 @@ const RELEASES = {
   '100': { version: '1.0.0', code: 71629, unifiedVersionName: true },
   '101': { version: '1.0.1', code: 71639, unifiedVersionName: true },
   '102': { version: '1.0.2', code: 71649, unifiedVersionName: true, separatePublicEdition: true },
+  '103': { version: '1.0.3', code: 71659, unifiedVersionName: true, separatePublicEdition: true },
 };
 
 function requireValue(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-export function expectedArtifact(edition, release = '79') {
+export function expectedArtifact(edition, release = '103') {
   requireValue(Object.hasOwn(RELEASES, release), 'Unknown APK release.');
   const { version, code, unifiedVersionName, separatePublicEdition } = RELEASES[release];
   requireValue(edition === 'full' || edition === 'friends' || (separatePublicEdition && edition === 'public'), 'Unknown APK edition for this release.');
@@ -33,7 +34,7 @@ export function expectedArtifact(edition, release = '79') {
   };
 }
 
-export function validateOutputMetadata(metadata, edition, release = '79') {
+export function validateOutputMetadata(metadata, edition, release = '103') {
   const expected = expectedArtifact(edition, release);
   requireValue(metadata.applicationId === PACKAGE, 'Output metadata has an unexpected package.');
   requireValue(Array.isArray(metadata.elements) && metadata.elements.length === 1, 'Expected one standalone arm64 APK.');
@@ -45,7 +46,7 @@ export function validateOutputMetadata(metadata, edition, release = '79') {
   return element.outputFile;
 }
 
-export function validateGeneratedFlag(source, edition, release = '79') {
+export function validateGeneratedFlag(source, edition, release = '103') {
   const expected = expectedArtifact(edition, release);
   const flags = [...source.matchAll(/^\s*public static final boolean LUMA_FRIENDS_EDITION = (true|false);\s*$/gm)];
   requireValue(flags.length === 1 && (flags[0][1] === 'true') === expected.friendsEdition, 'Generated library Friends flag is missing or incorrect.');
@@ -56,15 +57,17 @@ export function validateGeneratedFlag(source, edition, release = '79') {
   // Never print any part of BuildConfig: adjacent fields contain API credentials.
 }
 
-export function expectedEditions(release = '79', includeFriends = false) {
+export function expectedEditions(release = '103', includeFriends = false) {
   requireValue(Object.hasOwn(RELEASES, release), 'Unknown APK release.');
   requireValue(typeof includeFriends === 'boolean', 'Invalid Friends build selection.');
-  requireValue(!includeFriends || release === '102', 'Optional Friends builds require separate Public edition support.');
-  return release === '102' ? ['full', 'public', ...(includeFriends ? ['friends'] : [])] : ['full', 'friends'];
+  const separatePublicEdition = RELEASES[release].separatePublicEdition === true;
+  requireValue(!includeFriends || separatePublicEdition, 'Optional Friends builds require separate Public edition support.');
+  return separatePublicEdition ? ['full', 'public', ...(includeFriends ? ['friends'] : [])] : ['full', 'friends'];
 }
 
 export function validateArtifactMetadata(metadata, release, commit, editions) {
-  const schemaVersion = release === '102' ? 2 : 1;
+  requireValue(Object.hasOwn(RELEASES, release), 'Unknown APK release.');
+  const schemaVersion = RELEASES[release].separatePublicEdition ? 2 : 1;
   requireValue(typeof commit === 'string' && /^[0-9a-f]{40}$/.test(commit), 'An exact source commit is required.');
   requireValue(metadata?.schemaVersion === schemaVersion && metadata.packageName === PACKAGE
     && metadata.architecture === 'arm64-v8a' && metadata.sourceCommit === commit
@@ -78,7 +81,7 @@ export function validateArtifactMetadata(metadata, release, commit, editions) {
   }
 }
 
-export function validateApkBadging(badging, edition, release = '79') {
+export function validateApkBadging(badging, edition, release = '103') {
   const expected = expectedArtifact(edition, release);
   const name = badging.match(/^package: name='([^']+)'/m)?.[1];
   const versionCode = Number(badging.match(/^package:.*\bversionCode='([0-9]+)'/m)?.[1]);
@@ -119,8 +122,9 @@ async function collect(args) {
   const editionIndex = editions.indexOf(args.edition);
   requireValue(editionIndex >= 0, 'This edition is not selected for the APK set.');
   const metadataPath = path.join(directory, 'build-metadata.json');
-  let metadata = { schemaVersion: args.release === '102' ? 2 : 1,
-    ...(args.release === '102' ? { release: '102' } : {}),
+  const separatePublicEdition = RELEASES[args.release].separatePublicEdition === true;
+  let metadata = { schemaVersion: separatePublicEdition ? 2 : 1,
+    ...(separatePublicEdition ? { release: args.release } : {}),
     sourceCommit: commit, packageName: PACKAGE, architecture: 'arm64-v8a', artifacts: [] };
   if (fs.existsSync(metadataPath)) {
     metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
@@ -159,6 +163,7 @@ async function main() {
     if (key === '--verify-pair' || key === '--include-friends') args[key.slice(2)] = true;
     else args[key.slice(2)] = process.argv[++i];
   }
+  args.release ??= '103';
   requireValue(typeof args['artifact-dir'] === 'string', 'Artifact directory is required.');
   if (args['verify-pair']) return verifyPair(path.resolve(args['artifact-dir']), args.release, args['include-friends'] === true);
   requireValue(typeof args['repo-root'] === 'string' && typeof args.aapt === 'string', 'Repository and Android inspection tool are required.');
