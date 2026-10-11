@@ -117,6 +117,7 @@ public class ChatReplyContainer extends FrameLayout {
 
         public boolean hasSpoiler;
         public boolean active;
+        private boolean liquidGlassMode;
 
         public Layout(Context context, Theme.ResourcesProvider resourcesProvider) {
             super(context);
@@ -175,6 +176,12 @@ public class ChatReplyContainer extends FrameLayout {
         }
 
         private void setLiquidGlassMode(boolean enabled) {
+            liquidGlassMode = enabled;
+            final int leftMargin = dp(getTextInsetDp(image.getVisibility() == VISIBLE));
+            setLeftMargin(name, leftMargin);
+            setLeftMargin(obj, leftMargin);
+            setLeftMargin(objHint, leftMargin);
+            setLeftMargin(image, dp(getTextInsetDp(false)));
             // Keep long reply snippets away from the rounded edge. Reducing the
             // measured width lets SimpleTextView ellipsize normally instead of
             // drawing the last characters outside the glass island.
@@ -182,6 +189,18 @@ public class ChatReplyContainer extends FrameLayout {
             setRightMargin(name, rightMargin);
             setRightMargin(obj, rightMargin);
             setRightMargin(objHint, rightMargin);
+        }
+
+        public int getTextInsetDp(boolean withImage) {
+            return LumaComposerGeometry.replyTextInsetDp(liquidGlassMode, withImage);
+        }
+
+        private void setLeftMargin(View view, int leftMargin) {
+            final FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) view.getLayoutParams();
+            if (params.leftMargin != leftMargin) {
+                params.leftMargin = leftMargin;
+                view.setLayoutParams(params);
+            }
         }
 
         private void setRightMargin(View view, int rightMargin) {

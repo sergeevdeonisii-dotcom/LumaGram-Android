@@ -22,9 +22,9 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BillingController;
 import org.telegram.messenger.Emoji;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaAnonymousNumber;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
-import org.telegram.messenger.Utilities;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.browser.Browser;
@@ -42,7 +42,6 @@ import org.telegram.ui.Components.LinkSpanDrawable;
 import org.telegram.ui.Components.RLottieImageView;
 import org.telegram.ui.Stories.recorder.ButtonWithCounterView;
 
-import java.util.Locale;
 
 public class FragmentUsernameBottomSheet {
 
@@ -57,6 +56,12 @@ public class FragmentUsernameBottomSheet {
         TL_fragment.TL_collectibleInfo info,
         Theme.ResourcesProvider resourcesProvider
     ) {
+        open(context, type, name, owner, info, resourcesProvider, false);
+    }
+
+    private static void open(Context context, int type, String name, TLObject owner,
+                             TL_fragment.TL_collectibleInfo info, Theme.ResourcesProvider resourcesProvider,
+                             boolean localPhonePreview) {
         BottomSheet sheet = new BottomSheet(context, false, resourcesProvider);
         sheet.fixNavigationBar(Theme.getColor(Theme.key_dialogBackground, resourcesProvider));
 
@@ -91,7 +96,8 @@ public class FragmentUsernameBottomSheet {
             ownerName = "";
         }
 
-        final String money = BillingController.getInstance().formatCurrency(info.amount, info.currency);
+        final String money = localPhonePreview && info.amount < 0 ? ""
+                : BillingController.getInstance().formatCurrency(info.amount, info.currency);
         final String crypto_money = BillingController.getInstance().formatCurrency(info.crypto_amount, info.crypto_currency);
 
         String title;
@@ -184,101 +190,34 @@ public class FragmentUsernameBottomSheet {
 
     /**
      * Opens a local-only Fragment-style preview for the visual +888 number.
-     * Nothing is purchased and no account data is changed; the price is only
-     * randomized to make the preview resemble Telegram's collectible sheet.
+     * Nothing is purchased and no server account data is changed. The displayed
+     * price is a user preference belonging to the current account identity.
      */
     public static void openLocalPhone(
         Context context,
+        int currentAccount,
         String phone,
         TLRPC.User owner,
         Theme.ResourcesProvider resourcesProvider
     ) {
-        if (context == null || owner == null || TextUtils.isEmpty(phone)) {
+        if (context == null || owner == null || TextUtils.isEmpty(phone)
+                || currentAccount < 0 || currentAccount >= UserConfig.MAX_ACCOUNT_COUNT
+                || owner.id <= 0 || owner.id != UserConfig.getInstance(currentAccount).getClientUserId()
+                || !LumaAnonymousNumber.isEnabled(currentAccount)
+                || !phone.equals(LumaAnonymousNumber.getPhone(currentAccount))) {
             return;
         }
 
-        BottomSheet sheet = new BottomSheet(context, false, resourcesProvider);
-        sheet.fixNavigationBar(Theme.getColor(Theme.key_dialogBackground, resourcesProvider));
-
-        LinearLayout layout = new LinearLayout(context);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(dp(16), 0, dp(16), 0);
-
-        FrameLayout imageContainerView = new FrameLayout(context);
-        imageContainerView.setBackground(Theme.createCircleDrawable(dp(80), Theme.getColor(Theme.key_featuredStickers_addButton, resourcesProvider)));
-        layout.addView(imageContainerView, LayoutHelper.createLinear(80, 80, Gravity.CENTER_HORIZONTAL, 0, 16, 0, 16));
-
-        RLottieImageView imageView = new RLottieImageView(context);
-        imageView.setScaleType(ImageView.ScaleType.CENTER);
-        imageView.setAnimation(R.raw.fragment, 78, 78);
-        imageView.playAnimation();
-        imageView.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
-        imageView.setTranslationY(dp(2));
-        imageContainerView.addView(imageView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.CENTER));
-
-        final String formattedPhone = PhoneFormat.getInstance().format("+" + phone);
-        final String ownerName = UserObject.getUserName(owner);
-        final String price = String.format(Locale.US, "$%,d", 1000 + Utilities.random.nextInt(9001));
-        final String title = LocaleController.formatString(R.string.LumaAnonymousSheetTitle, formattedPhone);
-        final String message = LocaleController.formatString(R.string.LumaAnonymousSheetMessage, price);
-        final String link = formattedPhone;
-
-        Runnable copy = () -> {
-            AndroidUtilities.addToClipboard(link);
-            BulletinFactory.of(sheet.getContainer(), resourcesProvider).createCopyBulletin(getString(R.string.PhoneCopied)).show();
-        };
-        CharSequence titleSpanned = AndroidUtilities.replaceSingleTag(title, copy);
-
-        TextView headerView = new LinkSpanDrawable.LinksTextView(context);
-        headerView.setTypeface(AndroidUtilities.bold());
-        headerView.setGravity(Gravity.CENTER);
-        headerView.setTextColor(Theme.getColor(Theme.key_dialogTextBlack, resourcesProvider));
-        headerView.setLinkTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText2, resourcesProvider));
-        headerView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-        headerView.setText(titleSpanned);
-        layout.addView(headerView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 42, 0, 42, 0));
-
-        FrameLayout chipLayout = new FrameLayout(context);
-        chipLayout.setBackground(Theme.createRoundRectDrawable(dp(28), dp(28), Theme.getColor(Theme.key_groupcreate_spanBackground, resourcesProvider)));
-
-        BackupImageView chipAvatar = new BackupImageView(context);
-        chipAvatar.setRoundRadius(dp(28));
-        AvatarDrawable avatarDrawable = new AvatarDrawable();
-        avatarDrawable.setInfo(owner);
-        chipAvatar.setForUserOrChat(owner, avatarDrawable);
-        chipLayout.addView(chipAvatar, LayoutHelper.createFrame(28, 28, Gravity.LEFT | Gravity.TOP));
-
-        TextView chipText = new TextView(context);
-        chipText.setTextColor(Theme.getColor(Theme.key_dialogTextBlack, resourcesProvider));
-        chipText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
-        chipText.setSingleLine();
-        chipText.setText(Emoji.replaceEmoji(ownerName, chipText.getPaint().getFontMetricsInt(), false));
-        chipLayout.addView(chipText, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL | Gravity.LEFT, 37, 0, 10, 0));
-
-        layout.addView(chipLayout, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 28, Gravity.CENTER_HORIZONTAL, 42, 10, 42, 18));
-
-        TextView descriptionView = new TextView(context);
-        descriptionView.setGravity(Gravity.CENTER);
-        descriptionView.setTextColor(Theme.getColor(Theme.key_dialogTextBlack, resourcesProvider));
-        descriptionView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-        descriptionView.setText(AndroidUtilities.replaceTags(message));
-        layout.addView(descriptionView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 32, 0, 32, 19));
-
-        ButtonWithCounterView detailsButton = new ButtonWithCounterView(context, resourcesProvider).setRound();
-        detailsButton.setText(getString(R.string.LumaAnonymousSheetDetails), false);
-        detailsButton.setOnClickListener(v -> sheet.dismiss());
-        layout.addView(detailsButton, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 6, 0, 6, 0));
-
-        ButtonWithCounterView copyButton = new ButtonWithCounterView(context, resourcesProvider).setRound().setNeutral();
-        copyButton.setText(getString(R.string.LumaAnonymousSheetCopy), false);
-        copyButton.setOnClickListener(v -> {
-            copy.run();
-            sheet.dismiss();
-        });
-        layout.addView(copyButton, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 6, 6, 6, 0));
-
-        sheet.setCustomView(layout);
-        sheet.show();
+        TL_fragment.TL_collectibleInfo preview = new TL_fragment.TL_collectibleInfo();
+        preview.purchase_date = LumaAnonymousNumber.getPurchaseDate(currentAccount);
+        preview.crypto_currency = "TON";
+        preview.crypto_amount = LumaAnonymousNumber.getPriceNanoTon(currentAccount);
+        preview.currency = "USD";
+        preview.amount = LumaAnonymousNumber.getUsdCents(preview.crypto_amount,
+                MessagesController.getInstance(currentAccount).config.tonUsdRate.get());
+        // A general information link, never a claim that this user owns a real listing.
+        preview.url = "https://fragment.com/numbers";
+        open(context, TYPE_PHONE, phone, owner, preview, resourcesProvider, true);
     }
 
 }

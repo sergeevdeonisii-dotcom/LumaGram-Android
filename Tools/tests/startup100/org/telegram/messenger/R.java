@@ -14,6 +14,10 @@ public final class R {
     public static final class string {
         public static final int AppIconDefault=1, AppIconBlackHole=2, AppIconLumaGraphite=3,
                 AppIconLumaNavy=4, AppIconLumaSilver=5, AppIconLumaGarnet=6, AppIconLumaViolet=7,
-                AppIconVintage=8, AppIconAqua=9, AppIconPremium=10, AppIconTurbo=11, AppIconNox=12;
+                AppIconVintage=8, AppIconAqua=9, AppIconPremium=10, AppIconTurbo=11, AppIconNox=12,
+                LumaUpdateWelcomeName=20, LumaUpdateWelcomeVersion=21, LumaUpdateWelcomeChanges=22,
+                LumaUpdateWelcomeContinue=23, LumaUpdateWelcomeRoundCamera=24, LumaUpdateWelcomeRoundSettings=25,
+                LumaUpdateWelcomeVerification=26, LumaUpdateWelcomeNumberValue=27,
+                LumaUpdateWelcomePersonalGifts=28, LumaUpdateWelcomeFuture=29;
     }
 }

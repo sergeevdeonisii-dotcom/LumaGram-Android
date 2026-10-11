@@ -215,3 +215,67 @@ test('app pairing start is preview only; explicit exact private account confirma
     assert.equal(f.auth.authenticate(session.token, NOW), ALICE);
     assert.ok(!JSON.stringify(f.deliveries()).includes(session.token));
 });
+
+test('order reference bridges buyer receipt -> support ticket -> owner-only lookup -> separate refund confirmation', async t => {
+    const f = fixture(t);
+    const value = await purchase(f);
+    assert.ok(f.replies(ALICE).at(-1).text.includes(`Заказ: ${value.invoice.payload}`));
+    await f.dispatch(f.message(ALICE, '/keys'));
+    assert.ok(f.replies(ALICE).at(-1).text.includes(value.invoice.payload));
+    await f.dispatch(f.message(ALICE, '/paysupport'));
+    assert.match(f.replies(ALICE).at(-1).text, /\/keys/);
+    assert.match(f.replies(ALICE).at(-1).text, /Сам ключ/);
+    await f.dispatch(f.message(ALICE, '/support Не нахожу номер заказа, Based сегодня'));
+    const ticket = f.store.listTickets()[0];
+    // Knowledge of the opaque ticket reference grants no support-owner role.
+    for (const user of [ALICE, BOB]) {
+        await f.dispatch(f.message(user, `/orders ${ticket.id}`));
+        const denied = f.replies(user).at(-1).text;
+        assert.match(denied, /только владельцу/);
+        assert.ok(!denied.includes(value.invoice.payload));
+    }
+    await f.dispatch(f.message(OWNER, `/ticket ${ticket.id}`));
+    const detail = f.replies(OWNER).at(-1).text;
+    assert.ok(detail.includes(`/refund ${value.invoice.payload}`));
+    assert.ok(detail.includes(`/orders ${ticket.id}`));
+    assert.ok(!detail.includes(ALICE) && !detail.includes(value.code) && !detail.includes(value.chargeId));
+    await f.dispatch(f.message(OWNER, `/orders ${ticket.id}`));
+    const overview = f.replies(OWNER).at(-1).text;
+    assert.ok(overview.includes(value.invoice.payload));
+    assert.ok(!overview.includes(ALICE) && !overview.includes(value.code) && !overview.includes(value.chargeId));
+    assert.match(overview, /40 ⭐/);
+    assert.match(overview, /отдельное подтверждение/);
+    assert.equal(f.calls.some(c => c.method === 'refundStarPayment'), false);
+    await f.dispatch(f.message(OWNER, `/refund ${value.invoice.payload}`));
+    assert.equal(f.calls.some(c => c.method === 'refundStarPayment'), false);
+    assert.equal(f.replies(OWNER).at(-1).reply_markup.inline_keyboard[0][0].callback_data, `refund_${value.invoice.payload}`);
+    await f.dispatch(f.callback(OWNER, `refund_${value.invoice.payload}`));
+    assert.equal(f.calls.filter(c => c.method === 'refundStarPayment').length, 1);
+    assert.equal(f.store.getOrder(value.invoice.payload).status, 'refunded');
+});
+
+test('owner order pages ignore order IDs mentioned in ticket text and retain bounded readable replies', async t => {
+    const f = fixture(t);
+    const alice = await purchase(f);
+    f.store.acceptTerms(BOB, TERMS_VERSION);
+    const bob = f.store.createOrder(BOB, 'ultra', 'bob-purchase');
+    f.store.reservePreCheckout({ userId: BOB, orderId: bob.id, currency: 'XTR', totalAmount: 360, queryId: 'bob-query' });
+    f.store.recordPayment({ userId: BOB, orderId: bob.id, currency: 'XTR', totalAmount: 360, chargeId: 'bob-charge' });
+    const ticket = f.store.createSupportTicket(ALICE, `Не мой заказ ${bob.id} ` + 'д'.repeat(1900), 'long-ticket');
+    await f.dispatch(f.message(OWNER, `/ticket ${ticket.id}`));
+    const text = f.replies(OWNER).at(-1).text;
+    assert.ok(text.length <= 2000);
+    assert.ok(text.includes(`/refund ${alice.invoice.payload}`));
+    assert.ok(!text.includes(`/refund ${bob.id}`));
+    const [expectedId] = text.match(/\/refund [a-f0-9]{48}/g);
+    assert.equal(expectedId, `/refund ${alice.invoice.payload}`);
+    await f.dispatch(f.message(OWNER, `/orders ${ticket.id} 2`));
+    assert.match(f.replies(OWNER).at(-1).text, /на этой странице нет/);
+    for (const arg of [`${ticket.id} 1001`, `${ticket.id} 0`, `${ticket.id} 1.5`, ALICE]) {
+        await f.dispatch(f.message(OWNER, `/orders ${arg}`));
+        assert.match(f.replies(OWNER).at(-1).text, /страница 1–1000/);
+    }
+    await f.dispatch(f.message(OWNER, `/orders ${'f'.repeat(48)}`));
+    assert.match(f.replies(OWNER).at(-1).text, /Обращение не найдено/);
+    assert.equal(f.calls.some(c => c.method === 'refundStarPayment'), false);
+});

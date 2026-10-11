@@ -297,7 +297,7 @@ export function createLiveStore(storage, { encryptionKey, keyPepper, termsVersio
                 rows('INSERT INTO live_codes(code_hash,order_id,private_json) VALUES (?,?,?)', codeHash, orderId,
                     privateJson({ code }, codeHash, 'code'));
                 const outboxId = queue(tx, hash(`key:${orderId}`), KIND_KEY,
-                    sendText(userId, `Lunagram ${order.plan_id}\nКлюч на один месяц:\n${code}\n\nАктивируйте его в Lunagram. Ключ одноразовый: не публикуйте его. Повторная выдача: /keys`), at);
+                    sendText(userId, `Lunagram ${order.plan_id}\nЗаказ: ${orderId}\nКлюч на один месяц:\n${code}\n\nАктивируйте его в Lunagram. Ключ одноразовый: не публикуйте его. Повторная выдача: /keys. Для поддержки укажите номер заказа, не ключ.`), at);
                 return { status: 'paid', orderId, outboxId };
             });
         },
@@ -306,9 +306,9 @@ export function createLiveStore(storage, { encryptionKey, keyPepper, termsVersio
             const userHash = ownerHash(userId); text(requestKey, 128); limit(userId, 'keys', 5);
             return atomic(tx => {
                 const at = now(); const keys = keyRows(userId, 20);
-                const lines = keys.map(row => keyView(row).status === 'available'
+                const lines = keys.map(row => `Заказ: ${row.order_id}\n` + (keyView(row).status === 'available'
                     ? `${row.plan_id}: ${decrypt(row.private_json, row.code_hash, 'code').code}`
-                    : `${row.plan_id}: ${keyView(row).status}`);
+                    : `${row.plan_id}: ${keyView(row).status}`));
                 const outboxId = queue(tx, mac('keys-delivery', `${userHash}:${requestKey}`), KIND_KEY,
                     sendText(userId, lines.length ? `Ваши ключи Lunagram (до 20 последних):\n${lines.join('\n')}\n\nНе передавайте неиспользованные ключи посторонним.` : 'Покупок с ключами пока нет.'), at);
                 return { outboxId, count: keys.length };
@@ -458,6 +458,20 @@ export function createLiveStore(storage, { encryptionKey, keyPepper, termsVersio
             return { id: ticket.id, status: ticket.status,
                 messages: rows('SELECT * FROM live_ticket_messages WHERE ticket_id=? ORDER BY created_ms,id LIMIT 100', ticketId)
                     .map(row => ({ direction: row.direction, createdAtMs: row.created_ms, text: decrypt(row.private_json, row.id, 'ticket_message').text })) };
+        },
+        // SERVER-ONLY support-owner operation. Scope comes from the stored
+        // ticket's identity, never a claimed user ID or order mentioned in text.
+        // Views contain no bearer key, charge, Telegram identity or lookup HMAC.
+        listTicketOrders(ticketId, page = 1) {
+            requireBilling(Number.isSafeInteger(page) && page >= 1 && page <= 1000, 'INVALID_PAGE');
+            const ticket = rows('SELECT owner_hash FROM live_tickets WHERE id=?', text(ticketId, 128))[0];
+            requireBilling(ticket, 'TICKET_NOT_FOUND');
+            const matches = rows(`SELECT id,plan_id,stars,status,created_ms FROM live_orders
+                WHERE owner_hash=? AND primary_charge IS NOT NULL ORDER BY created_ms DESC,id DESC LIMIT 6 OFFSET ?`,
+                ticket.owner_hash, (page - 1) * 5);
+            return { ticketId, page, hasMore: matches.length > 5 && page < 1000,
+                orders: matches.slice(0, 5).map(row => ({ id: row.id, planId: row.plan_id, starsAmount: row.stars,
+                    status: row.status, createdAtMs: row.created_ms })) };
         },
         replyTicket(ticketId, value, requestKey) {
             text(ticketId, 128); messageText(value); text(requestKey, 128);

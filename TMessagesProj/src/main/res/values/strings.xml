@@ -11365,7 +11365,7 @@
     <string name="ExperimentalAnonymousNumberChooseTitle">Local anonymous number</string>
     <string name="ExperimentalAnonymousNumberChooseInfo">Enter the 8 digits after the +888 code. This is only a visual override on this device; your real account number is unchanged.</string>
     <string name="ExperimentalAnonymousNumberInvalid">Enter exactly 8 digits</string>
-    <string name="ExperimentalAnonymousNumberInfo">Shows the selected Fragment +888 number in the profile and settings only on this device. Sign-in, registration, and the server-side number are unchanged.</string>
+    <string name="ExperimentalAnonymousNumberInfo">Number appearance on this device only.</string>
     <string name="ExperimentalAnonymousNumberEnabled">Local anonymous number enabled</string>
     <string name="ExperimentalAnonymousNumberDisabled">Local anonymous number disabled</string>
     <string name="ExperimentalProfileVerificationHeader">Profile verification (local)</string>
@@ -11375,7 +11375,15 @@
     <string name="ExperimentalProfileVerificationDisabled">Local verification mark disabled</string>
     <string name="LumaProfileVerifiedInfo">This account is verified as official by the representatives of Telegram.</string>
     <string name="LumaAnonymousSheetTitle">**%s** is a collectible phone number that belongs to</string>
-    <string name="LumaAnonymousSheetMessage">This phone number was bought on **Fragment** for **%s** (local visual preview)</string>
+    <string name="LumaAnonymousSheetMessage">This phone number was bought on **Fragment** for **%s**</string>
+    <string name="LumaAnonymousNumberPriceValue">Number value: %1$s</string>
+    <string name="LumaAnonymousNumberPriceTitle">Price, TON</string>
+    <string name="LumaAnonymousNumberPriceInfo">Dollars are calculated automatically.</string>
+    <string name="LumaAnonymousNumberPriceInvalid">Enter 0–999999999 TON, with up to 9 decimal places.</string>
+    <string name="LumaAnonymousNumberDateValue">Purchase date: %1$s</string>
+    <string name="LumaAnonymousNumberDateTitle">Purchase date</string>
+    <string name="LumaAnonymousNumberTimeTitle">Purchase time</string>
+    <string name="LumaAnonymousNumberDateInvalid">Choose a valid date and time, not in the future.</string>
     <string name="LumaAnonymousSheetDetails">More details</string>
     <string name="LumaAnonymousSheetCopy">Copy phone number</string>
     <string name="ExperimentalDeletedMessagesHeader">Deleted messages</string>
@@ -11581,4 +11589,15 @@
     <string name="BHGUnknownChat">Chat</string>
     <string name="BHGDone">Done</string>
     <string name="BHGOperationFailed">Could not complete this action. The file may be invalid or encrypted storage may be unavailable.</string>
+    <!-- LocaleController reads generated assets from strings.xml, not separate resource XML files. -->
+    <string name="LumaUpdateWelcomeName">Lunagram</string>
+    <string name="LumaUpdateWelcomeVersion">Version %1$s</string>
+    <string name="LumaUpdateWelcomeChanges">What’s new</string>
+    <string name="LumaUpdateWelcomeContinue">Continue</string>
+    <string name="LumaUpdateWelcomeRoundCamera">Round videos: camera flip animation and faster switching on supported cameras.</string>
+    <string name="LumaUpdateWelcomeRoundSettings">Simpler round-video settings.</string>
+    <string name="LumaUpdateWelcomeVerification">A local verification symbol beside your profile name. It does not change Telegram verification.</string>
+    <string name="LumaUpdateWelcomeNumberValue">Set an anonymous number’s local display value in TON, with conversion to USD and a date. This appearance setting does not change its market price.</string>
+    <string name="LumaUpdateWelcomePersonalGifts">Animated details for local gifts in your profile. These gifts remain on this device and are not Telegram collectibles.</string>
+    <string name="LumaUpdateWelcomeFuture">This is the installed Lunagram release. Explore its available features in Lunagram settings.</string>
 </resources>

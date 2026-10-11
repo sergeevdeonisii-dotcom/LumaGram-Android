@@ -1,0 +1,41 @@
+/** Extracted production focus/touch bodies with a modeled owner, not Android lifecycle evidence. */
+public final class StartupOwnerFocus15Probe extends StartupFocusBase {
+    private boolean showing = true;
+    private boolean voipLaunchedInBackground = true;
+    private int showChecks;
+    private int dismissals;
+    private void maybeShowLumaStartupReveal() { showChecks++; }
+    private void dismissLumaStartupReveal() { dismissals++; showing = false; }
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        /* ACTUAL_FOCUS_BODY */
+    }
+    @Override public void onUserInteraction() {
+        /* ACTUAL_INTERACTION_BODY */
+    }
+    private static int assertions;
+    private static void check(boolean valid) {
+        assertions++;
+        if (!valid) throw new AssertionError("Owner focus assertion " + assertions);
+    }
+    public static void main(String[] arguments) {
+        StartupOwnerFocus15Probe owner = new StartupOwnerFocus15Probe();
+        owner.onWindowFocusChanged(false);
+        check(owner.showing && owner.dismissals == 0);
+        check(owner.showChecks == 0);
+        owner.onUserInteraction();
+        check(owner.showing && owner.dismissals == 0);
+        check(!owner.voipLaunchedInBackground);
+        owner.onWindowFocusChanged(true);
+        check(owner.showChecks == 1 && owner.dismissals == 0);
+        for (int i = 0; i < 100; i++) {
+            owner.onWindowFocusChanged(false);
+            owner.onUserInteraction();
+            check(owner.showing && owner.dismissals == 0);
+        }
+        System.out.println("Extracted startup focus/touch: " + assertions + " checks passed (modeled owner, not device).");
+    }
+}
+class StartupFocusBase {
+    public void onWindowFocusChanged(boolean hasFocus) {}
+    public void onUserInteraction() {}
+}

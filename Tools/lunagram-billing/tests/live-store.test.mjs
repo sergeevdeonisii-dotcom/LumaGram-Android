@@ -356,3 +356,84 @@ test('GCM authentication binds delivery ID and kind and rejects a wrong key', t 
     const other = createLiveStore(connection.storage, { encryptionKey: Buffer.alloc(32, 99), keyPepper: PEPPER });
     assert.throws(() => other.decryptOutbox(item));
 });
+
+test('buyer receipt and key retry include the same order reference without exposing another buyer', t => {
+    const connection = database(t).open();
+    const alice = paid(connection, 'alice');
+    const bob = paid(connection, 'bob', 'ultra', BOB);
+    const receipt = delivery(connection, alice.result.outboxId);
+    assert.equal(receipt.chat_id, ALICE);
+    assert.ok(receipt.text.includes(`Заказ: ${alice.id}`));
+    assert.ok(receipt.text.includes(alice.code));
+    assert.ok(!receipt.text.includes(bob.id));
+    const retry = delivery(connection, connection.store.enqueueKeys(ALICE, 'key-retry').outboxId);
+    assert.ok(retry.text.includes(`Заказ: ${alice.id}`));
+    assert.ok(retry.text.includes(alice.code));
+    assert.ok(!retry.text.includes(bob.id) && !retry.text.includes(bob.code));
+    connection.store.redeem(ALICE, alice.code);
+    const redeemed = delivery(connection, connection.store.enqueueKeys(ALICE, 'key-after-use').outboxId);
+    assert.ok(redeemed.text.includes(`Заказ: ${alice.id}`));
+    assert.match(redeemed.text, /redeemed/);
+    assert.ok(!redeemed.text.includes(alice.code));
+    connection.store.prepareRefund(alice.id);
+    connection.store.recordRefund({ chargeId: 'charge-alice' });
+    const refunded = delivery(connection, connection.store.enqueueKeys(ALICE, 'key-after-refund').outboxId);
+    assert.ok(refunded.text.includes(`Заказ: ${alice.id}`));
+    assert.match(refunded.text, /refunded/);
+    assert.ok(!refunded.text.includes(alice.code));
+});
+
+test('ticket-scoped paid order lookup is bounded, persistent and follows ticket identity rather than user text', t => {
+    const db = database(t);
+    let connection = db.open();
+    const bob = paid(connection, 'bob', 'ultra', BOB);
+    const alice = [];
+    for (let i = 0; i < 7; i++) {
+        db.state.at += 60_000;
+        alice.push(paid(connection, `alice-${i}`, i % 2 ? 'plus' : 'based'));
+    }
+    // A malicious mention of Bob's order must never change the query scope.
+    const ticket = connection.store.createSupportTicket(ALICE, `Верните ${bob.id}`, 'alice-ticket');
+    order(connection, 'unpaid');
+    const tablesBefore = ['live_orders', 'live_payments', 'live_codes', 'live_grants', 'live_ledger', 'billing_bot_outbox']
+        .map(table => count(connection.storage, table));
+    const first = connection.store.listTicketOrders(ticket.id);
+    assert.deepEqual(first.orders.map(o => o.id), alice.slice(2).reverse().map(o => o.id));
+    assert.equal(first.page, 1); assert.equal(first.hasMore, true);
+    for (const view of first.orders) assert.deepEqual(Object.keys(view).sort(), ['createdAtMs', 'id', 'planId', 'starsAmount', 'status']);
+    const serialized = JSON.stringify(first);
+    for (const forbidden of [ALICE, BOB, bob.id, bob.code, ...alice.map(a => a.code), 'charge-alice']) assert.ok(!serialized.includes(forbidden));
+    assert.deepEqual(['live_orders', 'live_payments', 'live_codes', 'live_grants', 'live_ledger', 'billing_bot_outbox']
+        .map(table => count(connection.storage, table)), tablesBefore, 'read-only lookup cannot trigger refunds or delivery');
+    connection.close(); connection = db.open();
+    assert.deepEqual(connection.store.listTicketOrders(ticket.id), first);
+    const second = connection.store.listTicketOrders(ticket.id, 2);
+    assert.deepEqual(second.orders.map(o => o.id), alice.slice(0, 2).reverse().map(o => o.id));
+    assert.equal(second.hasMore, false);
+    assert.deepEqual(connection.store.listTicketOrders(ticket.id, 3).orders, []);
+    for (const page of [0, -1, 1.5, 1001, NaN, Infinity, '1']) {
+        assert.throws(() => connection.store.listTicketOrders(ticket.id, page), codeError('INVALID_PAGE'));
+    }
+    assert.throws(() => connection.store.listTicketOrders('f'.repeat(48)), codeError('TICKET_NOT_FOUND'));
+    connection.store.prepareRefund(alice[6].id);
+    assert.equal(connection.store.listTicketOrders(ticket.id).orders[0].status, 'refund_pending');
+    connection.store.recordRefund({ chargeId: 'charge-alice-6' });
+    assert.equal(connection.store.listTicketOrders(ticket.id).orders[0].status, 'refunded');
+    const noPurchases = connection.store.createSupportTicket(OWNER, 'Нет покупок', 'owner-ticket');
+    assert.deepEqual(connection.store.listTicketOrders(noPurchases.id).orders, []);
+});
+
+test('twenty key references still fit the Telegram message and encrypted outbox limits', t => {
+    const db = database(t);
+    const connection = db.open();
+    const ids = [];
+    for (let i = 0; i < 21; i++) {
+        db.state.at += 60_000;
+        ids.push(paid(connection, `capacity-${i}`, 'standard').id);
+    }
+    const resend = delivery(connection, connection.store.enqueueKeys(ALICE, 'twenty-keys').outboxId);
+    assert.equal((resend.text.match(/Заказ: /g) || []).length, 20);
+    assert.ok(!resend.text.includes(ids[0]));
+    assert.ok(resend.text.length <= 4096);
+    assert.ok(Buffer.byteLength(JSON.stringify(resend)) <= 8192);
+});

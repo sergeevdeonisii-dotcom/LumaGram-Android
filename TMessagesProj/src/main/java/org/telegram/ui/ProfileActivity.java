@@ -156,6 +156,7 @@ import org.telegram.messenger.LumaLocalGifts;
 import org.telegram.messenger.LumaStarRating;
 import org.telegram.messenger.LumaAnonymousNumber;
 import org.telegram.messenger.LumaProfileVerification;
+import org.telegram.messenger.LumaGhostProfileStatus;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
@@ -7454,6 +7455,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     && getContext() != null) {
                 FragmentUsernameBottomSheet.openLocalPhone(
                         getContext(),
+                        currentAccount,
                         LumaAnonymousNumber.getPhone(currentAccount),
                         user,
                         getResourceProvider()
@@ -11449,6 +11451,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             CharSequence newString = UserObject.getUserName(user);
             String newString2;
             boolean hiddenStatusButton = false;
+            final String ghostStatus = LumaGhostProfileStatus.format(currentAccount, user,
+                    getConnectionsManager().getCurrentTime(), isOnline, shortStatus ? new boolean[1] : null);
+            boolean updatePresenceStyle = ghostStatus != null;
             if (user.id == getUserConfig().getClientUserId()) {
                 if (UserObject.hasFallbackPhoto(getUserInfo())) {
                     newString2 = "";
@@ -11458,7 +11463,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         fallbackImage.setImage(ImageLocation.getForPhoto(smallSize, getUserInfo().fallback_photo), "50_50", (Drawable) null, 0, null, UserConfig.getInstance(currentAccount).getCurrentUser(), 0);
                     }
                 } else {
-                    if (userInfo != null && userInfo.stars_rating != null && userInfo.stars_rating.stars < 0) {
+                    if (ghostStatus != null) {
+                        newString2 = ghostStatus;
+                    } else if (userInfo != null && userInfo.stars_rating != null && userInfo.stars_rating.stars < 0) {
                         newString2 = getString(R.string.StarRatingLevelNegative).toLowerCase(Locale.ROOT);
                     } else {
                         newString2 = LocaleController.getString(R.string.Online);
@@ -11480,12 +11487,13 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 isOnline[0] = false;
                 newString2 = LocaleController.formatUserStatus(currentAccount, user, isOnline, shortStatus ? new boolean[1] : null);
                 hiddenStatusButton = user != null && !isOnline[0] && !getUserConfig().isPremium() && user.status != null && (user.status instanceof TLRPC.TL_userStatusRecently || user.status instanceof TLRPC.TL_userStatusLastMonth || user.status instanceof TLRPC.TL_userStatusLastWeek) && user.status.by_me;
-                if (onlineTextView[1] != null && !mediaHeaderVisible) {
-                    int key = isOnline[0] && peerColor == null ? Theme.key_profile_status : Theme.key_actionBarDefaultSubtitle;
-                    onlineTextView[1].setTag(key);
-                    if (!isPulledDown) {
-                        onlineTextView[1].setTextColor(applyPeerColor(getThemedColor(key), true, isOnline[0]));
-                    }
+                updatePresenceStyle = true;
+            }
+            if (updatePresenceStyle && onlineTextView[1] != null && !mediaHeaderVisible) {
+                int key = isOnline[0] && peerColor == null ? Theme.key_profile_status : Theme.key_actionBarDefaultSubtitle;
+                onlineTextView[1].setTag(key);
+                if (!isPulledDown) {
+                    onlineTextView[1].setTextColor(applyPeerColor(getThemedColor(key), true, isOnline[0]));
                 }
             }
             hasCustomPhoto = user.photo != null && user.photo.personal;

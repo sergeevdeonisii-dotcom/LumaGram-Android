@@ -22,10 +22,17 @@ public class RoundStatusDrawable extends StatusDrawable {
     private boolean started = false;
     private float progress;
     private int progressDirection = 1;
+    private final boolean centerInBounds;
 
     private Paint currentPaint;
 
     public RoundStatusDrawable(boolean createPaint) {
+        this(createPaint, false);
+    }
+
+    /** Header slots are centered by intrinsic height; other callers retain their legacy placement. */
+    public RoundStatusDrawable(boolean createPaint, boolean centerInBounds) {
+        this.centerInBounds = centerInBounds;
         if (createPaint) {
             currentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         }
@@ -77,7 +84,7 @@ public class RoundStatusDrawable extends StatusDrawable {
         paint.setAlpha(55 + (int) (200 * progress));
         canvas.drawCircle(
                 getBounds().left + AndroidUtilities.dp(6),
-                getBounds().top + AndroidUtilities.dp(isChat ? 8 : 9),
+                centerInBounds ? getBounds().exactCenterY() : getBounds().top + AndroidUtilities.dp(isChat ? 8 : 9),
                 AndroidUtilities.dp(4),
                 paint);
         if (started) {

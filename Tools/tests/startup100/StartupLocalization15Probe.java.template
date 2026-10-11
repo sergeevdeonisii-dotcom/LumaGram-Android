@@ -1,0 +1,116 @@
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
+import javax.xml.parsers.DocumentBuilderFactory;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+
+/** Executes extracted production lookup bodies; not an Android device or Gradle asset build. */
+public final class StartupLocalization15Probe {
+    private static final String[] KEYS = {
+        "LumaUpdateWelcomeName", "LumaUpdateWelcomeVersion", "LumaUpdateWelcomeChanges",
+        "LumaUpdateWelcomeContinue", "LumaUpdateWelcomeRoundCamera", "LumaUpdateWelcomeRoundSettings",
+        "LumaUpdateWelcomeVerification", "LumaUpdateWelcomeNumberValue", "LumaUpdateWelcomePersonalGifts",
+        "LumaUpdateWelcomeFuture"
+    };
+    private static int checks;
+
+    private static void check(boolean condition, String message) {
+        checks++;
+        if (!condition) throw new AssertionError(message);
+    }
+
+    public static void main(String[] args) throws Exception {
+        check(args.length == 2, "EN and RU generator input files are required");
+        for (String path : args) {
+            // Read the actual inputs selected by TelegramBuildAppPlugin, not a
+            // whole-resource-tree union that would mask a standalone XML bug.
+            Map<String, String> generated = readStrings(Path.of(path));
+            Context context = new Context(generated);
+            ApplicationLoader.applicationContext = context;
+            Localization.rawResBindings = null;
+            for (boolean cloud : new boolean[]{false, true}) {
+                BuildVars.USE_CLOUD_STRINGS = cloud;
+                Controller current = new Controller(new Localization(generated));
+                for (int index = 0; index < KEYS.length; index++) {
+                    String key = KEYS[index];
+                    String expected = generated.get(key);
+                    check(expected != null && !expected.isBlank(), path + ": missing " + key);
+                    check(expected.equals(current.getStringV2(null, index + 1, null)), "R.string lookup: " + key);
+                    check(expected.equals(current.getStringV2(key, 0, null)), "Name lookup: " + key);
+                    check(!expected.startsWith("LOC_ERR"), "Error placeholder: " + key);
+                }
+
+                // Old layout: all ten resources exist for Android, including
+                // the R.id->name bindings, but only in excluded notes XML.
+                // Remove them solely from the generated localization table.
+                Map<String, String> standaloneOnly = new HashMap<>(generated);
+                for (String key : KEYS) standaloneOnly.remove(key);
+                Controller missing = new Controller(new Localization(standaloneOnly));
+                for (int index = 0; index < KEYS.length; index++) {
+                    String key = KEYS[index];
+                    check(context.getString(index + 1) != null, "Android still has standalone resource: " + key);
+                    check(missing.getStringV2(null, index + 1, null) == null,
+                        "Negative control must reproduce missing asset lookup despite valid Android resource: " + key);
+                    check(missing.getStringV2(key, 0, null) == null, "Name lookup must also reject excluded XML: " + key);
+                }
+            }
+        }
+        System.out.println("Startup localization extracted lookup: " + checks + " assertions passed (including standalone-only negative control).");
+    }
+
+    private static Map<String, String> readStrings(Path path) throws Exception {
+        check(path.getFileName().toString().equals("strings.xml"), "Must read localization generator input");
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        NodeList nodes = factory.newDocumentBuilder().parse(path.toFile()).getDocumentElement().getElementsByTagName("string");
+        Map<String, String> result = new HashMap<>();
+        for (int i = 0; i < nodes.getLength(); i++) {
+            Element node = (Element) nodes.item(i);
+            String name = node.getAttribute("name");
+            // Match TelegramStringsTask's XML-string normalization.
+            String value = node.getTextContent().replace("\\n", "\n").replace("\\", "").replace("&lt;", "<");
+            if (name.startsWith("LumaUpdateWelcome")) {
+                check(!result.containsKey(name), "Duplicate startup localization: " + name);
+            }
+            result.put(name, value);
+        }
+        return result;
+    }
+
+    private static final class Context {
+        final Map<Integer, String> androidResources = new HashMap<>();
+        final IntBindings bindings = new IntBindings();
+        Context(Map<String, String> source) {
+            for (int index = 0; index < KEYS.length; index++) {
+                androidResources.put(index + 1, source.get(KEYS[index]));
+                bindings.put(index + 1, KEYS[index].hashCode());
+            }
+        }
+        String getString(int id) { return androidResources.get(id); }
+    }
+    private static final class IntBindings extends HashMap<Integer, Integer> {
+        int get(int key) { return getOrDefault(Integer.valueOf(key), 0); }
+    }
+    private static final class ApplicationLoader { static Context applicationContext; }
+    private static final class BuildVars { static boolean USE_CLOUD_STRINGS; }
+    private static final class Localization {
+        static IntBindings rawResBindings;
+        final Map<Integer, String> localizations = new HashMap<>();
+        Localization(Map<String, String> values) {
+            values.forEach((name, value) -> localizations.put(name.hashCode(), value));
+        }
+        static IntBindings loadStringResBindings(Context context) { return context.bindings; }
+        public String getByResId(Context context, int resId) { /* ACTUAL_RES_ID_BODY */ }
+        public String getByResName(String resName) { /* ACTUAL_RES_NAME_BODY */ }
+        public String getByResNameOrResId(Context context, String resName, int resId) { /* ACTUAL_RES_NAME_OR_ID_BODY */ }
+        public String get(int resNameHash) { /* ACTUAL_GET_BODY */ }
+    }
+    private static final class Controller {
+        final Localization localizationInternal;
+        final Localization localizationExternal = new Localization(Map.of());
+        Controller(Localization internal) { localizationInternal = internal; }
+        void checkLocalizationInternal() { }
+        private String getStringV2(String key, int stringRes, String fallback) { /* ACTUAL_GET_STRING_BODY */ }
+    }
+}

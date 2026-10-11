@@ -378,7 +378,9 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             statusDrawables[1] = new RecordStatusDrawable(true);
             statusDrawables[2] = new SendingFileDrawable(true);
             statusDrawables[3] = new PlayingGameDrawable(false, resourcesProvider);
-            statusDrawables[4] = new RoundStatusDrawable(true);
+            // SimpleTextView centers the intrinsic slot, including inline text and snapshots.
+            // Center the dot inside that slot instead of its legacy below-center coordinates.
+            statusDrawables[4] = new RoundStatusDrawable(true, true);
             statusDrawables[5] = new ChoosingStickerStatusDrawable(true);
             for (int a = 0; a < statusDrawables.length; a++) {
                 statusDrawables[a].setIsChat(chat != null);

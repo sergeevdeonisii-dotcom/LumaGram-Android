@@ -581,6 +581,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             .add(NotificationCenter.needCheckSystemBarColors)
             .add(NotificationCenter.closeOtherAppActivities)
             .add(NotificationCenter.didSetPasscode)
+            .add(NotificationCenter.didStartedCall)
             .add(NotificationCenter.didSetNewWallpapper)
             .add(NotificationCenter.screenStateChanged)
             .add(NotificationCenter.showBulletin)
@@ -1204,6 +1205,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (account == UserConfig.selectedAccount || !UserConfig.isValidAccount(account)) {
             return;
         }
+        dismissLumaStartupReveal();
+        lumaLauncherStartup = false;
         org.telegram.messenger.BlackHoleVault.lockAll();
         switchingAccount = true;
 
@@ -6593,6 +6596,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private Utilities.Callback<Boolean> onPowerSaverCallback;
 
     private void onPowerSaver(boolean applied) {
+        if (lumaStartupReveal != null) lumaStartupReveal.onMotionPreferenceChanged();
         if (actionBarLayout == null || !applied || LiteMode.getPowerSaverLevel() >= 100) {
             return;
         }
@@ -6745,7 +6749,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     @Override
     public void onUserInteraction() {
         super.onUserInteraction();
-        dismissLumaStartupReveal();
         voipLaunchedInBackground = false;
     }
 
@@ -7110,28 +7113,46 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
             maybeShowLumaStartupReveal();
-        } else {
-            dismissLumaStartupReveal();
         }
     }
 
     private void maybeShowLumaStartupReveal() {
         if (lumaStartupReveal != null || !lumaLauncherStartup) return;
-        boolean protectedScreen = SharedConfig.appLocked || SharedConfig.isWaitingForPasscodeEnter
-                || (passcodeDialog != null && passcodeDialog.passcodeView.getVisibility() == View.VISIBLE)
-                || !overlayPasscodeViews.isEmpty() || voipLaunchedInBackground || isInPictureInPictureMode;
         try {
             lumaStartupReveal = org.telegram.ui.Components.LumaStartupReveal.maybeShow(frameLayout,
-                    lumaLauncherStartup, isResumed && hasWindowFocus() && !isFinishing(), protectedScreen);
+                    lumaLauncherStartup, isResumed && hasWindowFocus() && !isFinishing(),
+                    !canShowLumaStartupNotes(), this::canShowLumaStartupNotes);
         } catch (RuntimeException error) {
             lumaLauncherStartup = false;
             FileLog.e(error);
         }
     }
 
+    private boolean canShowLumaStartupNotes() {
+        if (!isResumed || isFinishing() || SharedConfig.appLocked || SharedConfig.isWaitingForPasscodeEnter
+                || (passcodeDialog != null && passcodeDialog.passcodeView.getVisibility() == View.VISIBLE)
+                || !overlayPasscodeViews.isEmpty() || voipLaunchedInBackground || isInPictureInPictureMode
+                || VoIPService.getSharedInstance() != null || VoIPFragment.getInstance() != null
+                || GroupCallActivity.groupCallInstance != null || !UserConfig.getInstance(currentAccount).isClientActivated()
+                || currentAccount != UserConfig.selectedAccount || switchingAccount
+                || (termsOfServiceView != null && termsOfServiceView.getVisibility() == View.VISIBLE)
+                || (blockingUpdateView != null && blockingUpdateView.getVisibility() == View.VISIBLE)
+                || mainFragmentsStack.isEmpty() || !(mainFragmentsStack.get(mainFragmentsStack.size() - 1) instanceof MainTabsActivity)
+                || (layersActionBarLayout != null && layersActionBarLayout.getView().getVisibility() == View.VISIBLE
+                    && !layersActionBarLayout.getFragmentStack().isEmpty())
+                || (rightActionBarLayout != null && rightActionBarLayout.getView().getVisibility() == View.VISIBLE
+                    && !rightActionBarLayout.getFragmentStack().isEmpty())
+                || getVisibleDialog() != null || mainFragmentsStack.get(mainFragmentsStack.size() - 1).getVisibleDialog() != null
+                || actionBarLayout == null || actionBarLayout.isTransitionAnimationInProgress()
+                || (PhotoViewer.hasInstance() && PhotoViewer.getInstance().isVisible())
+                || (SecretMediaViewer.hasInstance() && SecretMediaViewer.getInstance().isVisible())
+                || (ArticleViewer.hasInstance() && ArticleViewer.getInstance().isVisible())) return false;
+        return true;
+    }
+
     private void dismissLumaStartupReveal() {
         if (lumaStartupReveal != null) {
-            lumaStartupReveal.dismiss();
+            lumaStartupReveal.dismissForLifecycle();
             lumaStartupReveal = null;
         }
     }
@@ -7236,7 +7257,12 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     @SuppressWarnings("unchecked")
     public void didReceivedNotification(int id, final int account, Object... args) {
         if (id == NotificationCenter.appDidLogout) {
+            dismissLumaStartupReveal();
+            lumaLauncherStartup = false;
             switchToAvailableAccountOrLogout();
+        } else if (id == NotificationCenter.didStartedCall) {
+            dismissLumaStartupReveal();
+            lumaLauncherStartup = false;
         } else if (id == NotificationCenter.openBoostForUsersDialog) {
             long dialogId = (long) args[0];
             ChatMessageCell chatMessageCell = null;
@@ -7371,6 +7397,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 backgroundTablet.setBackgroundImage(Theme.getCachedWallpaper(), Theme.isWallpaperMotion());
             }
         } else if (id == NotificationCenter.didSetPasscode) {
+            if (SharedConfig.appLocked || SharedConfig.isWaitingForPasscodeEnter) dismissLumaStartupReveal();
             flagSecureReason.invalidate();
         } else if (id == NotificationCenter.reloadInterface) {
             boolean last = mainFragmentsStack.size() > 1 && mainFragmentsStack.get(mainFragmentsStack.size() - 1) instanceof ProfileActivity;
@@ -7623,6 +7650,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 onThemeLoadFinish();
             }
         } else if (id == NotificationCenter.screenStateChanged) {
+            if (!ApplicationLoader.isScreenOn) dismissLumaStartupReveal();
             if (ApplicationLoader.mainInterfacePaused) {
                 return;
             }
@@ -8403,6 +8431,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         }
         if (passcodeDialog != null && passcodeDialog.passcodeView.getVisibility() == View.VISIBLE) {
             if (invoked) finish();
+            return false;
+        }
+        if (lumaStartupReveal != null && lumaStartupReveal.isShowing()) {
+            if (invoked) lumaStartupReveal.dismiss();
             return false;
         }
         if (bottomSheetTabsOverlay != null && bottomSheetTabsOverlay.isOpen) {

@@ -5,6 +5,8 @@ import static org.telegram.messenger.LocaleController.getString;
 import android.content.Context;
 import android.os.Bundle;
 import android.text.InputType;
+import android.text.InputFilter;
+import android.text.method.DigitsKeyListener;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
@@ -34,6 +36,7 @@ import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.TextCheckCell;
 import org.telegram.ui.Cells.TextDetailCell;
 import org.telegram.ui.Components.BulletinFactory;
+import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.IconBackgroundColors;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.EditTextBoldCursor;
@@ -43,6 +46,7 @@ import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalRecyclerView;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Locale;
 
 public class ExperimentalFeaturesActivity extends BaseFragment {
@@ -87,6 +91,8 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     private static final int ROW_ANONYMOUS_NUMBER = 12;
     private static final int ROW_PROFILE_VERIFICATION_ENABLED = 13;
     private static final int ROW_GHOST_SCHEDULE_SEND_ENABLED = 14;
+    private static final int ROW_ANONYMOUS_NUMBER_PRICE = 15;
+    private static final int ROW_ANONYMOUS_NUMBER_DATE = 16;
 
     private final Section section;
     private UniversalRecyclerView listView;
@@ -311,6 +317,13 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             ROW_ANONYMOUS_NUMBER,
             LocaleController.formatString(R.string.ExperimentalAnonymousNumberValue, "+" + LumaAnonymousNumber.getPhone(currentAccount))
         ).setEnabled(anonymousNumberEnabled));
+        items.add(UItem.asButton(ROW_ANONYMOUS_NUMBER_PRICE,
+            LocaleController.formatString(R.string.LumaAnonymousNumberPriceValue,
+                LumaAnonymousNumber.getFormattedPriceTon(currentAccount))).setEnabled(anonymousNumberEnabled));
+        items.add(UItem.asButton(ROW_ANONYMOUS_NUMBER_DATE,
+            LocaleController.formatString(R.string.LumaAnonymousNumberDateValue,
+                LocaleController.formatShortDateTime(LumaAnonymousNumber.getPurchaseDate(currentAccount))))
+            .setEnabled(anonymousNumberEnabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalAnonymousNumberInfo)));
         }
 
@@ -329,7 +342,8 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 || item.id == ROW_DELETED_MESSAGES_ENABLED || item.id == Section.PRIVACY.id
                 || item.id == Section.SENDING.id)) return;
         if (!LumaBuildPolicy.allowsAnonymousNumber()
-                && (item.id == ROW_ANONYMOUS_NUMBER_ENABLED || item.id == ROW_ANONYMOUS_NUMBER)) return;
+                && (item.id == ROW_ANONYMOUS_NUMBER_ENABLED || item.id == ROW_ANONYMOUS_NUMBER
+                || item.id == ROW_ANONYMOUS_NUMBER_PRICE || item.id == ROW_ANONYMOUS_NUMBER_DATE)) return;
         if (!LumaBuildPolicy.allowsProfileVerification() && item.id == ROW_PROFILE_VERIFICATION_ENABLED) return;
         if (section == Section.ROOT) {
             Section destination = Section.fromId(item.id);
@@ -448,6 +462,10 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             ).show();
         } else if (item.id == ROW_ANONYMOUS_NUMBER) {
             showAnonymousNumberDialog();
+        } else if (item.id == ROW_ANONYMOUS_NUMBER_PRICE) {
+            if (LumaAnonymousNumber.isEnabled(currentAccount)) showAnonymousNumberPriceDialog();
+        } else if (item.id == ROW_ANONYMOUS_NUMBER_DATE) {
+            if (LumaAnonymousNumber.isEnabled(currentAccount)) showAnonymousNumberDateDialog();
         } else if (item.id == ROW_PROFILE_VERIFICATION_ENABLED) {
             final boolean enabled = !LumaProfileVerification.isEnabled(currentAccount);
             LumaProfileVerification.setEnabled(currentAccount, enabled);
@@ -538,6 +556,92 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             }
         });
         showProfileInputDialog(builder, editText);
+    }
+
+    private void showAnonymousNumberPriceDialog() {
+        if (getParentActivity() == null) return;
+        final long ownerId = getUserConfig().getClientUserId();
+        if (ownerId <= 0) return;
+        final EditTextBoldCursor editText = LumaDialogInput.create(getParentActivity(),
+                InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL, false, resourceProvider);
+        editText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16);
+        editText.setMinHeight(AndroidUtilities.dp(48));
+        editText.setKeyListener(DigitsKeyListener.getInstance("0123456789.,"));
+        editText.setFilters(new InputFilter[]{new InputFilter.LengthFilter(19)});
+        editText.setHint("0");
+        editText.setText(LumaAnonymousNumber.getPriceTon(currentAccount));
+        editText.setSelectAllOnFocus(true);
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), resourceProvider);
+        builder.setTitle(getString(R.string.LumaAnonymousNumberPriceTitle));
+        builder.setMessage(getString(R.string.LumaAnonymousNumberPriceInfo));
+        builder.setView(LumaDialogInput.wrap(editText));
+        builder.setNegativeButton(getString(R.string.Cancel), null);
+        builder.setPositiveButton(getString(R.string.Save), null);
+        AlertDialog dialog = builder.create();
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+                if (getUserConfig().getClientUserId() != ownerId || !LumaAnonymousNumber.isEnabled(currentAccount)) {
+                    dialog.dismiss();
+                    return;
+                }
+                if (!LumaAnonymousNumber.setPriceTon(currentAccount, ownerId, editText.getText().toString())) {
+                    editText.setError(getString(R.string.LumaAnonymousNumberPriceInvalid));
+                    return;
+                }
+                if (listView != null && listView.adapter != null) listView.adapter.update(false);
+                dialog.dismiss();
+            });
+            editText.requestFocus();
+            AndroidUtilities.showKeyboard(editText);
+        });
+        editText.setOnEditorActionListener((view, actionId, event) -> {
+            if (actionId != EditorInfo.IME_ACTION_DONE) return false;
+            View button = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            if (button != null) button.performClick();
+            return true;
+        });
+        showDialog(dialog);
+    }
+
+    private void showAnonymousNumberDateDialog() {
+        if (getParentActivity() == null) return;
+        final long ownerId = getUserConfig().getClientUserId();
+        if (ownerId <= 0) return;
+        Calendar selected = Calendar.getInstance();
+        selected.setTimeInMillis(LumaAnonymousNumber.getPurchaseDate(currentAccount) * 1000L);
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        AlertDialog.Builder picker = AlertsCreator.createDatePickerDialog(getParentActivity(),
+                1970 - currentYear, 0, selected.get(Calendar.YEAR) - currentYear,
+                selected.get(Calendar.DAY_OF_MONTH), selected.get(Calendar.MONTH), selected.get(Calendar.YEAR),
+                getString(R.string.LumaAnonymousNumberDateTitle), false, (year, month, day) -> {
+            if (getParentActivity() == null || getUserConfig().getClientUserId() != ownerId
+                    || !LumaAnonymousNumber.isEnabled(currentAccount)) return;
+            android.app.TimePickerDialog timePicker = new android.app.TimePickerDialog(getParentActivity(),
+                    Theme.isCurrentThemeDark() ? android.R.style.Theme_Material_Dialog_Alert
+                            : android.R.style.Theme_Material_Light_Dialog_Alert,
+                    (view, hour, minute) -> {
+                if (getUserConfig().getClientUserId() != ownerId || !LumaAnonymousNumber.isEnabled(currentAccount)) return;
+                Calendar date = Calendar.getInstance();
+                date.clear();
+                date.setLenient(false);
+                date.set(year, month, day, hour, minute, 0);
+                long seconds;
+                try {
+                    seconds = date.getTimeInMillis() / 1000L;
+                } catch (IllegalArgumentException invalidDate) {
+                    seconds = -1;
+                }
+                if (!LumaAnonymousNumber.setPurchaseDate(currentAccount, ownerId, seconds)) {
+                    BulletinFactory.of(this).createSimpleBulletin(R.raw.info,
+                            getString(R.string.LumaAnonymousNumberDateInvalid)).show();
+                    return;
+                }
+                if (listView != null && listView.adapter != null) listView.adapter.update(false);
+            }, selected.get(Calendar.HOUR_OF_DAY), selected.get(Calendar.MINUTE), LocaleController.is24HourFormat);
+            timePicker.setTitle(getString(R.string.LumaAnonymousNumberTimeTitle));
+            showDialog(timePicker);
+        });
+        if (picker != null) showDialog(picker.create());
     }
 
     private void showProfileInputDialog(AlertDialog.Builder builder, EditTextBoldCursor editText) {

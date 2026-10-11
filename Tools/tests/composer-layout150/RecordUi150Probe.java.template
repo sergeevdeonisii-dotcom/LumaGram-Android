@@ -1,0 +1,142 @@
+import java.util.ArrayList;
+import org.telegram.ui.Components.LumaRecordUiToken;
+
+public final class RecordUi150Probe {
+    static int assertions;
+    static void check(boolean result, String message) { assertions++; if (!result) throw new AssertionError(message); }
+    static class Animator {
+        ArrayList<Runnable> listeners = new ArrayList<>();
+        int starts, ends, cancels;
+        void removeAllListeners() { listeners.clear(); }
+        void start() { starts++; }
+        void end() { ends++; for (Runnable listener : new ArrayList<>(listeners)) listener.run(); }
+        void cancel() { cancels++; end(); }
+    }
+    static class ValueAnimator extends Animator {
+        int updates = 1;
+        void removeAllUpdateListeners() { updates = 0; }
+        static boolean areAnimatorsEnabled() { return motion; }
+    }
+    static class AnimatorSet extends Animator {
+        ArrayList<Animator> children = new ArrayList<>();
+        ArrayList<Animator> getChildAnimations() { return children; }
+        @Override void cancel() { for (Animator child : children) child.cancel(); super.cancel(); }
+    }
+    static class ViewGroup {
+        static class LayoutParams {}
+        ViewGroup parent;
+        int removals, additions, visibility = 8;
+        float alpha = 1f;
+        void setAlpha(float value) { alpha = value; }
+        int getVisibility() { return visibility; }
+        ViewGroup getParent() { return parent; }
+        void removeView(ViewGroup child) { removals++; child.parent = null; }
+        void addView(ViewGroup child, LayoutParams params) { additions++; child.parent = this; }
+    }
+    static class AndroidUtilities {
+        static ArrayList<Runnable> pending = new ArrayList<>();
+        static void cancelRunOnUIThread(Runnable callback) { pending.remove(callback); }
+        static void runOnUIThread(Runnable callback, int delay) { check(delay == 1100, "finite wall-clock guard"); pending.add(callback); }
+        static float getAnimatorDurationScale() { return motion ? 1 : 0; }
+    }
+    static class SharedConfig { static boolean animationsEnabled() { return motion; } }
+    static class LiteMode {
+        static final int FLAG_LIQUID_GLASS = 1;
+        static boolean isEnabled(int flag) { return glass; }
+        static boolean isPowerSaverApplied() { return powerSaver; }
+    }
+    static class Build { static class VERSION { static int SDK_INT = 36; } }
+    static boolean motion = true, powerSaver, glass = true;
+    static final int VISIBLE = 0;
+    boolean destroyed;
+    LumaRecordUiToken recordUiToken = new LumaRecordUiToken();
+    AnimatorSet runningAnimationAudio, recordPannelAnimation, recordLockAnimation;
+    Runnable recordUiAnimationDeadline, recordPanelAnimationDeadline, recordLockAnimationDeadline;
+    ViewGroup recordPreviewReturnParent, recordedAudioPanel, recordPanel, sizeNotifierLayout = new ViewGroup();
+    ViewGroup.LayoutParams recordPreviewReturnParams;
+    ViewGroup recordTimerView = new ViewGroup(), slideText = new ViewGroup();
+
+    /* ACTUAL_CANCEL_RUNNING */
+    /* ACTUAL_CANCEL_LOCK */
+    /* ACTUAL_CANCEL_PANEL */
+    /* ACTUAL_CLEAR_CALLBACKS */
+    /* ACTUAL_RESTORE_PARENT */
+    /* ACTUAL_START_RUNNING */
+    /* ACTUAL_MOTION_ENABLED */
+    /* ACTUAL_START_PANEL */
+    /* ACTUAL_RECORD_VISIBILITY */
+    /* ACTUAL_FAST_EXIT_HIDE */
+
+    public static void main(String[] args) {
+        RecordUi150Probe ui = new RecordUi150Probe();
+        ui.recordTimerView.alpha = .5f;
+        ui.hideFastRecordUiContent();
+        check(ui.recordTimerView.alpha == 0 && ui.slideText.alpha == 0, "fast glass cancel removes recorder text before placeholder returns");
+        glass = false; ui.recordTimerView.alpha = .5f; ui.slideText.alpha = 1f;
+        ui.hideFastRecordUiContent();
+        check(ui.recordTimerView.alpha == .5f && ui.slideText.alpha == 1f, "stock fast-exit fade preserved");
+        glass = true;
+        check(!ui.isRecordingUiVisible(), "no ghost recording islands before creation");
+        ui.recordPanel = new ViewGroup(); ui.recordPanel.visibility = VISIBLE;
+        check(ui.isRecordingUiVisible(), "active/cancel indicator retains left island");
+        ui.recordPanel.visibility = 8;
+        ui.recordedAudioPanel = new ViewGroup(); ui.recordedAudioPanel.visibility = VISIBLE;
+        check(ui.isRecordingUiVisible(), "preview trash retains left island after active panel hides");
+        ui.recordedAudioPanel.visibility = 8;
+        check(!ui.isRecordingUiVisible(), "normal geometry returns only after preview hides");
+        long oldEpoch = ui.recordUiToken.begin();
+        AnimatorSet old = new AnimatorSet();
+        ValueAnimator child = new ValueAnimator();
+        int[] internalCompletions = {0}, staleWrites = {0};
+        child.listeners.add(() -> internalCompletions[0]++);
+        child.listeners.add(() -> { if (ui.recordUiToken.isCurrent(oldEpoch)) staleWrites[0]++; });
+        old.listeners.add(() -> staleWrites[0]++);
+        old.children.add(child);
+        ui.runningAnimationAudio = old;
+        AnimatorSet oldLock = new AnimatorSet();
+        ValueAnimator oldLockProperty = new ValueAnimator();
+        oldLock.children.add(oldLockProperty);
+        ui.recordLockAnimation = oldLock;
+        Runnable oldLockDeadline = () -> {};
+        ui.recordLockAnimationDeadline = oldLockDeadline;
+        AndroidUtilities.pending.add(oldLockDeadline);
+        ui.startRunningRecordUiAnimation(true);
+        Runnable oldDeadline = ui.recordUiAnimationDeadline;
+        ui.recordUiToken.begin();
+        ui.cancelRunningRecordUiAnimation();
+        check(ui.runningAnimationAudio == null && old.cancels == 1, "clear owner before cancel");
+        check(staleWrites[0] == 0 && child.updates == 0, "cancel cannot restore old state");
+        check(internalCompletions[0] == 1, "native child bookkeeping remains subscribed");
+        check(!AndroidUtilities.pending.contains(oldDeadline), "old wall guard removed");
+        check(ui.recordLockAnimation == null && oldLock.cancels == 1 && oldLockProperty.updates == 0, "cancel main also stops independently delayed lock property writes");
+        check(ui.recordLockAnimationDeadline == null && !AndroidUtilities.pending.contains(oldLockDeadline), "delayed lock deadline removed");
+        AnimatorSet lateLock = new AnimatorSet(); ui.recordLockAnimation = lateLock;
+        ui.cancelRunningRecordUiAnimation();
+        check(lateLock.cancels == 1 && ui.recordLockAnimation == null, "normal entry has ended: null main animator still cancels live lock");
+        AnimatorSet next = new AnimatorSet(); ui.runningAnimationAudio = next;
+        ui.startRunningRecordUiAnimation(true); oldDeadline.run();
+        check(next.ends == 0, "late old deadline cannot end new transition");
+        ui.recordUiAnimationDeadline.run(); check(next.ends == 1, "frozen animator reaches final state");
+        ui.recordUiToken.begin(); ui.cancelRunningRecordUiAnimation();
+        motion = false; next = new AnimatorSet(); ui.runningAnimationAudio = next;
+        ui.startRunningRecordUiAnimation(true); check(next.starts == 1 && next.ends == 1 && ui.recordUiAnimationDeadline == null, "reduced motion settles immediately");
+        ui.cancelRunningRecordUiAnimation(); motion = true; powerSaver = true;
+        next = new AnimatorSet(); ui.recordPannelAnimation = next; ui.startRecordPanelUiAnimation();
+        check(next.ends == 1 && ui.recordPanelAnimationDeadline == null, "power saver panel settles");
+        ui.cancelRecordPanelUiAnimation(); powerSaver = false;
+        next = new AnimatorSet(); ui.recordPannelAnimation = next; ui.startRecordPanelUiAnimation();
+        Runnable panelDeadline = ui.recordPanelAnimationDeadline;
+        ui.destroyed = true; ui.recordUiToken.invalidate(); ui.cancelRecordPanelUiAnimation(); panelDeadline.run();
+        check(next.cancels == 1 && next.ends == 1, "destroy cancels without late panel finalization");
+        ViewGroup original = new ViewGroup(); ui.recordedAudioPanel = new ViewGroup();
+        ui.recordedAudioPanel.parent = ui.sizeNotifierLayout;
+        ui.recordPreviewReturnParent = original; ui.recordPreviewReturnParams = new ViewGroup.LayoutParams();
+        ui.restoreRecordPreviewParent(); ui.restoreRecordPreviewParent();
+        check(original.additions == 1 && ui.sizeNotifierLayout.removals == 1 && ui.recordedAudioPanel.parent == original, "preview reparent is restored exactly once");
+        for (int i = 0; i < 100; i++) {
+            long before = ui.recordUiToken.begin(); ui.recordUiToken.begin();
+            check(!ui.recordUiToken.isCurrent(before), "every restarted capture rejects old callback");
+        }
+        System.out.println("PASS: " + assertions + " extracted production animation-owner checks; modeled Animator dispatch, no device claim.");
+    }
+}

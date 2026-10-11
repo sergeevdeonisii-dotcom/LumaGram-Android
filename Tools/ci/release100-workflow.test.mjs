@@ -5,10 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { expectedArtifact } from './collect-lunagram-apk.mjs';
 
 const workflow = fs.readFileSync(new URL('../../.github/workflows/lunagram-release100-apks.yml', import.meta.url), 'utf8');
-const build = fs.readFileSync(new URL('./build-lunagram-release100.sh', import.meta.url), 'utf8');
-const prepare = fs.readFileSync(new URL('./prepare-lunagram-release105.sh', import.meta.url), 'utf8');
+const build = fs.readFileSync(new URL('./build-lunagram-release150.sh', import.meta.url), 'utf8');
+const prepare = fs.readFileSync(new URL('./prepare-lunagram-release150.sh', import.meta.url), 'utf8');
 const properties = fs.readFileSync(new URL('../../gradle.properties', import.meta.url), 'utf8');
 const subscriptionUi = fs.readFileSync(new URL('../tests/run-subscription-ui-compile.ps1', import.meta.url), 'utf8');
 const localGiftsUi = fs.readFileSync(new URL('../tests/run-local-gifts-ui102-regressions.ps1', import.meta.url), 'utf8');
@@ -71,22 +72,39 @@ test('the production baseline helper works with a fresh depth-1 clone and preser
   assert.equal(git('-C', clone, 'status', '--porcelain'), '');
 });
 
-test('1.0.5 workflow and scripts enforce the owner repository, source commit and exact release identity', () => {
+test('1.5 workflow and scripts enforce the owner repository, source commit and exact release identity', () => {
   for (const text of [workflow, build, prepare]) {
     assert.ok(text.includes('sergeevdeonisii-dotcom/LumaGram-Android'));
     assert.ok(text.includes('refs/heads/agent/lunagram-release100'));
   }
   for (const text of [build, prepare]) {
-    assert.match(text, /APP_VERSION_NAME=.*1\.0\.5/);
-    assert.match(text, /APP_VERSION_CODE=.*7167/);
+    assert.match(text, /APP_VERSION_NAME=.*1\.5/);
+    assert.match(text, /APP_VERSION_CODE=.*7168/);
     assert.ok(text.includes('GITHUB_SHA'));
   }
-  assert.match(properties, /^APP_VERSION_NAME=1\.0\.5\r?$/m);
-  assert.match(properties, /^APP_VERSION_CODE=7167\r?$/m);
+  assert.match(properties, /^APP_VERSION_NAME=1\.5\r?$/m);
+  assert.match(properties, /^APP_VERSION_CODE=7168\r?$/m);
   assert.match(build, /source_commit.*GITHUB_SHA/);
   assert.ok(!workflow.includes('pull_request'));
 });
-test('release105 builds and uploads only the genuine public and personal APK pair', () => {
+test('1.5 standalone APK identity derives from Gradle while explicit105 scripts stay historical', () => {
+  const standalone = fs.readFileSync(new URL('../../TMessagesProj_AppStandalone/build.gradle', import.meta.url), 'utf8');
+  const baseCode = Number(properties.match(/^APP_VERSION_CODE=(\d+)\r?$/m)?.[1]);
+  const visible = properties.match(/^APP_VERSION_NAME=([^\r\n]+)\r?$/m)?.[1];
+  const abiCode = Number(standalone.match(/abiVersionCode = (\d+)/)?.[1]);
+  assert.ok(standalone.includes('output.versionCodeOverride = defaultConfig.versionCode * 10 + variant.productFlavors.get(0).abiVersionCode'));
+  assert.ok(standalone.includes('versionName APP_VERSION_NAME'));
+  assert.equal(baseCode * 10 + abiCode, expectedArtifact('full').versionCode);
+  assert.equal(visible, expectedArtifact('full').versionName);
+  assert.equal(visible, '1.5');
+  for (const script of ['build-lunagram-release100.sh', 'prepare-lunagram-release105.sh']) {
+    const historical = fs.readFileSync(new URL(`./${script}`, import.meta.url), 'utf8');
+    assert.match(historical, /APP_VERSION_NAME=.*1\.0\.5/);
+    assert.match(historical, /APP_VERSION_CODE=.*7167/);
+    assert.ok(!workflow.includes(script), 'historical build scripts must not execute in the active workflow');
+  }
+});
+test('release150 builds and uploads only the genuine public and personal APK pair', () => {
   assert.ok(build.includes('editions=(full public)'));
   assert.ok(!build.includes('editions+=(friends)'));
   assert.ok(!build.includes('--include-friends'));
@@ -95,17 +113,17 @@ test('release105 builds and uploads only the genuine public and personal APK pai
   assert.match(build, /\[\[ "\$edition" != public \]\] \|\| public_flag=true/);
   assert.ok(build.includes('-PlumaFriendsEdition=$friends_flag'));
   assert.ok(build.includes('-PlumaPublicEdition=$public_flag'));
-  assert.ok(build.includes('Lunagram-1.0.5-$edition-temporary.apk'));
-  assert.match(build, /--release 105 --verify-pair/);
-  assert.ok(workflow.includes('lunagram-105-temporary-signed'));
+  assert.ok(build.includes('Lunagram-1.5-$edition-temporary.apk'));
+  assert.match(build, /--release 150 --verify-pair/);
+  assert.ok(workflow.includes('lunagram-150-temporary-signed'));
   const uploads = workflow.split(/\r?\n/).filter(line => line.includes('${{ runner.temp }}/'));
   assert.deepEqual(uploads.map(line => line.trim()), [
-    '${{ runner.temp }}/lunagram105-artifacts/Lunagram-1.0.5-full-temporary.apk',
-    '${{ runner.temp }}/lunagram105-artifacts/Lunagram-1.0.5-public-temporary.apk',
-    '${{ runner.temp }}/lunagram105-artifacts/build-metadata.json',
+    '${{ runner.temp }}/lunagram150-artifacts/Lunagram-1.5-full-temporary.apk',
+    '${{ runner.temp }}/lunagram150-artifacts/Lunagram-1.5-public-temporary.apk',
+    '${{ runner.temp }}/lunagram150-artifacts/build-metadata.json',
   ]);
   assert.ok(!workflow.includes('*.apk') && !workflow.includes('build_friends') && !workflow.includes('LUMA_BUILD_FRIENDS_EDITION:'));
-  assert.ok(!/--release (102|103|104)\b/.test(build));
+  assert.ok(!/--release (102|103|104|105)\b/.test(build));
   assert.ok(!build.includes('for edition in full friends;'));
   assert.ok(!/gh\s+release|git\s+push|latest\.json/.test(build));
 });
@@ -114,18 +132,18 @@ test('CI receives no production signing key and only uploads APKs and public pro
   assert.ok(workflow.includes('persist-credentials: false'));
   assert.ok(workflow.includes('include-hidden-files: false'));
   assert.equal([...workflow.matchAll(/secrets\.([A-Z0-9_]+)/g)].map(x => x[1]).sort().join(','), 'LUMA_API_HASH,LUMA_API_ID');
-  assert.ok(build.includes('mktemp -d "$RUNNER_TEMP/lunagram105-signing.XXXXXX"'));
+  assert.ok(build.includes('mktemp -d "$RUNNER_TEMP/lunagram150-signing.XXXXXX"'));
   assert.ok(build.includes('trap cleanup EXIT'));
   assert.ok(build.includes('unset LUMA_API_ID LUMA_API_HASH LUMA_CI_SIGNING_PASSWORD'));
   assert.ok(!/rm\s+-(?:rf|fr)/.test(build));
   for (const action of workflow.matchAll(/uses:\s+([^\s]+)/g)) assert.match(action[1], /@[0-9a-f]{40}$/);
 });
 test('SDK36 is prepared before credential-free native probes, and all block assembly', () => {
-  const sdkStep = workflow.indexOf('run: bash Tools/ci/prepare-lunagram-release105.sh');
+  const sdkStep = workflow.indexOf('run: bash Tools/ci/prepare-lunagram-release150.sh');
   const buildStep = workflow.indexOf('      - name: Build personal and public APKs');
   assert.ok(sdkStep > 0 && sdkStep < buildStep);
   assert.ok(sdkStep < workflow.indexOf('run-local-gifts-ui102-regressions.ps1'), 'Nested personal preview compilation needs Android36 before the gift UI suite');
-  assert.ok(workflow.includes('bash -n Tools/ci/prepare-lunagram-release105.sh'));
+  assert.ok(workflow.includes('bash -n Tools/ci/prepare-lunagram-release150.sh'));
   for (const script of ['run-profile-verification105-regressions.ps1', 'run-round-flip105-regressions.ps1', 'run-subscription-auth-regressions.ps1', 'run-subscriptions-regressions.ps1', 'run-subscription-ui-compile.ps1']) {
     const offset = workflow.indexOf(script);
     assert.ok(offset > sdkStep && offset < buildStep, script);
@@ -144,11 +162,16 @@ test('SDK36 is prepared before credential-free native probes, and all block asse
   assert.ok(subscriptionUi.includes('$run=Join-Path $output'));
 });
 test('release-blocking regression suites execute before either APK is built', () => {
-  const buildStep = workflow.indexOf('run: bash Tools/ci/build-lunagram-release100.sh');
+  const buildStep = workflow.indexOf('run: bash Tools/ci/build-lunagram-release150.sh');
   for (const script of ['run-round-controls81-regressions.ps1', 'run-round-editions100-regressions.ps1',
       'run-round-concurrent102-regressions.ps1',
       'run-round-flip105-regressions.ps1',
       'run-profile-verification105-regressions.ps1',
+      'run-anonymous-number150-regressions.ps1',
+      'run-ghost-profile150-regressions.ps1',
+      'run-recording-header150-regressions.ps1',
+      'run-composer-layout150-regressions.ps1',
+      'run-edit-composer150-regressions.ps1',
       'run-dialogs-canvas104-regressions.ps1', 'run-blur-capture104-regressions.ps1',
       'run-gift-geometry104-regressions.ps1',
       'run-shared-media-geometry104b-regressions.ps1',
@@ -169,4 +192,13 @@ test('release-blocking regression suites execute before either APK is built', ()
   assert.ok(localGiftsUi.includes("& (Join-Path $PSScriptRoot 'run-local-gifts-state102-regressions.ps1') -JavaHome $JavaHome -OutputRoot (Join-Path $OutputRoot 'state')"),
     'The required local-gifts UI suite must also run state/clone checks with the supplied CI runtime/output root');
   assert.ok(!workflow.includes('./Tools/tests/run-local-gifts-state102-regressions.ps1'), 'State checks are nested in the UI runner and must not run twice');
+});
+
+test('anonymous TON/date checks exercise the real identity helper without Android or credential dependencies', () => {
+  const runner = fs.readFileSync(new URL('../tests/run-anonymous-number150-regressions.ps1', import.meta.url), 'utf8');
+  assert.ok(runner.includes("@('LumaAnonymousNumber', 'LumaAccountData', 'LumaBuildPolicy')"));
+  assert.ok(runner.includes('TMessagesProj/src/main/java/org/telegram/messenger/$name.java'));
+  assert.ok(!runner.includes('friends531/fixtures/org/telegram/messenger/LumaAccountData'));
+  assert.ok(runner.includes('MessagesController.getInstance(currentAccount).config.tonUsdRate.get()'));
+  assert.equal(workflow.split('run-anonymous-number150-regressions.ps1').length, 2);
 });

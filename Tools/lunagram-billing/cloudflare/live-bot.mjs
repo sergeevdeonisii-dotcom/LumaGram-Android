@@ -7,6 +7,7 @@ const id = value => Number.isSafeInteger(value) && value > 0 && value < 2 ** 52 
 const bounded = (value, max) => typeof value === 'string' && value.length > 0 && value.length <= max;
 const keyboard = buttons => ({ inline_keyboard: buttons.map(([text, callback_data]) => [{ text, callback_data }]) });
 const PLAN_BUTTONS = keyboard(LIVE_PLANS.map(p => [`${p.title} · ${p.starsAmount} ⭐`, `buy_${p.id}`]));
+const orderLines = orders => orders.map(o => `${o.planId} · ${o.starsAmount} ⭐ · ${o.status} · ${new Date(o.createdAtMs).toISOString().slice(0, 10)} UTC\n/refund ${o.id}`).join('\n\n');
 const PLAN_TEXT = 'Lunagram · подписки на месяц\n\n' + LIVE_PLANS.map(p => `${p.title} — ${p.starsAmount} ⭐`).join('\n')
     + '\n\nРучное продление, без автосписаний. Все функции пока доступны без подписки. После оплаты вы получите одноразовый ключ из 16 символов.';
 export const TERMS_TEXT = 'Условия Lunagram\n\nПодписка добровольная: функции сейчас не ограничены и тарифы не дают разных возможностей. '
@@ -142,13 +143,13 @@ export async function dispatchLiveUpdate(update, { store, auth, control, api, cl
             return reply(status.active ? `Подписка ${status.planId} активна до ${new Date(status.expiresAtMs).toISOString().slice(0, 10)}. Все функции пока доступны без ограничений.`
                 : 'Активной подписки нет. Ключ можно активировать в настройках Lunagram или командой /redeem КЛЮЧ.');
         }
-        if (command === 'paysupport' || command === 'help') return reply('Поддержка работает прямо здесь. Отправьте /support и описание проблемы одним сообщением. Для возврата укажите номер заказа или дату и тариф. Не присылайте пароль, код входа, seed-фразу или банковские данные.');
+        if (command === 'paysupport' || command === 'help') return reply('Поддержка работает прямо здесь. Отправьте /support и описание проблемы одним сообщением. Для возврата укажите номер заказа из сообщения с ключом или /keys; если не нашли — дату и тариф. Сам ключ, пароль, код входа, seed-фразу или банковские данные не присылайте.');
         if (command === 'support') {
             if (!arg || arg.length > 1500) return reply('Отправьте /support описание проблемы (до 1500 символов). Не отправляйте пароли и коды входа.');
             const ticket = store.createSupportTicket(userId, arg, requestKey);
             return reply(`Обращение #${ticket.id} сохранено. Ответ придёт в этот бот.`);
         }
-        if (['tickets', 'ticket', 'reply', 'refund', 'reviews', 'refundreview'].includes(command)) {
+        if (['tickets', 'ticket', 'orders', 'reply', 'refund', 'reviews', 'refundreview'].includes(command)) {
             if (!control.isOwner(userId)) return reply('Команда доступна только владельцу поддержки.');
             if (command === 'reviews') {
                 const reviews = store.listPaymentReviews(10);
@@ -164,7 +165,18 @@ export async function dispatchLiveUpdate(update, { store, auth, control, api, cl
             }
             if (command === 'ticket') {
                 const ticket = store.readTicket(arg);
-                return reply(`Обращение #${ticket.id}\n${ticket.messages.slice(-3).map(m => `${m.direction === 'user' ? 'Покупатель' : 'Поддержка'}: ${m.text}`).join('\n\n')}`.slice(0, 1950));
+                const purchases = store.listTicketOrders(ticket.id);
+                const conversation = ticket.messages.slice(-3).map(m => `${m.direction === 'user' ? 'Покупатель' : 'Поддержка'}: ${m.text}`).join('\n\n').slice(0, 950);
+                return reply(`Обращение #${ticket.id}\n${conversation}\n\nОплаченные заказы автора обращения:\n${purchases.orders.length ? orderLines(purchases.orders.slice(0, 3)) : 'Не найдены.'}\n\nВсе страницы: /orders ${ticket.id}`);
+            }
+            if (command === 'orders') {
+                const parsed = /^([a-f0-9]{48})(?:\s+([1-9][0-9]{0,3}))?$/.exec(arg);
+                const page = parsed ? Number(parsed[2] || 1) : 0;
+                if (!parsed || page > 1000) return reply('/orders номер_обращения [страница 1–1000]');
+                const purchases = store.listTicketOrders(parsed[1], page);
+                return reply(`Заказы автора обращения #${purchases.ticketId}\nСтраница ${page}\n\n${purchases.orders.length ? orderLines(purchases.orders) : 'Оплаченных заказов на этой странице нет.'}`
+                    + (purchases.hasMore ? `\n\nДалее: /orders ${purchases.ticketId} ${page + 1}` : '')
+                    + '\n\nКоманда /refund только открывает отдельное подтверждение возврата.');
             }
             if (command === 'reply') {
                 const parsed = /^([a-f0-9]{48})\s+([\s\S]{1,1500})$/.exec(arg);

@@ -1,4 +1,4 @@
-name: Lunagram 1.0.5 personal and genuine public APKs
+name: Lunagram 1.5 personal and genuine public APKs
 
 on:
   push:
@@ -38,15 +38,16 @@ jobs:
       - name: Verify artifact metadata and release workflow guards
         shell: bash
         run: |
-          bash -n Tools/ci/build-lunagram-release100.sh
-          bash -n Tools/ci/prepare-lunagram-release105.sh
+          bash -n Tools/ci/build-lunagram-release150.sh
+          bash -n Tools/ci/prepare-lunagram-release150.sh
           node --test Tools/ci/collect-lunagram-apk.test.mjs Tools/ci/release100-workflow.test.mjs Tools/tests/lunagram-support100.test.mjs
       - name: Prepare pinned Android SDK without API or signing credentials
         shell: bash
-        run: bash Tools/ci/prepare-lunagram-release105.sh
+        run: bash Tools/ci/prepare-lunagram-release150.sh
       - name: Test camera policy, edition separation, size-safe export and security
         shell: pwsh
         run: |
+          $sdkRoot = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } elseif ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT } else { throw 'Android SDK is unavailable.' }
           ./Tools/tests/run-round-controls81-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-controls-tests')
           ./Tools/tests/run-round-concurrent102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-concurrent-tests')
           ./Tools/tests/run-dialogs-canvas104-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'dialogs-canvas-tests')
@@ -59,6 +60,11 @@ jobs:
           ./Tools/tests/run-logout102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'logout-tests')
           ./Tools/tests/run-round-editions100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-editions-tests')
           ./Tools/tests/run-round-settings100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-settings-tests')
+          ./Tools/tests/run-anonymous-number150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'anonymous-number-tests') -Aapt2 (Join-Path $sdkRoot 'build-tools/36.0.0/aapt2')
+          ./Tools/tests/run-ghost-profile150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'ghost-profile-tests')
+          ./Tools/tests/run-recording-header150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'recording-header-tests')
+          ./Tools/tests/run-composer-layout150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'composer-layout-tests') -AndroidJar (Join-Path $sdkRoot 'platforms/android-36/android.jar')
+          ./Tools/tests/run-edit-composer150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'edit-composer-tests') -AndroidJar (Join-Path $sdkRoot 'platforms/android-36/android.jar')
           ./Tools/tests/run-round-limits100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-limits-tests')
           ./Tools/tests/run-round-stats82-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-stats-tests')
           ./Tools/tests/run-round-export82-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-export-tests')
@@ -67,7 +73,7 @@ jobs:
           ./Tools/tests/run-http-url100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'http-url-tests')
           ./Tools/tests/run-media-browser100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'media-browser-tests')
           ./Tools/tests/run-playback-privacy100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'playback-privacy-tests')
-          ./Tools/tests/run-startup100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'startup-tests')
+          ./Tools/tests/run-startup100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'startup-tests') -AndroidJar (Join-Path $sdkRoot 'platforms/android-36/android.jar')
           ./Tools/tests/run-glass-contrast100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'glass-contrast-tests')
           ./Tools/tests/run-update-presentation100-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'update-presentation-tests')
       - name: Verify native animation, subscription auth, catalog and UI contracts without credentials
@@ -84,15 +90,15 @@ jobs:
         env:
           LUMA_API_ID: ${{ secrets.LUMA_API_ID }}
           LUMA_API_HASH: ${{ secrets.LUMA_API_HASH }}
-        run: bash Tools/ci/build-lunagram-release100.sh
+        run: bash Tools/ci/build-lunagram-release150.sh
       - name: Upload temporary APK pair and public provenance
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: lunagram-105-temporary-signed
+          name: lunagram-150-temporary-signed
           path: |
-            ${{ runner.temp }}/lunagram105-artifacts/Lunagram-1.0.5-full-temporary.apk
-            ${{ runner.temp }}/lunagram105-artifacts/Lunagram-1.0.5-public-temporary.apk
-            ${{ runner.temp }}/lunagram105-artifacts/build-metadata.json
+            ${{ runner.temp }}/lunagram150-artifacts/Lunagram-1.5-full-temporary.apk
+            ${{ runner.temp }}/lunagram150-artifacts/Lunagram-1.5-public-temporary.apk
+            ${{ runner.temp }}/lunagram150-artifacts/build-metadata.json
           if-no-files-found: error
           retention-days: 3
           compression-level: 0

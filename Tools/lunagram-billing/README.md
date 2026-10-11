@@ -1,6 +1,6 @@
 # Lunagram billing — rollout status (2026-10-12)
 
-The neutral service `https://lunagram-billing.pages.dev` now runs the durable bot, in-bot support, PKCE account pairing and authenticated subscription/code routes. **Live sales remain disabled** (`BILLING_PAYMENTS_ENABLED=false`) until the owner confirms their support role and the rollout is verified. No real payment or refund was made by the implementation tests. Crypto Pay and TON remain unconnected.
+The neutral service `https://lunagram-billing.pages.dev` now runs the durable bot, in-bot support, PKCE account pairing and authenticated subscription/code routes. The support owner is already bound, confirmed by private operator diagnostics on 2026-10-12. The reviewed support/order-lookup patch is deployed. **Live sales remain disabled** (`BILLING_PAYMENTS_ENABLED=false`) pending the remaining rollout, recovery and controlled-payment checks in `cloudflare/DEPLOYMENT.md`. No real payment or refund was made by the implementation tests. Crypto Pay and TON remain unconnected.
 
 ## Current connected implementation
 
@@ -13,7 +13,7 @@ The neutral service `https://lunagram-billing.pages.dev` now runs the durable bo
 
 Keys exist only in Cloudflare secrets. Never commit them, rotate/drop encryption secrets without a tested data migration, or use test fixtures in production. No rollout flag may bypass owner binding or authentication. Keep the private core's public routes and preview URLs disabled.
 
-Verification: 220 Node tests passed, plus a native workerd test using fake credentials and a fake Telegram transport: `/start`, owner confirmation, invoice → paid receipt → durable delivery → activation, and duplicate activation. It found and fixed a runtime incompatibility: workerd requires explicit bytes/encoding in `Cipheriv.update`; `tests/workerd-crypto.test.mjs` guards it. The owner's previously queued `/start` was subsequently acknowledged by Telegram after deployment. Full Android APK and real-money end-to-end verification remain separate release gates.
+Verification: 225 Node tests passed locally, including the deployed support/order-lookup patch. Native workerd tests used fake credentials and a fake Telegram transport: `/start`, owner confirmation, invoice → paid receipt → durable delivery → activation, duplicate activation and isolated author-only support lookup after reopening. They found and fixed a runtime incompatibility: workerd requires explicit bytes/encoding in `Cipheriv.update`; `tests/workerd-crypto.test.mjs` guards it. Production informational delivery was acknowledged twice, with no pending outbox jobs at the post-deployment check. Subsequent new `/paysupport` and `/keys` replies were verified in Telegram Desktop; the latter reported no key purchases. Full Android APK, paid-key delivery and real-money end-to-end verification remain separate release gates.
 
 ## Legacy isolated adapters and original scaffold notes
 

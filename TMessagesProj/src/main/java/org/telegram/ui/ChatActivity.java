@@ -2787,7 +2787,11 @@ public class ChatActivity extends BaseFragment implements
             final View senderSelect = chatActivityEnterView.getSenderSelectView();
             final View attachButton = chatActivityEnterView.getAttachButton();
 
-            if (isLiquidInputControlVisible(botMenuButton)) {
+            if (chatActivityEnterView.isRecordingUiVisible()) {
+                // Indicator/trash occupies the left island even while attachment glyphs are hidden.
+                centerInsetLeft = defaultInset;
+                drawLeftButton = true;
+            } else if (isLiquidInputControlVisible(botMenuButton)) {
                 final int controlRight = getLiquidInputControlRight(botMenuButton);
                 if (controlRight >= 0) {
                     centerInsetLeft = Math.max(defaultInset, controlRight + dp(6));
@@ -2893,10 +2897,9 @@ public class ChatActivity extends BaseFragment implements
         final FrameLayout.LayoutParams replyParams = (FrameLayout.LayoutParams) replyLayout.getLayoutParams();
         final FrameLayout.LayoutParams closeParams = (FrameLayout.LayoutParams) replyCloseImageView.getLayoutParams();
         if (enabled) {
-            // ChatActivityEnterView itself has 7dp side margins while the split glass
-            // capsule starts 52dp from the screen edge. Keep the complete reply row
-            // (including its icon and close button) inside that center capsule.
-            replyParams.leftMargin = dp(45);
+            // The reply icon remains in the left action island. Content uses
+            // the same single 64dp inset as the text field, not a second row inset.
+            replyParams.leftMargin = 0;
             replyParams.rightMargin = dp(89);
             closeParams.width = dp(44);
             closeParams.rightMargin = dp(45);
@@ -15798,7 +15801,7 @@ public class ChatActivity extends BaseFragment implements
                 replyImageLocation = null;
                 replyImageLocationObject = null;
                 replyImageView.setVisibility(View.INVISIBLE);
-                layoutParams1.leftMargin = layoutParams2.leftMargin = layoutParams3.leftMargin = AndroidUtilities.dp(52);
+                layoutParams1.leftMargin = layoutParams2.leftMargin = layoutParams3.leftMargin = AndroidUtilities.dp(replyLayout.current().getTextInsetDp(false));
             } else {
                 if (thumbMediaMessageObject.isRoundVideo()) {
                     replyImageView.setRoundRadius(AndroidUtilities.dp(17));
@@ -15815,7 +15818,7 @@ public class ChatActivity extends BaseFragment implements
                 replyLayout.current().hasSpoiler = hasSpoiler;
                 replyImageView.setImage(ImageLocation.getForObject(replyImageLocation, photoSizeObject), hasSpoiler ? "5_5_b" : "50_50", ImageLocation.getForObject(thumbPhotoSize, photoSizeObject), hasSpoiler ? "5_5_b" : "50_50_b", null, size, cacheType, thumbMediaMessageObject);
                 replyImageView.setVisibility(View.VISIBLE);
-                layoutParams1.leftMargin = layoutParams2.leftMargin = layoutParams3.leftMargin = AndroidUtilities.dp(96);
+                layoutParams1.leftMargin = layoutParams2.leftMargin = layoutParams3.leftMargin = AndroidUtilities.dp(replyLayout.current().getTextInsetDp(true));
             }
             replyNameTextView.setLayoutParams(layoutParams1);
             replyObjectTextView.setLayoutParams(layoutParams2);

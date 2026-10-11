@@ -6,19 +6,29 @@ The neutral service is `https://lunagram-billing.pages.dev`; the bot is `@Lunagr
 
 | Item | Current recorded state |
 | --- | --- |
-| Private core version | `2409f1e5-8adb-417a-9ad0-c7472310b85b` |
+| Private core version | `ca7dfded-b0a0-41e9-b002-3058cdedcbda` — support/order lookup, 2026-10-12 |
 | Pages deployment | `54f4ded9` |
 | `LIVE_BOT_ENABLED` | `true` |
 | `BILLING_PAYMENTS_ENABLED` | `false` |
-| Owner support role bound | `false` |
-| Production informational delivery | `/start` processed; encrypted outbox acknowledged: 1, pending: 0 |
-| Node regression tests | 220 passed |
+| Owner support role bound | `true` — confirmed through private operator diagnostics on 2026-10-12; configured and bot identity match also confirmed |
+| Production informational delivery | Encrypted outbox acknowledged: 2, pending: 0 at the owner-binding check; new `/paysupport` and `/keys` replies subsequently verified in Telegram Desktop |
+| Node regression tests | 225 passed locally, including the deployed support/order-lookup patch |
 | Native workerd check | Passed with fake credentials and fake Telegram transport |
 | Actual paid purchase/refund | **Not performed or verified** |
 
 The native workerd check exercised `/start`, explicit owner confirmation, invoice → simulated paid receipt → durable delivery → activation, and duplicate activation. It exposed an actual runtime incompatibility: `Cipheriv.update` needed explicit bytes/encoding instead of Node's implicit string handling. The implementation now passes UTF-8 `Buffer` data; `tests/workerd-crypto.test.mjs` guards this difference. The queued production `/start` was acknowledged by Telegram after deploying the fix.
 
-These results demonstrate the tested local payment state machine and one real informational delivery, **not** real-money checkout, refund settlement, production crash recovery, disaster recovery, or the final Android APK. No real payment or refund was created by these tests.
+These results demonstrate the tested local payment state machine, real informational delivery and a bound support owner, **not** real-money checkout, refund settlement, production crash recovery, disaster recovery, or the final Android APK. No real payment or refund was created by these tests. Owner binding is complete; it is no longer an activation blocker. Sales remain disabled pending the other gates below.
+
+### Support/order-lookup patch — deployed, sales remain disabled
+
+The source now includes the full opaque order reference in the buyer's original key receipt and `/keys` response. `/paysupport` tells the buyer to share this reference rather than the bearer key. Already queued encrypted messages are immutable and are not rewritten; after deployment a new `/keys` command supplies references for the latest 20 purchases.
+
+The bound support owner can open `/ticket TICKET_ID` to see the last three paid orders belonging to that ticket's author. `/orders TICKET_ID [page]` returns five per page (pages 1–1000). Matching uses the stored ticket identity, never the buyer's supplied user ID or a different order mentioned in the message. Views expose only order reference, tariff, Stars amount, status and UTC creation date—not Telegram identity, keys, payment charge IDs or identity hashes. These commands are denied to ordinary users, including the author of the ticket. Lookup does not change payment or key state.
+
+Refund execution is unchanged: the owner selects `/refund ORDER_ID` and must confirm it separately. An order reference is a lookup handle, not an authorization credential. The new local tests cover the buyer → support → owner lookup → explicit refund-confirmation flow, user isolation, pagination/reopening, wrong-order mentions and message-size limits. An isolated native workerd run additionally confirmed receipt order references, buyer-only lookup, reopening storage, and duplicate activation without a second grant. It used fake identities, keys and Telegram transport, never production financial records.
+
+The reviewed patch was deployed to the existing private core with `--keep-vars --strict`. No namespace, migration, key, owner binding or Pages route changed. Fresh production checks confirmed `paymentsAvailable=false`, `ownerBound=true`, matching bot identity, zero pending updates and two acknowledged prior deliveries. Anonymous webhook/admin requests returned 403 and anonymous subscription access returned 401. Subsequent Telegram Desktop checks verified new `/paysupport` instructions asking for the order reference, not the secret code, and a `/keys` reply correctly reporting no key purchases. This does **not** verify a real paid order, paid-key delivery or refund; no real payment was made.
 
 ## Current architecture and routes
 
@@ -52,8 +62,8 @@ Financial identities, support content, keys and delivery payloads are encrypted 
 
 ## Remaining activation and release gates
 
-1. Have the owner explicitly bind their support role in the private bot using the authorized one-time setup flow. Confirm the owner identity through private operator status, never by publishing its capability or account ID. The currently recorded state is `ownerBound=false`.
-2. Keep `BILLING_PAYMENTS_ENABLED=false` until owner binding, support/refund procedures and rollout checks are complete. A flag is not a substitute for authentication, terms or owner binding: `paymentsReady()` requires configuration, owner binding **and** the payment flag.
+1. Owner binding was confirmed on 2026-10-12 (`ownerBound=true`, configured and bot identity match). Preserve the bound role and verify it privately after updates; do not publish its capability or account ID and do not repeat bootstrap merely because sales are still disabled.
+2. The support/order-lookup patch is reviewed and deployed. Keep `BILLING_PAYMENTS_ENABLED=false` until the remaining support/refund procedures and rollout checks are complete. A flag is not a substitute for authentication, terms or owner binding: `paymentsReady()` requires configuration, owner binding **and** the payment flag.
 3. Check current Cloudflare free-plan resources/quotas through authorized tooling; stop rather than enabling a paid plan without approval. A paid VPS is not required for this deployment. Preserve the namespace, DO name, migrations and secrets on updates; keep private Worker public/preview URLs disabled.
 4. Before upload, run the complete Node suite and a native workerd smoke test with fake credentials/transport, then dry-run/build both bundles. Node-only checks did not catch the cipher encoding incompatibility. Never run synthetic financial fixtures against production storage or Telegram.
 5. Verify production health/catalog, rejected anonymous webhook/app requests, bounded private diagnostics and actual informational delivery. Qualify production restart/persistence, backup restoration, alarm recovery, duplicate/late receipts, failed delivery and operator refund/review recovery separately. Do not infer all of this from a green health response.

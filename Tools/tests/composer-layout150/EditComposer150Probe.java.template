@@ -1,0 +1,147 @@
+import java.util.HashMap;
+
+/** Runs the extracted production owner/layout methods against small view state models. */
+public final class EditComposer150Probe {
+    static int assertions;
+    static void check(boolean value, String label) { assertions++; if (!value) throw new AssertionError(label); }
+    static final int VISIBLE = 0, GONE = 8, DEFAULT_HEIGHT = 44;
+    static float density = 1;
+    static int dp(float value) { return (int) Math.ceil(value * density); }
+    static class Gravity { static final int BOTTOM=80, TOP=48, LEFT=3, RIGHT=5; }
+    static class FrameLayout {
+        static class LayoutParams { int gravity=Gravity.BOTTOM, leftMargin, rightMargin, topMargin, bottomMargin; }
+    }
+    static class Animation { int cancels; void cancel() { cancels++; } }
+    static class View {
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams();
+        Animation animation = new Animation();
+        int visibility=VISIBLE, minimum, changes, width=dp(DEFAULT_HEIGHT), measuredWidth;
+        float x, y, alpha=1f, scaleX=1f, scaleY=1f;
+        Object background, tag;
+        PorterDuffColorFilter colorFilter;
+        FrameLayout.LayoutParams getLayoutParams() { return params; }
+        void setLayoutParams(FrameLayout.LayoutParams value) { params=value; changes++; }
+        Animation animate() { return animation; }
+        void setTranslationX(float value) { x=value; }
+        void setTranslationY(float value) { y=value; }
+        void setAlpha(float value) { alpha=value; }
+        void setScaleX(float value) { scaleX=value; }
+        void setScaleY(float value) { scaleY=value; }
+        void setVisibility(int value) { visibility=value; }
+        int getVisibility() { return visibility; }
+        int getMinimumHeight() { return minimum; }
+        void setMinimumHeight(int value) { minimum=value; }
+        void setBackground(Object value) { background=value; }
+        void setColorFilter(PorterDuffColorFilter value) { colorFilter=value; }
+        int width() { return width; }
+        Object getTag() { return tag; }
+    }
+    static class Hint { boolean hidden; void hide() { hidden=true; } }
+    static class PorterDuff { static class Mode { static final int MULTIPLY=1; } }
+    static class PorterDuffColorFilter { int color; PorterDuffColorFilter(int color,int mode) { this.color=color; } }
+    static class Theme {
+        static final int key_chat_messagePanelBackground=1, key_listSelector=2, key_chat_messagePanelIcons=3, key_glass_defaultIcon=4;
+        static final int RIPPLE_MASK_CIRCLE_20DP=5;
+        static Object createSimpleSelectorCircleDrawable(int size,int background,int pressed) { return new int[]{size,background,pressed}; }
+        static Object createSelectorDrawable(int pressed,int mask,int size) { return "normal-selector"; }
+    }
+    int themeRevision;
+    int getThemedColor(int key) { return themeRevision*100+key; }
+    Object editingMessageObject;
+    boolean editingComposerLayout, shownAiButton, shownRichButton;
+    int editingAiBackgroundColor, editingAiPressedColor, editingAiIconColor;
+    View emojiButton=new View(), messageEditText=new View(), aiButton=new View(), messageEditTextContainer=new View();
+    View richButton=new View();
+    View doneButton=new View(), sendButton=new View(), botButton, scheduledButton, attachButton, notifyButton, recordedAudioPanel;
+    HashMap<View,Float> animationParamsX=new HashMap<>();
+    Hint aiHint;
+    int lastAttachVisible;
+    boolean isChat=true, isStories, isLiveComment, suggestButtonVisible;
+
+    /* ACTUAL_EDIT_LAYOUT */
+    /* ACTUAL_FIELD_RIGHT */
+
+    EditComposer150Probe() {
+        emojiButton.params.gravity=Gravity.BOTTOM|Gravity.RIGHT;
+        emojiButton.params.rightMargin=dp(8);
+        aiButton.params.gravity=Gravity.TOP|Gravity.LEFT;
+        aiButton.params.topMargin=dp(1);
+        aiButton.visibility=GONE;
+        messageEditText.params.leftMargin=dp(64);
+        messageEditText.params.rightMargin=dp(60);
+    }
+    void begin(boolean ai) { editingMessageObject=new Object(); shownAiButton=ai; updateEditingComposerLayout(); }
+    void end() { editingMessageObject=null; updateFieldRight(1); updateEditingComposerLayout(); }
+    static void checkEdit(EditComposer150Probe p, int doneWidth) {
+        check(p.emojiButton.params.gravity==(Gravity.BOTTOM|Gravity.LEFT), "edit emoji uses physical left gutter in both text directions");
+        check(p.emojiButton.params.leftMargin==dp(3)&&p.emojiButton.params.rightMargin==0, "emoji not displaced by send-as or bot menu");
+        check(p.messageEditText.params.leftMargin==dp(64), "left text inset excludes emoji touch target");
+        check(p.messageEditText.params.rightMargin==Math.max(dp(20),Math.max(0,doneWidth-dp(44))+dp(12)), "actual width reserves bounded paid action overflow");
+        check(p.aiButton.params.gravity==(Gravity.RIGHT|Gravity.BOTTOM), "Ai has separate right action column");
+        check(p.aiButton.params.bottomMargin==dp(48)&&p.aiButton.params.topMargin==0, "Ai touch area is above Done with4dp gap");
+    }
+    public static void main(String[] args) {
+        for(float d:new float[]{1,1.25f,1.5f,2,2.625f,3,3.5f,4}) {
+            density=d;
+            for(boolean shown:new boolean[]{false,true}) {
+                for(int doneWidth:new int[]{44,48,64,92,140}) {
+                    EditComposer150Probe p=new EditComposer150Probe();
+                    p.doneButton.width=dp(doneWidth);
+                    p.emojiButton.params.leftMargin=dp(104); // prior group avatar/menu state
+                    p.messageEditText.params.leftMargin=dp(104);
+                    p.emojiButton.x=17; p.messageEditText.x=17; p.aiButton.x=2; p.aiButton.y=70;
+                    p.aiButton.alpha=.4f; p.aiButton.scaleX=p.aiButton.scaleY=.8f; // normal Ai transition in flight
+                    p.shownRichButton=true;p.richButton.visibility=VISIBLE;
+                    p.animationParamsX.put(p.emojiButton,42f); p.animationParamsX.put(p.messageEditText,42f);
+                    Hint oldHint=p.aiHint=new Hint();
+                    p.begin(shown);
+                    checkEdit(p,dp(doneWidth));
+                    check(p.emojiButton.x==0&&p.messageEditText.x==0&&p.aiButton.x==0&&p.aiButton.y==0,"mode transition cancels old transforms");
+                    check(p.aiButton.alpha==(shown?1f:0f)&&p.aiButton.scaleX==(shown?1f:.6f)&&p.aiButton.visibility==(shown?VISIBLE:GONE),"enter normalizes active show/hide transition from current owner");
+                    check(!p.shownRichButton&&p.richButton.visibility==GONE&&p.richButton.alpha==0f&&p.richButton.animation.cancels==1,"normal rich action cannot fade over editing Ai");
+                    check(p.animationParamsX.isEmpty()&&oldHint.hidden&&p.aiHint==null,"old delayed X owner/hint cannot override edit layout");
+                    check(p.messageEditTextContainer.minimum==(shown?dp(92):0),"two right controls fit without clipping; single line remains compact");
+                    check(p.aiButton.background instanceof int[],"editing Ai has filled themed bubble");
+                    check(p.aiButton.colorFilter.color==Theme.key_chat_messagePanelIcons,"Ai foreground uses matching native panel token");
+                    int changes=p.messageEditText.changes, cancellations=p.aiButton.animation.cancels;
+                    p.updateFieldRight(2); p.updateEditingComposerLayout();
+                    checkEdit(p,dp(doneWidth));
+                    check(changes==p.messageEditText.changes&&cancellations==p.aiButton.animation.cancels,"repeat measure idempotent, no layout or animation churn");
+                    // Caption and resend edits share the owner branch; neither can restore normal60dp.
+                    p.editingMessageObject=new Object(); p.updateFieldRight(0); checkEdit(p,dp(doneWidth));
+                    for(int widthDp:new int[]{320,360,412,600}) {
+                        int frameRight=dp(widthDp)-dp(7)-dp(44);
+                        int textRight=frameRight-p.messageEditText.params.rightMargin;
+                        int textLeft=dp(7)+p.messageEditText.params.leftMargin;
+                        check(textRight>textLeft,"measured text stays positive at compact/large width");
+                        check(textRight<=dp(widthDp)-dp(7)-dp(doneWidth)-dp(12),"text ends before Done, not hidden by transformed drawing");
+                    }
+                    p.themeRevision=1;p.updateEditingComposerLayout();
+                    check(((int[])p.aiButton.background)[1]==101&&p.aiButton.colorFilter.color==103,"editing Ai retints for day/night change");
+                    p.end();
+                    check(p.emojiButton.params.gravity==(Gravity.BOTTOM|Gravity.RIGHT)&&p.emojiButton.params.rightMargin==dp(8),"normal right emoji restored");
+                    check(p.aiButton.params.gravity==(Gravity.TOP|Gravity.LEFT)&&p.aiButton.params.topMargin==dp(1)&&p.aiButton.params.bottomMargin==0,"normal Ai position restored");
+                    check("normal-selector".equals(p.aiButton.background)&&p.aiButton.colorFilter.color==104,"normal Ai styling restored");
+                    check(p.messageEditTextContainer.minimum==0,"no retained tall input after edit");
+                    check(p.messageEditText.params.gravity==Gravity.BOTTOM,"multiline/RTL text gravity is not rewritten by control positioning");
+                    check(p.messageEditText.params.rightMargin==Math.max(dp(60),Math.max(0,dp(doneWidth)-dp(44))),"normal margin policy restored with paid button state");
+                }
+            }
+        }
+        density=1;
+        EditComposer150Probe p=new EditComposer150Probe();p.begin(true);
+        p.shownAiButton=false;p.updateEditingComposerLayout();
+        check(p.messageEditTextContainer.minimum==92,"fade out keeps target geometry until gone");
+        p.aiButton.visibility=GONE;p.updateEditingComposerLayout();
+        check(p.messageEditTextContainer.minimum==0,"fade completion releases minimum");
+        p.begin(true);p.shownAiButton=false;p.aiButton.alpha=.4f;p.aiButton.visibility=VISIBLE;p.end();
+        check(p.aiButton.visibility==GONE&&p.aiButton.alpha==0f&&p.messageEditTextContainer.minimum==0,"leaving during Ai fade cannot retain editing bubble or blank height");
+        p=new EditComposer150Probe();p.botButton=new View();p.scheduledButton=new View();p.attachButton=new View();p.updateFieldRight(1);
+        check(p.messageEditText.params.rightMargin==156,"normal three accessory policy unchanged");
+        p=new EditComposer150Probe();p.isChat=false;p.updateFieldRight(0);
+        check(p.messageEditText.params.rightMargin==2,"nonchat composer retains normal compact policy");
+        p=new EditComposer150Probe();p.messageEditText=null;p.emojiButton=null;p.aiButton=null;p.messageEditTextContainer=null;p.doneButton=null;p.begin(false);
+        check(p.editingComposerLayout,"construction/destruction null controls safe");
+        System.out.println("PASS: "+assertions+" extracted edit-composer layout/state checks.");
+    }
+}
