@@ -384,15 +384,22 @@ public class DownscaleScrollableNoiseSuppressor {
                 continue;
             }
 
-            sourcePart.lastHash = hash;
-
             Canvas c = beginRecordingRect(a);
-            c.save();
-            c.translate(-position.left, -position.top);
-
-            capture.capture(c, tmpRectF);
-            c.restore();
-            endRecordingRect();
+            final int saveCount = c.save();
+            boolean complete = false;
+            try {
+                c.translate(-position.left, -position.top);
+                capture.capture(c, tmpRectF);
+                complete = true;
+            } finally {
+                try {
+                    c.restoreToCount(saveCount);
+                } finally {
+                    endRecordingRect(complete);
+                }
+            }
+            // A failed/partial recording must not be treated as a cached successful capture.
+            sourcePart.lastHash = hash;
 
             updatedCount++;
         }
@@ -502,28 +509,36 @@ public class DownscaleScrollableNoiseSuppressor {
         final SourcePart sourcePart = rectRenderNodes.get(index);
         Rect rectF = sourcePart.position;
 
-        recordingPos = rectF;
-        recordingIndex = index;
-
         final int width = rectF.width() / k;
         final int height = rectF.height() / k;
 
         sourcePart.renderNode.setPosition(0, 0, width, height);
         RecordingCanvas c = sourcePart.renderNode.beginRecording(width, height);
+        recordingPos = rectF;
+        recordingIndex = index;
         c.scale(1f / k, 1f / k);
         return c;
     }
 
-    private void endRecordingRect() {
+    private void endRecordingRect(boolean complete) {
         if (recordingPos == null) {
             throw new IllegalStateException();
         }
 
         final SourcePart sourcePart = rectRenderNodes.get(recordingIndex);
-        sourcePart.renderNode.endRecording();
-        sourcePart.invalidate();
-
-        recordingPos = null;
+        boolean ended = false;
+        try {
+            sourcePart.renderNode.endRecording();
+            ended = true;
+        } finally {
+            recordingPos = null;
+            if (!complete || !ended) {
+                sourcePart.renderNode.discardDisplayList();
+            }
+        }
+        if (complete) {
+            sourcePart.invalidate();
+        }
     }
 
     public void drawDebugPositions(Canvas canvas) {

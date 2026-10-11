@@ -3,7 +3,8 @@ package org.telegram.messenger;
 /** Bounded, Android-independent contrast policy for light chat glass, not message bubbles. */
 public final class LumaGlassContrast {
     public static final int MIN_LIGHT_CHANNEL = 238;
-    public static final int MIN_LIGHT_ALPHA = 204;
+    public static final int MIN_LIGHT_ALPHA = 128;
+    public static final int MAX_LIGHT_ALPHA = 204;
     private static final int DARKEST_SURFACE_CHANNEL = MIN_LIGHT_CHANNEL * MIN_LIGHT_ALPHA / 255;
     private static final int DARKEST_SURFACE = 0xff000000 | DARKEST_SURFACE_CHANNEL * 0x010101;
     private static final double TEXT_CONTRAST = 4.5;
@@ -21,8 +22,10 @@ public final class LumaGlassContrast {
             green += (255 - green) * amount / range;
             blue += (255 - blue) * amount / range;
         }
-        // Keep all opacity levels ordered rather than flattening them to one clamped value.
-        int alpha = MIN_LIGHT_ALPHA + ((color >>> 24) * (255 - MIN_LIGHT_ALPHA) + 127) / 255;
+        // Keep daytime glass translucent at every setting. The old 80%-100% range
+        // turned the default 62% tint into a nearly opaque 93% white panel.
+        // Foreground correction uses this same floor, including over black wallpaper.
+        int alpha = MIN_LIGHT_ALPHA + ((color >>> 24) * (MAX_LIGHT_ALPHA - MIN_LIGHT_ALPHA) + 127) / 255;
         return alpha << 24 | red << 16 | green << 8 | blue;
     }
 

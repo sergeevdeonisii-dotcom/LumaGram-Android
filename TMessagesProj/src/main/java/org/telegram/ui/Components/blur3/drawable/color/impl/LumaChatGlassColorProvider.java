@@ -49,8 +49,8 @@ public class LumaChatGlassColorProvider implements BlurredBackgroundColorProvide
             strokeColorBottom = 0x14FFFFFF;
             shadowColor = 0;
         } else {
-            strokeColorTop = 0xFFFFFFFF;
-            strokeColorBottom = 0xFFFFFFFF;
+            strokeColorTop = 0x9EFFFFFF;
+            strokeColorBottom = 0x26000000;
             shadowColor = 0x20000000;
         }
     }

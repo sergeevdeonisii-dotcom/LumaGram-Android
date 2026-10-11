@@ -1,22 +1,84 @@
 import fs from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
 const workflow = fs.readFileSync(new URL('../../.github/workflows/lunagram-release100-apks.yml', import.meta.url), 'utf8');
 const build = fs.readFileSync(new URL('./build-lunagram-release100.sh', import.meta.url), 'utf8');
 const localGiftsUi = fs.readFileSync(new URL('../tests/run-local-gifts-ui102-regressions.ps1', import.meta.url), 'utf8');
+const baselineScript = fs.readFileSync(new URL('./ensure-visual104-baseline.ps1', import.meta.url), 'utf8');
+const visualBaseline = '8f60669bc4c257402d18bedd67e1ab71d0f59df8';
 
-test('1.0.3 workflow and build script enforce the owner repository and exact release branch', () => {
+test('visual regressions fetch only their pinned baseline before tests without expanding checkout trust', () => {
+  assert.ok(workflow.includes('fetch-depth: 1'));
+  assert.ok(workflow.includes('run: ./Tools/ci/ensure-visual104-baseline.ps1'));
+  assert.ok(workflow.indexOf('ensure-visual104-baseline.ps1') < workflow.indexOf('run-dialogs-canvas104-regressions.ps1'));
+  assert.ok(workflow.indexOf('ensure-visual104-baseline.ps1') < workflow.indexOf('run-blur-capture104-regressions.ps1'));
+  assert.ok(baselineScript.includes(`$BaselineCommit = '${visualBaseline}'`));
+  assert.ok(baselineScript.includes('fetch --no-tags --depth=1 origin $BaselineCommit'));
+  assert.ok(baselineScript.includes('$resolved -cne $BaselineCommit'));
+  assert.ok(baselineScript.includes('$headAfter -cne $headBefore'));
+  assert.ok(!/git[^\r\n]*(?:checkout|reset|push|--unshallow|--depth=0|--force)/.test(baselineScript));
+  for (const runner of ['run-dialogs-canvas104-regressions.ps1', 'run-blur-capture104-regressions.ps1']) {
+    assert.ok(fs.readFileSync(new URL(`../tests/${runner}`, import.meta.url), 'utf8').includes(visualBaseline), runner);
+  }
+});
+
+test('the production baseline helper works with a fresh depth-1 clone and preserves HEAD', () => {
+  const scratch = fs.mkdtempSync(path.join(process.env.LUMA_CI_TEST_OUTPUT_ROOT || os.tmpdir(), 'lunagram-baseline104-'));
+  const origin = path.join(scratch, 'origin');
+  const clone = path.join(scratch, 'shallow');
+  fs.mkdirSync(origin);
+  const run = (command, args, expectedCode = 0) => {
+    const result = spawnSync(command, args, { encoding: 'utf8', timeout: 30000 });
+    assert.ifError(result.error);
+    assert.equal(result.status, expectedCode, result.stderr || result.stdout);
+    return result.stdout.trim();
+  };
+  const git = (...args) => run('git', args);
+  git('-C', origin, 'init', '-b', 'baseline-test');
+  fs.writeFileSync(path.join(origin, 'fixture.txt'), 'baseline\n');
+  git('-C', origin, 'add', 'fixture.txt');
+  const commit = message => git('-C', origin, '-c', 'user.name=Lunagram regression', '-c', 'user.email=regression@example.invalid', 'commit', '-m', message);
+  commit('baseline');
+  const baseline = git('-C', origin, 'rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(origin, 'fixture.txt'), 'current\n');
+  git('-C', origin, 'add', 'fixture.txt');
+  commit('current');
+  const head = git('-C', origin, 'rev-parse', 'HEAD');
+  git('clone', '--no-tags', '--depth=1', pathToFileURL(origin).href, clone);
+  assert.equal(git('-C', clone, 'rev-parse', '--is-shallow-repository'), 'true');
+  assert.notEqual(spawnSync('git', ['-C', clone, 'cat-file', '-e', `${baseline}^{commit}`], { encoding: 'utf8' }).status, 0);
+  assert.equal(baselineScript.split(visualBaseline).length, 2, 'replace only the pinned literal for this synthetic fixture');
+  const helper = path.join(scratch, 'ensure-baseline-fixture.ps1');
+  fs.writeFileSync(helper, baselineScript.replace(visualBaseline, baseline));
+  const pwsh = process.env.LUMA_PWSH_PATH || 'pwsh';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    run(pwsh, ['-NoProfile', '-File', helper, '-RepoRoot', clone]);
+    assert.equal(git('-C', clone, 'rev-parse', `${baseline}^{commit}`), baseline);
+    assert.equal(git('-C', clone, 'rev-parse', 'HEAD'), head);
+    assert.equal(git('-C', clone, 'status', '--porcelain'), '');
+  }
+  fs.writeFileSync(helper, baselineScript.replace(visualBaseline, '0000000000000000000000000000000000000000'));
+  run(pwsh, ['-NoProfile', '-File', helper, '-RepoRoot', clone], 1);
+  assert.equal(git('-C', clone, 'rev-parse', 'HEAD'), head, 'unavailable baseline must fail closed without moving HEAD');
+  assert.equal(git('-C', clone, 'status', '--porcelain'), '');
+});
+
+test('1.0.4 workflow and build script enforce the owner repository and exact release branch', () => {
   for (const text of [workflow, build]) {
     assert.ok(text.includes('sergeevdeonisii-dotcom/LumaGram-Android'));
     assert.ok(text.includes('refs/heads/agent/lunagram-release100'));
   }
-  assert.match(build, /APP_VERSION_NAME=.*1\.0\.3/);
-  assert.match(build, /APP_VERSION_CODE=.*7165/);
+  assert.match(build, /APP_VERSION_NAME=.*1\.0\.4/);
+  assert.match(build, /APP_VERSION_CODE=.*7166/);
   assert.match(build, /source_commit.*GITHUB_SHA/);
   assert.ok(!workflow.includes('pull_request'));
 });
-test('genuine public and personal APKs use the release103 collector; restricted Friends is optional and distinct', () => {
+test('genuine public and personal APKs use the release104 collector; restricted Friends is optional and distinct', () => {
   assert.ok(build.includes('editions=(full public)'));
   assert.ok(build.includes('editions+=(friends)'));
   assert.ok(build.includes('collector_flags+=(--include-friends)'));
@@ -25,12 +87,12 @@ test('genuine public and personal APKs use the release103 collector; restricted 
   assert.match(build, /\[\[ "\$edition" != public \]\] \|\| public_flag=true/);
   assert.ok(build.includes('-PlumaFriendsEdition=$friends_flag'));
   assert.ok(build.includes('-PlumaPublicEdition=$public_flag'));
-  assert.ok(build.includes('Lunagram-1.0.3-$edition-temporary.apk'));
-  assert.match(build, /--release 103 --verify-pair/);
-  assert.ok(workflow.includes('lunagram-103-temporary-signed'));
-  assert.ok(workflow.includes('lunagram103-artifacts/*.apk'));
-  assert.ok(workflow.includes('lunagram103-artifacts/build-metadata.json'));
-  assert.ok(!build.includes('--release 102'));
+  assert.ok(build.includes('Lunagram-1.0.4-$edition-temporary.apk'));
+  assert.match(build, /--release 104 --verify-pair/);
+  assert.ok(workflow.includes('lunagram-104-temporary-signed'));
+  assert.ok(workflow.includes('lunagram104-artifacts/*.apk'));
+  assert.ok(workflow.includes('lunagram104-artifacts/build-metadata.json'));
+  assert.ok(!build.includes('--release 102') && !build.includes('--release 103'));
   assert.match(workflow, /build_friends:[\s\S]*?type: boolean[\s\S]*?default: false/);
   assert.ok(workflow.includes('LUMA_BUILD_FRIENDS_EDITION:'));
   assert.ok(!build.includes('for edition in full friends;'));
@@ -41,7 +103,7 @@ test('CI receives no production signing key and only uploads APKs and public pro
   assert.ok(workflow.includes('persist-credentials: false'));
   assert.ok(workflow.includes('include-hidden-files: false'));
   assert.equal([...workflow.matchAll(/secrets\.([A-Z0-9_]+)/g)].map(x => x[1]).sort().join(','), 'LUMA_API_HASH,LUMA_API_ID');
-  assert.ok(build.includes('mktemp -d "$RUNNER_TEMP/lunagram103-signing.XXXXXX"'));
+  assert.ok(build.includes('mktemp -d "$RUNNER_TEMP/lunagram104-signing.XXXXXX"'));
   assert.ok(build.includes('trap cleanup EXIT'));
   assert.ok(build.includes('unset LUMA_API_ID LUMA_API_HASH LUMA_CI_SIGNING_PASSWORD'));
   assert.ok(!/rm\s+-(?:rf|fr)/.test(build));
@@ -51,6 +113,8 @@ test('release-blocking regression suites execute before either APK is built', ()
   const buildStep = workflow.indexOf('run: bash Tools/ci/build-lunagram-release100.sh');
   for (const script of ['run-round-controls81-regressions.ps1', 'run-round-editions100-regressions.ps1',
       'run-round-concurrent102-regressions.ps1',
+      'run-dialogs-canvas104-regressions.ps1', 'run-blur-capture104-regressions.ps1',
+      'run-gift-geometry104-regressions.ps1',
       'run-local-gifts102-regressions.ps1',
       'run-local-gifts-ui102-regressions.ps1', 'run-logout102-regressions.ps1',
       'run-round-settings100-regressions.ps1', 'run-startup100-regressions.ps1', 'run-glass-contrast100-regressions.ps1',

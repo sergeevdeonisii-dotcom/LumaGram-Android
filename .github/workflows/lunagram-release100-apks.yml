@@ -1,4 +1,4 @@
-name: Lunagram 1.0.3 personal and genuine public APKs
+name: Lunagram 1.0.4 personal and genuine public APKs
 
 on:
   push:
@@ -38,6 +38,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - name: Fetch only the pinned visual regression baseline when needed
+        shell: pwsh
+        run: ./Tools/ci/ensure-visual104-baseline.ps1
       - name: Verify artifact metadata and release workflow guards
         shell: bash
         run: |
@@ -48,6 +51,9 @@ jobs:
         run: |
           ./Tools/tests/run-round-controls81-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-controls-tests')
           ./Tools/tests/run-round-concurrent102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-concurrent-tests')
+          ./Tools/tests/run-dialogs-canvas104-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'dialogs-canvas-tests')
+          ./Tools/tests/run-blur-capture104-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'blur-capture-tests')
+          ./Tools/tests/run-gift-geometry104-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'gift-geometry-tests')
           ./Tools/tests/run-local-gifts102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'local-gifts-tests')
           ./Tools/tests/run-local-gifts-ui102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'local-gifts-ui-tests')
           ./Tools/tests/run-logout102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'logout-tests')
@@ -74,10 +80,10 @@ jobs:
       - name: Upload temporary APK pair and public provenance
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: lunagram-103-temporary-signed
+          name: lunagram-104-temporary-signed
           path: |
-            ${{ runner.temp }}/lunagram103-artifacts/*.apk
-            ${{ runner.temp }}/lunagram103-artifacts/build-metadata.json
+            ${{ runner.temp }}/lunagram104-artifacts/*.apk
+            ${{ runner.temp }}/lunagram104-artifacts/build-metadata.json
           if-no-files-found: error
           retention-days: 3
           compression-level: 0

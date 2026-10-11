@@ -115,8 +115,6 @@ function metadata103(editions = ['full', 'public']) {
     artifacts: editions.map(edition => ({ ...expectedArtifact(edition, '103'), sha256: 'b'.repeat(64) })) };
 }
 test('1.0.3 hotfix keeps all three edition contracts and rejects 1.0.2 outputs', () => {
-  assert.deepEqual(expectedArtifact('public'), expectedArtifact('public', '103'));
-  assert.deepEqual(expectedEditions(), ['full', 'public']);
   assert.deepEqual(expectedEditions('103'), ['full', 'public']);
   assert.deepEqual(expectedEditions('103', true), ['full', 'public', 'friends']);
   for (const edition of ['full', 'public', 'friends']) {
@@ -159,6 +157,43 @@ test('1.0.3 has exact schema-2 release provenance; historical metadata is never 
   assert.throws(() => validateArtifactMetadata(metadata103(['full', 'public', 'friends']), '103', commit102, expectedEditions('103')));
   assert.throws(() => validateArtifactMetadata(metadata103(), '103', commit102, expectedEditions('103', true)));
   assert.throws(() => validateArtifactMetadata({ schemaVersion: 1, sourceCommit: commit102, packageName: 'org.luma.liquid.web', architecture: 'arm64-v8a', artifacts: [] }, '999', commit102, []));
+});
+function metadata104(editions = ['full', 'public']) {
+  return { schemaVersion: 2, release: '104', sourceCommit: commit102, packageName: 'org.luma.liquid.web', architecture: 'arm64-v8a',
+    artifacts: editions.map(edition => ({ ...expectedArtifact(edition, '104'), sha256: 'd'.repeat(64) })) };
+}
+test('1.0.4 default keeps personal/public/Friends policies with a strictly newer APK identity', () => {
+  assert.deepEqual(expectedArtifact('public'), expectedArtifact('public', '104'));
+  assert.deepEqual(expectedEditions(), ['full', 'public']);
+  assert.deepEqual(expectedEditions('104', true), ['full', 'public', 'friends']);
+  for (const edition of ['full', 'public', 'friends']) {
+    const expected = expectedArtifact(edition);
+    assert.equal(expected.versionName, '1.0.4');
+    assert.equal(expected.versionCode, 71669);
+    assert.equal(expected.fileName, `Lunagram-1.0.4-${edition}-temporary.apk`);
+    assert.equal(expected.friendsEdition, edition === 'friends');
+    assert.equal(expected.publicEdition, edition === 'public');
+    validateGeneratedFlag(flags102(edition), edition);
+    validateOutputMetadata({ applicationId: 'org.luma.liquid.web', elements: [{ versionName: '1.0.4', versionCode: 71669, outputFile: 'app.apk' }] }, edition);
+    validateApkBadging("package: name='org.luma.liquid.web' versionCode='71669' versionName='1.0.4'\nnative-code: 'arm64-v8a'\n", edition);
+    assert.throws(() => validateApkBadging("package: name='org.luma.liquid.web' versionCode='71659' versionName='1.0.3'\nnative-code: 'arm64-v8a'\n", edition));
+  }
+  assert.throws(() => validateGeneratedFlag(flags102('friends'), 'public'));
+});
+test('1.0.4 accepts only its exact schema-2 provenance and preserves explicit 1.0.3 validation', () => {
+  validateArtifactMetadata(metadata104(), '104', commit102, expectedEditions());
+  validateArtifactMetadata(metadata104(['full', 'public', 'friends']), '104', commit102, expectedEditions('104', true));
+  validateArtifactMetadata(metadata103(), '103', commit102, expectedEditions('103'));
+  assert.throws(() => validateArtifactMetadata(metadata103(), '104', commit102, expectedEditions()));
+  assert.throws(() => validateArtifactMetadata(metadata104(), '103', commit102, expectedEditions('103')));
+  for (const mutate of [m => m.release = '103', m => m.release = 104, m => delete m.release,
+    m => m.artifacts[1].versionCode = 71659, m => m.artifacts[1].versionName = '1.0.3',
+    m => m.artifacts[1].fileName = 'Lunagram-1.0.3-public-temporary.apk',
+    m => m.artifacts[1].friendsEdition = true, m => m.artifacts[1].publicEdition = false,
+    m => delete m.artifacts[1].publicEdition, m => m.artifacts[1].publicEdition = 'true']) {
+    const metadata = metadata104(); mutate(metadata);
+    assert.throws(() => validateArtifactMetadata(metadata, '104', commit102, expectedEditions()));
+  }
 });
 test('wrong package, version, ABI, multiple outputs and path traversal rejected', () => {
   const metadata = output('full');

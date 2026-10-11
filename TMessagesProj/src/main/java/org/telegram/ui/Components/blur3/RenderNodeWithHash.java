@@ -49,15 +49,27 @@ public class RenderNodeWithHash {
             || hash != lastHash
             || hash == HASH_UNSUPPORTED;
 
+        if (needUpdateDisplayList) {
+            RecordingCanvas canvas = renderNode.beginRecording();
+            boolean complete = false;
+            try {
+                renderer.renderNodeUpdateDisplayList(canvas);
+                complete = true;
+            } finally {
+                boolean ended = false;
+                try {
+                    renderNode.endRecording();
+                    ended = true;
+                } finally {
+                    if (!complete || !ended) {
+                        renderNode.discardDisplayList();
+                    }
+                }
+            }
+        }
         lastWidth = width;
         lastHeight = height;
         lastHash = hash;
-
-        if (needUpdateDisplayList) {
-            RecordingCanvas canvas = renderNode.beginRecording();
-            renderer.renderNodeUpdateDisplayList(canvas);
-            renderNode.endRecording();
-        }
     }
 
     public void invalidate() {

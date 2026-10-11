@@ -161,8 +161,8 @@ public class BlurredBackgroundProviderImpl {
                     return LumaGlassContrast.panel(Theme.multAlpha(colorBg, alpha), isDark,
                             LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS));
                 })
-                .setStrokeColorTop(0xFFFFFFFF, 0x46FFFFFF)
-                .setStrokeColorBottom(0xFFFFFFFF, 0x24FFFFFF)
+                .setStrokeColorTop(0x9EFFFFFF, 0x46FFFFFF)
+                .setStrokeColorBottom(0x26000000, 0x24FFFFFF)
                 .setShadowColor(0x28000000, 0x18000000)
                 .setShadowLayer(dpf2(4f), 0, dpf2(1f))
                 .setStrokeWidth(dpf2(0.67f), dpf2(0.67f))
@@ -184,8 +184,8 @@ public class BlurredBackgroundProviderImpl {
                     return LumaGlassContrast.panel(Theme.multAlpha(colorBg, alpha), isDark,
                             LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS));
                 })
-                .setStrokeColorTop(0xFFFFFFFF, 0x20FFFFFF)
-                .setStrokeColorBottom(0xFFFFFFFF, 0x14FFFFFF)
+                .setStrokeColorTop(0x9EFFFFFF, 0x20FFFFFF)
+                .setStrokeColorBottom(0x26000000, 0x14FFFFFF)
                 .setShadowColor(0x20000000, 0)
                 //.setShadowLayer(dpf2(10 / 3f), 0, dpf2(2 / 3f))
                 .setStrokeWidth(dpf2(0.55f), dpf2(0.55f))

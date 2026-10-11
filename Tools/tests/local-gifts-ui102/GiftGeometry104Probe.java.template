@@ -1,0 +1,108 @@
+import java.util.*;
+
+/** Verbatim production geometry methods with view-property fixtures, not an Android renderer. */
+public final class GiftGeometry104Probe {
+    static int checks;
+    static void check(boolean value, String label) {
+        checks++;
+        if (!value) throw new AssertionError(label);
+    }
+    static boolean finite(float value) { return !Float.isNaN(value) && !Float.isInfinite(value); }
+    static float clamp01(float value) { return Math.max(0, Math.min(1, value)); }
+    static float ilerp(float value, float from, float to) { return (value - from) / (to - from); }
+    static float lerp(float from, float to, float alpha) { return from + (to - from) * alpha; }
+    static int dp(int value) { return value; }
+    static final class MathUtils {
+        static float clamp(float value, float min, float max) { return Math.max(min, Math.min(max, value)); }
+    }
+    static class View {
+        int width;
+        float translationX, translationY, scaleX = 1, scaleY = 1, alpha = 1;
+        int getWidth() { return width; }
+        float getTranslationX() { return translationX; }
+        void setTranslationY(float value) { translationY = value; }
+        void setScaleX(float value) { scaleX = value; }
+        void setScaleY(float value) { scaleY = value; }
+        void setAlpha(float value) { alpha = value; }
+    }
+    static final class Page extends View {
+        float height;
+        boolean hasTabs = true;
+        Page(int width, float translationX, float height) {
+            this.width = width; this.translationX = translationX; this.height = height;
+        }
+        float getTabsHeight() { return height; }
+    }
+    static final class Pager {
+        final View[] pages;
+        Pager(View... pages) { this.pages = pages; }
+        View[] getViewPages() { return pages; }
+    }
+    static class Geometry {
+        Pager viewPager;
+        View tabsView = new View();
+        int externalPaddingTop = 48;
+        Geometry(View... pages) { viewPager = new Pager(pages); }
+        // PRODUCTION_GEOMETRY
+    }
+    static void propertiesFinite(Geometry geometry, String label) {
+        geometry.updateTabsY();
+        check(finite(geometry.tabsView.translationY) && finite(geometry.tabsView.scaleX)
+            && finite(geometry.tabsView.scaleY) && finite(geometry.tabsView.alpha), label);
+        check(geometry.tabsView.alpha >= 0 && geometry.tabsView.alpha <= 1, label + " bounded alpha");
+        check(geometry.tabsView.scaleX >= .9f && geometry.tabsView.scaleX <= 1,
+            label + " bounded scale");
+    }
+    public static void main(String[] args) {
+        Geometry unmeasured = new Geometry(new Page(0, 0, 42));
+        check(finite(unmeasured.getTabsHeight()) && unmeasured.getTabsHeight() == 0,
+            "Unmeasured zero-width gift page must not return NaN");
+        propertiesFinite(unmeasured, "Unmeasured page RenderNode properties");
+        Page delayed = (Page) unmeasured.viewPager.pages[0];
+        delayed.width = 300;
+        check(unmeasured.getTabsHeight() == 42, "First layout restores actual page height");
+        propertiesFinite(unmeasured, "Measured page RenderNode properties");
+        Geometry stationary = new Geometry(new Page(300, 0, 90));
+        check(stationary.getTabsHeight() == 90, "Stationary page preserves height");
+        stationary.updateTabsY();
+        check(stationary.tabsView.translationY == 48 && stationary.tabsView.alpha == 1,
+            "Normal profile tabs preserve existing placement");
+        for (int sign : new int[] { -1, 1 }) {
+            Geometry halfway = new Geometry(new Page(300, sign * 150, 80));
+            check(halfway.getTabsHeight() == 40, "Both swipe directions use visible page fraction");
+            propertiesFinite(halfway, "Halfway page " + sign);
+            Geometry outside = new Geometry(new Page(300, sign * 450, 80));
+            check(outside.getTabsHeight() == 0, "Offscreen page does not add negative/excess height");
+            propertiesFinite(outside, "Offscreen page " + sign);
+        }
+        Geometry transition = new Geometry(new Page(300, -150, 80), new Page(300, 150, 60));
+        check(transition.getTabsHeight() == 70, "Two measured transition pages are weighted once");
+        propertiesFinite(transition, "Two-page transition");
+        Geometry pending = new Geometry(new Page(300, 0, 90), new Page(0, 0, 90));
+        check(pending.getTabsHeight() == 90, "Unmeasured secondary page cannot poison measured page");
+        propertiesFinite(pending, "Pending secondary page");
+        for (float invalid : new float[] { Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY }) {
+            Geometry invalidTranslation = new Geometry(new Page(300, invalid, 80));
+            check(invalidTranslation.getTabsHeight() == 0, "Nonfinite translation rejected");
+            propertiesFinite(invalidTranslation, "Invalid translation");
+            Geometry invalidHeight = new Geometry(new Page(300, 0, invalid));
+            check(invalidHeight.getTabsHeight() == 0, "Nonfinite page height rejected");
+            propertiesFinite(invalidHeight, "Invalid height");
+            Geometry override = new Geometry() { @Override public float getTabsHeight() { return invalid; } };
+            propertiesFinite(override, "Defensive renderer boundary");
+        }
+        Geometry overflow = new Geometry(new Page(300, 0, Float.MAX_VALUE), new Page(300, 0, Float.MAX_VALUE));
+        check(overflow.getTabsHeight() == 0, "Overflow cannot escape height aggregation");
+        propertiesFinite(overflow, "Overflow height");
+        Geometry negativeHeight = new Geometry(new Page(300, 0, -40));
+        check(negativeHeight.getTabsHeight() == 0, "Negative page height ignored");
+        propertiesFinite(negativeHeight, "Negative height");
+        Geometry empty = new Geometry();
+        propertiesFinite(empty, "Empty pager");
+        Geometry beforePager = new Geometry(); beforePager.viewPager = null;
+        check(beforePager.getTabsHeight() == 0, "Before pager creation has zero height");
+        Geometry beforeTabs = new Geometry(); beforeTabs.tabsView = null;
+        beforeTabs.updateTabsY(); check(true, "Before tab creation remains safe");
+        System.out.println("PASS: " + checks + " production-derived gift geometry checks; native GPU rendering not simulated.");
+    }
+}

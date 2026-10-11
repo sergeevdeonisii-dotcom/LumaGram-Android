@@ -1801,216 +1801,220 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
         @Override
         protected void dispatchDraw(Canvas canvas) {
-            canvas.save();
-            if (rightFragmentOpenedProgress > 0) {
-                canvas.clipRect(0, 0, AndroidUtilities.lerp(getMeasuredWidth(), dp(RightSlidingDialogContainer.getRightPaddingSize()), rightFragmentOpenedProgress), getMeasuredHeight());
-                paint.setColor(getThemedColor(Theme.key_chats_pinnedOverlay));
-                paint.setAlpha((int) (paint.getAlpha() * rightFragmentOpenedProgress));
-                canvas.drawRect(0, 0, dp(RightSlidingDialogContainer.getRightPaddingSize()), getMeasuredHeight(), paint);
+            final int saveCount = canvas.save();
+            try {
+                if (rightFragmentOpenedProgress > 0) {
+                    canvas.clipRect(0, 0, AndroidUtilities.lerp(getMeasuredWidth(), dp(RightSlidingDialogContainer.getRightPaddingSize()), rightFragmentOpenedProgress), getMeasuredHeight());
+                    paint.setColor(getThemedColor(Theme.key_chats_pinnedOverlay));
+                    paint.setAlpha((int) (paint.getAlpha() * rightFragmentOpenedProgress));
+                    canvas.drawRect(0, 0, dp(RightSlidingDialogContainer.getRightPaddingSize()), getMeasuredHeight(), paint);
 
 
-                int alpha = Theme.dividerPaint.getAlpha();
-                Theme.dividerPaint.setAlpha((int) (rightFragmentOpenedProgress * alpha));
-                canvas.drawRect(dp(RightSlidingDialogContainer.getRightPaddingSize()), 0, dp(RightSlidingDialogContainer.getRightPaddingSize()) - 1, getMeasuredHeight(), Theme.dividerPaint);
-                Theme.dividerPaint.setAlpha(alpha);
-            }
-
-            int maxSupportedViewsPosition = Integer.MIN_VALUE;
-            int minSupportedViewsPosition = Integer.MAX_VALUE;
-
-            if (animationSupportListView != null) {
-                if (animationSupportViewsByDialogId == null) {
-                    animationSupportViewsByDialogId = new LongSparseArray<>();
+                    int alpha = Theme.dividerPaint.getAlpha();
+                    Theme.dividerPaint.setAlpha((int) (rightFragmentOpenedProgress * alpha));
+                    canvas.drawRect(dp(RightSlidingDialogContainer.getRightPaddingSize()), 0, dp(RightSlidingDialogContainer.getRightPaddingSize()) - 1, getMeasuredHeight(), Theme.dividerPaint);
+                    Theme.dividerPaint.setAlpha(alpha);
                 }
 
-                for (int i = 0; i < animationSupportListView.getChildCount(); i++) {
-                    View child = animationSupportListView.getChildAt(i);
-                    if (child instanceof DialogCell && child.getBottom() > 0) {
-                        animationSupportViewsByDialogId.put(((DialogCell) child).getDialogId(), child);
-                    }
-                }
-            }
+                int maxSupportedViewsPosition = Integer.MIN_VALUE;
+                int minSupportedViewsPosition = Integer.MAX_VALUE;
 
-            float maxTop = Integer.MAX_VALUE;
-            float maxBottom = Integer.MIN_VALUE;
-            DialogCell selectedCell = null;
-
-            float scrollOffset = rightFragmentTransitionIsOpen ? 0 : scrollYOffset;
-
-            for (int i = 0; i < getChildCount(); i++) {
-                View view = getChildAt(i);
-                DialogCell dialogCell = null;
-                if (view instanceof DialogCell) {
-                    dialogCell = (DialogCell) view;
-                    dialogCell.setRightFragmentOpenedProgress(rightFragmentOpenedProgress);
-                    if (AndroidUtilities.isTablet()) {
-                        dialogCell.setDialogSelected(dialogCell.getDialogId() == openedDialogId.dialogId);
-                    }
-                    if (animationSupportViewsByDialogId != null && animationSupportListView != null) {
-                        View animateToView = animationSupportViewsByDialogId.get(dialogCell.getDialogId());
-
-                        animationSupportViewsByDialogId.delete(dialogCell.getDialogId());
-                        if (animateToView != null) {
-                            int supportViewPosition = animationSupportListView.getChildLayoutPosition(animateToView);
-                            if (supportViewPosition > maxSupportedViewsPosition) {
-                                maxSupportedViewsPosition = supportViewPosition;
-                            }
-                            if (supportViewPosition < minSupportedViewsPosition) {
-                                minSupportedViewsPosition = supportViewPosition;
-                            }
-                            dialogCell.collapseOffset = (animateToView.getTop() - dialogCell.getTop()) * rightFragmentOpenedProgress;
-
-                            if (dialogCell.getTop() + dialogCell.collapseOffset < maxTop) {
-                                maxTop = dialogCell.getTop() + dialogCell.collapseOffset - scrollOffset;
-                            }
-                            float bottom = dialogCell.getTop() + AndroidUtilities.lerp(dialogCell.getMeasuredHeight(), animateToView.getMeasuredHeight(), rightFragmentOpenedProgress);
-                            if (bottom + dialogCell.collapseOffset > maxBottom) {
-                                maxBottom = bottom + dialogCell.collapseOffset - scrollOffset;
-                            }
-                        }
-                    }
-                    if (updateDialogsOnNextDraw) {
-                        if (dialogCell.update(0, true)) {
-                            int p = getChildAdapterPosition(dialogCell);
-                            if (p >= 0) {
-                                getAdapter().notifyItemChanged(p);
-                            }
-                        }
-                    }
-                    if (dialogCell.getDialogId() == rightSlidingDialogContainer.getCurrentFragmetDialogId()) {
-                        selectedCell = dialogCell;
-                    }
-                }
                 if (animationSupportListView != null) {
-                    int restoreCount = canvas.save();
-
-                    canvas.translate(view.getX(), view.getY());
-                    if (dialogCell != null) {
-                        dialogCell.rightFragmentOffset = -scrollOffset;
-                    } else {
-                        canvas.saveLayerAlpha(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight(), (int) (255 * (1f - rightFragmentOpenedProgress)), Canvas.ALL_SAVE_FLAG);
+                    if (animationSupportViewsByDialogId == null) {
+                        animationSupportViewsByDialogId = new LongSparseArray<>();
                     }
-                    view.draw(canvas);
 
-                    if (dialogCell != null && dialogCell != selectedCell) {
-                        dialogCell.collapseOffset = 0;
-                        dialogCell.rightFragmentOffset = 0;
-                    }
-                    canvas.restoreToCount(restoreCount);
-                }
-            }
-
-
-            if (selectedCell != null) {
-                canvas.save();
-                lastDrawSelectorY = selectedCell.getY() + selectedCell.collapseOffset + selectedCell.avatarImage.getImageY();
-                selectedCell.collapseOffset = 0;
-                selectedCell.rightFragmentOffset = 0;
-                if (selectorPositionProgress != 1f) {
-                    selectorPositionProgress += 16 / 200f;
-                    selectorPositionProgress = Utilities.clamp(selectorPositionProgress, 1f, 0f);
-                    invalidate();
-                }
-                float selectorPositionProgress = CubicBezierInterpolator.DEFAULT.getInterpolation(this.selectorPositionProgress);
-                boolean animateInOut = false;
-                if (selectorPositionProgress != 1f && animateFromSelectorPosition != Integer.MIN_VALUE) {
-                    if (Math.abs(animateFromSelectorPosition - lastDrawSelectorY) < getMeasuredHeight() * 0.4f) {
-                        lastDrawSelectorY = AndroidUtilities.lerp(animateFromSelectorPosition, lastDrawSelectorY, selectorPositionProgress);
-                    } else {
-                        animateInOut = true;
+                    for (int i = 0; i < animationSupportListView.getChildCount(); i++) {
+                        View child = animationSupportListView.getChildAt(i);
+                        if (child instanceof DialogCell && child.getBottom() > 0) {
+                            animationSupportViewsByDialogId.put(((DialogCell) child).getDialogId(), child);
+                        }
                     }
                 }
 
-                float hideProgrss = animateSwitchingSelector && (animateInOut || animateFromSelectorPosition == Integer.MIN_VALUE) ? (1f - selectorPositionProgress) : (1f - rightFragmentOpenedProgress);
-                if (hideProgrss == 1f) {
-                    lastDrawSelectorY = Integer.MIN_VALUE;
-                }
-                float xOffset = -dp(5) * hideProgrss;
-                AndroidUtilities.rectTmp.set(-dp(4) + xOffset, lastDrawSelectorY - dp(1), dp(4) + xOffset, lastDrawSelectorY + selectedCell.avatarImage.getImageHeight() + dp(1));
-                if (selectorPaint == null) {
-                    selectorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                }
-                selectorPaint.setColor(getThemedColor(Theme.key_featuredStickers_addButton));
-                canvas.drawRoundRect(AndroidUtilities.rectTmp, dp(4), dp(4), selectorPaint);
-                canvas.restore();
-            } else {
-                lastDrawSelectorY = Integer.MIN_VALUE;
-            }
+                float maxTop = Integer.MAX_VALUE;
+                float maxBottom = Integer.MIN_VALUE;
+                DialogCell selectedCell = null;
 
-            //undrawing views
-            if (animationSupportViewsByDialogId != null) {
-                float maxUndrawTop = Integer.MIN_VALUE;
-                float maxUndrawBottom = Integer.MAX_VALUE;
-                for (int i = 0; i < animationSupportViewsByDialogId.size(); i++) {
-                    View view = animationSupportViewsByDialogId.valueAt(i);
-                    int position = animationSupportListView.getChildLayoutPosition(view);
-                    if (position < minSupportedViewsPosition && view.getTop() > maxUndrawTop) {
-                        maxUndrawTop = view.getTop();
-                    }
-                    if (position > maxSupportedViewsPosition && view.getBottom() < maxUndrawBottom) {
-                        maxUndrawBottom = view.getBottom();
-                    }
-                }
-                for (int i = 0; i < animationSupportViewsByDialogId.size(); i++) {
-                    View view = animationSupportViewsByDialogId.valueAt(i);
+                float scrollOffset = rightFragmentTransitionIsOpen ? 0 : scrollYOffset;
+
+                for (int i = 0; i < getChildCount(); i++) {
+                    View view = getChildAt(i);
+                    DialogCell dialogCell = null;
                     if (view instanceof DialogCell) {
-                        int position = animationSupportListView.getChildLayoutPosition(view);
-                        DialogCell dialogCell = (DialogCell) view;
-                        dialogCell.isTransitionSupport = false;
-                        dialogCell.buildLayout();
-                        dialogCell.isTransitionSupport = true;
+                        dialogCell = (DialogCell) view;
                         dialogCell.setRightFragmentOpenedProgress(rightFragmentOpenedProgress);
+                        if (AndroidUtilities.isTablet()) {
+                            dialogCell.setDialogSelected(dialogCell.getDialogId() == openedDialogId.dialogId);
+                        }
+                        if (animationSupportViewsByDialogId != null && animationSupportListView != null) {
+                            View animateToView = animationSupportViewsByDialogId.get(dialogCell.getDialogId());
 
+                            animationSupportViewsByDialogId.delete(dialogCell.getDialogId());
+                            if (animateToView != null) {
+                                int supportViewPosition = animationSupportListView.getChildLayoutPosition(animateToView);
+                                if (supportViewPosition > maxSupportedViewsPosition) {
+                                    maxSupportedViewsPosition = supportViewPosition;
+                                }
+                                if (supportViewPosition < minSupportedViewsPosition) {
+                                    minSupportedViewsPosition = supportViewPosition;
+                                }
+                                dialogCell.collapseOffset = (animateToView.getTop() - dialogCell.getTop()) * rightFragmentOpenedProgress;
+
+                                if (dialogCell.getTop() + dialogCell.collapseOffset < maxTop) {
+                                    maxTop = dialogCell.getTop() + dialogCell.collapseOffset - scrollOffset;
+                                }
+                                float bottom = dialogCell.getTop() + AndroidUtilities.lerp(dialogCell.getMeasuredHeight(), animateToView.getMeasuredHeight(), rightFragmentOpenedProgress);
+                                if (bottom + dialogCell.collapseOffset > maxBottom) {
+                                    maxBottom = bottom + dialogCell.collapseOffset - scrollOffset;
+                                }
+                            }
+                        }
+                        if (updateDialogsOnNextDraw) {
+                            if (dialogCell.update(0, true)) {
+                                int p = getChildAdapterPosition(dialogCell);
+                                if (p >= 0) {
+                                    getAdapter().notifyItemChanged(p);
+                                }
+                            }
+                        }
+                        if (dialogCell.getDialogId() == rightSlidingDialogContainer.getCurrentFragmetDialogId()) {
+                            selectedCell = dialogCell;
+                        }
+                    }
+                    if (animationSupportListView != null) {
                         int restoreCount = canvas.save();
-                        if (position > maxSupportedViewsPosition) {
-                            canvas.translate(view.getX(), maxBottom + view.getBottom() - maxUndrawBottom);
+
+                        canvas.translate(view.getX(), view.getY());
+                        if (dialogCell != null) {
+                            dialogCell.rightFragmentOffset = -scrollOffset;
                         } else {
-                            canvas.translate(view.getX(), maxBottom + view.getTop() - maxUndrawTop);
+                            canvas.saveLayerAlpha(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight(), (int) (255 * (1f - rightFragmentOpenedProgress)), Canvas.ALL_SAVE_FLAG);
                         }
                         view.draw(canvas);
 
+                        if (dialogCell != null && dialogCell != selectedCell) {
+                            dialogCell.collapseOffset = 0;
+                            dialogCell.rightFragmentOffset = 0;
+                        }
                         canvas.restoreToCount(restoreCount);
                     }
                 }
-                animationSupportViewsByDialogId.clear();
-            }
 
-            updateDialogsOnNextDraw = false;
-            if (animationSupportListView != null) {
-                invalidate();
-            }
 
-            if (animationSupportListView == null) {
-                super.dispatchDraw(canvas);
-            }
-
-            if (drawMovingViewsOverlayed()) {
-                paint.setColor(getThemedColor(Theme.key_windowBackgroundWhite));
-                for (int i = 0; i < getChildCount(); i++) {
-                    View view = getChildAt(i);
-
-                    if ((view instanceof DialogCell && ((DialogCell) view).isMoving()) || (view instanceof DialogsAdapter.LastEmptyView && ((DialogsAdapter.LastEmptyView) view).moving)) {
-                        if (view.getAlpha() != 1f) {
-                            rectF.set(view.getX(), view.getY(), view.getX() + view.getMeasuredWidth(), view.getY() + view.getMeasuredHeight());
-                            canvas.saveLayerAlpha(rectF, (int) (255 * view.getAlpha()), Canvas.ALL_SAVE_FLAG);
-                        } else {
-                            canvas.save();
-                        }
-                        canvas.translate(view.getX(), view.getY());
-                        canvas.drawRect(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight(), paint);
-                        view.draw(canvas);
-                        canvas.restore();
+                if (selectedCell != null) {
+                    canvas.save();
+                    lastDrawSelectorY = selectedCell.getY() + selectedCell.collapseOffset + selectedCell.avatarImage.getImageY();
+                    selectedCell.collapseOffset = 0;
+                    selectedCell.rightFragmentOffset = 0;
+                    if (selectorPositionProgress != 1f) {
+                        selectorPositionProgress += 16 / 200f;
+                        selectorPositionProgress = Utilities.clamp(selectorPositionProgress, 1f, 0f);
+                        invalidate();
                     }
+                    float selectorPositionProgress = CubicBezierInterpolator.DEFAULT.getInterpolation(this.selectorPositionProgress);
+                    boolean animateInOut = false;
+                    if (selectorPositionProgress != 1f && animateFromSelectorPosition != Integer.MIN_VALUE) {
+                        if (Math.abs(animateFromSelectorPosition - lastDrawSelectorY) < getMeasuredHeight() * 0.4f) {
+                            lastDrawSelectorY = AndroidUtilities.lerp(animateFromSelectorPosition, lastDrawSelectorY, selectorPositionProgress);
+                        } else {
+                            animateInOut = true;
+                        }
+                    }
+
+                    float hideProgrss = animateSwitchingSelector && (animateInOut || animateFromSelectorPosition == Integer.MIN_VALUE) ? (1f - selectorPositionProgress) : (1f - rightFragmentOpenedProgress);
+                    if (hideProgrss == 1f) {
+                        lastDrawSelectorY = Integer.MIN_VALUE;
+                    }
+                    float xOffset = -dp(5) * hideProgrss;
+                    AndroidUtilities.rectTmp.set(-dp(4) + xOffset, lastDrawSelectorY - dp(1), dp(4) + xOffset, lastDrawSelectorY + selectedCell.avatarImage.getImageHeight() + dp(1));
+                    if (selectorPaint == null) {
+                        selectorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    }
+                    selectorPaint.setColor(getThemedColor(Theme.key_featuredStickers_addButton));
+                    canvas.drawRoundRect(AndroidUtilities.rectTmp, dp(4), dp(4), selectorPaint);
+                    canvas.restore();
+                } else {
+                    lastDrawSelectorY = Integer.MIN_VALUE;
                 }
-                invalidate();
+
+                //undrawing views
+                if (animationSupportViewsByDialogId != null) {
+                    float maxUndrawTop = Integer.MIN_VALUE;
+                    float maxUndrawBottom = Integer.MAX_VALUE;
+                    for (int i = 0; i < animationSupportViewsByDialogId.size(); i++) {
+                        View view = animationSupportViewsByDialogId.valueAt(i);
+                        int position = animationSupportListView.getChildLayoutPosition(view);
+                        if (position < minSupportedViewsPosition && view.getTop() > maxUndrawTop) {
+                            maxUndrawTop = view.getTop();
+                        }
+                        if (position > maxSupportedViewsPosition && view.getBottom() < maxUndrawBottom) {
+                            maxUndrawBottom = view.getBottom();
+                        }
+                    }
+                    for (int i = 0; i < animationSupportViewsByDialogId.size(); i++) {
+                        View view = animationSupportViewsByDialogId.valueAt(i);
+                        if (view instanceof DialogCell) {
+                            int position = animationSupportListView.getChildLayoutPosition(view);
+                            DialogCell dialogCell = (DialogCell) view;
+                            dialogCell.isTransitionSupport = false;
+                            dialogCell.buildLayout();
+                            dialogCell.isTransitionSupport = true;
+                            dialogCell.setRightFragmentOpenedProgress(rightFragmentOpenedProgress);
+
+                            int restoreCount = canvas.save();
+                            if (position > maxSupportedViewsPosition) {
+                                canvas.translate(view.getX(), maxBottom + view.getBottom() - maxUndrawBottom);
+                            } else {
+                                canvas.translate(view.getX(), maxBottom + view.getTop() - maxUndrawTop);
+                            }
+                            view.draw(canvas);
+
+                            canvas.restoreToCount(restoreCount);
+                        }
+                    }
+                    animationSupportViewsByDialogId.clear();
+                }
+
+                updateDialogsOnNextDraw = false;
+                if (animationSupportListView != null) {
+                    invalidate();
+                }
+
+                if (animationSupportListView == null) {
+                    super.dispatchDraw(canvas);
+                }
+
+                if (drawMovingViewsOverlayed()) {
+                    paint.setColor(getThemedColor(Theme.key_windowBackgroundWhite));
+                    for (int i = 0; i < getChildCount(); i++) {
+                        View view = getChildAt(i);
+
+                        if ((view instanceof DialogCell && ((DialogCell) view).isMoving()) || (view instanceof DialogsAdapter.LastEmptyView && ((DialogsAdapter.LastEmptyView) view).moving)) {
+                            if (view.getAlpha() != 1f) {
+                                rectF.set(view.getX(), view.getY(), view.getX() + view.getMeasuredWidth(), view.getY() + view.getMeasuredHeight());
+                                canvas.saveLayerAlpha(rectF, (int) (255 * view.getAlpha()), Canvas.ALL_SAVE_FLAG);
+                            } else {
+                                canvas.save();
+                            }
+                            canvas.translate(view.getX(), view.getY());
+                            canvas.drawRect(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight(), paint);
+                            view.draw(canvas);
+                            canvas.restore();
+                        }
+                    }
+                    invalidate();
+                }
+                if (slidingView != null && pacmanAnimation != null) {
+                    pacmanAnimation.draw(canvas, slidingView.getTop() + slidingView.getMeasuredHeight() / 2);
+                }
+                if (poller == null) {
+                    poller = UserListPoller.getInstance(currentAccount);
+                }
+                poller.checkList( this);
+            } finally {
+                canvas.restoreToCount(saveCount);
             }
-            if (slidingView != null && pacmanAnimation != null) {
-                pacmanAnimation.draw(canvas, slidingView.getTop() + slidingView.getMeasuredHeight() / 2);
-            }
-            if (poller == null) {
-                poller = UserListPoller.getInstance(currentAccount);
-            }
-            poller.checkList( this);
         }
 
         @Override

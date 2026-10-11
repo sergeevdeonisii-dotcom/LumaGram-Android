@@ -6,6 +6,7 @@ import android.graphics.RectF;
 import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 
 import androidx.annotation.NonNull;
 
@@ -33,47 +34,76 @@ public class ViewGroupPartRenderer implements IBlur3Capture {
         this.listViewParent = listViewParent;
     }
 
-    private final RectF savedPos = new RectF();
     public boolean ignoreBlurCap;
+
+    private boolean isVisibleInParent() {
+        View current = listView;
+        while (true) {
+            if (current.getVisibility() != View.VISIBLE || current.getAlpha() <= 0) return false;
+            if (current == listViewParent) return true;
+            final ViewParent parent = current.getParent();
+            if (!(parent instanceof View)) return false;
+            current = (View) parent;
+        }
+    }
 
     @Override
     public void capture(Canvas canvas, RectF position) {
+        // Hidden media pages remain attached; geometry alone does not make them drawable.
+        if (!isVisibleInParent()) return;
         final long drawingTime = SystemClock.uptimeMillis();
 
         if (!ViewPositionWatcher.computeCoordinatesInParent(listView, listViewParent, tmpDrawListViewPointF)) {
             return;
         }
 
-        canvas.save();
-        canvas.clipRect(position);
-        canvas.translate(tmpDrawListViewPointF.x, tmpDrawListViewPointF.y);
+        final float offsetX = tmpDrawListViewPointF.x;
+        final float offsetY = tmpDrawListViewPointF.y;
+        final int saveCount = canvas.save();
+        try {
+            canvas.clipRect(position);
+            canvas.translate(offsetX, offsetY);
 
-        if (listView instanceof IBlur3Capture && !ignoreBlurCap) {
-            IBlur3Capture capture = (IBlur3Capture) listView;
-
-            savedPos.set(position);
-            position.offset(-tmpDrawListViewPointF.x, -tmpDrawListViewPointF.y);
-            capture.capture(canvas, position);
-            position.set(savedPos);
-        } else {
-            for (int i = 0; i < listView.getChildCount(); i++) {
-                final View child = listView.getChildAt(i);
-                if (!ViewPositionWatcher.computeRectInParent(child, listViewParent, tmpDrawListViewRectF)) {
-                    continue;
+            if (listView instanceof IBlur3Capture && !ignoreBlurCap) {
+                IBlur3Capture capture = (IBlur3Capture) listView;
+                final float left = position.left, top = position.top;
+                final float right = position.right, bottom = position.bottom;
+                try {
+                    position.offset(-offsetX, -offsetY);
+                    capture.capture(canvas, position);
+                } finally {
+                    position.set(left, top, right, bottom);
                 }
+            } else {
+                for (int i = 0; i < listView.getChildCount(); i++) {
+                    final View child = listView.getChildAt(i);
+                    if (!ViewPositionWatcher.computeRectInParent(child, listViewParent, tmpDrawListViewRectF)) {
+                        continue;
+                    }
 
-                if (!tmpDrawListViewRectF.intersect(position)) {
-                    continue;
+                    if (!tmpDrawListViewRectF.intersect(position)) {
+                        continue;
+                    }
+
+                    final int childSaveCount = canvas.save();
+                    try {
+                        listViewDrawChildMethod.drawChild(canvas, child, drawingTime);
+                    } finally {
+                        canvas.restoreToCount(childSaveCount);
+                    }
                 }
-
-                listViewDrawChildMethod.drawChild(canvas, child, drawingTime);
             }
+        } finally {
+            // A captured child may save again: pop our scope, not just its last save.
+            canvas.restoreToCount(saveCount);
         }
-        canvas.restore();
     }
 
     @Override
     public void captureCalculateHash(IBlur3Hash builder, RectF position) {
+        final boolean visible = isVisibleInParent();
+        builder.add(visible);
+        if (!visible) return;
         if (!ViewPositionWatcher.computeCoordinatesInParent(listView, listViewParent, tmpDrawListViewPointF)) {
             builder.unsupported();
             return;
@@ -86,10 +116,14 @@ public class ViewGroupPartRenderer implements IBlur3Capture {
 
             IBlur3Capture capture = (IBlur3Capture) listView;
 
-            savedPos.set(position);
-            position.offset(-tmpDrawListViewPointF.x, -tmpDrawListViewPointF.y);
-            capture.captureCalculateHash(builder, position);
-            position.set(savedPos);
+            final float left = position.left, top = position.top;
+            final float right = position.right, bottom = position.bottom;
+            try {
+                position.offset(-tmpDrawListViewPointF.x, -tmpDrawListViewPointF.y);
+                capture.captureCalculateHash(builder, position);
+            } finally {
+                position.set(left, top, right, bottom);
+            }
         } else {
             builder.unsupported();
         }

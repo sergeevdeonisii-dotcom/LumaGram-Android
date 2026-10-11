@@ -1,0 +1,85 @@
+import java.util.ArrayList;
+
+public final class CanvasScope104Probe {
+    static int checks;
+    static void check(boolean value, String reason) {
+        checks++;
+        if (!value) throw new AssertionError(reason);
+    }
+    static final class State {
+        double x, y;
+        int clipWidth = 4096, clipHeight = 4096;
+        State copy() {
+            State copy = new State();
+            copy.x = x; copy.y = y;
+            copy.clipWidth = clipWidth; copy.clipHeight = clipHeight;
+            return copy;
+        }
+    }
+    static final class Canvas {
+        final ArrayList<State> states = new ArrayList<>();
+        Canvas() { states.add(new State()); }
+        State state() { return states.get(states.size() - 1); }
+        int save() {
+            int checkpoint = states.size();
+            states.add(state().copy());
+            return checkpoint;
+        }
+        void restore() {
+            if (states.size() <= 1) throw new AssertionError("save underflow");
+            states.remove(states.size() - 1);
+        }
+        void restoreToCount(int checkpoint) {
+            if (checkpoint < 1 || checkpoint > states.size()) throw new AssertionError("invalid checkpoint");
+            while (states.size() > checkpoint) restore();
+        }
+        void translate(double x, double y) { state().x += x; state().y += y; }
+        void clipRect(int width, int height) { state().clipWidth = width; state().clipHeight = height; }
+    }
+    static final class Fragment {
+        int mode;
+        final RuntimeException childFailure = new RuntimeException("modeled child draw failure");
+
+@@DISPATCH@@
+
+        void drawScene(Canvas canvas) {
+            canvas.save();
+            canvas.translate(19, 37);
+            canvas.clipRect(2, 3);
+            if (mode == 0) canvas.restore();
+            if (mode == 2) throw childFailure;
+            // Mode 1 intentionally models an unbalanced child capture.
+        }
+    }
+    static void test(int mode) {
+        Canvas canvas = new Canvas();
+        canvas.save();
+        canvas.translate(123, -45);
+        canvas.clipRect(601, 1203);
+        Fragment fragment = new Fragment();
+        fragment.mode = mode;
+        for (int frame = 0; frame < 40; frame++) {
+            int depth = canvas.states.size();
+            State before = canvas.state().copy();
+            boolean thrown = false;
+            try { fragment.dispatchDraw(canvas); }
+            catch (RuntimeException failure) {
+                check(failure == fragment.childFailure, "draw exception identity changed");
+                thrown = true;
+            }
+            check(thrown == (mode == 2), "unexpected draw exception behavior");
+            check(canvas.states.size() == depth, "dispatch leaked its outer or nested save");
+            check(canvas.state().x == before.x && canvas.state().y == before.y, "caller translation leaked");
+            check(canvas.state().clipWidth == before.clipWidth && canvas.state().clipHeight == before.clipHeight,
+                "caller clipping leaked");
+        }
+        canvas.restore();
+        check(canvas.states.size() == 1 && canvas.state().x == 0 && canvas.state().y == 0,
+            "caller could not restore its own original canvas");
+    }
+    public static void main(String[] args) {
+        if (args.length == 1) test(Integer.parseInt(args[0]));
+        else for (int mode = 0; mode < 4; mode++) test(mode);
+        System.out.println("PASS: " + checks + " extracted production canvas-envelope assertions");
+    }
+}

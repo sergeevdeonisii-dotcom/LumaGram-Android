@@ -1,0 +1,187 @@
+import java.util.ArrayList;
+import java.util.List;
+
+public final class BlurCapture104Regression {
+    static int assertions;
+    static void check(boolean ok, String message) {
+        assertions++;
+        if (!ok) throw new AssertionError(message);
+    }
+    static final class Failure extends RuntimeException {}
+    @interface NonNull {}
+    static class RectF {
+        float left, top, right, bottom;
+        RectF() {}
+        RectF(RectF other) { set(other); }
+        RectF(float l, float t, float r, float b) { set(l, t, r, b); }
+        void set(float l, float t, float r, float b) { left=l;top=t;right=r;bottom=b; }
+        void set(RectF r) { set(r.left,r.top,r.right,r.bottom); }
+        void set(Rect r) { set(r.left,r.top,r.right,r.bottom); }
+        void offset(float dx,float dy) { left+=dx;right+=dx;top+=dy;bottom+=dy; }
+        boolean intersect(RectF r) {
+            if (left>=r.right||right<=r.left||top>=r.bottom||bottom<=r.top) return false;
+            set(Math.max(left,r.left),Math.max(top,r.top),Math.min(right,r.right),Math.min(bottom,r.bottom));
+            return true;
+        }
+        boolean same(RectF r) { return left==r.left&&top==r.top&&right==r.right&&bottom==r.bottom; }
+    }
+    static final class Rect {
+        int left=64,top=96,right=160,bottom=240;
+        int width(){return right-left;} int height(){return bottom-top;}
+    }
+    static class PointF { float x,y; }
+    static class Canvas {
+        static final class State {
+            float x,y,sx=1,sy=1; int alpha=255; RectF clip;
+            State copy(){State s=new State();s.x=x;s.y=y;s.sx=sx;s.sy=sy;s.alpha=alpha;s.clip=clip==null?null:new RectF(clip);return s;}
+        }
+        final ArrayList<State> stack=new ArrayList<>();
+        Canvas(){stack.add(new State());}
+        State state(){return stack.get(stack.size()-1);}
+        int save(){int before=stack.size();stack.add(state().copy());return before;}
+        int saveLayerAlpha(RectF rect,int alpha){int n=save();state().alpha=alpha;return n;}
+        void restore(){restoreToCount(stack.size()-1);}
+        void restoreToCount(int count){if(count<1||count>stack.size())throw new IllegalStateException();while(stack.size()>count)stack.remove(stack.size()-1);}
+        void translate(float dx,float dy){state().x+=state().sx*dx;state().y+=state().sy*dy;}
+        void scale(float x,float y){state().sx*=x;state().sy*=y;}
+        void clipRect(RectF rect){state().clip=new RectF(rect);}
+        int getSaveCount(){return stack.size();}
+        boolean same(State s,int count){State t=state();return stack.size()==count&&t.x==s.x&&t.y==s.y&&t.sx==s.sx&&t.sy==s.sy&&t.alpha==s.alpha&&(t.clip==null?s.clip==null:s.clip!=null&&t.clip.same(s.clip));}
+    }
+    static final class RecordingCanvas extends Canvas {}
+    interface ViewParent {}
+    static class View implements ViewParent {
+        static final int VISIBLE=0,GONE=8,INVISIBLE=4;
+        float x,y,alpha=1; int width=200,height=300,visibility=VISIBLE; ViewParent parent;
+        int getVisibility(){return visibility;}float getAlpha(){return alpha;}ViewParent getParent(){return parent;}
+    }
+    static class ViewGroup extends View {
+        final ArrayList<View> children=new ArrayList<>();
+        int getChildCount(){return children.size();} View getChildAt(int i){return children.get(i);}
+    }
+    static final class SystemClock {static long uptimeMillis(){return 1;}}
+    static final class ViewPositionWatcher {
+        static boolean computeCoordinatesInParent(View view,ViewGroup parent,PointF p){p.x=view.x;p.y=view.y;return true;}
+        static boolean computeRectInParent(View view,ViewGroup parent,RectF r){r.set(view.x,view.y,view.x+view.width,view.y+view.height);return true;}
+    }
+    interface IBlur3Hash {default void add(long value){}default void add(boolean value){add(value?1:0);}default void addF(float value){}default void unsupported(){}}
+    interface IBlur3Capture {
+        void capture(Canvas canvas,RectF position);
+        default void captureCalculateHash(IBlur3Hash hash,RectF position){hash.unsupported();}
+    }
+    static final class Blur3HashImpl implements IBlur3Hash {
+        long hash=73,visibility=-1; boolean unsupported;
+        void start(){unsupported=false;} long get(){return hash;} boolean isUnsupported(){return unsupported;}
+        public void add(long value){visibility=value;}
+        public void unsupported(){unsupported=true;}
+    }
+    static class CaptureList extends ViewGroup implements IBlur3Capture {
+        IBlur3Capture delegate;
+        public void capture(Canvas c,RectF p){delegate.capture(c,p);}
+        public void captureCalculateHash(IBlur3Hash h,RectF p){delegate.captureCalculateHash(h,p);}
+    }
+    // PRODUCTION_VIEWGROUP_CLASS
+    static final class RelativeCapture {
+        private static final RectF captureTmpChildPos = new RectF();
+        private static final RectF captureTmpRectF = new RectF(); // Allows testing the actual HEAD implementation too.
+        // PRODUCTION_RELATIVE_METHOD
+    }
+    static final class RenderNode {
+        RecordingCanvas canvas; boolean recording,display; int discarded,ended;
+        RenderNode() {} RenderNode(String name) {}
+        int getWidth(){return 96;} int getHeight(){return 144;}
+        void setPosition(int l,int t,int r,int b){}
+        RecordingCanvas beginRecording(){return beginRecording(getWidth(),getHeight());}
+        RecordingCanvas beginRecording(int w,int h){if(recording)throw new IllegalStateException();recording=true;return canvas=new RecordingCanvas();}
+        void endRecording(){if(!recording)throw new IllegalStateException();recording=false;display=true;ended++;}
+        boolean hasDisplayList(){return display;}
+        void discardDisplayList(){display=false;discarded++;}
+    }
+    // PRODUCTION_HASH_CLASS
+    static final class Suppressor {
+        static final class SourcePart {
+            final Rect position=new Rect(); final RenderNode renderNode=new RenderNode(); long lastHash=66; int invalidations;
+            void invalidate(){invalidations++;}
+        }
+        final ArrayList<SourcePart> rectRenderNodes=new ArrayList<>(); int rectRenderNodesCount=1,k=1;
+        final RectF tmpRectF=new RectF(); final Blur3HashImpl builder=new Blur3HashImpl();
+        int recordingIndex; Rect recordingPos; int resultInvalidations;
+        Suppressor(){rectRenderNodes.add(new SourcePart());}
+        private boolean invalidateResultRenderNodes(int w,int h){resultInvalidations++;return true;}
+        // PRODUCTION_SUPPRESSOR_CAPTURE
+        // PRODUCTION_SUPPRESSOR_BEGIN
+        // PRODUCTION_SUPPRESSOR_END
+    }
+    static Canvas preparedCanvas(){Canvas c=new Canvas();c.save();c.translate(4,8);c.scale(2,3);c.clipRect(new RectF(1,2,300,400));return c;}
+    static void viewGroupTests() {
+        ViewGroup parent=new ViewGroup(); CaptureList list=new CaptureList();list.parent=parent;list.x=12;list.y=20;
+        ViewGroupPartRenderer renderer=new ViewGroupPartRenderer(list,parent,(c,v,t)->true);
+        RectF p=new RectF(100,110,180,190), original=new RectF(p);
+        Canvas c=preparedCanvas();Canvas.State state=c.state().copy();int count=c.getSaveCount();Failure failure=new Failure();
+        list.delegate=(canvas,rect)->{check(rect.left==88&&rect.top==90,"relative list capture coordinates");canvas.save();canvas.translate(90,70);rect.offset(500,500);throw failure;};
+        try{renderer.capture(c,p);throw new AssertionError("capture must propagate failure");}catch(Failure e){check(e==failure,"original capture exception propagated");}
+        check(p.same(original),"VIEWGROUP_POSITION: throwing capture restores caller rectangle");
+        check(c.same(state,count),"VIEWGROUP_SCOPE: throwing/leaky child restores exact caller canvas");
+        list.delegate=(canvas,rect)->{canvas.save();canvas.translate(99,77);};
+        renderer.capture(c,p);
+        check(c.same(state,count),"VIEWGROUP_SCOPE: successful leaky child restores canvas");check(p.same(original),"successful capture restores rectangle");
+        final int[] depth={0};
+        list.delegate=(canvas,rect)->{if(depth[0]++==0){RectF before=new RectF(rect);renderer.capture(canvas,rect);check(rect.same(before),"reentrant same-renderer capture preserves parent rectangle");}depth[0]--;};
+        renderer.capture(c,p);check(p.same(original),"reentrant outer rectangle restored");check(c.same(state,count),"reentrant outer scope restored");
+        list.delegate=new IBlur3Capture(){public void capture(Canvas a,RectF b){}public void captureCalculateHash(IBlur3Hash h,RectF rect){rect.offset(90,90);throw failure;}};
+        try{renderer.captureCalculateHash(new Blur3HashImpl(),p);throw new AssertionError("hash must propagate failure");}catch(Failure e){check(e==failure,"original hash exception propagated");}
+        check(p.same(original),"throwing hash capture restores rectangle");
+        ViewGroup plain=new ViewGroup();plain.parent=parent;plain.x=12;plain.y=20;plain.children.add(new View());plain.children.add(new View());final int[] draws={0};
+        ViewGroupPartRenderer children=new ViewGroupPartRenderer(plain,parent,(canvas,child,time)->{check(canvas.state().x==28&&canvas.state().y==68,"CHILD_SCOPE: next child starts at list transform, not previous child's leaked transform");draws[0]++;canvas.save();canvas.translate(99,99);return true;});
+        children.capture(c,p);check(draws[0]==2,"both intersecting children drawn");check(c.same(state,count),"fallback children outer scope restored");
+    }
+    static void visibilityTests(){
+        ViewGroup parent=new ViewGroup();CaptureList list=new CaptureList();
+        ViewGroupPartRenderer renderer=new ViewGroupPartRenderer(list,parent,(c,v,t)->true);
+        Canvas c=preparedCanvas();Canvas.State state=c.state().copy();int count=c.getSaveCount();
+        RectF p=new RectF(100,110,180,190),original=new RectF(p);
+        ViewGroup hiddenParent=new ViewGroup();hiddenParent.parent=parent;hiddenParent.visibility=View.GONE;list.parent=hiddenParent;
+        final int[] captures={0},hashes={0};list.delegate=new IBlur3Capture(){public void capture(Canvas a,RectF b){captures[0]++;}public void captureCalculateHash(IBlur3Hash h,RectF b){hashes[0]++;}};
+        Blur3HashImpl visibilityHash=new Blur3HashImpl();renderer.capture(c,p);renderer.captureCalculateHash(visibilityHash,p);
+        check(captures[0]==0&&hashes[0]==0&&visibilityHash.visibility==0,"HIDDEN_PAGE: GONE ancestor prevents capture/hash and records hidden state");
+        hiddenParent.visibility=View.INVISIBLE;renderer.capture(c,p);check(captures[0]==0,"INVISIBLE ancestor is not captured");
+        hiddenParent.visibility=View.VISIBLE;hiddenParent.alpha=0;renderer.capture(c,p);check(captures[0]==0,"fully transparent ancestor is not captured");
+        hiddenParent.alpha=1;renderer.capture(c,p);renderer.captureCalculateHash(visibilityHash,p);check(captures[0]==1&&hashes[0]==1&&visibilityHash.visibility==1,"visible ancestor re-enables capture and changes visibility hash");
+        list.parent=null;renderer.capture(c,p);renderer.captureCalculateHash(visibilityHash,p);check(captures[0]==1&&hashes[0]==1&&visibilityHash.visibility==0,"detached/wrong ancestor is never captured");
+        check(p.same(original)&&c.same(state,count),"hidden/visible captures preserve caller state");
+    }
+    static void relativeTests(){
+        Canvas c=preparedCanvas();Canvas.State state=c.state().copy();int count=c.getSaveCount();ViewGroup parent=new ViewGroup();View view=new View();view.x=30;view.y=40;
+        RectF p=new RectF(100,110,180,190),original=new RectF(p);Failure failure=new Failure();
+        IBlur3Capture bad=(canvas,rect)->{check(rect.left==70&&rect.top==70,"relative capture rectangle");canvas.save();canvas.translate(99,88);rect.offset(600,600);throw failure;};
+        try{RelativeCapture.captureRelativeParent(bad,c,p,view,parent,77);throw new AssertionError("relative must propagate");}catch(Failure e){check(e==failure,"relative exception identity");}
+        check(c.same(state,count),"RELATIVE_SCOPE: alpha/translation/leaked saves restored");check(p.same(original),"relative helper protects caller rectangle");
+        IBlur3Capture nested=(canvas,rect)->{RectF before=new RectF(rect);View nestedView=new View();nestedView.x=5;nestedView.y=7;RelativeCapture.captureRelativeParent((cc,rr)->{rr.offset(600,700);cc.save();cc.translate(123,456);},canvas,rect,nestedView,parent,111);check(rect.same(before),"RELATIVE_RECT: nested helper must not corrupt outer capture input");};
+        RelativeCapture.captureRelativeParent(nested,c,p,view,parent,128);check(c.same(state,count),"nested relative capture restored");check(p.same(original),"nested relative caller rectangle unchanged");
+        View zero=new View();RelativeCapture.captureRelativeParent((canvas,rect)->{canvas.save();canvas.translate(4,7);},c,p,zero,parent,255);check(c.same(state,count),"zero-offset full-alpha capture still isolates leaky child");
+        RelativeCapture.captureRelativeParent((canvas,rect)->{throw new AssertionError("transparent capture invoked");},c,p,view,parent,0);check(c.same(state,count),"transparent capture stays no-op");
+    }
+    static void suppressorTests(){
+        Suppressor s=new Suppressor();Suppressor.SourcePart part=s.rectRenderNodes.get(0);Failure failure=new Failure();final int[] calls={0};
+        IBlur3Capture bad=(canvas,rect)->{calls[0]++;canvas.save();canvas.translate(99,88);throw failure;};
+        try{s.invalidateResultRenderNodes(bad,300,400);throw new AssertionError("suppressor must propagate");}catch(Failure e){check(e==failure,"suppressor exception identity");}
+        check(s.recordingPos==null&&!part.renderNode.recording,"SUPPRESSOR_CLEANUP: failed capture closes recording and clears latch");
+        check(!part.renderNode.hasDisplayList(),"SUPPRESSOR_CACHE: failed partial display list discarded");
+        check(part.lastHash==66,"SUPPRESSOR_CACHE: failure does not publish successful hash");
+        check(part.renderNode.canvas.getSaveCount()==1&&part.renderNode.canvas.state().x==0&&part.renderNode.canvas.state().y==0,"failed recording restores canvas scope");
+        IBlur3Capture good=new IBlur3Capture(){public void capture(Canvas canvas,RectF rect){calls[0]++;check(canvas.state().x==-64&&canvas.state().y==-96,"capture source position preserved on retry");canvas.save();canvas.translate(77,99);}public void captureCalculateHash(IBlur3Hash h,RectF r){}};
+        check(s.invalidateResultRenderNodes(good,300,400),"next capture succeeds after failure");check(part.renderNode.hasDisplayList()&&part.lastHash==73,"successful display list/hash published");
+        check(s.recordingPos==null&&!part.renderNode.recording,"successful recording closes latch");check(part.renderNode.canvas.getSaveCount()==1&&part.renderNode.canvas.state().x==0&&part.renderNode.canvas.state().y==0,"successful leaky recording restored");
+        check(!s.invalidateResultRenderNodes(good,300,400)&&calls[0]==2,"successful cache prevents duplicate capture");
+    }
+    static void hashTests(){
+        RenderNode node=new RenderNode();Failure failure=new Failure();final boolean[] fail={true};final int[] calls={0};
+        RenderNodeWithHash hashed=new RenderNodeWithHash(node,new RenderNodeWithHash.Renderer(){public void renderNodeUpdateDisplayList(Canvas c){calls[0]++;c.save();c.translate(77,99);if(fail[0])throw failure;}public void renderNodeCalculateHash(IBlur3Hash h){}});
+        try{hashed.updateDisplayListIfNeeded();throw new AssertionError("hash renderer must propagate");}catch(Failure e){check(e==failure,"hash renderer original exception");}
+        check(!node.recording&&!node.hasDisplayList(),"HASH_CLEANUP: failed hash renderer ends and discards partial recording");
+        check(hashed.lastHash==0&&hashed.lastWidth==0&&hashed.lastHeight==0,"HASH_CACHE: failed rendering must not publish dimensions/hash");
+        fail[0]=false;hashed.updateDisplayListIfNeeded();check(!node.recording&&node.hasDisplayList()&&calls[0]==2,"hash renderer recovers on next call");
+        hashed.updateDisplayListIfNeeded();check(calls[0]==2,"successful hash renderer cached");
+    }
+    public static void main(String[] args){String mode=args.length==0?"all":args[0];if(mode.equals("all")||mode.equals("viewgroup"))viewGroupTests();if(mode.equals("all")||mode.equals("visibility"))visibilityTests();if(mode.equals("all")||mode.equals("relative"))relativeTests();if(mode.equals("all")||mode.equals("suppressor"))suppressorTests();if(mode.equals("all")||mode.equals("hash"))hashTests();System.out.println("PASS: "+assertions+" production-derived blur capture canvas/rectangle/recording checks.");}
+}

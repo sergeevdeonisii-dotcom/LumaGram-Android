@@ -64,8 +64,8 @@ public final class GlassContrast100Test {
                 int protectedPanel = LumaGlassContrast.panel(original, false, true);
                 check((protectedPanel >>> 24) >= previousAlpha, "opacity control stays ordered");
                 previousAlpha = protectedPanel >>> 24;
-                check(previousAlpha >= 204, "daytime opacity floor");
-                check(alpha == 255 || previousAlpha < 255 || alpha >= 253, "glass stays translucent");
+                check(previousAlpha >= LumaGlassContrast.MIN_LIGHT_ALPHA, "daytime opacity floor");
+                check(previousAlpha <= LumaGlassContrast.MAX_LIGHT_ALPHA, "daytime glass retains visible background");
                 check((protectedPanel >>> 16 & 255) >= 238 && (protectedPanel >>> 8 & 255) >= 238
                     && (protectedPanel & 255) >= 238, "bright tint floor");
                 check(LumaGlassContrast.panel(original, true, true) == original, "dark surface bit-identical");
@@ -88,8 +88,21 @@ public final class GlassContrast100Test {
         }
         check(LumaGlassContrast.foreground(0x00123456, false, true) == 0x00123456,
             "intentionally transparent colors are not exposed");
-        check(LumaGlassContrast.foreground(0xff303030, false, true) == 0xff303030,
+        check(LumaGlassContrast.foreground(0xff050505, false, true) == 0xff050505,
             "already readable theme text is unchanged");
+        int oldDefaultAlpha = 204 + (158 * (255 - 204) + 127) / 255;
+        check(oldDefaultAlpha > 230, "negative control: old default daytime glass was nearly opaque");
+        int newDefaultAlpha = LumaGlassContrast.panel(0x9effffff, false, true) >>> 24;
+        check(newDefaultAlpha >= 160 && newDefaultAlpha <= 190,
+            "default light glass is translucent like the dark material, not a white slab");
+        for (int[] levels : new int[][]{{92, 117, 143}, {133, 158, 184}}) {
+            int previous = -1;
+            for (int level : levels) {
+                int result = LumaGlassContrast.panel(level << 24 | 0x00ffffff, false, true) >>> 24;
+                check(result > previous, "all three opacity settings remain distinct with/without refraction");
+                previous = result;
+            }
+        }
         // Saturated translucent text: the old grey-only test passed while these
         // valid non-grey protected surfaces dipped below AA (4.45095 and 4.49661).
         int[][] translucentCases = {{0xa00301ed, 0xffbebeff}, {0x2ec564cf, 0xffbebfbe}};
@@ -102,8 +115,9 @@ public final class GlassContrast100Test {
         for (int i = 0; i < 100000; i++) {
             int fg = random.nextInt() | 0x01000000;
             int adjusted = LumaGlassContrast.foreground(fg, false, true);
-            int bg = 0xff000000 | (190 + random.nextInt(66)) << 16
-                | (190 + random.nextInt(66)) << 8 | (190 + random.nextInt(66));
+            int floor = LumaGlassContrast.MIN_LIGHT_CHANNEL * LumaGlassContrast.MIN_LIGHT_ALPHA / 255;
+            int bg = 0xff000000 | (floor + random.nextInt(256 - floor)) << 16
+                | (floor + random.nextInt(256 - floor)) << 8 | (floor + random.nextInt(256 - floor));
             check(LumaGlassContrast.contrast(adjusted, bg) >= 4.5,
                 "all protected RGB interiors retain AA for saturated alpha text");
         }

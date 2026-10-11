@@ -1499,15 +1499,23 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
 
     public float getTabsHeight() {
         float h = 0;
-        if (viewPager.getViewPages() != null) {
+        if (viewPager != null && viewPager.getViewPages() != null) {
             final View[] views = viewPager.getViewPages();
             for (View view : views) {
                 if (view instanceof Page) {
-                    h += (1.0f - (float) view.getTranslationX() / view.getWidth()) * ((Page) view).getTabsHeight();
+                    // A page is bound before its first measure. Never publish
+                    // 0 / 0 (or an invalid animation value) to a RenderNode.
+                    final int width = view.getWidth();
+                    final float translationX = view.getTranslationX();
+                    final float pageHeight = ((Page) view).getTabsHeight();
+                    if (width <= 0 || Float.isNaN(translationX) || Float.isInfinite(translationX)
+                            || Float.isNaN(pageHeight) || Float.isInfinite(pageHeight)) continue;
+                    final float visibility = clamp01(1.0f - Math.abs(translationX) / width);
+                    h += visibility * Math.max(0.0f, pageHeight);
                 }
             }
         }
-        return h;
+        return Float.isNaN(h) || Float.isInfinite(h) ? 0.0f : h;
     }
 
     private float hasTabs() {
@@ -1525,7 +1533,9 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
 
     public void updateTabsY() {
         if (tabsView == null) return;
-        final float ty = Math.min(externalPaddingTop, getTabsHeight() - dp(42));
+        final float height = getTabsHeight();
+        final float finiteHeight = Float.isNaN(height) || Float.isInfinite(height) ? 0.0f : height;
+        final float ty = Math.min(externalPaddingTop, finiteHeight - dp(42));
         final float alpha = clamp01(ilerp(ty - externalPaddingTop, -dp(42), 0));
         final float scale = lerp(0.9f, 1.0f, alpha);
         tabsView.setTranslationY(ty);
@@ -2504,7 +2514,12 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                 if (view instanceof Page) {
                     Page page = (Page) view;
                     if (page.iBlur3Capture == null) {
-                        page.iBlur3Capture = new ViewGroupPartRenderer(page.listView, iBlur3CaptureParent, page.listView::drawChild);
+                        final ViewGroupPartRenderer renderer = new ViewGroupPartRenderer(
+                            page.listView, iBlur3CaptureParent, page.listView::drawChild);
+                        // Match the outer profile list: capture gift children, not the
+                        // grid's own RenderNode (the overscroll capture workaround).
+                        renderer.ignoreBlurCap = true;
+                        page.iBlur3Capture = renderer;
                     }
                     page.iBlur3Capture.capture(canvas, position);
                 }

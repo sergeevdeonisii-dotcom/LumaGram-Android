@@ -46,7 +46,6 @@ public class Blur3Utils {
         return true;
     }
 
-    private static final RectF captureTmpRectF = new RectF();
     private static final RectF captureTmpChildPos = new RectF();
 
     public static void captureRelativeParent(IBlur3Capture capture, Canvas canvas, RectF position, View view, ViewGroup parent) {
@@ -60,25 +59,24 @@ public class Blur3Utils {
         if (ViewPositionWatcher.computeRectInParent(view, parent, captureTmpChildPos)) {
             final float oX = captureTmpChildPos.left;
             final float oY = captureTmpChildPos.top;
-            captureTmpRectF.set(position);
-            captureTmpRectF.offset(-oX, -oY);
+            // Search/list captures can nest this helper. Do not reuse their input rectangle.
+            final RectF capturePosition = new RectF(position);
+            capturePosition.offset(-oX, -oY);
 
             final boolean needSaveTranslation = oX != 0 || oY != 0;
             final boolean needSaveAlpha = alpha != 255;
 
-            if (needSaveTranslation) {
-                canvas.save();
-                canvas.translate(oX, oY);
-            }
-            if (needSaveAlpha) {
-                canvas.saveLayerAlpha(captureTmpRectF, alpha);
-            }
-            capture.capture(canvas, captureTmpRectF);
-            if (needSaveAlpha) {
-                canvas.restore();
-            }
-            if (needSaveTranslation) {
-                canvas.restore();
+            final int saveCount = canvas.save();
+            try {
+                if (needSaveTranslation) {
+                    canvas.translate(oX, oY);
+                }
+                if (needSaveAlpha) {
+                    canvas.saveLayerAlpha(capturePosition, alpha);
+                }
+                capture.capture(canvas, capturePosition);
+            } finally {
+                canvas.restoreToCount(saveCount);
             }
         }
     }
