@@ -1,0 +1,12 @@
+# Local runtime output and credentials must never enter source control.
+.wrangler/
+node_modules/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+*.log
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*

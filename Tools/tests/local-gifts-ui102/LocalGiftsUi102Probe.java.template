@@ -24,8 +24,19 @@ public final class LocalGiftsUi102Probe {
     static final class FlickerLoadingView { static final int STAR_GIFT = 1; }
     static final class R {
         static final class string { static final int LumaShowAllGifts = 1, LumaHideAllGifts = 2,
-            LumaLocalGiftsHeader = 3, ProfileGifts = 4, LumaLocalGiftPreviewInfo = 5, ProfileGiftsInfo = 6; }
+            LumaLocalGiftsHeader = 3, ProfileGifts = 4, LumaLocalGiftPreviewInfo = 5, ProfileGiftsInfo = 6,
+            LumaPersonalGiftRemove = 7, LumaLocalGiftRemove = 8, LumaPersonalGiftRemoveInfo = 9,
+            LumaLocalGiftRemoveInfo = 10, LumaPersonalGiftRemoved = 11, LumaLocalGiftRemoved = 12; }
         static final class drawable { static final int msg_message = 1, menu_hide_gift = 2; }
+    }
+    static final class BuildConfig {
+        static boolean LUMA_PUBLIC_EDITION = true, LUMA_FRIENDS_EDITION;
+    }
+    static final class LumaBuildPolicy {
+        // PRODUCTION_PERSONAL_EDITION
+    }
+    static final class LumaLocalGiftPreview {
+        // PRODUCTION_PREVIEW_LABELS
     }
     static final class UserConfig {
         static long identity = 1001;
@@ -246,7 +257,8 @@ public final class LocalGiftsUi102Probe {
         return g;
     }
     static ArrayList<UItem> display(Page p) { ArrayList<UItem> items = new ArrayList<>(); p.fillItems(items, p.listView.adapter); p.listView.adapter.items = items; return items; }
-    static void queuedSpanRegression() {
+    static void queuedSpanRegression(boolean personal) {
+        BuildConfig.LUMA_PUBLIC_EDITION = !personal;
         AndroidUtilities.ui.automatic = false;
         Parent parent = new Parent(); Page page = new Page(parent);
         parent.localProfileGifts.add(new LumaLocalGifts.LocalSavedGift(1001, 77));
@@ -270,7 +282,10 @@ public final class LocalGiftsUi102Probe {
             check(adapter.updates == 0, "Actual UniversalAdapter rejects subsequent updates after poisoned layout");
             throw new AssertionError("Queued span growth must not abort after SPACE or poison future layout", error);
         }
-        check(boundary.children.contains("toggle") && boundary.children.contains("local-header") && boundary.children.contains("real-header"), "All full-width rows bind while queued manager change is pending");
+        check(boundary.children.contains("toggle"), "Full-width toggle binds while queued manager change is pending");
+        check(personal ? !boundary.children.contains("local-header") && !boundary.children.contains("real-header")
+                : boundary.children.contains("local-header") && boundary.children.contains("real-header"),
+                "Only personal edition hides section headers during queued layout");
         check(!boundary.isComputingLayout() && boundary.intercepted == 0, "Successful actual layout boundary releases counters");
         for (int position = 0; position < page.listView.adapter.items.size(); position++) {
             UItem item = page.listView.adapter.getItem(position);
@@ -291,11 +306,85 @@ public final class LocalGiftsUi102Probe {
         boundary = new LayoutBoundary(page); boundary.dispatchLayoutStep2();
         check(boundary.children.size() == page.listView.adapter.items.size(), "Post-transition full layout binds every published item");
         AndroidUtilities.ui.automatic = true;
+        BuildConfig.LUMA_PUBLIC_EDITION = true;
+    }
+    static ArrayList<Object> tiles(ArrayList<UItem> items) {
+        ArrayList<Object> gifts = new ArrayList<>();
+        for (UItem item : items) if (item.object instanceof TL_stars.SavedStarGift) gifts.add(item.object);
+        return gifts;
+    }
+    static void personalGridRegression() {
+        Parent parent = new Parent(); Page page = new Page(parent);
+        LumaLocalGifts.LocalSavedGift localFirst = new LumaLocalGifts.LocalSavedGift(1001, 81);
+        LumaLocalGifts.LocalSavedGift localPinned = new LumaLocalGifts.LocalSavedGift(1001, 82);
+        parent.localProfileGifts.add(localFirst); parent.localProfileGifts.add(localPinned);
+        TL_stars.SavedStarGift realFirst = server(801), realPinned = server(802), realLast = server(803);
+        parent.list.gifts.add(realFirst); parent.list.gifts.add(realPinned); parent.list.gifts.add(realLast);
+        parent.list.totalCount = 3; page.reordering = true;
+        parent.setGiftPinnedLocally(localPinned, true); parent.setGiftPinnedLocally(realPinned, true);
+        BuildConfig.LUMA_PUBLIC_EDITION = false;
+        ArrayList<UItem> personal = display(page);
+        check(tiles(personal).equals(Arrays.asList(localPinned, realPinned, localFirst, realFirst, realLast)),
+                "Personal unified grid places all local pins ahead of all unpinned entries with stable source order");
+        check(personal.stream().noneMatch(i -> i.kind.endsWith("header") || i.kind.equals("text")),
+                "Personal unified grid has no local/real section labels or inaccurate ownership footer");
+        check(page.listView.getSpanCount() == 3, "Personal merged grid uses the combined gift count");
+        for (UItem item : personal) {
+            if (item.object == localPinned || item.object == realPinned) check(Boolean.TRUE.equals(item.object2), "Unified pin badge survives for either source");
+            if (item.object instanceof LumaLocalGifts.LocalSavedGift) check(!item.reordering && item.spanCount == 1, "Personal local marker stays single-span and never server-reorderable");
+        }
+        check(parent.list.gifts.equals(Arrays.asList(realFirst, realPinned, realLast)) && parent.list.totalCount == 3,
+                "Unified UI does not copy, reorder or count local markers into real server inventory");
+        check(parent.localProfileGifts.equals(Arrays.asList(localFirst, localPinned)) && localFirst.localKey.equals("unique:81"),
+                "Personal presentation preserves local identities and stored source ordering");
+        check(tiles(display(page)).equals(tiles(personal)), "Repeated unified grid snapshots keep pin ordering stable");
+        parent.list.loading = true;
+        ArrayList<UItem> loading = display(page);
+        check(loading.stream().filter(i -> i.kind.equals("flicker")).count() == 1,
+                "Personal unified loading remainder accounts for both local and real tiles");
+        BuildConfig.LUMA_PUBLIC_EDITION = true;
+        ArrayList<UItem> publicUi = display(page);
+        check(tiles(publicUi).equals(Arrays.asList(localPinned, localFirst, realPinned, realFirst, realLast)),
+                "Public edition retains separate-source pin ordering unchanged");
+        check(publicUi.stream().filter(i -> i.kind.endsWith("header")).count() == 2,
+                "Public edition retains both existing section headers");
+        check(publicUi.stream().filter(i -> i.kind.equals("flicker")).count() == 3,
+                "Public loading remainder keeps original independent server-section behavior");
+        parent.list.gifts.clear(); parent.list.totalCount = 0; parent.list.loading = false;
+        publicUi = display(page);
+        check(publicUi.stream().anyMatch(i -> i.kind.equals("local-header")) && publicUi.stream().anyMatch(i -> i.kind.equals("text")),
+                "Public local-only profile keeps its local header and explanatory footer");
+        BuildConfig.LUMA_PUBLIC_EDITION = false;
+        personal = display(page);
+        check(personal.stream().noneMatch(i -> i.kind.endsWith("header") || i.kind.equals("text")) && tiles(personal).size() == 2,
+                "Personal local-only profile retains both gifts without local labels");
+        parent.localProfileGifts.clear(); parent.list.gifts.add(realFirst); parent.list.totalCount = 1;
+        check(display(page).stream().anyMatch(i -> i.kind.equals("text")), "Personal real-only footer remains unchanged");
+        BuildConfig.LUMA_PUBLIC_EDITION = true;
+    }
+    static void previewLabelRegression() {
+        BuildConfig.LUMA_PUBLIC_EDITION = false;
+        check(LumaLocalGiftPreview.getRemoveTitle().equals(getString(R.string.LumaPersonalGiftRemove))
+                && LumaLocalGiftPreview.getRemoveInfo().equals(getString(R.string.LumaPersonalGiftRemoveInfo))
+                && LumaLocalGiftPreview.getRemovedMessage().equals(getString(R.string.LumaPersonalGiftRemoved)),
+                "Personal preview selects ordinary profile removal labels from actual helpers");
+        BuildConfig.LUMA_PUBLIC_EDITION = true;
+        check(LumaLocalGiftPreview.getRemoveTitle().equals(getString(R.string.LumaLocalGiftRemove))
+                && LumaLocalGiftPreview.getRemoveInfo().equals(getString(R.string.LumaLocalGiftRemoveInfo))
+                && LumaLocalGiftPreview.getRemovedMessage().equals(getString(R.string.LumaLocalGiftRemoved)),
+                "Public preview keeps all existing local removal labels");
+        BuildConfig.LUMA_PUBLIC_EDITION = false; BuildConfig.LUMA_FRIENDS_EDITION = true;
+        check(!LumaBuildPolicy.isPersonalEdition() && LumaLocalGiftPreview.getRemoveTitle().equals(getString(R.string.LumaLocalGiftRemove)),
+                "Restricted Friends build does not accidentally get personal UI");
+        BuildConfig.LUMA_FRIENDS_EDITION = false; BuildConfig.LUMA_PUBLIC_EDITION = true;
     }
     // PRODUCTION_SHARED_SELF_HELPER
     public static void main(String[] args) {
         UserConfig.identity = 1001;
-        queuedSpanRegression();
+        queuedSpanRegression(false);
+        queuedSpanRegression(true);
+        personalGridRegression();
+        previewLabelRegression();
         Parent p = new Parent(); Page page = new Page(p);
         LumaLocalGifts.LocalSavedGift l1 = new LumaLocalGifts.LocalSavedGift(1001, 11);
         LumaLocalGifts.LocalSavedGift l2 = new LumaLocalGifts.LocalSavedGift(1001, 12);

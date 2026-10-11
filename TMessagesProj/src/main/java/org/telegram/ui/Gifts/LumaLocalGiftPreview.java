@@ -12,6 +12,7 @@ import android.widget.TextView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.messenger.LumaLocalGifts;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -34,6 +35,18 @@ import org.telegram.ui.Stars.StarGiftSheet;
 public final class LumaLocalGiftPreview {
     private LumaLocalGiftPreview() {}
 
+    public static String getRemoveTitle() {
+        return getString(LumaBuildPolicy.isPersonalEdition() ? R.string.LumaPersonalGiftRemove : R.string.LumaLocalGiftRemove);
+    }
+
+    public static String getRemoveInfo() {
+        return getString(LumaBuildPolicy.isPersonalEdition() ? R.string.LumaPersonalGiftRemoveInfo : R.string.LumaLocalGiftRemoveInfo);
+    }
+
+    public static String getRemovedMessage() {
+        return getString(LumaBuildPolicy.isPersonalEdition() ? R.string.LumaPersonalGiftRemoved : R.string.LumaLocalGiftRemoved);
+    }
+
     public static void show(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift) {
         int account = fragment.getCurrentAccount();
         Context context = fragment.getParentActivity();
@@ -47,15 +60,18 @@ public final class LumaLocalGiftPreview {
 
         GiftSheet.GiftCell card = new GiftSheet.GiftCell(context, account, resources);
         card.setStarsGift(gift, true, false);
-        content.addView(card, LayoutHelper.createLinear(200, 220, Gravity.CENTER_HORIZONTAL));
+        content.addView(card, LayoutHelper.createLinear(200, 220, Gravity.CENTER_HORIZONTAL,
+                0, 0, 0, LumaBuildPolicy.isPersonalEdition() ? 16 : 0));
 
-        TextView local = new TextView(context);
-        local.setText(getString(R.string.LumaLocalGiftPreviewInfo));
-        local.setTextSize(13);
-        local.setTextColor(Theme.getColor(Theme.key_dialogTextGray2, resources));
-        local.setGravity(Gravity.CENTER);
-        content.addView(local, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT,
-                LayoutHelper.WRAP_CONTENT, 0, 10, 0, 16));
+        if (!LumaBuildPolicy.isPersonalEdition()) {
+            TextView local = new TextView(context);
+            local.setText(getString(R.string.LumaLocalGiftPreviewInfo));
+            local.setTextSize(13);
+            local.setTextColor(Theme.getColor(Theme.key_dialogTextGray2, resources));
+            local.setGravity(Gravity.CENTER);
+            content.addView(local, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT,
+                    LayoutHelper.WRAP_CONTENT, 0, 10, 0, 16));
+        }
 
         TableView table = new TableView(context, resources);
         LinearLayout owner = new LinearLayout(context);
@@ -104,7 +120,7 @@ public final class LumaLocalGiftPreview {
                 .setTitle(unique.title + " #" + LocaleController.formatNumber(unique.num, ','))
                 .setView(scroll)
                 .setPositiveButton(getString(R.string.OK), null)
-                .setNegativeButton(getString(R.string.LumaLocalGiftRemove), (dialog, which) -> confirmRemove(fragment, gift))
+                .setNegativeButton(getRemoveTitle(), (dialog, which) -> confirmRemove(fragment, gift))
                 .create());
     }
 
@@ -114,8 +130,8 @@ public final class LumaLocalGiftPreview {
         final long owner = gift.ownerUserId;
         if (context == null || owner != UserConfig.getInstance(account).getClientUserId()) return;
         fragment.showDialog(new AlertDialog.Builder(context, fragment.getResourceProvider())
-                .setTitle(getString(R.string.LumaLocalGiftRemove))
-                .setMessage(getString(R.string.LumaLocalGiftRemoveInfo))
+                .setTitle(getRemoveTitle())
+                .setMessage(getRemoveInfo())
                 .setPositiveButton(getString(R.string.Delete), (dialog, which) -> Utilities.globalQueue.postRunnable(() -> {
                     boolean removed = LumaLocalGifts.remove(account, gift);
                     AndroidUtilities.runOnUIThread(() -> {
@@ -123,7 +139,7 @@ public final class LumaLocalGiftPreview {
                         if (removed) NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.lumaLocalGiftsChanged, owner);
                         if (fragment.getParentActivity() != null) BulletinFactory.of(fragment).createSimpleBulletin(
                                 removed ? R.raw.done : R.raw.chats_infotip,
-                                getString(removed ? R.string.LumaLocalGiftRemoved : R.string.LumaLocalGiftFailed)).show();
+                                removed ? getRemovedMessage() : getString(R.string.LumaLocalGiftFailed)).show();
                     });
                 }))
                 .setNegativeButton(getString(R.string.Cancel), null)

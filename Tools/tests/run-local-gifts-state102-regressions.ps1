@@ -49,6 +49,8 @@ $utilities=[IO.File]::ReadAllText((Join-Path $src 'messenger/Utilities.java'))
 $universal=[IO.File]::ReadAllText((Join-Path $src 'ui/Components/UniversalRecyclerView.java'))
 $adapter=[IO.File]::ReadAllText((Join-Path $src 'ui/Components/UniversalAdapter.java'))
 $item=[IO.File]::ReadAllText((Join-Path $src 'ui/Components/UItem.java'))
+$policy=[IO.File]::ReadAllText((Join-Path $src 'messenger/LumaBuildPolicy.java'))
+$preview=[IO.File]::ReadAllText((Join-Path $src 'ui/Gifts/LumaLocalGiftPreview.java'))
 $recycler=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/androidx/recyclerview/widget/RecyclerView.java'))
 $grid=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/androidx/recyclerview/widget/GridLayoutManager.java'))
 $probe=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'local-gifts-ui102/LocalGiftsUi102Probe.java.template'))
@@ -71,6 +73,8 @@ $probe=$probe.Replace('// PRODUCTION_DISPATCH_LAYOUT_STEP_2',(Method $recycler '
 $probe=$probe.Replace('// PRODUCTION_IS_COMPUTING_LAYOUT',(Method $recycler 'public boolean isComputingLayout()'))
 $probe=$probe.Replace('// PRODUCTION_GRID_SPAN_CONSTRAINT',(Method $grid 'if (spanSize > mSpanCount)'))
 $probe=$probe.Replace('// PRODUCTION_ADAPTER_UPDATE',(Method $adapter 'private void updateInternal(boolean animated)'))
+$probe=$probe.Replace('// PRODUCTION_PERSONAL_EDITION',(Method $policy 'public static boolean isPersonalEdition()'))
+$probe=$probe.Replace('// PRODUCTION_PREVIEW_LABELS',((@('public static String getRemoveTitle()', 'public static String getRemoveInfo()', 'public static String getRemovedMessage()')|ForEach-Object{Method $preview $_})-join "`n"))
 $profileEvent=Method $profile 'else if (id == NotificationCenter.lumaLocalGiftsChanged)'
 $profileEvent=$profileEvent.Replace('else if (id == NotificationCenter.lumaLocalGiftsChanged)','if (id == 1)')
 $headerEvent="void localEvent(int id, int account, Object... args) { $profileEvent }"

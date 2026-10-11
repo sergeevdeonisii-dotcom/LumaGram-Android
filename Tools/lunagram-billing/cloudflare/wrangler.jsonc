@@ -1,0 +1,19 @@
+{
+  "name": "lunagram-billing-core",
+  "main": "core-worker.mjs",
+  "compatibility_date": "2026-10-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "observability": { "enabled": false },
+  "vars": {
+    "LIVE_BOT_ENABLED": "true",
+    "BILLING_PAYMENTS_ENABLED": "false",
+    "TELEGRAM_WEBHOOK_IP": "172.66.44.64"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "BILLING_STORE", "class_name": "BillingStore" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BillingStore"] }]
+}

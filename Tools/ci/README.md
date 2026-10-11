@@ -1,33 +1,43 @@
-# Temporary cloud compilation for Lunagram 1.0.4
+# Temporary cloud compilation for Lunagram 1.0.5
 
 Current workflow: `.github/workflows/lunagram-release100-apks.yml` (historical
 filename retained), owner repository only, branch `agent/lunagram-release100`.
-Version name is `1.0.4`, standalone arm64 version code is `71669`.
+Version name is `1.0.5`, base version code is `7167`, and standalone arm64 version
+code is `71679` (the existing ABI suffix is `9`).
 
 | Edition | `lumaFriendsEdition` | `lumaPublicEdition` | Delivery name | Privacy/local-number tools | Enhanced horizon / personal updater |
 | --- | --- | --- | --- | --- | --- |
-| Personal (`full`) | false | false | `Lunagram-1.0.4-personal-arm64.apk` | Yes | Yes |
-| General release (`public`) | false | true | `Lunagram-1.0.4-public-arm64.apk` | Yes | No |
-| Restricted Friends (`friends`) | true | false | `Lunagram-1.0.4-friends-arm64.apk` | No | No |
+| Personal (`full`) | false | false | `Lunagram-1.0.5-personal-arm64.apk` | Yes | Yes |
+| General release (`public`) | false | true | `Lunagram-1.0.5-public-arm64.apk` | Yes | No |
 
 The general release is NOT the restricted Friends edition. The mistaken
 historical `.100`/`.101` friends-to-public naming must never be applied to `.102` or later.
-Both edition flags true is invalid. Default CI compiles `full` then `public`;
-manual dispatch can add the third Friends APK with `build_friends=true`.
+Both edition flags true is invalid. This release compiles only `full` then `public`;
+Friends selection and release-105 Friends artifacts are rejected.
 Each APK is copied and inspected before Gradle reuses the shared output path.
 
-CI has no production signing key. Artifact `lunagram-104-temporary-signed`
-contains the selected temporary APKs and schema-2 `build-metadata.json` with
-explicit release `104`, exact workflow commit, identity, ABI, both edition flags
-and hashes. Collector tests and camera/local-gift/security regressions run first.
+CI has no production signing key. Artifact `lunagram-105-temporary-signed`
+contains exactly `Lunagram-1.0.5-full-temporary.apk`,
+`Lunagram-1.0.5-public-temporary.apk` and schema-2 `build-metadata.json` with
+explicit release `105`, exact workflow commit, identity, ABI, both edition flags
+and hashes. No wildcard upload can include extra APKs or credential files.
+Collector tests and camera/local-gift/security regressions run first. A separate
+credential-free SDK step installs the pinned Android 36 tools, then three local
+subscription probes check auth contracts, catalog/EN-RU resources with AAPT2,
+and actual screen/client compilation against Android 36 with modeled Telegram UI
+collaborators. All run before the secret-bearing disposable-key/Gradle step.
+They do not contact the billing server, make purchases or validate device Keystore
+and rendered UI behavior; the full app build remains necessary.
 Local signing must validate the exact DEX capability policy as well as metadata,
 signature, manifest, hashes and unchanged application payload. Genuine public
 must never receive the private updater feed or the personal enhanced horizon.
 Neither signing nor CI compilation publishes a release or modifies an update feed.
-The collector retains the immutable `.102`/`.103` metadata/version contracts for
-existing artifacts; old APKs are never accepted or relabelled as the `.104` hotfix.
-Collector and local signing/payload helpers now default to `.104`; inspecting
-historical artifacts requires an explicit `--release 103` / `-Release 103` (or `102`).
+The collector retains the immutable `.102`/`.103`/`.104` metadata/version contracts
+for existing artifacts, including their historical Friends validation; old APKs
+are never accepted or relabelled as `.105`. The collector defaults to `.105`;
+historical artifacts require an explicit `--release 104` (or `103`/`102`). Local
+production signing is separate: any legacy `.79` signing helper must not be used
+for this pair without a reviewed `.105` identity and full/public policy update.
 
 The checkout stays at depth 1. Before the visual regression suites, a dedicated
 helper fetches only the immutable pre-fix commit

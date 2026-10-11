@@ -29,6 +29,7 @@ $utilities = Source 'messenger/Utilities.java'
 $universal = Source 'ui/Components/UniversalRecyclerView.java'
 $adapter = Source 'ui/Components/UniversalAdapter.java'
 $item = Source 'ui/Components/UItem.java'
+$policy = Source 'messenger/LumaBuildPolicy.java'
 $recycler = [IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/androidx/recyclerview/widget/RecyclerView.java'))
 $grid = [IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/androidx/recyclerview/widget/GridLayoutManager.java'))
 $template = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'local-gifts-ui102/LocalGiftsUi102Probe.java.template'))
@@ -51,6 +52,8 @@ $template = $template.Replace('// PRODUCTION_DISPATCH_LAYOUT_STEP_2', (Method $r
 $template = $template.Replace('// PRODUCTION_IS_COMPUTING_LAYOUT', (Method $recycler 'public boolean isComputingLayout()'))
 $template = $template.Replace('// PRODUCTION_GRID_SPAN_CONSTRAINT', (Method $grid 'if (spanSize > mSpanCount)'))
 $template = $template.Replace('// PRODUCTION_ADAPTER_UPDATE', (Method $adapter 'private void updateInternal(boolean animated)'))
+$template = $template.Replace('// PRODUCTION_PERSONAL_EDITION', (Method $policy 'public static boolean isPersonalEdition()'))
+$template = $template.Replace('// PRODUCTION_PREVIEW_LABELS', ((@('public static String getRemoveTitle()', 'public static String getRemoveInfo()', 'public static String getRemovedMessage()') | ForEach-Object { Method $preview $_ }) -join "`n"))
 $run = Join-Path $OutputRoot ([guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $run -Force | Out-Null
 $probe = Join-Path $run 'LocalGiftsUi102Probe.java'
@@ -61,6 +64,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Production-derived local gift UI probe compila
 if ($LASTEXITCODE -ne 0) { throw 'Production-derived local gift UI regression failed.' }
 $negativeControls = @(
     @{ Name = 'queued-grid-span'; Pattern = '\.setSpanCount\(UItem\.MAX_SPAN_COUNT\)'; Replacement = '.setSpanCount(spanCount)'; Expected = 'Queued span growth must not abort after SPACE or poison future layout' },
+    @{ Name = 'personal-unified-gate'; Pattern = 'final boolean unifiedGifts = LumaBuildPolicy\.isPersonalEdition\(\);'; Replacement = 'final boolean unifiedGifts = false;'; Expected = 'Only personal edition hides section headers during queued layout' },
+    @{ Name = 'personal-unified-pins'; Pattern = 'if \(parent\.isGiftPinnedLocally\(gift\) != \(localPinnedPass == 1\)\) continue;'; Replacement = 'if (localPinnedPass != 0) continue;'; Expected = 'Personal unified grid places all local pins ahead of all unpinned entries' },
+    @{ Name = 'personal-loading-remainder'; Pattern = 'if \(--spanCountLeft == 0\) spanCountLeft = spanCount;'; Expected = 'Personal unified loading remainder accounts for both local and real tiles' },
     @{ Name = 'cross-pin-groups'; Pattern = 'if \(parent\.isGiftPinnedLocally\(getSavedGift\(viewHolder\)\)\s*!= parent\.isGiftPinnedLocally\(getSavedGift\(target\)\)\) return false;'; Expected = 'Drag across local-pin display groups' },
     @{ Name = 'detached-holder'; Pattern = 'if \(fromPosition < 0 \|\| toPosition < 0\) return false;'; Expected = 'Detached holder NO_POSITION' },
     @{ Name = 'stale-owner-pin'; Pattern = 'localPinsOwner <= 0 \|\| localPinsOwner != UserConfig\.getInstance\(currentAccount\)\.getClientUserId\(\)\s*\|\|\s*'; Expected = 'Stale local pin callback' }
@@ -78,7 +84,7 @@ foreach ($control in $negativeControls) {
     $negativeOutput = (& $java -Xmx128m -cp $negativeRun LocalGiftsUi102Probe 2>&1 | Out-String)
     if ($LASTEXITCODE -eq 0 -or !$negativeOutput.Contains($control.Expected)) { throw "Negative control did not reproduce its defect: $($control.Name)" }
 }
-Write-Output 'PASS: negative controls reproduce queued-grid SPACE-only/stuck-layout, cross-pin-group reorder, detached holder and stale-owner pin defects when their actual production guards are removed.'
+Write-Output 'PASS: negative controls reproduce queued-grid SPACE-only/stuck-layout, personal section/pin/loading defects, cross-pin-group reorder, detached holder and stale-owner pin defects when their actual production guards are removed.'
 if ($preview -match 'ConnectionsManager|new\s+StarGiftSheet|sendRequest\(|TL_payments|saveStarGift|transferStarGift|resellStarGift') { throw 'Read-only local preview must not open server inventory/payment actions.' }
 if ([regex]::Matches($preview, 'StarGiftSheet\.').Count -ne 1 -or !$preview.Contains('StarGiftSheet.getRarityName(')) { throw 'Only the pure static rarity formatter may be reused from the transaction sheet.' }
 foreach ($guard in @('gift.ownerUserId != UserConfig.getInstance(account).getClientUserId()',
@@ -90,6 +96,18 @@ $click = Method $profile 'public void onItemClick('
 $localBranch = $click.IndexOf('item.object instanceof LumaLocalGifts.LocalSavedGift')
 $serverBranch = $click.IndexOf('item.object instanceof TL_stars.SavedStarGift')
 if ($localBranch -lt 0 -or $localBranch -gt $serverBranch -or !$click.Contains('LumaLocalGiftPreview.show(')) { throw 'Local marker must be routed before the ordinary saved-gift transaction sheet.' }
+$longPress = Method $profile 'public boolean onItemLongPress('
+$localMenu = Method $longPress 'if (item.object instanceof LumaLocalGifts.LocalSavedGift)'
+if ($localMenu -match 'sendRequest\(|ConnectionsManager|TL_payments|saveStarGift|transferStarGift|new\s+StarGiftSheet' -or !$localMenu.Contains('LumaLocalGiftPreview.getRemoveTitle()') -or !$localMenu.Contains('LumaLocalGiftPreview.confirmRemove(') -or
+        !$localMenu.Contains('gift.ownerUserId != UserConfig.getInstance(currentAccount).getClientUserId()') -or !$localMenu.Contains('return true;')) { throw 'Unified local tile menu must keep marker/owner routing, edition-aware label and no real transaction actions.' }
+if (!$preview.Contains('if (!LumaBuildPolicy.isPersonalEdition())') -or !$preview.Contains('local.setText(getString(R.string.LumaLocalGiftPreviewInfo))')) { throw 'Personal preview disclaimer may be hidden without changing the public disclaimer.' }
+foreach ($path in @('TMessagesProj/src/main/res/values/strings.xml', 'TMessagesProj/src/main/res/values-ru/strings.xml')) {
+    [xml]$strings = [IO.File]::ReadAllText((Join-Path $repo $path))
+    foreach ($name in @('LumaPersonalGiftRemove', 'LumaPersonalGiftRemoveInfo', 'LumaPersonalGiftRemoved')) {
+        $entry = $strings.resources.string | Where-Object { $_.name -eq $name }
+        if (!$entry -or $entry.InnerText -match '(?i)local|локал') { throw "Personal preview label must exist without a local-section label: $name" }
+    }
+}
 $localAdd = Method $sheet 'private void addGiftLocally('
 if ($localAdd -match 'sendRequest\(|ConnectionsManager|TL_payments|saveStarGift|transferStarGift') { throw 'Local add must not reach server/payment APIs.' }
 foreach ($guard in @('final long owner = UserConfig.getInstance(currentAccount).getClientUserId()',

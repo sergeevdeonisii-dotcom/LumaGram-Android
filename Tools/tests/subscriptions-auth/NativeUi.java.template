@@ -1,0 +1,110 @@
+// FILE: org/telegram/messenger/AndroidUtilities.java
+package org.telegram.messenger;
+public final class AndroidUtilities {
+    public static void runOnUIThread(Runnable task) {}
+    public static void runOnUIThread(Runnable task,long delay) {}
+    public static void cancelRunOnUIThread(Runnable task) {}
+    public static void showKeyboard(android.view.View view) {}
+    public static void hideKeyboard(android.view.View view) {}
+}
+// FILE: org/telegram/messenger/LocaleController.java
+package org.telegram.messenger;
+public final class LocaleController {
+    public static String getString(int id) { return ""; }
+    public static String formatString(int id,Object... args) { return ""; }
+}
+// FILE: org/telegram/messenger/browser/Browser.java
+package org.telegram.messenger.browser;
+public final class Browser {
+    public static void openUrl(android.content.Context context,String url,boolean allowCustom) {}
+}
+// FILE: org/telegram/ui/ActionBar/Theme.java
+package org.telegram.ui.ActionBar;
+public final class Theme {
+    public interface ResourcesProvider {}
+    public static final int key_windowBackgroundGray=1;
+    public static int getColor(int key,ResourcesProvider provider) { return 0; }
+}
+// FILE: org/telegram/ui/ActionBar/ActionBar.java
+package org.telegram.ui.ActionBar;
+public final class ActionBar {
+    public abstract static class ActionBarMenuOnItemClick { public abstract void onItemClick(int id); }
+    public void setBackButtonImage(int id) {}
+    public void setAllowOverlayTitle(boolean allow) {}
+    public void setTitle(String title) {}
+    public void setActionBarMenuOnItemClick(ActionBarMenuOnItemClick callback) {}
+    public void setAdaptiveBackground(android.view.View view) {}
+}
+// FILE: org/telegram/ui/ActionBar/BaseFragment.java
+package org.telegram.ui.ActionBar;
+public class BaseFragment {
+    protected int currentAccount;
+    protected boolean isPaused=true,isFinished;
+    protected Theme.ResourcesProvider resourceProvider;
+    protected ActionBar actionBar;
+    protected android.view.View fragmentView;
+    public boolean onFragmentCreate() { return true; }
+    public void onResume() {}
+    public void onPause() {}
+    public void onFragmentDestroy() {}
+    public android.view.View createView(android.content.Context context) { return null; }
+    public android.app.Activity getParentActivity() { return null; }
+    public void finishFragment() {}
+    public android.app.Dialog showDialog(android.app.Dialog dialog) { return dialog; }
+    public android.app.Dialog showDialog(android.app.Dialog dialog,android.app.Dialog.OnDismissListener listener) { return dialog; }
+}
+// FILE: org/telegram/ui/ActionBar/AlertDialog.java
+package org.telegram.ui.ActionBar;
+public class AlertDialog extends android.app.Dialog {
+    public AlertDialog(android.content.Context context) { super(context); }
+    public void setDismissDialogByButtons(boolean enabled) {}
+    public static final class Builder {
+        public Builder(android.content.Context context,Theme.ResourcesProvider provider) {}
+        public Builder setTitle(CharSequence text) { return this; }
+        public Builder setMessage(CharSequence text) { return this; }
+        public Builder setView(android.view.View view) { return this; }
+        public Builder setPositiveButton(CharSequence text,android.content.DialogInterface.OnClickListener listener) { return this; }
+        public Builder setNegativeButton(CharSequence text,android.content.DialogInterface.OnClickListener listener) { return this; }
+        public AlertDialog create() { return new AlertDialog(null); }
+    }
+}
+// FILE: org/telegram/ui/Components/EditTextBoldCursor.java
+package org.telegram.ui.Components;
+public class EditTextBoldCursor extends android.widget.EditText {
+    public EditTextBoldCursor(android.content.Context context) { super(context); }
+}
+// FILE: org/telegram/ui/Components/LumaDialogInput.java
+package org.telegram.ui.Components;
+public final class LumaDialogInput {
+    public static EditTextBoldCursor create(android.content.Context context,int inputType,boolean multiline,org.telegram.ui.ActionBar.Theme.ResourcesProvider provider) { return null; }
+    public static android.widget.FrameLayout wrap(EditTextBoldCursor field) { return null; }
+}
+// FILE: org/telegram/ui/Components/LayoutHelper.java
+package org.telegram.ui.Components;
+public final class LayoutHelper {
+    public static final int MATCH_PARENT=-1;
+    public static android.widget.FrameLayout.LayoutParams createFrame(int width,int height,int gravity) { return null; }
+}
+// FILE: org/telegram/ui/Components/UItem.java
+package org.telegram.ui.Components;
+public final class UItem {
+    public int id;
+    public static UItem asShadow(CharSequence text) { return null; }
+    public static UItem asHeader(CharSequence text) { return null; }
+    public static UItem asButton(int id,CharSequence text) { return null; }
+    public static UItem asRadio2(int id,CharSequence title,CharSequence value) { return null; }
+    public UItem setEnabled(boolean enabled) { return this; }
+    public UItem setChecked(boolean checked) { return this; }
+}
+// FILE: org/telegram/ui/Components/UniversalAdapter.java
+package org.telegram.ui.Components;
+public final class UniversalAdapter { public void update(boolean animated) {} }
+// FILE: org/telegram/ui/Components/UniversalRecyclerView.java
+package org.telegram.ui.Components;
+public final class UniversalRecyclerView extends android.view.View {
+    public interface Fill { void run(java.util.ArrayList<UItem> items,UniversalAdapter adapter); }
+    public interface Click { void run(UItem item,android.view.View view,Integer position,Float x,Float y); }
+    public final UniversalAdapter adapter=new UniversalAdapter();
+    public UniversalRecyclerView(org.telegram.ui.ActionBar.BaseFragment fragment,Fill fill,Click click,Object longClick) { super(null); }
+    public void setSections() {}
+}

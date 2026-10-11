@@ -8,6 +8,9 @@ import { spawnSync } from 'node:child_process';
 
 const workflow = fs.readFileSync(new URL('../../.github/workflows/lunagram-release100-apks.yml', import.meta.url), 'utf8');
 const build = fs.readFileSync(new URL('./build-lunagram-release100.sh', import.meta.url), 'utf8');
+const prepare = fs.readFileSync(new URL('./prepare-lunagram-release105.sh', import.meta.url), 'utf8');
+const properties = fs.readFileSync(new URL('../../gradle.properties', import.meta.url), 'utf8');
+const subscriptionUi = fs.readFileSync(new URL('../tests/run-subscription-ui-compile.ps1', import.meta.url), 'utf8');
 const localGiftsUi = fs.readFileSync(new URL('../tests/run-local-gifts-ui102-regressions.ps1', import.meta.url), 'utf8');
 const baselineScript = fs.readFileSync(new URL('./ensure-visual104-baseline.ps1', import.meta.url), 'utf8');
 const visualBaseline = '8f60669bc4c257402d18bedd67e1ab71d0f59df8';
@@ -68,33 +71,41 @@ test('the production baseline helper works with a fresh depth-1 clone and preser
   assert.equal(git('-C', clone, 'status', '--porcelain'), '');
 });
 
-test('1.0.4 workflow and build script enforce the owner repository and exact release branch', () => {
-  for (const text of [workflow, build]) {
+test('1.0.5 workflow and scripts enforce the owner repository, source commit and exact release identity', () => {
+  for (const text of [workflow, build, prepare]) {
     assert.ok(text.includes('sergeevdeonisii-dotcom/LumaGram-Android'));
     assert.ok(text.includes('refs/heads/agent/lunagram-release100'));
   }
-  assert.match(build, /APP_VERSION_NAME=.*1\.0\.4/);
-  assert.match(build, /APP_VERSION_CODE=.*7166/);
+  for (const text of [build, prepare]) {
+    assert.match(text, /APP_VERSION_NAME=.*1\.0\.5/);
+    assert.match(text, /APP_VERSION_CODE=.*7167/);
+    assert.ok(text.includes('GITHUB_SHA'));
+  }
+  assert.match(properties, /^APP_VERSION_NAME=1\.0\.5\r?$/m);
+  assert.match(properties, /^APP_VERSION_CODE=7167\r?$/m);
   assert.match(build, /source_commit.*GITHUB_SHA/);
   assert.ok(!workflow.includes('pull_request'));
 });
-test('genuine public and personal APKs use the release104 collector; restricted Friends is optional and distinct', () => {
+test('release105 builds and uploads only the genuine public and personal APK pair', () => {
   assert.ok(build.includes('editions=(full public)'));
-  assert.ok(build.includes('editions+=(friends)'));
-  assert.ok(build.includes('collector_flags+=(--include-friends)'));
-  assert.ok(build.includes('${LUMA_BUILD_FRIENDS_EDITION:-false}'));
-  assert.match(build, /\[\[ "\$edition" != friends \]\] \|\| friends_flag=true/);
+  assert.ok(!build.includes('editions+=(friends)'));
+  assert.ok(!build.includes('--include-friends'));
+  assert.ok(!build.includes('friends_flag=true'));
+  assert.match(build, /\[\[ "\$\{LUMA_BUILD_FRIENDS_EDITION:-false\}" == false \]\] \|\| fail/);
   assert.match(build, /\[\[ "\$edition" != public \]\] \|\| public_flag=true/);
   assert.ok(build.includes('-PlumaFriendsEdition=$friends_flag'));
   assert.ok(build.includes('-PlumaPublicEdition=$public_flag'));
-  assert.ok(build.includes('Lunagram-1.0.4-$edition-temporary.apk'));
-  assert.match(build, /--release 104 --verify-pair/);
-  assert.ok(workflow.includes('lunagram-104-temporary-signed'));
-  assert.ok(workflow.includes('lunagram104-artifacts/*.apk'));
-  assert.ok(workflow.includes('lunagram104-artifacts/build-metadata.json'));
-  assert.ok(!build.includes('--release 102') && !build.includes('--release 103'));
-  assert.match(workflow, /build_friends:[\s\S]*?type: boolean[\s\S]*?default: false/);
-  assert.ok(workflow.includes('LUMA_BUILD_FRIENDS_EDITION:'));
+  assert.ok(build.includes('Lunagram-1.0.5-$edition-temporary.apk'));
+  assert.match(build, /--release 105 --verify-pair/);
+  assert.ok(workflow.includes('lunagram-105-temporary-signed'));
+  const uploads = workflow.split(/\r?\n/).filter(line => line.includes('${{ runner.temp }}/'));
+  assert.deepEqual(uploads.map(line => line.trim()), [
+    '${{ runner.temp }}/lunagram105-artifacts/Lunagram-1.0.5-full-temporary.apk',
+    '${{ runner.temp }}/lunagram105-artifacts/Lunagram-1.0.5-public-temporary.apk',
+    '${{ runner.temp }}/lunagram105-artifacts/build-metadata.json',
+  ]);
+  assert.ok(!workflow.includes('*.apk') && !workflow.includes('build_friends') && !workflow.includes('LUMA_BUILD_FRIENDS_EDITION:'));
+  assert.ok(!/--release (102|103|104)\b/.test(build));
   assert.ok(!build.includes('for edition in full friends;'));
   assert.ok(!/gh\s+release|git\s+push|latest\.json/.test(build));
 });
@@ -103,11 +114,33 @@ test('CI receives no production signing key and only uploads APKs and public pro
   assert.ok(workflow.includes('persist-credentials: false'));
   assert.ok(workflow.includes('include-hidden-files: false'));
   assert.equal([...workflow.matchAll(/secrets\.([A-Z0-9_]+)/g)].map(x => x[1]).sort().join(','), 'LUMA_API_HASH,LUMA_API_ID');
-  assert.ok(build.includes('mktemp -d "$RUNNER_TEMP/lunagram104-signing.XXXXXX"'));
+  assert.ok(build.includes('mktemp -d "$RUNNER_TEMP/lunagram105-signing.XXXXXX"'));
   assert.ok(build.includes('trap cleanup EXIT'));
   assert.ok(build.includes('unset LUMA_API_ID LUMA_API_HASH LUMA_CI_SIGNING_PASSWORD'));
   assert.ok(!/rm\s+-(?:rf|fr)/.test(build));
   for (const action of workflow.matchAll(/uses:\s+([^\s]+)/g)) assert.match(action[1], /@[0-9a-f]{40}$/);
+});
+test('SDK36 is prepared before credential-free subscription probes, and all three block assembly', () => {
+  const sdkStep = workflow.indexOf('run: bash Tools/ci/prepare-lunagram-release105.sh');
+  const buildStep = workflow.indexOf('      - name: Build personal and public APKs');
+  assert.ok(sdkStep > 0 && sdkStep < buildStep);
+  assert.ok(workflow.includes('bash -n Tools/ci/prepare-lunagram-release105.sh'));
+  for (const script of ['run-subscription-auth-regressions.ps1', 'run-subscriptions-regressions.ps1', 'run-subscription-ui-compile.ps1']) {
+    const offset = workflow.indexOf(script);
+    assert.ok(offset > sdkStep && offset < buildStep, script);
+    assert.equal(workflow.split(script).length, 2, `${script} executes exactly once`);
+  }
+  for (const sdkPackage of ['platforms;android-36', 'build-tools;36.0.0', 'ndk;27.2.12479018', 'cmake;3.22.1']) {
+    assert.ok(prepare.includes(`'${sdkPackage}'`), sdkPackage);
+  }
+  assert.ok(!prepare.includes('LUMA_API_') && !prepare.includes('keytool') && !prepare.includes('GradleWrapperMain'));
+  assert.ok(!workflow.slice(0, buildStep).includes('secrets.'));
+  assert.ok(!build.includes('sdkmanager'), 'SDK provisioning must not inherit API credentials');
+  assert.ok(workflow.includes("-Aapt2 (Join-Path $sdkRoot 'build-tools/36.0.0/aapt2')"));
+  assert.ok(workflow.includes("-AndroidJar (Join-Path $sdkRoot 'platforms/android-36/android.jar')"));
+  assert.ok(subscriptionUi.includes('[string]$OutputRoot='));
+  assert.ok(subscriptionUi.includes('configured runner temporary storage'));
+  assert.ok(subscriptionUi.includes('$run=Join-Path $output'));
 });
 test('release-blocking regression suites execute before either APK is built', () => {
   const buildStep = workflow.indexOf('run: bash Tools/ci/build-lunagram-release100.sh');
@@ -123,7 +156,8 @@ test('release-blocking regression suites execute before either APK is built', ()
       'run-round-limits100-regressions.ps1', 'run-round-stats82-regressions.ps1', 'run-round-export82-regressions.ps1',
       'check-release100-security.ps1', 'run-svg101-regressions.ps1', 'run-http-url100-regressions.ps1', 'run-media-browser100-regressions.ps1',
       'run-playback-privacy100-regressions.ps1', 'run-update-presentation100-regressions.ps1',
-      'lunagram-support100.test.mjs']) {
+      'lunagram-support100.test.mjs', 'run-subscription-auth-regressions.ps1',
+      'run-subscriptions-regressions.ps1', 'run-subscription-ui-compile.ps1']) {
     assert.ok(workflow.indexOf(script) > 0 && workflow.indexOf(script) < buildStep, script);
   }
   for (const line of workflow.split('\n').filter(x => x.includes('-JavaHome'))) {

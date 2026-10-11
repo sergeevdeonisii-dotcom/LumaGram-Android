@@ -61,6 +61,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.LumaAccountData;
 import org.telegram.messenger.LumaLocalGifts;
+import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.messenger.LumaGiftVisibilityOperation;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -633,6 +634,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                 return;
             final int displayCount = Math.max(0, list.totalCount) + localGifts.size();
             final int spanCount = Math.max(1, displayCount == 0 ? 3 : Math.min(3, displayCount));
+            final boolean unifiedGifts = LumaBuildPolicy.isPersonalEdition();
             if (parent.list == list && parent.canFilterHidden()) {
                 final boolean allGiftsHidden = parent.areAllGiftsHidden();
                 items.add(UItem.asButton(
@@ -641,7 +643,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                     getString(allGiftsHidden ? R.string.LumaShowAllGifts : R.string.LumaHideAllGifts)
                 ).setSpanCount(UItem.MAX_SPAN_COUNT));
             }
-            if (!localGifts.isEmpty()) {
+            if (!unifiedGifts && !localGifts.isEmpty()) {
                 // Column changes are queued below. Full-width rows must follow
                 // the current layout manager until that queued change runs.
                 items.add(UItem.asHeader(getString(R.string.LumaLocalGiftsHeader)).setSpanCount(UItem.MAX_SPAN_COUNT));
@@ -659,6 +661,16 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
             if (list != null) {
                 int spanCountLeft = spanCount;
                 for (int localPinnedPass = 1; localPinnedPass >= 0; localPinnedPass--) {
+                    if (unifiedGifts) {
+                        for (LumaLocalGifts.LocalSavedGift gift : localGifts) {
+                            if (parent.isGiftPinnedLocally(gift) != (localPinnedPass == 1)) continue;
+                            final UItem localItem = GiftSheet.GiftCell.Factory.asStarGift(0, gift, true, false, false)
+                                    .setReordering(false);
+                            localItem.object2 = parent.isGiftPinnedLocally(gift);
+                            items.add(localItem);
+                            if (--spanCountLeft == 0) spanCountLeft = spanCount;
+                        }
+                    }
                     for (TL_stars.SavedStarGift userGift : list.gifts) {
                         if (parent.isGiftPinnedLocally(userGift) != (localPinnedPass == 1)) {
                             continue;
@@ -684,7 +696,8 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
             }
             if (parent.list == list) {
                 items.add(UItem.asSpace(dp(20)));
-                if (parent.dialogId == UserConfig.getInstance(currentAccount).getClientUserId()) {
+                if (parent.dialogId == UserConfig.getInstance(currentAccount).getClientUserId()
+                        && !(unifiedGifts && !localGifts.isEmpty())) {
                     items.add(TextFactory.asText(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, resourcesProvider), Gravity.CENTER, 14,
                             getString(list.gifts.isEmpty() && !localGifts.isEmpty() ? R.string.LumaLocalGiftPreviewInfo : R.string.ProfileGiftsInfo), false, dp(24), 0));
                 }
@@ -788,7 +801,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                             parent.setGiftPinnedLocally(gift, !pinned);
                             update(true);
                         })
-                        .add(R.drawable.msg_delete, getString(R.string.LumaLocalGiftRemove),
+                        .add(R.drawable.msg_delete, LumaLocalGiftPreview.getRemoveTitle(),
                                 () -> LumaLocalGiftPreview.confirmRemove(parent.fragment, gift))
                         .show();
                 return true;

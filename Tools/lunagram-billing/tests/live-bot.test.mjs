@@ -1,0 +1,217 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
+import { dispatchLiveUpdate } from '../cloudflare/live-bot.mjs';
+import { createLiveStore } from '../cloudflare/live-store.mjs';
+import { createLiveControl, TERMS_VERSION } from '../cloudflare/live-control.mjs';
+import { createLiveAuth } from '../live-auth.mjs';
+import { openSqliteStorageForTests } from './sqlite-storage-fixture.mjs';
+
+const NOW = Date.UTC(2026, 9, 12, 18);
+const ALICE = '4012345678901';
+const BOB = '4012345678902';
+const OWNER = '4012345678903';
+const CLAIM_TOKEN = Buffer.alloc(32, 33).toString('base64url');
+const KEYS = { encryptionKey: Buffer.alloc(32, 34), keyPepper: Buffer.alloc(32, 35), authPepper: Buffer.alloc(32, 36) };
+function fixture(t, { claimed = true, sales = true } = {}) {
+    const parent = resolve(tmpdir());
+    const directory = mkdtempSync(join(parent, 'lunagram-live-bot-'));
+    const storage = openSqliteStorageForTests(join(directory, 'bot.sqlite'));
+    t.after(() => {
+        storage.close();
+        assert.equal(dirname(resolve(directory)), parent);
+        assert.ok(basename(directory).startsWith('lunagram-live-bot-'));
+        rmSync(directory, { recursive: true, force: true });
+    });
+    const state = { at: NOW, updateId: 1, apiResult: { ok: true, result: true } };
+    const env = { BILLING_PAYMENTS_ENABLED: sales ? 'true' : 'false',
+        BILLING_OWNER_CLAIM_TOKEN: CLAIM_TOKEN, BILLING_OWNER_CLAIM_EXPIRES: String(NOW + 600000) };
+    const control = createLiveControl(storage, KEYS, env);
+    control.finishSetup();
+    if (claimed) control.claimOwner(CLAIM_TOKEN, OWNER, NOW);
+    const store = createLiveStore(storage, { ...KEYS, ownerUserId: OWNER, termsVersion: TERMS_VERSION, clock: () => state.at });
+    const auth = createLiveAuth({ storage, authPepper: KEYS.authPepper });
+    const calls = [];
+    const api = { async call(method, args) { calls.push({ method, args: structuredClone(args) }); return state.apiResult; } };
+    const dispatch = update => dispatchLiveUpdate(update, { store, auth, control, api, clock: () => state.at });
+    const message = (userId, text, extra = {}) => ({ update_id: state.updateId++, message: {
+        message_id: state.updateId, from: { id: Number(userId), is_bot: false },
+        chat: { id: Number(userId), type: 'private' }, date: Math.floor(state.at / 1000), text, ...extra } });
+    const callback = (userId, data) => ({ update_id: state.updateId++, callback_query: {
+        id: `test-query-${state.updateId}`, data, from: { id: Number(userId), is_bot: false },
+        message: { message_id: state.updateId, chat: { id: Number(userId), type: 'private' } } } });
+    const deliveries = () => [...storage.sql.exec('SELECT id,kind,encrypted_payload FROM billing_bot_outbox ORDER BY rowid')]
+        .map(row => ({ id: row.id, ...store.decryptOutbox({ id: row.id, kind: row.kind, encryptedPayload: JSON.parse(row.encrypted_payload) }) }));
+    const replies = userId => deliveries().filter(item => item.method === 'sendMessage' && item.chat_id === userId);
+    const count = table => [...storage.sql.exec(`SELECT COUNT(*) AS n FROM ${table}`)][0].n;
+    return { storage, store, control, auth, state, calls, dispatch, message, callback, deliveries, replies, count };
+}
+async function purchase(f, plan = 'based') {
+    await f.dispatch(f.callback(ALICE, `accept_${plan}`));
+    const invoice = f.deliveries().filter(item => item.method === 'sendInvoice').at(-1);
+    assert.ok(invoice);
+    const pre = { update_id: f.state.updateId++, pre_checkout_query: { id: `pre-${f.state.updateId}`,
+        from: { id: Number(ALICE), is_bot: false }, invoice_payload: invoice.payload,
+        currency: 'XTR', total_amount: invoice.prices[0].amount } };
+    await f.dispatch(pre);
+    assert.equal(f.calls.at(-1).args.ok, true);
+    const chargeId = `charge-${invoice.payload}`;
+    const paid = f.message(ALICE, undefined, { successful_payment: { invoice_payload: invoice.payload,
+        currency: 'XTR', total_amount: invoice.prices[0].amount, telegram_payment_charge_id: chargeId } });
+    await f.dispatch(paid);
+    const keyReply = f.replies(ALICE).find(reply => /\b[A-Z0-9]{16}\b/.test(reply.text));
+    const code = keyReply.text.match(/\b[A-Z0-9]{16}\b/)[0];
+    return { invoice, pre, paid, code, chargeId };
+}
+
+test('private start -> explicit consent -> immutable invoice -> checkout -> encrypted key -> redeem end to end', async t => {
+    const f = fixture(t);
+    await f.dispatch(f.message(ALICE, '/start'));
+    assert.match(f.replies(ALICE).at(-1).text, /40 ⭐/);
+    assert.equal(f.count('live_orders'), 0);
+    await f.dispatch(f.callback(ALICE, 'buy_based'));
+    assert.equal(f.store.getConsent(ALICE).accepted, false);
+    assert.match(f.replies(ALICE).at(-1).text, /Условия Lunagram/);
+    assert.equal(f.count('live_orders'), 0);
+    const { invoice, pre, paid, code } = await purchase(f);
+    assert.equal(invoice.start_parameter, 'buy_based');
+    assert.equal(invoice.provider_token, '');
+    assert.equal(invoice.subscription_period, undefined);
+    assert.equal(f.store.getSubscription(ALICE).active, false);
+    const before = f.count('billing_bot_outbox');
+    await f.dispatch(paid);
+    assert.equal(f.count('billing_bot_outbox'), before);
+    assert.equal(f.count('live_codes'), 1);
+    f.state.at += 100000;
+    await f.dispatch({ ...pre, update_id: f.state.updateId++, pre_checkout_query: { ...pre.pre_checkout_query, id: 'different-pre' } });
+    assert.equal(f.calls.at(-1).args.ok, false);
+    await f.dispatch(f.message(ALICE, `/redeem ${code}`));
+    assert.equal(f.store.getSubscription(ALICE).active, true);
+    await f.dispatch(f.message(BOB, `/redeem ${code}`));
+    assert.match(f.replies(BOB).at(-1).text, /другим аккаунтом/);
+    assert.equal(f.store.getSubscription(BOB).active, false);
+    await f.dispatch(f.message(ALICE, '/keys'));
+    assert.ok(!f.replies(ALICE).at(-1).text.includes(code)); // Already-redeemed bearer is not reissued.
+    assert.equal(f.calls.some(c => c.method === 'sendMessage' || c.method === 'sendInvoice'), false); // Outbox, not immediate network.
+});
+
+test('repeated conversation update is a durable no-op even after mutable subscription state changes', async t => {
+    const f = fixture(t);
+    const status = f.message(ALICE, '/status');
+    await f.dispatch(status);
+    const beforeText = f.replies(ALICE).at(-1).text;
+    const value = await purchase(f);
+    f.store.redeem(ALICE, value.code);
+    const before = f.count('billing_bot_outbox');
+    await f.dispatch(status);
+    assert.equal(f.count('billing_bot_outbox'), before);
+    assert.ok(f.replies(ALICE).some(row => row.text === beforeText));
+    assert.equal(f.count('live_grants'), 1);
+});
+
+test('group, cross-chat, bot, edited and stale text updates cannot create invoices or keys', async t => {
+    const f = fixture(t);
+    const group = f.message(ALICE, '/buy based'); group.message.chat.type = 'supergroup';
+    const cross = f.message(ALICE, '/buy based'); cross.message.chat.id = Number(BOB);
+    const bot = f.message(ALICE, '/buy based'); bot.message.from.is_bot = true;
+    const stale = f.message(ALICE, '/buy based'); stale.message.date -= 86401;
+    const edited = f.message(ALICE, '/buy based'); edited.edited_message = edited.message; delete edited.message;
+    for (const update of [group, cross, bot, stale, edited]) await f.dispatch(update);
+    assert.equal(f.count('billing_bot_outbox'), 0);
+    assert.equal(f.count('live_orders'), 0);
+    assert.equal(f.calls.length, 0);
+});
+
+test('sale switch denies purchases/checkout while late genuine paid and refunded receipts still reconcile', async t => {
+    const f = fixture(t, { sales: false });
+    await f.dispatch(f.message(ALICE, '/buy based'));
+    assert.match(f.replies(ALICE).at(-1).text, /ещё не открыта/);
+    assert.equal(f.count('live_orders'), 0);
+    f.store.acceptTerms(ALICE, TERMS_VERSION);
+    const order = f.store.createOrder(ALICE, 'based', 'issued-before-stop');
+    f.store.reservePreCheckout({ userId: ALICE, orderId: order.id, currency: 'XTR', totalAmount: 40, queryId: 'old-pre' });
+    await f.dispatch({ update_id: f.state.updateId++, pre_checkout_query: { id: 'new-pre', from: { id: Number(ALICE), is_bot: false },
+        invoice_payload: order.id, currency: 'XTR', total_amount: 40 } });
+    assert.equal(f.calls.at(-1).args.ok, false);
+    const metadata = { invoice_payload: order.id, currency: 'XTR', total_amount: 40, telegram_payment_charge_id: 'late-paid' };
+    const receipt = f.message(ALICE, undefined, { date: 1, successful_payment: metadata });
+    await f.dispatch(receipt);
+    assert.equal(f.store.getOrder(order.id).status, 'paid');
+    await f.dispatch(f.message(ALICE, undefined, { date: 1, refunded_payment: metadata }));
+    assert.equal(f.store.getOrder(order.id).status, 'refunded');
+    assert.equal(f.store.listKeys(ALICE)[0].status, 'refunded');
+});
+
+test('non-owner cannot inspect support or refund; owner gets anonymous tickets and explicit refund confirmation', async t => {
+    const f = fixture(t);
+    const value = await purchase(f);
+    f.store.redeem(ALICE, value.code);
+    await f.dispatch(f.message(ALICE, '/support Проверка оплаты'));
+    const ticket = f.store.listTickets()[0];
+    await f.dispatch(f.message(BOB, `/ticket ${ticket.id}`));
+    assert.match(f.replies(BOB).at(-1).text, /только владельцу/);
+    await f.dispatch(f.message(BOB, `/refund ${value.invoice.payload}`));
+    await f.dispatch(f.callback(BOB, `refund_${value.invoice.payload}`));
+    assert.equal(f.calls.some(c => c.method === 'refundStarPayment'), false);
+    await f.dispatch(f.message(OWNER, `/ticket ${ticket.id}`));
+    assert.match(f.replies(OWNER).at(-1).text, /Проверка оплаты/);
+    assert.ok(!f.replies(OWNER).at(-1).text.includes(ALICE));
+    await f.dispatch(f.message(OWNER, `/reply ${ticket.id} Проверяем платёж`));
+    assert.match(f.replies(ALICE).at(-1).text, /Проверяем платёж/);
+    await f.dispatch(f.message(OWNER, `/refund ${value.invoice.payload}`));
+    assert.equal(f.calls.some(c => c.method === 'refundStarPayment'), false);
+    const confirm = f.callback(OWNER, `refund_${value.invoice.payload}`);
+    await f.dispatch(confirm);
+    const refundCalls = f.calls.filter(c => c.method === 'refundStarPayment');
+    assert.equal(refundCalls.length, 1);
+    assert.equal(refundCalls[0].args.user_id, Number(ALICE));
+    assert.equal(refundCalls[0].args.telegram_payment_charge_id, value.chargeId);
+    assert.equal(f.store.getSubscription(ALICE).active, false);
+    await f.dispatch(confirm);
+    assert.equal(f.calls.filter(c => c.method === 'refundStarPayment').length, 1);
+});
+
+test('ambiguous refund response retains blocked key and grants until authoritative confirmation', async t => {
+    const f = fixture(t);
+    const value = await purchase(f);
+    f.store.redeem(ALICE, value.code);
+    f.state.apiResult = { ok: false, retryable: true, error: 'TEST_TIMEOUT' };
+    await f.dispatch(f.callback(OWNER, `refund_${value.invoice.payload}`));
+    assert.equal(f.store.getOrder(value.invoice.payload).status, 'refund_pending');
+    assert.equal(f.store.getSubscription(ALICE).active, true);
+    assert.throws(() => f.store.redeem(BOB, value.code), error => error.code === 'CODE_UNAVAILABLE');
+    assert.match(f.replies(OWNER).at(-1).text, /не подтверждён/);
+});
+
+test('owner setup requires exact expiring server capability plus explicit callback, never start alone', async t => {
+    const f = fixture(t, { claimed: false });
+    await f.dispatch(f.message(OWNER, `/start owner_${CLAIM_TOKEN}`));
+    assert.equal(f.control.owner(), null);
+    assert.equal(f.control.paymentsReady(), false);
+    await f.dispatch(f.callback(BOB, `owner_${Buffer.alloc(32, 1).toString('base64url')}`));
+    assert.equal(f.control.owner(), null);
+    await f.dispatch(f.callback(OWNER, `owner_${CLAIM_TOKEN}`));
+    assert.equal(f.control.owner(), OWNER);
+    assert.equal(f.control.paymentsReady(), true);
+    await f.dispatch(f.callback(BOB, `owner_${CLAIM_TOKEN}`));
+    assert.equal(f.control.owner(), OWNER);
+});
+
+test('app pairing start is preview only; explicit exact private account confirmation is required for PKCE exchange', async t => {
+    const f = fixture(t);
+    const verifier = Buffer.alloc(32, 75).toString('base64url');
+    const challenge = createHash('sha256').update(verifier, 'ascii').digest('base64url');
+    const pair = f.auth.start({ challenge, expectedUserId: ALICE }, NOW);
+    await f.dispatch(f.message(ALICE, `/start ${pair.startParameter}`));
+    assert.equal(f.auth.exchange(pair.pairId, verifier, NOW).status, 'pending');
+    await f.dispatch(f.callback(BOB, pair.startParameter));
+    assert.equal(f.auth.exchange(pair.pairId, verifier, NOW).status, 'pending');
+    await f.dispatch(f.callback(ALICE, pair.startParameter));
+    const session = f.auth.exchange(pair.pairId, verifier, NOW);
+    assert.equal(session.status, 'authenticated');
+    assert.equal(f.auth.authenticate(session.token, NOW), ALICE);
+    assert.ok(!JSON.stringify(f.deliveries()).includes(session.token));
+});

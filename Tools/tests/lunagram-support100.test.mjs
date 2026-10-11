@@ -60,7 +60,7 @@ test('the production constant is exactly the requested canonical TON address wit
   }
 });
 
-test('support is directly below the advanced row, uses a distinct ID and is shared by both editions', () => {
+test('support follows subscriptions below the advanced row, uses a distinct ID and is shared by both editions', () => {
   const row = settings.match(/private static final int LUNAGRAM_SUPPORT_ROW = (\d+);/);
   assert.equal(row?.[1], '1003');
   const constantRows = [...settings.matchAll(/private static final int ((?:BHG|LUNAGRAM)_\w+_ROW) = (\d+);/g)];
@@ -68,7 +68,7 @@ test('support is directly below the advanced row, uses a distinct ID and is shar
   assert.equal([...settings.matchAll(/case LUNAGRAM_SUPPORT_ROW:/g)].length, 1);
   assert.doesNotMatch(settings, /case 1003\s*:/);
   const fill = block(settings, 'private void fillItems(');
-  assert.match(fill, /items\.add\(SettingCell\.Factory\.of\(BHG_ADVANCED_ROW,[^\r\n]+\);\s*items\.add\(SettingCell\.Factory\.of\(LUNAGRAM_SUPPORT_ROW,/);
+  assert.match(fill, /items\.add\(SettingCell\.Factory\.of\(BHG_ADVANCED_ROW,[^\r\n]+\);\s*items\.add\(SettingCell\.Factory\.of\(LUNAGRAM_SUBSCRIPTION_ROW,[^\r\n]+\);\s*items\.add\(SettingCell\.Factory\.of\(LUNAGRAM_SUPPORT_ROW,/);
   const beforeRow = maskJava(fill).slice(0, fill.indexOf('items.add(SettingCell.Factory.of(LUNAGRAM_SUPPORT_ROW'));
   assert.equal([...beforeRow].reduce((depth, char) => depth + (char === '{' ? 1 : char === '}' ? -1 : 0), 0), 0,
     'support must not be nested in a personal/debug/premium branch');
