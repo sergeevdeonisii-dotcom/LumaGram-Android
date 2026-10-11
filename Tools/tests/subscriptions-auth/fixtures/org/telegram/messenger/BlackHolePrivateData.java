@@ -20,5 +20,5 @@ public final class BlackHolePrivateData {
         if (owner != UserConfig.getInstance(account).getClientUserId()) throw new Exception("Fixture changed owner");
         removes++; stored.remove(role(account,name));
     }
-    public static void reset() { available = true; fail = false; writes = removes = 0; stored.clear(); UserConfig.selectedAccount = 0; UserConfig.ids[0] = 101; org.telegram.tgnet.ConnectionsManager.test = false; }
+    public static void reset() { available = true; fail = false; writes = removes = 0; stored.clear(); UserConfig.selectedAccount = 0; UserConfig.ids[0] = 101; UserConfig.ids[1] = 202; org.telegram.tgnet.ConnectionsManager.test = false; }
 }

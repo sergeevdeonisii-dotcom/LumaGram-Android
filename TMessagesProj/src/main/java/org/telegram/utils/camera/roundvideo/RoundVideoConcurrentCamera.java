@@ -7,6 +7,8 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.CaptureResult;
+import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.OutputConfiguration;
 import android.hardware.camera2.params.SessionConfiguration;
 import android.os.Handler;
@@ -28,13 +30,14 @@ final class RoundVideoConcurrentCamera {
         final RoundVideoSession.CameraResolution resolution;
         final Size previewSize, size;
         final int crop;
+        final int frameRate;
         final Range<Integer> fps;
 
         Spec(String id, CameraCharacteristics characteristics, RoundVideoSession.CameraFacing facing,
-             RoundVideoSession.CameraResolution resolution, Size previewSize, Size size, int crop, Range<Integer> fps) {
+             RoundVideoSession.CameraResolution resolution, Size previewSize, Size size, int crop, int frameRate, Range<Integer> fps) {
             this.id = id; this.characteristics = characteristics; this.facing = facing;
             this.resolution = resolution; this.previewSize = previewSize; this.size = size;
-            this.crop = crop; this.fps = fps;
+            this.crop = crop; this.frameRate = frameRate; this.fps = fps;
         }
 
         boolean realtime() {
@@ -62,9 +65,15 @@ final class RoundVideoConcurrentCamera {
     private final Slot[] slots;
     private int selected;
     private boolean started, configuring, closed, ready, stabilization = true;
+    private boolean qualifying;
+    private static final long QUALIFICATION_TIMEOUT_MS = 1_000L;
+    private static final int WARMUP_FRAMES = 4;
+    private static final int QUALIFICATION_INTERVALS = 12;
+    private static final int MONITOR_INTERVALS = 30;
     private int closeGeneration;
     private Runnable afterClose;
     private final Runnable startupTimeout = () -> fail(new IllegalStateException("Concurrent camera startup timed out"));
+    private final Runnable qualificationTimeout = () -> fail(new IllegalStateException("Concurrent 60 FPS could not be verified on both cameras"));
 
     private final class Slot {
         final Spec spec;
@@ -72,6 +81,9 @@ final class RoundVideoConcurrentCamera {
         CameraDevice device;
         CameraCaptureSession session;
         boolean opening;
+        int warmupFrames, intervals;
+        long firstTimestamp, lastTimestamp;
+        boolean cadenceQualified;
 
         Slot(Spec spec, Surface surface) { this.spec = spec; this.surface = surface; }
 
@@ -84,12 +96,7 @@ final class RoundVideoConcurrentCamera {
                             Slot.this.session = session;
                             try {
                                 repeat(Slot.this);
-                                if (!ready && slots[0].session != null && slots[1].session != null) {
-                                    ready = true;
-                                    handler.removeCallbacks(startupTimeout);
-                                    Slot active = slots[selected];
-                                    callback.onReady(active.spec, active.device, active.session);
-                                }
+                                maybeReady();
                             } catch (Exception error) { fail(error); }
                         }
                         @Override public void onConfigureFailed(CameraCaptureSession session) {
@@ -134,6 +141,38 @@ final class RoundVideoConcurrentCamera {
                 finishClose();
             }
         };
+
+        final CameraCaptureSession.CaptureCallback measuredCallback = new CameraCaptureSession.CaptureCallback() {
+            @Override public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
+                if (closed || Slot.this.session != session) return;
+                if (spec.frameRate == 60 && qualifying) {
+                    Long timestamp = result.get(CaptureResult.SENSOR_TIMESTAMP);
+                    if (timestamp != null && timestamp > 0 && timestamp > lastTimestamp) {
+                        lastTimestamp = timestamp;
+                        if (warmupFrames < WARMUP_FRAMES) {
+                            warmupFrames++;
+                        } else if (firstTimestamp == 0L) {
+                            firstTimestamp = timestamp;
+                        } else if (++intervals >= (ready ? MONITOR_INTERVALS : QUALIFICATION_INTERVALS)) {
+                            long elapsed = timestamp - firstTimestamp;
+                            double measured = intervals * 1_000_000_000d / elapsed;
+                            // Session support explicitly ignores session parameters,
+                            // so advertised 60 FPS alone is not simultaneous-60 proof.
+                            // Sensor cadence, never Handler callback arrival, is used.
+                            if (measured < 57d || measured > 63d) {
+                                fail(new IllegalStateException("Concurrent 60 FPS sensor cadence rejected: " + measured));
+                                return;
+                            }
+                            cadenceQualified = true;
+                            firstTimestamp = timestamp;
+                            intervals = 0;
+                            maybeReady();
+                        }
+                    }
+                }
+                if (!closed) captureCallback.onCaptureCompleted(session, request, result);
+            }
+        };
     }
 
     RoundVideoConcurrentCamera(CameraManager manager, Handler handler, Spec first, Surface firstSurface,
@@ -145,6 +184,7 @@ final class RoundVideoConcurrentCamera {
     }
 
     boolean isSupported() throws CameraAccessException {
+        if (!validRates()) return false;
         boolean pairAdvertised = manager.getConcurrentCameraIds().stream()
                 .anyMatch(ids -> ids.contains(slots[0].spec.id) && ids.contains(slots[1].spec.id));
         if (!pairAdvertised) return false;
@@ -157,6 +197,7 @@ final class RoundVideoConcurrentCamera {
     void start() {
         if (started || closed) return;
         started = true;
+        if (!validRates()) { fail(new IllegalStateException("Concurrent camera FPS mismatch")); return; }
         handler.postDelayed(startupTimeout, 3_000L);
         try {
             for (Slot slot : slots) {
@@ -188,13 +229,40 @@ final class RoundVideoConcurrentCamera {
     private void repeat(Slot slot) throws CameraAccessException {
         try {
             slot.session.setRepeatingRequest(requests.create(slot.device, slot.spec, slot.surface,
-                    slot == slots[selected], stabilization), captureCallback, handler);
+                    slot == slots[selected], stabilization), slot.measuredCallback, handler);
         } catch (IllegalArgumentException | CameraAccessException error) {
             if (!stabilization) throw error;
             stabilization = false;
             slot.session.setRepeatingRequest(requests.create(slot.device, slot.spec, slot.surface,
-                    slot == slots[selected], false), captureCallback, handler);
+                    slot == slots[selected], false), slot.measuredCallback, handler);
         }
+    }
+
+    private boolean validRates() {
+        int target = slots[0].spec.frameRate;
+        if (target != 30 && target != 60) return false;
+        for (Slot slot : slots) {
+            if (slot.spec.frameRate != target || slot.spec.fps == null
+                    || slot.spec.fps.getUpper() != target || slot.spec.fps.getLower() <= 0
+                    || target == 60 && slot.spec.fps.getLower() != 60) return false;
+        }
+        return true;
+    }
+
+    private void maybeReady() {
+        if (ready || closed || slots[0].session == null || slots[1].session == null) return;
+        if (slots[0].spec.frameRate == 60) {
+            if (!qualifying) {
+                qualifying = true;
+                handler.postDelayed(qualificationTimeout, QUALIFICATION_TIMEOUT_MS);
+            }
+            if (!slots[0].cadenceQualified || !slots[1].cadenceQualified) return;
+        }
+        ready = true;
+        handler.removeCallbacks(startupTimeout);
+        handler.removeCallbacks(qualificationTimeout);
+        Slot active = slots[selected];
+        callback.onReady(active.spec, active.device, active.session);
     }
 
     private void fail(Exception error) {
@@ -212,6 +280,7 @@ final class RoundVideoConcurrentCamera {
         }
         closed = true; ready = false; afterClose = completion;
         handler.removeCallbacks(startupTimeout);
+        handler.removeCallbacks(qualificationTimeout);
         for (Slot slot : slots) {
             if (slot.session != null) { slot.session.close(); slot.session = null; }
             if (slot.device != null) slot.device.close();

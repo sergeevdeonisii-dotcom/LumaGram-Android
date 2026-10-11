@@ -79,6 +79,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
     private final FrameLayout previewContainer;
     private final TextureView textureView;
     private final BackupImageView textureOverlayView;
+    private final LumaRoundCameraFlip cameraFlip;
     private final LinearLayout buttonsLayout;
     private final FlashViews.ImageViewInvertable switchCameraButton;
     private final FlashViews.ImageViewInvertable flashButton;
@@ -200,6 +201,18 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
                 LayoutHelper.MATCH_PARENT,
                 Gravity.FILL
         ));
+        previewContainer.setCameraDistance(dp(800));
+        cameraFlip = new LumaRoundCameraFlip(new LumaRoundCameraFlip.Target() {
+            @Override
+            public void setRotationY(float rotation) {
+                previewContainer.setRotationY(rotation);
+            }
+
+            @Override
+            public void hidePlaceholder() {
+                hideCameraSwitchPlaceholder();
+            }
+        });
         progressView.addView(previewContainer, LayoutHelper.createFrame(
                 LayoutHelper.MATCH_PARENT,
                 LayoutHelper.MATCH_PARENT,
@@ -298,6 +311,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
 
     @Override
     public void setVisibility(int visibility) {
+        if (visibility != VISIBLE && cameraFlip != null) cameraFlip.cancel();
         super.setVisibility(visibility);
         buttonsLayout.setAlpha(0f);
         cameraContainer.setAlpha(0f);
@@ -322,6 +336,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
 
     @Override
     public void destroy(boolean async) {
+        cameraFlip.cancel();
         setRecordingUiFrameClockActive(false);
         previewContainer.animate().cancel();
         previewContainer.setRotationY(0f);
@@ -393,6 +408,18 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         MediaController.getInstance().requestRecordAudioFocus(true);
         session.start();
         startAnimation(true, fromPaused);
+    }
+
+    @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        super.onWindowVisibilityChanged(visibility);
+        if (visibility != VISIBLE && cameraFlip != null) cameraFlip.cancel();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        if (cameraFlip != null) cameraFlip.cancel();
+        super.onDetachedFromWindow();
     }
 
     private RoundVideoSession.CameraFacing getInitialCameraFacing(boolean fromPaused) {
@@ -680,6 +707,14 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         public void onStateChanged(@NonNull RoundVideoSession.StateInfo info) {
             RoundVideoSession.State previous = stateInfo == null ? null : stateInfo.getState();
             stateInfo = info;
+            if (info.getState() == RoundVideoSession.State.PAUSING
+                    || info.getState() == RoundVideoSession.State.PREVIEWING
+                    || info.getState() == RoundVideoSession.State.FINISHING
+                    || info.getState() == RoundVideoSession.State.COMPLETED
+                    || info.getState() == RoundVideoSession.State.ERROR
+                    || info.getState() == RoundVideoSession.State.RELEASED) {
+                cameraFlip.cancel();
+            }
             if (previous == RoundVideoSession.State.RECORDING
                     && info.getState() != RoundVideoSession.State.RECORDING) {
                 saveLastCameraBitmap(true);
@@ -734,6 +769,11 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
 
         @Override
         public void onCameraSwitchStarted(@NonNull RoundVideoSession.CameraFacing facing) {
+            if (!canAnimateCameraSwitch()) {
+                cameraFlip.cancel();
+                return;
+            }
+            cameraFlip.begin();
             showCameraSwitchPlaceholder();
             previewContainer.animate().cancel();
             // A HAL reopen can take seconds. Keep a full-sized last frame instead
@@ -743,13 +783,17 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
 
         @Override
         public void onCameraSwitchCompleted(@NonNull RoundVideoSession.CameraFacing facing) {
-            previewContainer.animate().cancel();
-            previewContainer.setRotationY(0f);
+            // HAL configuration is not a displayed frame and may arrive during the turn.
+            // Only the first-frame hook starts it; this notification must not cancel it.
         }
 
         @Override
         public void onCameraSwitchFirstFrame() {
-            hideCameraSwitchPlaceholder();
+            if (!canAnimateCameraSwitch()) {
+                cameraFlip.cancel();
+                return;
+            }
+            cameraFlip.firstFrame(LumaRoundCameraFlip.animationsEnabled());
         }
 
         @Override
@@ -785,6 +829,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
 
         @Override
         public void onError(@NonNull Exception error) {
+            cameraFlip.cancel();
             startHeavyOperations();
             FileLog.e(error);
             if (upload != null) upload.release(true);
@@ -819,6 +864,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
                 || stateInfo.getState() != RoundVideoSession.State.RECORDING) {
             return;
         }
+        cameraFlip.cancel();
         postRecordStopped(2);
         session.pauseRecording();
     }
@@ -1104,6 +1150,11 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         cameraContainer.setTranslationY(animationTranslationY + panTranslationY);
     }
 
+    private boolean canAnimateCameraSwitch() {
+        return session != null && isRecordingState() && isShown()
+                && getWindowVisibility() == VISIBLE;
+    }
+
     private void showInitialPlaceholder() {
         if (drawInitialPlaceholder) return;
         if (lastBitmap == null) {
@@ -1128,6 +1179,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         if (!drawInitialPlaceholder) return;
         drawInitialPlaceholder = false;
         textureOverlayView.invalidate();
+        if (switchPlaceholderVisible) return;
         textureOverlayView.animate().cancel();
         textureOverlayView.animate()
                 .alpha(0f)
@@ -1138,8 +1190,11 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
 
     private void showCameraSwitchPlaceholder() {
         saveLastCameraBitmap(false);
-        if (lastBitmap == null) return;
-        textureOverlayView.setImageBitmap(lastBitmap);
+        if (lastBitmap != null) {
+            textureOverlayView.setImageBitmap(lastBitmap);
+        } else {
+            textureOverlayView.setImageResource(R.drawable.icplaceholder);
+        }
         switchPlaceholderVisible = true;
         textureOverlayView.animate().cancel();
         textureOverlayView.setAlpha(1f);
@@ -1149,11 +1204,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         if (!switchPlaceholderVisible) return;
         switchPlaceholderVisible = false;
         textureOverlayView.animate().cancel();
-        textureOverlayView.animate()
-                .alpha(0f)
-                .setDuration(100L)
-                .setInterpolator(new DecelerateInterpolator())
-                .start();
+        textureOverlayView.setAlpha(0f);
     }
 
     private void saveLastCameraBitmap(boolean persist) {

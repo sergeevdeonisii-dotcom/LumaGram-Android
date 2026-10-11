@@ -86,7 +86,9 @@ foreach ($control in $negativeControls) {
 }
 Write-Output 'PASS: negative controls reproduce queued-grid SPACE-only/stuck-layout, personal section/pin/loading defects, cross-pin-group reorder, detached holder and stale-owner pin defects when their actual production guards are removed.'
 if ($preview -match 'ConnectionsManager|new\s+StarGiftSheet|sendRequest\(|TL_payments|saveStarGift|transferStarGift|resellStarGift') { throw 'Read-only local preview must not open server inventory/payment actions.' }
-if ([regex]::Matches($preview, 'StarGiftSheet\.').Count -ne 1 -or !$preview.Contains('StarGiftSheet.getRarityName(')) { throw 'Only the pure static rarity formatter may be reused from the transaction sheet.' }
+$pureGiftVisuals = @('TopView', 'addAttributeRow', 'getRarityName')
+$giftSheetReferences = @([regex]::Matches($preview, 'StarGiftSheet\.(\w+)') | ForEach-Object { $_.Groups[1].Value })
+if ($giftSheetReferences.Count -ne 3 -or @($giftSheetReferences | Where-Object { $_ -notin $pureGiftVisuals }).Count -gt 0) { throw 'Only the pure NFT header and static attribute/rarity formatting may be reused from the transaction sheet.' }
 foreach ($guard in @('gift.ownerUserId != UserConfig.getInstance(account).getClientUserId()',
         '!(gift.gift instanceof TL_stars.TL_starGiftUnique)', 'getString(R.string.LumaLocalGiftPreviewInfo)',
         'TLRPC.User self = UserConfig.getInstance(account).getCurrentUser()', 'LumaLocalGifts.remove(account, gift)')) {
@@ -138,4 +140,5 @@ foreach ($guard in @('Utilities.globalQueue.postRunnable(', 'generation != local
 }
 Write-Output 'PASS: local click routing, current owner/avatar/type, read-only preview, async identity, no network/payment and balanced local-change observers source guards.'
 Write-Output "Test artifacts: $run"
+& (Join-Path $PSScriptRoot 'run-local-gift-preview-ui105-regressions.ps1') -JavaHome $JavaHome -OutputRoot (Join-Path $OutputRoot 'preview')
 & (Join-Path $PSScriptRoot 'run-local-gifts-state102-regressions.ps1') -JavaHome $JavaHome -OutputRoot (Join-Path $OutputRoot 'state')

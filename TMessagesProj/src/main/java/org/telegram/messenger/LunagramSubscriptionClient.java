@@ -27,6 +27,15 @@ public final class LunagramSubscriptionClient {
     private static final long PAIR_TTL = 10 * 60 * 1000L;
     private static final long SESSION_TTL = 30 * 24 * 60 * 60 * 1000L;
     private static final DispatchQueue QUEUE = new DispatchQueue("lunagram-billing");
+    private static final long[] ACCOUNT_EPOCHS = new long[UserConfig.MAX_ACCOUNT_COUNT];
+
+    private static synchronized long accountEpoch(int account) { return ACCOUNT_EPOCHS[account]; }
+
+    /** Called after UserConfig publishes an empty identity, before clearing its data.
+     * The class monitor drains writes past their final owner check; never acquire
+     * a client-instance lock here. Epochs also reject a late response after the
+     * same Telegram user signs into the reused slot again. */
+    public static synchronized void onAccountLogout(int account) { ACCOUNT_EPOCHS[account]++; }
 
     public enum Error { NONE, NETWORK, SERVER, BAD_RESPONSE, ACCOUNT_CHANGED, AUTH_REQUIRED,
         EXPIRED, STORAGE, INVALID_CODE, RATE_LIMITED, NOT_CONFIGURED }
@@ -52,6 +61,7 @@ public final class LunagramSubscriptionClient {
     private final Object lock = new Object();
     private final int account;
     private final long owner;
+    private final long accountEpoch;
     private final Transport transport;
     private Listener listener;
     private long generation;
@@ -69,6 +79,7 @@ public final class LunagramSubscriptionClient {
     }
     LunagramSubscriptionClient(int account, Transport transport) {
         this.account = account;
+        this.accountEpoch = accountEpoch(account);
         this.owner = UserConfig.getInstance(account).getClientUserId();
         this.transport = transport;
     }
@@ -115,7 +126,7 @@ public final class LunagramSubscriptionClient {
         }
     }
     private boolean currentOwner() {
-        return owner > 0 && UserConfig.selectedAccount == account
+        return accountEpoch == accountEpoch(account) && owner > 0 && UserConfig.selectedAccount == account
                 && !isTestAccount()
                 && UserConfig.getInstance(account).getClientUserId() == owner;
     }
@@ -199,7 +210,7 @@ public final class LunagramSubscriptionClient {
                         long expiry = expiry(response.body, SESSION_TTL);
                         if (BlackHolePrivateData.isAvailable()) {
                             try {
-                                BlackHolePrivateData.write(account, owner, SESSION_KEY, new JSONObject()
+                                persistSession(ticket, new JSONObject()
                                         .put("telegramUserId", Long.toString(owner)).put("token", authenticatedToken)
                                         .put("expiresAtMs", expiry).toString());
                             } catch (Exception failure) { throw new Failure(Error.STORAGE); }
@@ -248,9 +259,17 @@ public final class LunagramSubscriptionClient {
         if (expiry > System.currentTimeMillis() + SESSION_TTL + 30_000) throw new Failure(Error.STORAGE);
         token = value; tokenExpiresAt = expiry;
     }
+    private void persistSession(long ticket, String value) throws Exception {
+        synchronized (LunagramSubscriptionClient.class) {
+            if (!current(ticket)) throw new Failure(Error.ACCOUNT_CHANGED);
+            BlackHolePrivateData.write(account, owner, SESSION_KEY, value);
+        }
+    }
     private void clearSession() throws Exception {
         token = null; tokenExpiresAt = 0; subscription = null; clearPair();
-        if (BlackHolePrivateData.isAvailable() && currentOwner()) BlackHolePrivateData.remove(account, owner, SESSION_KEY);
+        synchronized (LunagramSubscriptionClient.class) {
+            if (BlackHolePrivateData.isAvailable() && currentOwner()) BlackHolePrivateData.remove(account, owner, SESSION_KEY);
+        }
     }
     private Subscription parseSubscription(JSONObject json) throws Exception {
         requireUser(json);

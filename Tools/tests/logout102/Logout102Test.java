@@ -108,14 +108,16 @@ public final class Logout102Test {
     /** Pause after the production encrypted writer's FINAL owner check, at preference apply. */
     private static void racedWriter(String kind) throws Exception {
         reset(); user(0,1001); user(1,2002);
-        String key = kind.equals("gifts") ? "luma_local_unique_gifts_v1" : kind.equals("notes") ? "bhg_note_42" : "bhg_notification_journal";
+        String key = kind.equals("gifts") ? "luma_local_unique_gifts_v1" : kind.equals("notes") ? "bhg_note_42"
+                : kind.equals("subscription") ? "lunagram_subscription_session_v1_prod" : "bhg_notification_journal";
         if(kind.equals("journal")) BlackHoleNotificationJournal.setEnabled(0,true);
         CountDownLatch writePaused=new CountDownLatch(1), releaseWrite=new CountDownLatch(1), logoutFinished=new CountDownLatch(1);
         AtomicBoolean paused=new AtomicBoolean(), heldMonitor=new AtomicBoolean();
         AtomicReference<Throwable> failure=new AtomicReference<>();
         Context.applyHook = (store,changes,clear) -> {
             if(!clear && store.equals("luma_user_1001") && changes.containsKey(key) && paused.compareAndSet(false,true)) {
-                Class<?> helper=kind.equals("gifts") ? LumaLocalGifts.class : kind.equals("notes") ? BlackHoleNotes.class : BlackHoleNotificationJournal.class;
+                Class<?> helper=kind.equals("gifts") ? LumaLocalGifts.class : kind.equals("notes") ? BlackHoleNotes.class
+                        : kind.equals("subscription") ? LunagramSubscriptionClient.class : BlackHoleNotificationJournal.class;
                 heldMonitor.set(Thread.holdsLock(helper));
                 writePaused.countDown();
                 try { if(!releaseWrite.await(5,TimeUnit.SECONDS)) throw new AssertionError("write release timeout"); }
@@ -125,7 +127,9 @@ public final class Logout102Test {
         Thread writer = new Thread(() -> {
             try {
                 if(kind.equals("gifts")) LumaLocalGifts.add(0,1001,gift(5));
-                else if(kind.equals("notes")) {
+                else if(kind.equals("subscription")) {
+                    new LunagramSubscriptionClient(0).persistForTest("already checked subscription owner A");
+                } else if(kind.equals("notes")) {
                     try { BlackHoleNotes.save(0,42,"already checked owner A"); }
                     catch(IllegalStateException expectedIdentityInvalidation) { }
                 } else {
@@ -162,9 +166,31 @@ public final class Logout102Test {
                 kind+" no encrypted data bleeds into replacement account");
     }
 
+    private static void subscriptionEpochAndIsolation() throws Exception {
+        reset(); user(0,1001); user(1,2002);
+        final String key = "lunagram_subscription_session_v1_prod";
+        LunagramSubscriptionClient old = new LunagramSubscriptionClient(0);
+        LunagramSubscriptionClient other = new LunagramSubscriptionClient(1);
+        old.persistForTest("old A session"); other.persistForTest("other B session");
+        UserConfig.getInstance(0).clearConfig();
+        check(preferences(1001).getString(key,null)==null,"subscription persistent token cleared on real logout");
+        check("other B session".equals(BlackHolePrivateData.read(1,key,null)),"other account's encrypted subscription stays intact");
+        user(0,1001);
+        boolean rejected=false;
+        try { old.persistForTest("late response for same owner"); } catch(Exception expected) { rejected=true; }
+        check(rejected && preferences(1001).getString(key,null)==null,"epoch rejects late response after SAME identity re-login");
+        user(0,3003);
+        new LunagramSubscriptionClient(0).persistForTest("replacement C session");
+        rejected=false;
+        try { old.persistForTest("late outgoing owner write"); } catch(Exception expected) { rejected=true; }
+        check(rejected && "replacement C session".equals(BlackHolePrivateData.read(0,key,null)),"old client cannot overwrite replacement-account encrypted storage");
+        check("other B session".equals(BlackHolePrivateData.read(1,key,null)),"subscription barrier and slot reuse preserve other account");
+    }
+
     public static void main(String[] arguments) throws Exception {
         standardLogout();
-        racedWriter("gifts"); racedWriter("notes"); racedWriter("journal");
+        racedWriter("gifts"); racedWriter("notes"); racedWriter("journal"); racedWriter("subscription");
+        subscriptionEpochAndIsolation();
         reset(); user(3,4321);
         preferences(4321).edit().putString("private-last-slot","A").apply();
         check(LumaLocalGifts.add(3,4321,gift(4)),"nonzero account slot helper bound to actual UserConfig owner API");

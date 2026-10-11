@@ -15,7 +15,11 @@ public final class RoundConcurrent102Test {
         final RoundVideoConcurrentCamera cameras;
         int ready, failures, stabilizationRetries;
         boolean rejectStabilization;
-        Scenario() {
+        final int fps, secondFps, lowerFps;
+        Scenario() { this(30); }
+        Scenario(int fps) { this(fps, fps, fps); }
+        Scenario(int fps, int secondFps, int lowerFps) {
+            this.fps = fps; this.secondFps = secondFps; this.lowerFps = lowerFps;
             cameras = new RoundVideoConcurrentCamera(manager, handler, spec("front", RoundVideoSession.CameraFacing.FRONT),
                     new Surface(), spec("back", RoundVideoSession.CameraFacing.BACK), new Surface(),
                     (device, spec, surface, selected, stabilization) -> {
@@ -27,8 +31,10 @@ public final class RoundConcurrent102Test {
                     });
         }
         RoundVideoConcurrentCamera.Spec spec(String id, RoundVideoSession.CameraFacing facing) {
+            int target = facing == RoundVideoSession.CameraFacing.BACK ? secondFps : fps;
             return new RoundVideoConcurrentCamera.Spec(id, new CameraCharacteristics(), facing,
-                    RoundVideoSession.CameraResolution.MEDIUM, new Size(720, 1280), new Size(720, 1280), 720, new Range<>(30, 30));
+                    RoundVideoSession.CameraResolution.MEDIUM, new Size(720, 1280), new Size(720, 1280), 720,
+                    target, new Range<>(target == fps ? lowerFps : target, target));
         }
         CameraDevice device(String id) { return manager.devices.get(id); }
         void open(String id) { CameraDevice d = device(id); d.callback.onOpened(d); }
@@ -117,6 +123,54 @@ public final class RoundConcurrent102Test {
         s.closed("front"); s.closed("back"); check(s.failures == 1, "Disconnect fallback waits for closure of both devices");
         s = new Scenario(); s.cameras.close(null); s.cameras.start();
         check(s.manager.devices.isEmpty() && s.handler.delayed.isEmpty(), "Closed actor never opens cameras again");
+        s = new Scenario(60); check(s.cameras.isSupported(), "Fixed advertised 60 can enter bounded hardware qualification");
+        s.cameras.start(); s.open("front"); s.open("back");
+        front = s.configure("front"); back = s.configure("back");
+        check(!s.cameras.isReady() && s.ready == 0, "Configured sessions alone never claim actual concurrent 60");
+        check(s.handler.delayed.size() == 2, "Qualification is bounded independently of initial open timeout");
+        for (int i = 1; i <= 17; i++) front.frame(i * 16_666_667L);
+        check(s.ready == 0, "Both sensor streams must qualify, not just selected camera");
+        for (int i = 1; i <= 17; i++) back.frame(i * 16_666_667L);
+        check(s.cameras.isReady() && s.ready == 1, "Both real sensor timelines establish genuine 60 FPS");
+        check(s.handler.delayed.isEmpty(), "Successful sensor qualification cancels both startup deadlines");
+        check(s.cameras.activeSpec().frameRate == 60, "Active negotiated FPS remains 60, not hard-coded 30");
+        check(s.cameras.select(RoundVideoSession.CameraFacing.BACK), "Verified 60 FPS uses the existing warm device");
+        check(s.device("front").configs == 1 && s.device("back").configs == 1, "60 FPS flip never recreates a capture session");
+        long timestamp = 17 * 16_666_667L;
+        for (int i = 1; i <= 30; i++) back.frame(timestamp + i * 33_333_333L);
+        check(!s.cameras.isReady() && front.closed && back.closed, "Later HAL throttling to 30 is detected instead of silently retaining dual mode");
+        s.closed("front"); s.closed("back"); check(s.failures == 1, "Cadence rejection recovers once after both cameras close");
+        s = new Scenario(60); s.cameras.start(); s.open("front"); s.open("back");
+        front = s.configure("front"); back = s.configure("back");
+        for (int i = 1; i <= 17; i++) { front.frame(i * 16_666_667L); back.frame(i * 33_333_333L); }
+        check(s.ready == 0 && !s.cameras.isReady(), "Nominal 60 request with actual standby 30 never starts recording as dual 60");
+        s.closed("front"); s.closed("back"); check(s.failures == 1, "Unsupported actual dual rate yields ordinary single-camera recovery");
+        s = new Scenario(60); s.cameras.start(); s.open("front"); s.open("back");
+        front = s.configure("front"); back = s.configure("back");
+        for (int i = 0; i < 40; i++) { front.frame(100L); back.frame(null); }
+        check(s.ready == 0, "Duplicate or missing sensor timestamps cannot manufacture a 60 FPS qualification");
+        s.handler.timeout(); s.closed("front"); s.closed("back");
+        check(s.failures == 1 && s.ready == 0, "Missing real frames fail within the bounded qualification deadline");
+        s = new Scenario(60); s.cameras.start(); s.open("front"); s.open("back");
+        front = s.configure("front"); back = s.configure("back");
+        for (int i = 1; i <= 17; i++) { front.frame(i * 8_333_333L); back.frame(i * 8_333_333L); }
+        check(s.ready == 0, "A 120 sensor timeline cannot falsely qualify as requested 60");
+        s = new Scenario(120);
+        check(!s.cameras.isSupported(), "Concurrent high-speed mode is not inferred from ordinary dual streams");
+        s = new Scenario(60, 30, 60);
+        check(!s.cameras.isSupported(), "A 30 FPS standby can never downgrade a 60 FPS recording just for fast switching");
+        s = new Scenario(60, 60, 15);
+        check(!s.cameras.isSupported(), "Adaptive 15-60 ranges do not prove simultaneous fixed 60 support");
+        s.cameras.start(); s.handler.drain();
+        check(s.failures == 1 && s.manager.devices.isEmpty(), "Unqualified rate configuration fails before opening either camera");
+        s = new Scenario(60); s.cameras.start(); s.open("front"); s.open("back");
+        front = s.configure("front"); back = s.configure("back");
+        timestamp = 1L;
+        for (int i = 1; i <= 17; i++) {
+            timestamp += 16_666_667L + (i % 2 == 0 ? 2_000_000L : -2_000_000L);
+            front.frame(timestamp); back.frame(timestamp);
+        }
+        check(s.ready == 1, "Small sensor jitter passes even when callbacks arrive together, without callback-wallclock FPS guesses");
         System.out.println("PASS: " + checks + " production concurrent-camera lifecycle checks (simulated Camera2, not a hardware FPS claim).");
     }
 }

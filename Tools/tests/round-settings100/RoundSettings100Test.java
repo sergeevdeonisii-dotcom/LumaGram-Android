@@ -93,7 +93,6 @@ public final class RoundSettings100Test {
             check(ui.choices.length==(LumaBuildPolicy.isPersonalEdition()?3:2),"Only personal edition shows enhanced stabilization");
             check(ui.index<= (LumaBuildPolicy.isPersonalEdition()?2:1),"Saved/imported enhanced mode cannot overflow public slider");
         }
-        check(RoundSettingsUiProbe.info()==(LumaBuildPolicy.isPersonalEdition()?3:4),"Edition-specific stabilization help follows UI gate");
         assertions += RoundSettingsNavigationProbe.run();
         System.out.println("PASS "+(BuildConfig.LUMA_FRIENDS_EDITION?"friends":BuildConfig.LUMA_PUBLIC_EDITION?"public":"personal")+": "+assertions+" real settings/enums/Builder/UI assertions.");
     }

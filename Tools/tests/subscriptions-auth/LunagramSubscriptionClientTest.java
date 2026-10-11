@@ -40,13 +40,13 @@ public final class LunagramSubscriptionClientTest {
         client.startAuthentication(); DispatchQueue.drain();
         check(client.isPairing() && !client.isBusy(),"Pair started without granting session");
         check("/v1/auth/start".equals(transport.path) && transport.token == null,"Start has no bearer header");
-        check("101".equals(transport.body.get("expectedUserId")),"Current account is only an expected-user hint");
+        check(Long.toString(UserConfig.ids[0]).equals(transport.body.get("expectedUserId")),"Current account is only an expected-user hint");
         return client;
     }
     private static LunagramSubscriptionClient connected(Transport transport) {
         LunagramSubscriptionClient client = started(transport);
         String challenge = (String)transport.body.get("challenge");
-        transport.next = new LunagramSubscriptionClient.Response(200,authenticated("101"));
+        transport.next = new LunagramSubscriptionClient.Response(200,authenticated(Long.toString(UserConfig.ids[0])));
         client.checkAuthentication(); DispatchQueue.drain();
         byte[] verifier = ((String)transport.body.get("verifier")).getBytes(StandardCharsets.US_ASCII);
         try { check(verifier.length == 43 && challenge.equals(LunagramSubscriptionClient.challenge(verifier)),"Actual exchange verifier matches start S256 challenge"); }
@@ -100,6 +100,36 @@ public final class LunagramSubscriptionClientTest {
         transport.beforeReturn = () -> UserConfig.selectedAccount = 1;
         transport.next = new LunagramSubscriptionClient.Response(200,authenticated("101")); client.checkAuthentication(); DispatchQueue.drain();
         check(!client.isAuthenticated() && BlackHolePrivateData.writes == 0,"Account switch rejects late exchange result"); client.dispose();
+
+        BlackHolePrivateData.reset(); transport = new Transport(); client = started(transport);
+        transport.beforeReturn = () -> UserConfig.logout(0);
+        transport.next = new LunagramSubscriptionClient.Response(200,authenticated("101"));
+        client.checkAuthentication(); DispatchQueue.drain();
+        check(!client.isAuthenticated() && BlackHolePrivateData.writes == 0 && BlackHolePrivateData.stored.isEmpty(),
+                "Logout before late exchange response cannot resurrect a persistent session");
+        BlackHolePrivateData.reset(); transport = new Transport(); client = started(transport);
+        transport.beforeReturn = () -> { UserConfig.logout(0); UserConfig.ids[0] = 101; };
+        transport.next = new LunagramSubscriptionClient.Response(200,authenticated("101"));
+        client.checkAuthentication(); DispatchQueue.drain();
+        check(!client.isAuthenticated() && BlackHolePrivateData.writes == 0,
+                "Logout epoch rejects late result even after the SAME user signs into the same slot");
+        BlackHolePrivateData.reset(); transport = new Transport(); client = connected(transport);
+        int oldCalls = transport.calls;
+        UserConfig.logout(0); UserConfig.ids[0] = 202;
+        Transport replacementTransport = new Transport();
+        LunagramSubscriptionClient replacement = new LunagramSubscriptionClient(0,replacementTransport);
+        replacement.restore(); DispatchQueue.drain();
+        check(!replacement.isAuthenticated(),"Replacement account never restores outgoing user's billing token");
+        replacement = connected(replacementTransport);
+        check(replacement.isAuthenticated(),"Replacement account can authenticate independently");
+        String replacementStored = BlackHolePrivateData.stored.get("202:lunagram_subscription_session_v1_prod");
+        client.disconnect(); DispatchQueue.drain();
+        check(transport.calls == oldCalls && replacementStored.equals(BlackHolePrivateData.stored.get("202:lunagram_subscription_session_v1_prod")),
+                "Stale client's logout cannot revoke or delete replacement-account session");
+        UserConfig.ids[0] = 101;
+        LunagramSubscriptionClient previousOwner = new LunagramSubscriptionClient(0,new Transport());
+        previousOwner.restore(); DispatchQueue.drain();
+        check(!previousOwner.isAuthenticated(),"Returning old owner does not recover a session cleared by logout");
 
         BlackHolePrivateData.reset(); transport = new Transport(); client = started(transport);
         BlackHolePrivateData.fail = true; transport.next = new LunagramSubscriptionClient.Response(200,authenticated("101")); client.checkAuthentication(); DispatchQueue.drain();

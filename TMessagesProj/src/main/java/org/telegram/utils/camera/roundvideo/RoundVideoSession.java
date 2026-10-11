@@ -913,6 +913,8 @@ public final class RoundVideoSession {
                 @Override
                 public void onCameraSwitchStarted(@NonNull CameraFacing facing) {
                     mainHandler.post(() -> {
+                        if (isTerminalState() || state != State.STARTING
+                                && state != State.RECORDING && state != State.RESUMING) return;
                         cameraSwitchCount++;
                         cameraSwitching = true;
                         diagnostics.log("camera switch started: target=" + facing);
@@ -923,7 +925,11 @@ public final class RoundVideoSession {
 
                 @Override
                 public void onCameraSwitchFirstFrame() {
-                    mainHandler.post(listener::onCameraSwitchFirstFrame);
+                    mainHandler.post(() -> {
+                        if (isTerminalState() || state != State.STARTING
+                                && state != State.RECORDING && state != State.RESUMING) return;
+                        listener.onCameraSwitchFirstFrame();
+                    });
                 }
 
                 @Override

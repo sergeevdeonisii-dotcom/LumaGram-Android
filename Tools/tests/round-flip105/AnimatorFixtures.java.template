@@ -1,0 +1,68 @@
+// FILE: android/animation/TimeInterpolator.java
+package android.animation;
+public interface TimeInterpolator { float getInterpolation(float value); }
+// FILE: android/animation/Animator.java
+package android.animation;
+import java.util.ArrayList;
+public class Animator {
+    public final ArrayList<AnimatorListenerAdapter> listeners = new ArrayList<>();
+    public void addListener(AnimatorListenerAdapter listener) { listeners.add(listener); }
+    public void removeAllListeners() { listeners.clear(); }
+    protected void end() { for (AnimatorListenerAdapter listener : new ArrayList<>(listeners)) listener.onAnimationEnd(this); }
+}
+// FILE: android/animation/AnimatorListenerAdapter.java
+package android.animation;
+public class AnimatorListenerAdapter { public void onAnimationEnd(Animator animation) {} }
+// FILE: android/animation/ValueAnimator.java
+package android.animation;
+import java.util.ArrayList;
+public class ValueAnimator extends Animator {
+    public interface AnimatorUpdateListener { void onAnimationUpdate(ValueAnimator animation); }
+    public static final ArrayList<ValueAnimator> instances = new ArrayList<>();
+    public static boolean enabled = true;
+    public final ArrayList<AnimatorUpdateListener> updates = new ArrayList<>();
+    public float from, to, value;
+    public long duration;
+    public boolean started, cancelled;
+    public TimeInterpolator interpolator;
+    public static ValueAnimator ofFloat(float... values) {
+        ValueAnimator animator = new ValueAnimator(); animator.from=values[0]; animator.to=values[values.length-1];
+        instances.add(animator); return animator;
+    }
+    public static boolean areAnimatorsEnabled() { return enabled; }
+    public ValueAnimator setDuration(long value) { duration=value; return this; }
+    public void setInterpolator(TimeInterpolator value) { interpolator=value; }
+    public void addUpdateListener(AnimatorUpdateListener listener) { updates.add(listener); }
+    public void removeAllUpdateListeners() { updates.clear(); }
+    public Object getAnimatedValue() { return value; }
+    public void start() { started=true; advance(0f); }
+    public void cancel() { cancelled=true; end(); }
+    public void advance(float fraction) {
+        value=from+(to-from)*interpolator.getInterpolation(fraction);
+        for (AnimatorUpdateListener listener : new ArrayList<>(updates)) listener.onAnimationUpdate(this);
+        if (fraction==1f) end();
+    }
+}
+// FILE: android/os/Build.java
+package android.os;
+public class Build { public static class VERSION { public static int SDK_INT=36; } }
+// FILE: android/view/animation/LinearInterpolator.java
+package android.view.animation;
+public class LinearInterpolator implements android.animation.TimeInterpolator {
+    public float getInterpolation(float value) { return value; }
+}
+// FILE: org/telegram/messenger/AndroidUtilities.java
+package org.telegram.messenger;
+import java.util.ArrayList;
+public class AndroidUtilities {
+    public static float durationScale=1f;
+    public static boolean failScale;
+    public static long delay;
+    public static final ArrayList<Runnable> pending=new ArrayList<>();
+    public static float getAnimatorDurationScale() { if (failScale) throw new RuntimeException("controlled settings failure"); return durationScale; }
+    public static void runOnUIThread(Runnable task,long duration) { delay=duration; pending.add(task); }
+    public static void cancelRunOnUIThread(Runnable task) { pending.remove(task); }
+}
+// FILE: org/telegram/messenger/SharedConfig.java
+package org.telegram.messenger;
+public class SharedConfig { public static boolean enabled=true; public static boolean animationsEnabled() { return enabled; } }

@@ -2807,7 +2807,21 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         public void setPattern(int p, TL_stars.starGiftAttributePattern pattern, boolean animated) {
             if (pattern == null || this.patternAttribute[p] == pattern) return;
             this.patternAttribute[p] = pattern;
-            this.pattern[p].set(pattern.document, animated);
+            final AnimatedEmojiDrawable preview = createReadOnlyPatternDrawable(p, pattern.document);
+            if (preview != null) {
+                this.pattern[p].set(preview, false);
+                // Swap.set() calls play() after attaching. A read-only preview may
+                // intentionally keep a still frame, including when bound while attached.
+                final ImageReceiver receiver = preview.getImageReceiver();
+                if (receiver != null && !receiver.getAllowStartAnimation()) receiver.stopAnimation();
+            } else {
+                this.pattern[p].set(pattern.document, animated);
+            }
+        }
+
+        /** Optional isolated artwork for a read-only preview; normal gift sheets use the original cache. */
+        protected AnimatedEmojiDrawable createReadOnlyPatternDrawable(int page, TLRPC.Document document) {
+            return null;
         }
 
         private void preloadPattern(TL_stars.starGiftAttributePattern pattern) {

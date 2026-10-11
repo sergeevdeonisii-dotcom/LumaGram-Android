@@ -15,7 +15,6 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.LumaRoundVideoCamera;
 import org.telegram.messenger.LumaRoundVideoStabilization;
-import org.telegram.messenger.LumaRoundVideoStats;
 import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.utils.settings.SharedSettings;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -23,6 +22,7 @@ import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.HeaderCell;
+import org.telegram.ui.Cells.ShadowSectionCell;
 import org.telegram.ui.Cells.TextCheckCell;
 import org.telegram.ui.Cells.TextInfoPrivacyCell;
 import org.telegram.ui.Cells.TextSettingsCell;
@@ -38,6 +38,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
     private static final int TYPE_VALUE = 2;
     private static final int TYPE_INFO = 3;
     private static final int TYPE_SLIDER = 4;
+    private static final int TYPE_SEPARATOR = 5;
 
     private static final int ROW_GENERAL_HEADER = 0;
     private static final int ROW_ENABLED = 1;
@@ -55,16 +56,14 @@ public class RoundVideoSettingsActivity extends BaseFragment {
     private static final int ROW_FRAME_RATE_INFO = 13;
     private static final int ROW_STABILIZATION_HEADER = 14;
     private static final int ROW_STABILIZATION = 15;
-    private static final int ROW_STABILIZATION_INFO = 16;
-    private static final int ROW_LAST_RECORDING_HEADER = 17;
-    private static final int ROW_LAST_RECORDING_INFO = 18;
-    private static final int ROW_CONCURRENT_HEADER = 19;
-    private static final int ROW_CONCURRENT_ENABLED = 20;
-    private static final int ROW_CONCURRENT_INFO = 21;
-    private static final int ROW_COMPOSITION_HEADER = 22;
-    private static final int ROW_COMPOSITION = 23;
-    private static final int ROW_COMPOSITION_INFO = 24;
-    private static final int ROW_COUNT = BuildConfig.DEBUG_PRIVATE_VERSION ? 25 : 22;
+    private static final int ROW_STABILIZATION_SEPARATOR = 16;
+    private static final int ROW_CONCURRENT_HEADER = 17;
+    private static final int ROW_CONCURRENT_ENABLED = 18;
+    private static final int ROW_CONCURRENT_SEPARATOR = 19;
+    private static final int ROW_COMPOSITION_HEADER = 20;
+    private static final int ROW_COMPOSITION = 21;
+    private static final int ROW_COMPOSITION_INFO = 22;
+    private static final int ROW_COUNT = BuildConfig.DEBUG_PRIVATE_VERSION ? 23 : 20;
 
     private static final int[] BITRATES = {
             750_000,
@@ -84,21 +83,6 @@ public class RoundVideoSettingsActivity extends BaseFragment {
 
     private RecyclerListView listView;
     private ListAdapter adapter;
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        if (adapter != null) adapter.notifyItemChanged(ROW_LAST_RECORDING_INFO);
-    }
-
-    private String lastRecordingInfo() {
-        LumaRoundVideoStats.Result result = LumaRoundVideoStats.lastResult();
-        if (result == null) return LocaleController.getString(R.string.LumaRoundVideoMeasuredEmpty);
-        return LocaleController.formatString(R.string.LumaRoundVideoMeasuredInfo,
-                result.width, result.height, result.measuredFps,
-                result.videoBitrate / 1_000_000.0, result.requestedFps)
-                + "\n" + LocaleController.getString(R.string.LumaRoundVideoMeasuredNote);
-    }
 
     @Override
     public View createView(Context context) {
@@ -224,11 +208,6 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 : new String[]{off, standard};
     }
 
-    static int stabilizationInfoResource() {
-        return LumaBuildPolicy.allowsEnhancedRoundVideoStabilization()
-                ? R.string.LumaRoundVideoStabilizationInfo : R.string.LumaRoundVideoStabilizationPublicInfo;
-    }
-
     private static String cameraResolutionLabel(RoundVideoSession.CameraResolution resolution) {
         if (resolution == RoundVideoSession.CameraResolution.HIGH) {
             return LocaleController.getString(R.string.RoundVideoCameraResolutionHigh);
@@ -283,6 +262,8 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 view = cell;
             } else if (viewType == TYPE_SLIDER) {
                 view = new SlideChooseView(context);
+            } else if (viewType == TYPE_SEPARATOR) {
+                view = new ShadowSectionCell(context);
             } else {
                 view = new TextInfoPrivacyCell(context);
             }
@@ -295,6 +276,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
 
         @Override
         public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+            if (holder.getItemViewType() == TYPE_SEPARATOR) return;
             boolean enabled = SharedSettings.roundVideoCamera2Enabled.get();
             if (holder.getItemViewType() == TYPE_HEADER) {
                 HeaderCell cell = (HeaderCell) holder.itemView;
@@ -303,7 +285,6 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                         : position == ROW_QUALITY_HEADER ? LocaleController.getString(R.string.LumaRoundVideoLegacyQualityTitle)
                         : position == ROW_FRAME_RATE_HEADER ? LocaleController.getString(R.string.LumaRoundVideoFps)
                         : position == ROW_STABILIZATION_HEADER ? LocaleController.getString(R.string.LumaRoundVideoStabilization)
-                        : position == ROW_LAST_RECORDING_HEADER ? LocaleController.getString(R.string.LumaRoundVideoMeasuredTitle)
                         : position == ROW_CONCURRENT_HEADER ? LocaleController.getString(R.string.LumaRoundVideoFastSwitchTitle)
                         : LocaleController.getString(R.string.RoundVideoComposition));
             } else if (holder.getItemViewType() == TYPE_SLIDER) {
@@ -372,19 +353,16 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                         : position == ROW_QUALITY_INFO ? LocaleController.getString(R.string.LumaRoundVideoLegacyQualityInfo)
                                 + "\n\n" + LocaleController.getString(R.string.LumaRoundVideoQualityInfo)
                         : position == ROW_REAR_CAMERA_INFO ? LocaleController.getString(R.string.LumaRoundVideoStartRearCameraInfo)
-                        : position == ROW_LAST_RECORDING_INFO ? lastRecordingInfo()
-                        : position == ROW_CONCURRENT_INFO ? LocaleController.getString(R.string.LumaRoundVideoFastSwitchInfo)
                         : position == ROW_FRAME_RATE_INFO ? LocaleController.getString(R.string.LumaRoundVideoFpsInfo)
-                        : position == ROW_STABILIZATION_INFO ? LocaleController.getString(stabilizationInfoResource())
                         : LocaleController.getString(R.string.RoundVideoCompositionInfo));
             }
         }
 
         @Override
         public int getItemViewType(int position) {
+            if (position == ROW_STABILIZATION_SEPARATOR || position == ROW_CONCURRENT_SEPARATOR) return TYPE_SEPARATOR;
             if (position == ROW_GENERAL_HEADER || position == ROW_COMPOSITION_HEADER
                     || position == ROW_QUALITY_HEADER
-                    || position == ROW_LAST_RECORDING_HEADER
                     || position == ROW_CONCURRENT_HEADER
                     || position == ROW_FRAME_RATE_HEADER || position == ROW_STABILIZATION_HEADER) {
                 return TYPE_HEADER;
@@ -397,9 +375,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
             }
             if (position == ROW_GENERAL_INFO || position == ROW_COMPOSITION_INFO
                     || position == ROW_QUALITY_INFO || position == ROW_REAR_CAMERA_INFO
-                    || position == ROW_LAST_RECORDING_INFO
-                    || position == ROW_CONCURRENT_INFO
-                    || position == ROW_FRAME_RATE_INFO || position == ROW_STABILIZATION_INFO) {
+                    || position == ROW_FRAME_RATE_INFO) {
                 return TYPE_INFO;
             }
             return TYPE_VALUE;

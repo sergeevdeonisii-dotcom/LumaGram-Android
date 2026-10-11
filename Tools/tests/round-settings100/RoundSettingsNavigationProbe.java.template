@@ -46,9 +46,7 @@ public final class RoundSettingsNavigationProbe {
     private final Adapter adapter = new Adapter();
     private interface ChoiceHandler { void onChoice(int index); }
     private void showChoice(int title, CharSequence[] choices, ChoiceHandler handler) {}
-    private String lastRecordingInfo() { return "measured"; }
     static String[] stabilizationOptions() { return RoundSettingsUiProbe.stabilization().choices; }
-    static int stabilizationInfoResource() { return RoundSettingsUiProbe.info(); }
 
     // ROW_CONSTANTS
     // ARRAYS
@@ -57,7 +55,8 @@ public final class RoundSettingsNavigationProbe {
     private RecyclerView.ViewHolder bind(int row) {
         int type = getItemViewType(row);
         View view = type == TYPE_HEADER ? new HeaderCell() : type == TYPE_CHECK ? new TextCheckCell()
-            : type == TYPE_VALUE ? new TextSettingsCell() : type == TYPE_SLIDER ? new SlideChooseView() : new TextInfoPrivacyCell();
+            : type == TYPE_VALUE ? new TextSettingsCell() : type == TYPE_SLIDER ? new SlideChooseView()
+            : type == TYPE_SEPARATOR ? new View() : new TextInfoPrivacyCell();
         RecyclerView.ViewHolder holder = new RecyclerView.ViewHolder(view,row,type);
         onBindViewHolder(holder,row);
         return holder;
@@ -98,6 +97,15 @@ public final class RoundSettingsNavigationProbe {
         }
         check(ROW_QUALITY<screen.getItemCount()&&ROW_REAR_CAMERA<screen.getItemCount(),"moved settings included in release row count");
         check(ROW_COMPOSITION>=screen.getItemCount(),"private-debug composition gate is retained");
+        check(screen.getItemCount()==20,"Release settings remove the measurement section without blank leftover rows");
+        check(screen.getItemViewType(ROW_STABILIZATION_SEPARATOR)==TYPE_SEPARATOR
+                && screen.getItemViewType(ROW_CONCURRENT_SEPARATOR)==TYPE_SEPARATOR,"Removed explanations use compact native separators");
+        check(!screen.isEnabled(screen.bind(ROW_STABILIZATION_SEPARATOR))
+                && !screen.isEnabled(screen.bind(ROW_CONCURRENT_SEPARATOR)),"Separators cannot open settings or change preferences");
+        check(ROW_CONCURRENT_HEADER==ROW_STABILIZATION_SEPARATOR+1
+                && ROW_CONCURRENT_ENABLED==ROW_CONCURRENT_HEADER+1,"Fast-camera toggle follows stabilization without statistics");
+        check(screen.getItemViewType(ROW_FRAME_RATE)==TYPE_SLIDER
+                && screen.getItemViewType(ROW_STABILIZATION)==TYPE_SLIDER,"FPS and stabilization controls remain present");
         return checks;
     }
 }

@@ -707,6 +707,10 @@ final class RoundVideoCameraController {
                                 ),
                                 wasSwitch
                         );
+                        // A concurrent trial may already have reported its first
+                        // GL frame before being rejected. Its fallback must start
+                        // the existing recorder once the single session is ready.
+                        if (glProcessor != null && glProcessor.hasFirstFrame()) startRecordingAfterFirstFrame();
                         if (requestedFacing != activeFacing) switchCameraIfNeeded(requestedFacing);
                     } catch (Exception e) {
                         if (activeFrameRate.getValue() > 30) {
@@ -1701,14 +1705,14 @@ final class RoundVideoCameraController {
 
     private RoundVideoConcurrentCamera.Spec snapshotCamera() {
         return new RoundVideoConcurrentCamera.Spec(cameraId, characteristics, selectedFacing,
-                activeCameraResolution, previewSize, recordingSize, sourceCropSize, activeFpsRange);
+                activeCameraResolution, previewSize, recordingSize, sourceCropSize, activeFrameRate.getValue(), activeFpsRange);
     }
 
     private void restoreCamera(RoundVideoConcurrentCamera.Spec spec) {
         cameraId = spec.id; characteristics = spec.characteristics; selectedFacing = spec.facing;
         activeCameraResolution = spec.resolution; previewSize = spec.previewSize;
         recordingSize = spec.size; sourceCropSize = spec.crop; activeFpsRange = spec.fps;
-        activeFrameRate = RoundVideoSession.FrameRate.FPS_30; highSpeed = false;
+        activeFrameRate = RoundVideoSession.FrameRate.fromValue(spec.frameRate); highSpeed = false;
         maximumZoomRatio = readMaximumZoomRatio(characteristics);
     }
 
@@ -1721,10 +1725,12 @@ final class RoundVideoCameraController {
     }
 
     private boolean tryStartConcurrentCameras() {
-        // Concurrent 30 FPS is a separate capability. Never replace a selected
-        // 60 FPS mode with 30 FPS merely to keep a second camera warm.
+        // Concurrent support alone does not establish FPS support. Regular 60
+        // requires fixed advertised ranges on BOTH cameras and a bounded sensor
+        // cadence qualification before the recorder starts (in the pair actor).
+        int targetFps = requestedFrameRate.getValue();
         if (Build.VERSION.SDK_INT < 30 || !LumaRoundVideoCamera.isFastSwitchEnabled()
-                || requestedFrameRate.getValue() != 30 || activeFrameRate.getValue() != 30 || highSpeed) return false;
+                || targetFps != 30 && targetFps != 60 || activeFrameRate.getValue() != targetFps || highSpeed) return false;
         RoundVideoConcurrentCamera.Spec first = snapshotCamera();
         RoundVideoConcurrentCamera.Spec second;
         OutputPair initialFallback = regularFallbackPair;
@@ -1732,7 +1738,7 @@ final class RoundVideoCameraController {
         try {
             selectCameraAndSizes(first.facing == RoundVideoSession.CameraFacing.FRONT
                     ? RoundVideoSession.CameraFacing.BACK : RoundVideoSession.CameraFacing.FRONT);
-            if (highSpeed || activeFrameRate.getValue() != 30) return false;
+            if (highSpeed || activeFrameRate.getValue() != targetFps) return false;
             second = snapshotCamera();
         } catch (Exception error) {
             diagnostics.log("concurrent candidate unavailable: " + error);
@@ -1745,12 +1751,16 @@ final class RoundVideoCameraController {
             boolean advertised = cameraManager.getConcurrentCameraIds().stream()
                     .anyMatch(ids -> ids.contains(first.id) && ids.contains(second.id));
             if (!advertised || first.fps == null || second.fps == null) return false;
+            if (targetFps == 60 && (first.fps.getLower() != 60 || second.fps.getLower() != 60)) return false;
             processedPreview = true;
             SurfaceTexture texture = previewView.getSurfaceTexture();
             if (texture == null) return false;
             texture.setDefaultBufferSize(outputSize, outputSize);
             if (previewSurface == null) previewSurface = new Surface(texture);
             createRecordingPipeline();
+            // Encoder fallback is independent from concurrent capture. If it
+            // rejected the selected rate, keep its ordinary single-camera path.
+            if (activeFrameRate.getValue() != targetFps) return false;
             Surface secondSurface = glProcessor.addConcurrentInput(second.size, second.crop,
                     second.realtime(), second.facing == RoundVideoSession.CameraFacing.FRONT);
             RoundVideoConcurrentCamera candidate = new RoundVideoConcurrentCamera(cameraManager, cameraHandler,
@@ -1763,7 +1773,8 @@ final class RoundVideoCameraController {
                             adoptConcurrentCamera(spec, device, session);
                             callback.onConfigured(currentCameraInfo(), false);
                             if (glProcessor != null && glProcessor.hasFirstFrame()) startRecordingAfterFirstFrame();
-                            diagnostics.log("concurrent front/back recording ready; standby frames are not encoded");
+                            diagnostics.log("concurrent front/back recording ready: fps=" + spec.frameRate
+                                    + "; standby frames are not encoded");
                             if (requestedFacing != activeFacing) switchCameraIfNeeded(requestedFacing);
                         }
                         @Override public void onFailure(Exception error) { finishConcurrentRecovery(error); }
@@ -1838,6 +1849,9 @@ final class RoundVideoCameraController {
     private void finishConcurrentRecovery(Exception error) {
         if (!active || stopping || concurrentCamera == null) return;
         diagnostics.log("concurrent cameras closed; recover single stream without losing MP4/audio: " + error);
+        if (recorder != null && recorder.isStarted() && glProcessor != null && activeFacing != null) {
+            glProcessor.beginCameraSwitch(activeFacing, requestedFacing);
+        }
         concurrentCamera = null; concurrentPrimary = null;
         cameraDevice = null; captureSession = null; repeatingBuilder = null;
         opening = false; switchingCamera = false;

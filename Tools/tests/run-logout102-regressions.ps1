@@ -54,12 +54,23 @@ foreach ($entry in $replacements.GetEnumerator()) { $template = $template.Replac
 $generatedPrivate = Join-Path $run 'BlackHolePrivateData.java'
 [IO.File]::WriteAllText($generatedPrivate,$template,[Text.UTF8Encoding]::new($false))
 
+$subscription = [IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/messenger/LunagramSubscriptionClient.java'))
+$template = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'logout102/LunagramSubscriptionClient.java.template'))
+$replacements = [ordered]@{
+    '@@EPOCH@@' = 'private static synchronized long accountEpoch(int account)';
+    '@@LOGOUT@@' = 'public static synchronized void onAccountLogout(int account)';
+    '@@PERSIST@@' = 'private void persistSession(long ticket, String value)'
+}
+foreach ($entry in $replacements.GetEnumerator()) { $template = $template.Replace($entry.Key,(ProductionMethod $subscription $entry.Value)) }
+$generatedSubscription = Join-Path $run 'LunagramSubscriptionClient.java'
+[IO.File]::WriteAllText($generatedSubscription,$template,[Text.UTF8Encoding]::new($false))
+
 $tlrpc = [IO.File]::ReadAllText((Join-Path $storageRun 'TLRPC.java'))
 $lastBrace = $tlrpc.LastIndexOf('}')
 $tlrpc = $tlrpc.Insert($lastBrace,"`npublic static class User extends TLObject { public long id; }`n")
 $generatedRpc = Join-Path $run 'TLRPC.java'
 [IO.File]::WriteAllText($generatedRpc,$tlrpc,[Text.UTF8Encoding]::new($false))
-$sources = @($generatedConfig,$generatedPrivate,$generatedRpc,(Join-Path $PSScriptRoot 'logout102/Logout102Test.java'))
+$sources = @($generatedConfig,$generatedPrivate,$generatedRpc,$generatedSubscription,(Join-Path $PSScriptRoot 'logout102/Logout102Test.java'))
 $sources += (Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'logout102/fixtures') -Recurse -Filter '*.java').FullName
 $sources += @('TMessagesProj/src/main/java/org/telegram/messenger/BlackHoleNotes.java',
     'TMessagesProj/src/main/java/org/telegram/messenger/BlackHoleNotificationJournal.java',
@@ -83,18 +94,28 @@ if (Get-Command rg -ErrorAction SilentlyContinue) {
     }
 }
 $actualWriters = ($writeFiles | Sort-Object -Unique) -join ','
-if ($actualWriters -ne 'BlackHoleNotes.java,BlackHoleNotificationJournal.java,LumaLocalGifts.java') {
+if ($actualWriters -ne 'BlackHoleNotes.java,BlackHoleNotificationJournal.java,LumaLocalGifts.java,LunagramSubscriptionClient.java') {
     throw "Encrypted writer inventory changed; review logout barriers: $actualWriters"
 }
 $clear = ProductionMethod $config 'public void clearConfig()'
 foreach ($guard in @('synchronized (sync)', 'logoutOwner = currentUser != null ? currentUser.id : 0;',
     'currentUser = null;', 'clientUserId = 0;', 'synchronized (BlackHoleNotes.class) { }',
     'synchronized (BlackHoleNotificationJournal.class) { }', 'synchronized (LumaLocalGifts.class)',
+    'LunagramSubscriptionClient.onAccountLogout(currentAccount);',
     'LumaLocalGifts.clearCache(currentAccount);', 'LumaAccountData.clearOnLogout(currentAccount, logoutOwner);',
     'getPreferences().edit().clear().apply();', 'saveConfig(true);')) {
     if (!$clear.Contains($guard)) { throw "Missing logout guard/reset: $guard" }
 }
 if (($clear | Select-String -Pattern 'LumaAccountData\.clearOnLogout' -AllMatches).Matches.Count -ne 1) { throw 'Local account cleanup must run once.' }
+$persist = ProductionMethod $subscription 'private void persistSession(long ticket, String value)'
+foreach ($guard in @('synchronized (LunagramSubscriptionClient.class)', 'if (!current(ticket))',
+    'BlackHolePrivateData.write(account, owner, SESSION_KEY, value);')) {
+    if (!$persist.Contains($guard)) { throw "Missing subscription write barrier: $guard" }
+}
+foreach ($guard in @('this.accountEpoch = accountEpoch(account);', 'accountEpoch == accountEpoch(account)', 'persistSession(ticket, new JSONObject()')) {
+    if (!$subscription.Contains($guard)) { throw "Missing subscription epoch/write wiring: $guard" }
+}
+if (($subscription | Select-String -Pattern 'BlackHolePrivateData\.write\(' -AllMatches).Matches.Count -ne 1) { throw 'Subscription writes must remain inside the reviewed persistence method.' }
 Write-Output 'PASS: all current encrypted write sites inventoried; identity-first/sequential drain/one cleanup/save wiring checked.'
-Write-Output 'Scope: real extracted UserConfig identity/reset methods, real local gift/note/journal/data helpers and AES-GCM; platform preferences/keys/JSON/save notifications are deterministic JVM models, not real Android lifecycle.'
+Write-Output 'Scope: real extracted UserConfig identity/reset and subscription persist/epoch methods, real local gift/note/journal/data helpers and AES-GCM; platform preferences/keys/JSON/save notifications are deterministic JVM models, not real Android lifecycle.'
 Write-Output "Test artifacts: $run"

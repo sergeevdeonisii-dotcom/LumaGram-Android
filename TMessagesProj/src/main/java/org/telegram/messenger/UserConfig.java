@@ -472,6 +472,7 @@ public class UserConfig extends BaseController {
         // getClientUserId, and holding it here would reverse the lock order.
         synchronized (BlackHoleNotes.class) { }
         synchronized (BlackHoleNotificationJournal.class) { }
+        LunagramSubscriptionClient.onAccountLogout(currentAccount);
         synchronized (LumaLocalGifts.class) {
             LumaLocalGifts.clearCache(currentAccount);
             LumaAccountData.clearOnLogout(currentAccount, logoutOwner);

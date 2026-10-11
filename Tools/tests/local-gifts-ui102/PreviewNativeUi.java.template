@@ -1,0 +1,105 @@
+// FILE: org/telegram/messenger/AndroidUtilities.java
+package org.telegram.messenger;
+public final class AndroidUtilities { public static int dp(float n){return (int)n;} public static void runOnUIThread(Runnable r){} public static float getAnimatorDurationScale(){return 1;} }
+// FILE: org/telegram/messenger/SharedConfig.java
+package org.telegram.messenger; public final class SharedConfig {public static boolean animationsEnabled(){return true;}}
+// FILE: org/telegram/messenger/LocaleController.java
+package org.telegram.messenger;
+public final class LocaleController { public static String getString(int n){return "";} public static String formatNumber(int n,char sep){return "";} }
+// FILE: org/telegram/messenger/LumaBuildPolicy.java
+package org.telegram.messenger; public final class LumaBuildPolicy { public static boolean isPersonalEdition(){return true;} }
+// FILE: org/telegram/messenger/ImageReceiver.java
+package org.telegram.messenger;
+public class ImageReceiver { public void setCurrentAccount(int a){} public void setAllowDecodeSingleFrame(boolean v){} public void setAutoRepeat(int v){} public void setAllowStartAnimation(boolean v){} public void setAllowStartLottieAnimation(boolean v){} public void startAnimation(){} public void stopAnimation(){} public void setUniqKeyPrefix(String s){} }
+// FILE: org/telegram/messenger/LumaLocalGifts.java
+package org.telegram.messenger;
+public final class LumaLocalGifts { public static final class LocalSavedGift { public long ownerUserId; public org.telegram.tgnet.tl.TL_stars.StarGift gift; } public static boolean remove(int a,LocalSavedGift g){return false;} }
+// FILE: org/telegram/messenger/NotificationCenter.java
+package org.telegram.messenger;
+public final class NotificationCenter {
+ public static final int lumaLocalGiftsChanged=1,appDidLogout=2,activeAccountChanged=3;
+ public interface NotificationCenterDelegate {void didReceivedNotification(int id,int account,Object... args);}
+ public static NotificationCenter getInstance(int a){return null;} public static NotificationCenter getGlobalInstance(){return null;}
+ public void postNotificationName(int id,Object... args){} public void addObserver(NotificationCenterDelegate who,int id){} public void removeObserver(NotificationCenterDelegate who,int id){}
+}
+// FILE: org/telegram/messenger/UserConfig.java
+package org.telegram.messenger;
+public final class UserConfig { public static int selectedAccount; public static UserConfig getInstance(int a){return null;} public long getClientUserId(){return 1;} public org.telegram.tgnet.TLRPC.User getCurrentUser(){return null;} }
+// FILE: org/telegram/messenger/UserObject.java
+package org.telegram.messenger; public final class UserObject { public static String getUserName(org.telegram.tgnet.TLRPC.User u){return "";} }
+// FILE: org/telegram/messenger/Utilities.java
+package org.telegram.messenger; public final class Utilities { public static Queue globalQueue; public static class Queue { public void postRunnable(Runnable r){} } }
+// FILE: org/telegram/tgnet/TLRPC.java
+package org.telegram.tgnet; public class TLRPC { public static class User{} public static class Document{} }
+// FILE: org/telegram/tgnet/tl/TL_stars.java
+package org.telegram.tgnet.tl;
+public class TL_stars {
+ public static class StarGift { public String title; public int num; public Object resell_amount; public java.util.ArrayList<StarGiftAttribute> attributes; }
+ public static class TL_starGiftUnique extends StarGift{}
+ public static class StarGiftAttribute { public String name; public Object rarity; }
+ public static class starGiftAttributeModel extends StarGiftAttribute{}
+ public static class starGiftAttributeBackdrop extends StarGiftAttribute{}
+ public static class starGiftAttributePattern extends StarGiftAttribute{}
+}
+// FILE: org/telegram/ui/ActionBar/Theme.java
+package org.telegram.ui.ActionBar;
+public final class Theme { public interface ResourcesProvider{} public static int key_dialogTextGray2,key_dialogTextBlack,key_dialogBackground,key_text_RedBold; public static int getColor(int k,ResourcesProvider p){return 0;} }
+// FILE: org/telegram/ui/ActionBar/BaseFragment.java
+package org.telegram.ui.ActionBar;
+public class BaseFragment { public int getCurrentAccount(){return 0;} public android.app.Activity getParentActivity(){return null;} public Theme.ResourcesProvider getResourceProvider(){return null;} public android.app.Dialog showDialog(android.app.Dialog d){return d;} }
+// FILE: org/telegram/ui/ActionBar/AlertDialog.java
+package org.telegram.ui.ActionBar;
+public class AlertDialog extends android.app.Dialog { public AlertDialog(android.content.Context c){super(c);} public static class Builder {
+ public Builder(android.content.Context c,Theme.ResourcesProvider p){} public Builder setTitle(CharSequence s){return this;} public Builder setMessage(CharSequence s){return this;} public Builder setView(android.view.View v){return this;}
+ public Builder setPositiveButton(CharSequence s,android.content.DialogInterface.OnClickListener l){return this;} public Builder setNegativeButton(CharSequence s,android.content.DialogInterface.OnClickListener l){return this;} public AlertDialog create(){return null;}
+} }
+// FILE: org/telegram/ui/ActionBar/BottomSheet.java
+package org.telegram.ui.ActionBar;
+public class BottomSheet extends android.app.Dialog {
+ public BottomSheet(android.content.Context c,boolean f,Theme.ResourcesProvider r){super(c);}
+ public void setApplyTopPadding(boolean v){} public void setApplyBottomPadding(boolean v){} public void setAllowNestedScroll(boolean v){} public void fixNavigationBar(int c){} public void setCustomView(android.view.View v){} public void setOnDismissListener(Runnable r){}
+ public static class BottomSheetCell extends android.widget.FrameLayout { public BottomSheetCell(android.content.Context c,int t,Theme.ResourcesProvider r){super(c);} public void setTextAndIcon(CharSequence s,int i){} public void setTextColor(int c){} public void setGravity(int g){} }
+}
+// FILE: androidx/core/widget/NestedScrollView.java
+package androidx.core.widget; public class NestedScrollView extends android.widget.ScrollView { public NestedScrollView(android.content.Context c){super(c);} }
+// FILE: org/telegram/ui/Components/AvatarDrawable.java
+package org.telegram.ui.Components;
+public class AvatarDrawable extends android.graphics.drawable.ColorDrawable { public void setInfo(org.telegram.tgnet.TLRPC.User u){} }
+// FILE: org/telegram/ui/Components/AnimatedEmojiDrawable.java
+package org.telegram.ui.Components;
+public class AnimatedEmojiDrawable { public static final int CACHE_TYPE_EMOJI_STATUS=1; public AnimatedEmojiDrawable(int type,int account,org.telegram.tgnet.TLRPC.Document document){} public org.telegram.messenger.ImageReceiver getImageReceiver(){return null;} }
+// FILE: org/telegram/ui/Components/BackupImageView.java
+package org.telegram.ui.Components;
+public class BackupImageView extends android.view.View { public BackupImageView(android.content.Context c){super(c);} public void setRoundRadius(int r){} public void setForUserOrChat(Object u,AvatarDrawable d){} public void setImageDrawable(android.graphics.drawable.Drawable d){} public org.telegram.messenger.ImageReceiver getImageReceiver(){return null;} }
+// FILE: org/telegram/ui/Components/BulletinFactory.java
+package org.telegram.ui.Components;
+public class BulletinFactory { public static BulletinFactory of(org.telegram.ui.ActionBar.BaseFragment f){return null;} public BulletinFactory createSimpleBulletin(int raw,CharSequence s){return this;} public void show(){} }
+// FILE: org/telegram/ui/Components/LayoutHelper.java
+package org.telegram.ui.Components;
+public final class LayoutHelper {
+ public static final int MATCH_PARENT=-1,WRAP_CONTENT=-2;
+ public static android.widget.LinearLayout.LayoutParams createLinear(int w,int h){return null;}
+ public static android.widget.LinearLayout.LayoutParams createLinear(int w,int h,int gravity,float l,float t,float r,float b){return null;}
+ public static android.widget.LinearLayout.LayoutParams createLinear(int w,int h,float l,float t,float r,float b){return null;}
+}
+// FILE: org/telegram/ui/Components/TableView.java
+package org.telegram.ui.Components;
+public class TableView extends android.widget.LinearLayout { public TableView(android.content.Context c,org.telegram.ui.ActionBar.Theme.ResourcesProvider r){super(c);} public void addRowUnpadded(CharSequence title,android.view.View v){} public void addRow(CharSequence title,CharSequence text){} }
+// FILE: org/telegram/ui/Stories/recorder/ButtonWithCounterView.java
+package org.telegram.ui.Stories.recorder;
+public class ButtonWithCounterView extends android.widget.FrameLayout { public ButtonWithCounterView(android.content.Context c,org.telegram.ui.ActionBar.Theme.ResourcesProvider r){super(c);} public void setText(CharSequence s,boolean a){} }
+// FILE: org/telegram/ui/Stars/StarGiftSheet.java
+package org.telegram.ui.Stars;
+public class StarGiftSheet {
+ public static CharSequence getRarityName(Object r,Integer[] color){return "";} public static void addAttributeRow(org.telegram.ui.Components.TableView t,org.telegram.tgnet.tl.TL_stars.StarGiftAttribute a){}
+ public static class TopView extends android.widget.FrameLayout {
+  public final android.widget.FrameLayout imageLayout=null; public final android.widget.ImageView optionsView=null;
+  public TopView(android.content.Context c,org.telegram.ui.ActionBar.Theme.ResourcesProvider r,Runnable dismiss,android.view.View.OnClickListener menu,android.view.View.OnClickListener craft,android.view.View.OnClickListener transfer,android.view.View.OnClickListener wear,android.view.View.OnClickListener share,android.view.View.OnClickListener resell,android.view.View.OnClickListener price){super(c);}
+  public void setGift(org.telegram.tgnet.tl.TL_stars.StarGift g,boolean owner,boolean host,boolean worn,boolean link,boolean rolling){}
+  public void setText(int page,CharSequence title,CharSequence subtitle,CharSequence releasedSubtitle,CharSequence released){} public int getFinalHeight(){return 0;}
+  protected org.telegram.ui.Components.AnimatedEmojiDrawable createReadOnlyPatternDrawable(int page,org.telegram.tgnet.TLRPC.Document document){return null;}
+ }
+}
+// FILE: org/telegram/ui/Gifts/GiftSheet.java
+package org.telegram.ui.Gifts;
+public class GiftSheet { public static class GiftCell extends android.widget.FrameLayout { public GiftCell(android.content.Context c,int a,org.telegram.ui.ActionBar.Theme.ResourcesProvider r){super(c);} public void setStarsGift(org.telegram.messenger.LumaLocalGifts.LocalSavedGift g,boolean n,boolean b){} } }

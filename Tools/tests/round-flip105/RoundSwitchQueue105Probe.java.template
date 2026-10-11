@@ -1,0 +1,52 @@
+package org.telegram.ui.Components;
+
+import java.util.ArrayDeque;
+
+/** Executes the actual Session posted-callback bodies, not a copied policy predicate. */
+public final class RoundSwitchQueue105Probe {
+    private enum State { IDLE, STARTING, RECORDING, PAUSING, PREVIEWING, RESUMING, FINISHING, COMPLETED, ERROR, RELEASED }
+    private State state;
+    private int cameraSwitchCount, notifications;
+    private boolean cameraSwitching;
+    private static int checks;
+    private final Handler mainHandler=new Handler();
+    private final Listener listener=new Listener();
+    private final Diagnostics diagnostics=new Diagnostics();
+
+    private static final class Handler {
+        final ArrayDeque<Runnable> queue=new ArrayDeque<>();
+        void post(Runnable action) { queue.add(action); }
+        void drain() { while (!queue.isEmpty()) queue.remove().run(); }
+    }
+    private static final class Listener {
+        int started, frames;
+        void onCameraSwitchStarted(String facing) { started++; }
+        void onCameraSwitchFirstFrame() { frames++; }
+    }
+    private static final class Diagnostics { void log(String value) {} }
+    private boolean isTerminalState() { return state==State.COMPLETED || state==State.ERROR || state==State.RELEASED; }
+    private void notifyState() { notifications++; }
+    private void started(String facing) {
+        /* ACTUAL_STARTED_BODY */
+    }
+    private void frame() {
+        /* ACTUAL_FRAME_BODY */
+    }
+    private static void check(boolean value,String label) { if (!value) throw new AssertionError(label); checks++; }
+    public static void main(String[] args) {
+        for (State afterPost:State.values()) {
+            RoundSwitchQueue105Probe probe=new RoundSwitchQueue105Probe();
+            probe.state=State.RECORDING;
+            probe.started("BACK"); probe.frame();
+            check(probe.listener.started==0 && probe.listener.frames==0,"callbacks are really queued");
+            probe.state=afterPost;
+            probe.mainHandler.drain();
+            boolean active=afterPost==State.STARTING || afterPost==State.RECORDING || afterPost==State.RESUMING;
+            check(probe.listener.started==(active?1:0),"switch-start checks lifecycle when queued work executes");
+            check(probe.listener.frames==(active?1:0),"first-frame checks lifecycle when queued work executes");
+            check(probe.cameraSwitchCount==(active?1:0) && probe.cameraSwitching==active && probe.notifications==(active?1:0),
+                    "rejected queued start has no counter/flag/listener side effects");
+        }
+        System.out.println("PASS: "+checks+" extracted Session queue contracts; no real Handler/camera/device proof.");
+    }
+}

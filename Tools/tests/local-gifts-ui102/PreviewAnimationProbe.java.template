@@ -1,0 +1,199 @@
+import java.util.*;
+
+/** Executes the production header subclass with deliberately small lifecycle collaborators. */
+public class PreviewAnimationProbe {
+    static int checks;
+    static void check(boolean value, String label) {
+        checks++;
+        if (!value) throw new AssertionError(label);
+    }
+    static int dp(int value) { return value; }
+    static class Context { }
+    static class Theme { static class ResourcesProvider { } }
+    static class SharedConfig { static boolean enabled = true; static boolean animationsEnabled() { return enabled; } }
+    static class AndroidUtilities {
+        static float scale = 1; static boolean failure;
+        static float getAnimatorDurationScale() { if (failure) throw new IllegalStateException("unavailable"); return scale; }
+    }
+    static class TLRPC { static class Document {} }
+    static class TL_stars { static class starGiftAttributePattern { TLRPC.Document document = new TLRPC.Document(); } }
+    static class Build { static class VERSION { static int SDK_INT = 36; } }
+    static class ValueAnimator { static boolean enabled = true; static boolean areAnimatorsEnabled() { return enabled; } }
+    static class Outline { void setRoundRect(int l, int t, int r, int b, float radius) { } }
+    static abstract class ViewOutlineProvider { abstract void getOutline(View view, Outline outline); }
+    static class View {
+        int getWidth() { return 360; }
+        int getHeight() { return 260; }
+        static class MeasureSpec { static final int UNSPECIFIED = 0; static int makeMeasureSpec(int size, int mode) { return size; } }
+    }
+    static class ImageReceiver {
+        int account, repeat, starts, stops;
+        boolean decode, allowFile = true, allowLottie = true, running;
+        String prefix;
+        void setCurrentAccount(int value) { account = value; }
+        void setAllowDecodeSingleFrame(boolean value) { decode = value; }
+        void setAutoRepeat(int value) { repeat = value; }
+        void setAllowStartAnimation(boolean value) { allowFile = value; }
+        boolean getAllowStartAnimation() { return allowFile; }
+        void setUniqKeyPrefix(String value) { prefix = value; }
+        void setAllowStartLottieAnimation(boolean value) { allowLottie = value; }
+        void startAnimation() { starts++; running = true; }
+        void stopAnimation() { stops++; running = false; }
+        void lateDownload() { running = allowFile && allowLottie; }
+    }
+    static class AnimatedEmojiDrawable {
+        static final int CACHE_TYPE_EMOJI_STATUS = 1;
+        final ImageReceiver receiver = new ImageReceiver();
+        AnimatedEmojiDrawable(int cache, int account, TLRPC.Document document) { receiver.account = account; }
+        ImageReceiver getImageReceiver() { return receiver; }
+    }
+    static class SwapPattern {
+        AnimatedEmojiDrawable drawable;
+        int legacySets;
+        void set(TLRPC.Document document, boolean animated) { legacySets++; }
+        void set(AnimatedEmojiDrawable d, boolean animated) { drawable = d; d.receiver.startAnimation(); }
+        void attach() { if (drawable != null) drawable.receiver.lateDownload(); }
+        void detach() { }
+    }
+    static class BackupImageView extends View {
+        final ImageReceiver receiver = new ImageReceiver();
+        ImageReceiver getImageReceiver() { return receiver; }
+    }
+    static class ImageLayout {
+        final List<View> children = new ArrayList<>();
+        ImageLayout() { for (int i = 0; i < 5; i++) children.add(new BackupImageView()); children.add(new View()); }
+        int getChildCount() { return children.size(); }
+        View getChildAt(int index) { return children.get(index); }
+    }
+    static class StarGiftSheet {
+        static class TopView extends View {
+            final ImageLayout imageLayout = new ImageLayout();
+            boolean attached, clipped;
+            int measuredHeight;
+            final TL_stars.starGiftAttributePattern[] patternAttribute = new TL_stars.starGiftAttributePattern[2];
+            final SwapPattern[] pattern = { new SwapPattern(), new SwapPattern() };
+            TopView(Context c, Theme.ResourcesProvider r, Runnable dismiss, Object... callbacks) {
+                check(callbacks.length == 7 && Arrays.stream(callbacks).allMatch(Objects::isNull), "no action callback capabilities");
+            }
+            void setOutlineProvider(ViewOutlineProvider outline) { }
+            void setClipToOutline(boolean value) { clipped = value; }
+            protected void onMeasure(int width, int height) { measuredHeight = 900; }
+            void setMeasuredDimension(int width, int height) { measuredHeight = height; }
+            int getMeasuredWidth() { return 360; }
+            int getFinalHeight() { return 260; }
+            protected void onAttachedToWindow() { attached = true; for (SwapPattern p : pattern) p.attach(); }
+            protected void onDetachedFromWindow() { attached = false; for (SwapPattern p : pattern) p.detach(); }
+            // PRODUCTION_NATIVE_SET_PATTERN
+            // PRODUCTION_NATIVE_PATTERN_DEFAULT
+        }
+    }
+    static class UserConfig {
+        static int selectedAccount = 1;
+        static final long[] ids = { 100, 200, 300, 400 };
+        final int account;
+        UserConfig(int a) { account = a; }
+        static UserConfig getInstance(int account) { return new UserConfig(account); }
+        long getClientUserId() { return ids[account]; }
+    }
+    static class NotificationCenter {
+        interface NotificationCenterDelegate { void didReceivedNotification(int id, int account, Object... args); }
+        static final int appDidLogout = 1, activeAccountChanged = 2;
+        static final NotificationCenter global = new NotificationCenter();
+        static final Map<Integer, NotificationCenter> accounts = new HashMap<>();
+        final Set<NotificationCenterDelegate> observers = new HashSet<>();
+        static NotificationCenter getInstance(int a) { return accounts.computeIfAbsent(a, ignored -> new NotificationCenter()); }
+        static NotificationCenter getGlobalInstance() { return global; }
+        void addObserver(NotificationCenterDelegate who, int event) { observers.add(who); }
+        void removeObserver(NotificationCenterDelegate who, int event) { observers.remove(who); }
+    }
+
+    // PRODUCTION_PREVIEW_TOP_VIEW
+
+    static ImageReceiver receiver(PreviewTopView view, int i) { return ((BackupImageView) view.imageLayout.getChildAt(i)).receiver; }
+    static PreviewTopView view(int[] dismisses) {
+        return new PreviewTopView(new Context(), 1, 200, new Theme.ResourcesProvider(), () -> dismisses[0]++);
+    }
+    public static void main(String[] args) {
+        int[] dismissed = {0};
+        PreviewTopView top = view(dismissed);
+        TL_stars.starGiftAttributePattern attribute = new TL_stars.starGiftAttributePattern();
+        top.setPattern(0, attribute, false);
+        ImageReceiver patternReceiver = top.pattern[0].drawable.receiver;
+        check(!patternReceiver.running && !patternReceiver.allowFile && !patternReceiver.allowLottie, "pattern binding must not bypass motion gate through Swap.play");
+        check(patternReceiver.prefix.startsWith("luma_gift_preview_"), "private pattern image-cache namespace");
+        for (int i = 0; i < 5; i++) {
+            ImageReceiver r = receiver(top, i);
+            check(r.account == 1 && r.decode && r.repeat == 2, "correct account and one-shot animated document");
+            check(r.prefix.startsWith("luma_gift_preview_model_"), "main gift Lottie cache isolated from other screens");
+            check(!r.allowFile && !r.allowLottie && !r.running, "do not animate before attachment");
+        }
+        top.onMeasure(360, 900);
+        check(top.measuredHeight == 260, "hidden craft pages never reserve empty space");
+        check(top.clipped, "native sheet top corners clipped");
+        top.onAttachedToWindow();
+        check(patternReceiver.running && patternReceiver.allowFile && patternReceiver.allowLottie, "native pattern animates when allowed");
+        check(top.attached && dismissed[0] == 0, "native header attached without closing valid owner");
+        check(NotificationCenter.global.observers.contains(top) && NotificationCenter.getInstance(1).observers.contains(top), "identity observers registered");
+        for (int i = 0; i < 5; i++) {
+            ImageReceiver r = receiver(top, i);
+            check(r.running && r.allowFile && r.allowLottie, "animated gift starts on open");
+            r.lateDownload();
+            check(r.running, "late animated document starts while visible");
+        }
+        top.stopPreview();
+        patternReceiver.lateDownload();
+        check(!patternReceiver.running && !patternReceiver.allowFile && !patternReceiver.allowLottie, "dismiss also gates late pattern asset");
+        for (int i = 0; i < 5; i++) {
+            ImageReceiver r = receiver(top, i); r.lateDownload();
+            check(!r.running && !r.allowFile && !r.allowLottie, "dismiss cancels even late-download animation");
+        }
+        top.onDetachedFromWindow();
+        check(!top.attached && NotificationCenter.global.observers.isEmpty()
+                && NotificationCenter.getInstance(1).observers.isEmpty(), "native pattern and identity observers detached");
+        top.onAttachedToWindow();
+        check(!receiver(top, 0).running, "dismissed header cannot restart after reattachment");
+        top.onDetachedFromWindow();
+        ValueAnimator.enabled = false;
+        top = view(dismissed); top.setPattern(0, attribute, false); top.onAttachedToWindow(); receiver(top, 0).lateDownload();
+        check(!receiver(top, 0).running && receiver(top, 0).decode, "Remove animations keeps a decoded still frame");
+        top.pattern[0].drawable.receiver.lateDownload();
+        check(!top.pattern[0].drawable.receiver.running && top.pattern[0].drawable.receiver.decode, "Remove animations also keeps pattern still");
+        top.setPattern(1, new TL_stars.starGiftAttributePattern(), false);
+        check(!top.pattern[1].drawable.receiver.running, "late pattern binding remains still while attached");
+        top.onDetachedFromWindow(); ValueAnimator.enabled = true;
+        check(!top.pattern[0].drawable.receiver.running, "detached pattern remains stopped");
+        PreviewTopView other = view(dismissed); other.setPattern(0, attribute, false);
+        check(top.pattern[0].drawable != other.pattern[0].drawable && !top.pattern[0].drawable.receiver.prefix.equals(other.pattern[0].drawable.receiver.prefix), "same gift never shares animated drawable or Lottie key");
+        StarGiftSheet.TopView ordinary = new StarGiftSheet.TopView(new Context(), new Theme.ResourcesProvider(), () -> {}, null, null, null, null, null, null, null);
+        ordinary.setPattern(0, attribute, true);
+        check(ordinary.pattern[0].legacySets == 1 && ordinary.pattern[0].drawable == null, "ordinary Telegram pattern path unchanged");
+        Build.VERSION.SDK_INT = 21;
+        AndroidUtilities.scale = 0;
+        check(!PreviewTopView.animationsAllowed(), "API21 honors zero animator scale");
+        AndroidUtilities.scale = 1; SharedConfig.enabled = false;
+        check(!PreviewTopView.animationsAllowed(), "API21 honors app animation switch");
+        SharedConfig.enabled = true;
+        check(PreviewTopView.animationsAllowed(), "API21 animates normally with both preferences enabled");
+        Build.VERSION.SDK_INT = 25; AndroidUtilities.scale = Float.NaN;
+        check(!PreviewTopView.animationsAllowed(), "invalid animator scale fails closed");
+        AndroidUtilities.scale = Float.POSITIVE_INFINITY;
+        check(!PreviewTopView.animationsAllowed(), "infinite animator scale fails closed");
+        AndroidUtilities.scale = 1; AndroidUtilities.failure = true;
+        check(!PreviewTopView.animationsAllowed(), "preference read exception fails closed");
+        AndroidUtilities.failure = false; Build.VERSION.SDK_INT = 36;
+        top = view(dismissed); top.onAttachedToWindow();
+        UserConfig.selectedAccount = 2;
+        top.didReceivedNotification(NotificationCenter.activeAccountChanged, -1, 2);
+        check(dismissed[0] == 1 && !receiver(top, 0).running, "switch account stops and dismisses old owner's gift");
+        top.onDetachedFromWindow(); UserConfig.selectedAccount = 1;
+        top = view(dismissed); top.onAttachedToWindow(); UserConfig.ids[1] = 999;
+        top.didReceivedNotification(NotificationCenter.appDidLogout, 1);
+        check(dismissed[0] == 2 && !receiver(top, 0).running, "logout/reused slot cannot keep old gift open");
+        top.onDetachedFromWindow();
+        top = view(dismissed); top.onAttachedToWindow();
+        check(dismissed[0] == 3 && !receiver(top, 0).running, "owner changed between construction and show fails closed");
+        top.onDetachedFromWindow(); UserConfig.ids[1] = 200;
+        check(NotificationCenter.global.observers.isEmpty() && NotificationCenter.getInstance(1).observers.isEmpty(), "no observer leak across dismiss paths");
+        System.out.println("PASS: " + checks + " production-derived native gift header lifecycle assertions.");
+    }
+}

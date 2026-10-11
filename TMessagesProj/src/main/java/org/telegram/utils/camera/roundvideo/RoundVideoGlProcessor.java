@@ -386,7 +386,7 @@ final class RoundVideoGlProcessor {
                 pendingSelection = pendingSelectionFailure = null;
                 Handler currentHandler = handler;
                 if (currentHandler != null) currentHandler.removeCallbacks(selectionTimeout);
-                frameGate = null; previewGate = null; // Both validated inputs run at 30 FPS.
+                frameGate = null; previewGate = null; // Both validated inputs run at the same requested 30/60 FPS.
             }
             if (input == activeInput) drawFrame(timestamp);
             // Standby was drained above; never submit its frames to MP4.

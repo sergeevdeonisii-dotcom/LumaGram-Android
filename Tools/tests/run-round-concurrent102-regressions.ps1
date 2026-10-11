@@ -19,10 +19,19 @@ $root=Join-Path $repo 'TMessagesProj/src/main/java/org/telegram'
 $camera=[IO.File]::ReadAllText((Join-Path $root 'utils/camera/roundvideo/RoundVideoCameraController.java'))
 $gl=[IO.File]::ReadAllText((Join-Path $root 'utils/camera/roundvideo/RoundVideoGlProcessor.java'))
 $view=[IO.File]::ReadAllText((Join-Path $root 'ui/Components/InstantCameraView2.java'))
-foreach($guard in @('requestedFrameRate.getValue() != 30','Build.VERSION.SDK_INT < 30','candidate.isSupported()',
+foreach($guard in @('targetFps != 30 && targetFps != 60','activeFrameRate.getValue() != targetFps','first.fps.getLower() != 60','Build.VERSION.SDK_INT < 30','candidate.isSupported()',
         'glProcessor.addConcurrentInput','processor.selectConcurrentInput','concurrentCamera.close(null)',
         'glProcessor.resetToPrimaryInput()')) {
     if(!$camera.Contains($guard)){throw "Missing concurrent safety guard: $guard"}
+}
+$concurrent=[IO.File]::ReadAllText((Join-Path $root 'utils/camera/roundvideo/RoundVideoConcurrentCamera.java'))
+foreach($guard in @('QUALIFICATION_TIMEOUT_MS = 1_000L','CaptureResult.SENSOR_TIMESTAMP',
+        '!slots[0].cadenceQualified || !slots[1].cadenceQualified','measured < 57d || measured > 63d')) {
+    if(!$concurrent.Contains($guard)){throw "Missing actual concurrent FPS qualification: $guard"}
+}
+if(!$camera.Contains('RoundVideoSession.FrameRate.fromValue(spec.frameRate)') -or
+    !$camera.Contains('if (glProcessor != null && glProcessor.hasFirstFrame()) startRecordingAfterFirstFrame();')) {
+    throw 'Concurrent recovery must preserve negotiated FPS and start the existing recorder exactly once.'
 }
 $cameraPermission=$camera.IndexOf('ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)')
 $audioPermission=$camera.IndexOf('ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)')
@@ -49,4 +58,4 @@ foreach($locale in @('values','values-ru')) {
         if(@($xml.resources.string|Where-Object name -CEQ $key).Count -ne 1){throw "Missing/duplicate string: $locale/$key"}
     }
 }
-Write-Output 'PASS: dual-stream integration, unchanged 60 FPS, standby exclusion, bounded fresh-frame wait and full-size preview source guards.'
+Write-Output 'PASS: dual-stream integration, verified 60 FPS or unchanged single-camera fallback, standby exclusion, bounded fresh-frame wait and preview source guards.'

@@ -120,12 +120,13 @@ test('CI receives no production signing key and only uploads APKs and public pro
   assert.ok(!/rm\s+-(?:rf|fr)/.test(build));
   for (const action of workflow.matchAll(/uses:\s+([^\s]+)/g)) assert.match(action[1], /@[0-9a-f]{40}$/);
 });
-test('SDK36 is prepared before credential-free subscription probes, and all three block assembly', () => {
+test('SDK36 is prepared before credential-free native probes, and all block assembly', () => {
   const sdkStep = workflow.indexOf('run: bash Tools/ci/prepare-lunagram-release105.sh');
   const buildStep = workflow.indexOf('      - name: Build personal and public APKs');
   assert.ok(sdkStep > 0 && sdkStep < buildStep);
+  assert.ok(sdkStep < workflow.indexOf('run-local-gifts-ui102-regressions.ps1'), 'Nested personal preview compilation needs Android36 before the gift UI suite');
   assert.ok(workflow.includes('bash -n Tools/ci/prepare-lunagram-release105.sh'));
-  for (const script of ['run-subscription-auth-regressions.ps1', 'run-subscriptions-regressions.ps1', 'run-subscription-ui-compile.ps1']) {
+  for (const script of ['run-profile-verification105-regressions.ps1', 'run-round-flip105-regressions.ps1', 'run-subscription-auth-regressions.ps1', 'run-subscriptions-regressions.ps1', 'run-subscription-ui-compile.ps1']) {
     const offset = workflow.indexOf(script);
     assert.ok(offset > sdkStep && offset < buildStep, script);
     assert.equal(workflow.split(script).length, 2, `${script} executes exactly once`);
@@ -146,6 +147,8 @@ test('release-blocking regression suites execute before either APK is built', ()
   const buildStep = workflow.indexOf('run: bash Tools/ci/build-lunagram-release100.sh');
   for (const script of ['run-round-controls81-regressions.ps1', 'run-round-editions100-regressions.ps1',
       'run-round-concurrent102-regressions.ps1',
+      'run-round-flip105-regressions.ps1',
+      'run-profile-verification105-regressions.ps1',
       'run-dialogs-canvas104-regressions.ps1', 'run-blur-capture104-regressions.ps1',
       'run-gift-geometry104-regressions.ps1',
       'run-shared-media-geometry104b-regressions.ps1',

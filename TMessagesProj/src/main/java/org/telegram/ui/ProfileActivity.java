@@ -391,6 +391,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private Long emojiStatusGiftId;
     private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable[] emojiStatusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable[2];
     private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable[] botVerificationDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable[2];
+    private final Drawable[] localVerificationDrawable = new Drawable[2];
     private final Drawable[] verifiedCheckDrawable = new Drawable[2];
     private final CrossfadeDrawable[] verifiedCrossfadeDrawable = new CrossfadeDrawable[2];
     private final CrossfadeDrawable[] premiumCrossfadeDrawable = new CrossfadeDrawable[2];
@@ -10790,10 +10791,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (user != null && username != null) {
                     usernameRow = rowCount++;
                 }
-                final boolean localVerified = user != null
-                        && user.id == getUserConfig().getClientUserId()
-                        && LumaProfileVerification.isEnabled(currentAccount);
-                if (user != null && (user.verified || localVerified)) {
+                if (user != null && user.verified) {
                     verificationInfoRow = rowCount++;
                 }
                 if (userInfo != null) {
@@ -11186,6 +11184,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     }
 
     private Drawable getBotVerificationDrawable(long icon, boolean animated, int a) {
+        return getBotVerificationDrawable(icon, animated, a, false);
+    }
+
+    private Drawable getBotVerificationDrawable(long icon, boolean animated, int a, boolean localPreview) {
         if (botVerificationDrawable[a] == null) {
             botVerificationDrawable[a] = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(nameTextView[a], AndroidUtilities.dp(17), a == 0 ? AnimatedEmojiDrawable.CACHE_TYPE_EMOJI_STATUS : AnimatedEmojiDrawable.CACHE_TYPE_KEYBOARD);
             botVerificationDrawable[a].offset(0, dp(1));
@@ -11195,6 +11197,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         }
         if (icon != 0) {
             botVerificationDrawable[a].set(icon, animated);
+        } else if (localPreview) {
+            if (localVerificationDrawable[a] == null) {
+                localVerificationDrawable[a] = ContextCompat.getDrawable(getContext(), R.drawable.luma_profile_verification).mutate();
+            }
+            botVerificationDrawable[a].set(localVerificationDrawable[a], animated);
         } else {
             botVerificationDrawable[a].set((Drawable) null, animated);
         }
@@ -11580,11 +11587,16 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         nameTextView[a].setRightDrawable(null);
                     }
                 }
-                if (leftIcon == null && currentEncryptedChat == null && user.bot_verification_icon != 0) {
+                final boolean localVerification = LumaProfileVerification.showsPrefix(currentAccount, user.id,
+                        getUserConfig().getClientUserId(), currentEncryptedChat != null, user.bot_verification_icon);
+                if (leftIcon == null && currentEncryptedChat == null && (user.bot_verification_icon != 0 || localVerification)) {
                     nameTextView[a].setLeftDrawableOutside(true);
-                    leftIcon = getBotVerificationDrawable(user.bot_verification_icon, false, a);
+                    leftIcon = getBotVerificationDrawable(user.bot_verification_icon, false, a, localVerification);
                 } else {
                     nameTextView[a].setLeftDrawableOutside(false);
+                    if (botVerificationDrawable[a] != null) {
+                        botVerificationDrawable[a].set((Drawable) null, false);
+                    }
                 }
                 nameTextView[a].setLeftDrawable(leftIcon);
                 if (a == 1 && (rightIconIsStatus || rightIconIsPremium)) {
@@ -14113,7 +14125,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         TLObject obj = getMessagesController().getUserOrChat(did);
                         TL_bots.botVerification bot_verification = userInfo != null ? userInfo.bot_verification : chatInfo != null ? chatInfo.bot_verification : null;
                         Long bot_manager_id = userInfo != null && TLObject.hasFlag(userInfo.flags2, TLObject.FLAG_25) ? userInfo.bot_manager_id : null;
-                        if (botAppRow >= 0 || bot_verification != null || bot_manager_id != null) {
+                        final boolean localVerification = LumaProfileVerification.showsFooter(currentAccount, userId,
+                                getUserConfig().getClientUserId(), currentEncryptedChat != null,
+                                bot_verification != null, bot_manager_id != null);
+                        if (botAppRow >= 0 || bot_verification != null || bot_manager_id != null || localVerification) {
                             cell.setFixedSize(0);
                             final TLRPC.User user = getMessagesController().getUser(userId);
                             final boolean botOwner = user != null && user.bot && user.bot_can_edit;
@@ -14123,7 +14138,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                                 sb.append(AndroidUtilities.replaceSingleTag(getString(botOwner ? R.string.ProfileBotOpenAppInfoOwner : R.string.ProfileBotOpenAppInfo), () -> {
                                     Browser.openUrl(getContext(), getString(botOwner ? R.string.ProfileBotOpenAppInfoOwnerLink : R.string.ProfileBotOpenAppInfoLink));
                                 }));
-                                if (bot_verification != null || bot_manager_id != null) {
+                                if (bot_verification != null || bot_manager_id != null || localVerification) {
                                     sb.append("\n\n\n");
                                 }
                             }
@@ -14171,6 +14186,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                                         () -> presentFragment(ProfileActivity.of(bot_manager_id))
                                     ));
                                 }
+                            } else if (localVerification) {
+                                sb.append("x");
+                                final ColoredImageSpan marker = new ColoredImageSpan(R.drawable.luma_profile_verification, ColoredImageSpan.ALIGN_CENTER);
+                                marker.setRelativeSize(cell.getTextView().getPaint().getFontMetricsInt());
+                                sb.setSpan(marker, sb.length() - 1, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                sb.append(" ").append(getString(R.string.LumaProfileVerifiedInfo));
                             }
 
                             cell.setLinkTextRippleColor(Theme.multAlpha(getThemedColor(Theme.key_windowBackgroundWhiteGrayText4), 0.2f));

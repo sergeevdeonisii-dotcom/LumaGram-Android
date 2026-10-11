@@ -1,0 +1,26 @@
+package org.telegram.messenger;
+
+/** Production persistence/barrier methods. Network/UI state is tested separately
+ * with the complete real client in run-subscription-auth-regressions.ps1. */
+public final class LunagramSubscriptionClient {
+    private static final String SESSION_KEY = "lunagram_subscription_session_v1_prod";
+    private static final long[] ACCOUNT_EPOCHS = new long[UserConfig.MAX_ACCOUNT_COUNT];
+    private final int account;
+    private final long owner;
+    private final long accountEpoch;
+    public LunagramSubscriptionClient(int account) {
+        this.account = account;
+        this.accountEpoch = accountEpoch(account);
+        this.owner = UserConfig.getInstance(account).getClientUserId();
+    }
+    private enum Error { ACCOUNT_CHANGED }
+    private static final class Failure extends Exception { Failure(Error error) { super(error.name()); } }
+    private boolean current(long ticket) {
+        return ticket == 1 && accountEpoch == accountEpoch(account) && owner > 0
+                && owner == UserConfig.getInstance(account).getClientUserId();
+    }
+    public void persistForTest(String value) throws Exception { persistSession(1, value); }
+    @@EPOCH@@
+    @@LOGOUT@@
+    @@PERSIST@@
+}

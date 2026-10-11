@@ -36,7 +36,7 @@ $generatedSession=Join-Path $run 'RoundVideoSession.java'
 [IO.File]::WriteAllText($generatedSession,$sessionTemplate.Replace('// PRODUCTION_ENUMS',($enums-join "`n")).Replace('// PRODUCTION_SETTERS',($setters-join "`n")),[Text.UTF8Encoding]::new($false))
 $uiTemplate=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'round-settings100/RoundSettingsUiProbe.java.template'))
 $resolutions=(Block $ui 'private static final RoundVideoSession.OutputResolution[] OUTPUT_RESOLUTIONS')+';'
-$helpers=@('static String[] stabilizationOptions()', 'static int stabilizationInfoResource()')|ForEach-Object{Block $ui $_}
+$helpers=@('static String[] stabilizationOptions()')|ForEach-Object{Block $ui $_}
 $fps=[regex]::Match($ui,'int fallback = enabled \?[^;]+;\s*cell\.setOptions\([^;]+;').Value
 $stabilization=[regex]::Match($ui,'cell\.setOptions\(LumaRoundVideoStabilization\.getMode\(\), stabilizationOptions\(\)\);').Value
 Check ($fps.Length -gt 0 -and $stabilization.Length -gt 0) 'Missing real native-slider option binding.'
@@ -77,6 +77,8 @@ Check ($view.Contains('activeOutputResolution = SharedSettings.getRoundVideoOutp
 Check ($view.Contains('LumaRoundVideoQuality.getPreferredFrameRate(SharedSettings.getRoundVideoFrameRate().getValue())') -and $view.Contains('.setFrameRate(RoundVideoSession.FrameRate.fromValue(requestedRecordingFps))')) 'Real recording must use migrated and capped FPS.'
 Check ($ui.Contains('SharedSettings.getRoundVideoOutputResolution().getSize()') -and !$ui.Contains('SharedSettings.roundVideoOutputResolution.get().getSize()')) 'UI resolution label must use the same migrated preference as recording.'
 Check ($ui.Contains('new CharSequence[]{"360 × 360", "480 × 480", "640 × 640"}')) 'Resolution choice labels must agree with actual encoded sizes.'
+Check ($ui -notmatch 'LumaRoundVideoStats|LumaRoundVideoMeasured|LumaRoundVideoFastSwitchInfo|stabilizationInfoResource|ROW_LAST_RECORDING|ROW_STABILIZATION_INFO|ROW_CONCURRENT_INFO') 'Removed measurement block and stabilization/concurrent explanations must not be rebound to settings rows.'
+Check ($ui.Contains('new ShadowSectionCell(context)') -and $ui.Contains('if (holder.getItemViewType() == TYPE_SEPARATOR) return;')) 'Compact native section spacers must not bind explanatory text or masquerade as clickable values.'
 $advanced=[IO.File]::ReadAllText((Join-Path $root 'ui/ExperimentalFeaturesActivity.java'))
 $search=[IO.File]::ReadAllText((Join-Path $root 'ui/BlackHoleSearchActivity.java'))
 Check ($advanced -notmatch 'LumaRoundVideo|RoundVideoSettingsActivity|ROW_ROUND_VIDEO') 'Sending must contain no duplicate camera rows or stale click handlers.'

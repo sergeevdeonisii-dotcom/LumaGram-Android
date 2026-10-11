@@ -21,6 +21,22 @@ public final class LumaProfileVerification {
         return LumaBuildPolicy.allowsProfileVerification() && preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
+    /** Only view-local decoration; the caller must keep real server markers and lock icons. */
+    public static boolean showsPrefix(int account, long profileUserId, long ownUserId,
+                                      boolean encryptedChat, long serverIcon) {
+        return !encryptedChat && serverIcon == 0 && showsOwnProfile(account, profileUserId, ownUserId);
+    }
+
+    public static boolean showsFooter(int account, long profileUserId, long ownUserId,
+                                      boolean encryptedChat, boolean serverVerification, boolean managedBot) {
+        return !encryptedChat && !serverVerification && !managedBot
+                && showsOwnProfile(account, profileUserId, ownUserId);
+    }
+
+    private static boolean showsOwnProfile(int account, long profileUserId, long ownUserId) {
+        return profileUserId > 0 && profileUserId == ownUserId && isEnabled(account);
+    }
+
     public static void setEnabled(int account, boolean enabled) {
         if (!LumaBuildPolicy.allowsProfileVerification()) return;
         preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
