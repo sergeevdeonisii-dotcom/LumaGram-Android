@@ -26,6 +26,11 @@ $factory = Source 'ui/Gifts/GiftSheet.java'
 $activity = Source 'ui/ProfileActivity.java'
 $shared = Source 'ui/Components/SharedMediaLayout.java'
 $utilities = Source 'messenger/Utilities.java'
+$universal = Source 'ui/Components/UniversalRecyclerView.java'
+$adapter = Source 'ui/Components/UniversalAdapter.java'
+$item = Source 'ui/Components/UItem.java'
+$recycler = [IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/androidx/recyclerview/widget/RecyclerView.java'))
+$grid = [IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/androidx/recyclerview/widget/GridLayoutManager.java'))
 $template = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'local-gifts-ui102/LocalGiftsUi102Probe.java.template'))
 $parentSignatures = @('private String getLocalPinsKey()', 'private String getLocalGiftId(', 'private boolean isGiftPinnedLocally(',
     'private boolean hasMissingLocalPins(', 'private void setGiftPinnedLocally(', 'private void reloadLocalGifts()',
@@ -38,6 +43,14 @@ $template = $template.Replace('// PRODUCTION_FACTORY', (Method $factory 'public 
 $template = $template.Replace('// PRODUCTION_PROFILE_SELF_HELPER', (Method $activity 'private boolean hasLocalGiftsForProfile()'))
 $template = $template.Replace('// PRODUCTION_SHARED_SELF_HELPER', (Method $shared 'private static boolean hasLocalGiftsForDialog('))
 $template = $template.Replace('// PRODUCTION_CLAMP', (Method $utilities 'public static int clamp('))
+$maxSpan = [regex]::Match($item, 'public static final int MAX_SPAN_COUNT\s*=\s*-?\d+;')
+if (!$maxSpan.Success) { throw 'Missing production full-width span sentinel.' }
+$template = $template.Replace('// PRODUCTION_MAX_SPAN_COUNT', $maxSpan.Value)
+$template = $template.Replace('// PRODUCTION_SPAN_LOOKUP', (Method $universal 'public int getSpanSize(int position)'))
+$template = $template.Replace('// PRODUCTION_DISPATCH_LAYOUT_STEP_2', (Method $recycler 'private void dispatchLayoutStep2()'))
+$template = $template.Replace('// PRODUCTION_IS_COMPUTING_LAYOUT', (Method $recycler 'public boolean isComputingLayout()'))
+$template = $template.Replace('// PRODUCTION_GRID_SPAN_CONSTRAINT', (Method $grid 'if (spanSize > mSpanCount)'))
+$template = $template.Replace('// PRODUCTION_ADAPTER_UPDATE', (Method $adapter 'private void updateInternal(boolean animated)'))
 $run = Join-Path $OutputRoot ([guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $run -Force | Out-Null
 $probe = Join-Path $run 'LocalGiftsUi102Probe.java'
@@ -47,12 +60,14 @@ if ($LASTEXITCODE -ne 0) { throw 'Production-derived local gift UI probe compila
 & $java -Xmx128m -cp $run LocalGiftsUi102Probe
 if ($LASTEXITCODE -ne 0) { throw 'Production-derived local gift UI regression failed.' }
 $negativeControls = @(
+    @{ Name = 'queued-grid-span'; Pattern = '\.setSpanCount\(UItem\.MAX_SPAN_COUNT\)'; Replacement = '.setSpanCount(spanCount)'; Expected = 'Queued span growth must not abort after SPACE or poison future layout' },
     @{ Name = 'cross-pin-groups'; Pattern = 'if \(parent\.isGiftPinnedLocally\(getSavedGift\(viewHolder\)\)\s*!= parent\.isGiftPinnedLocally\(getSavedGift\(target\)\)\) return false;'; Expected = 'Drag across local-pin display groups' },
     @{ Name = 'detached-holder'; Pattern = 'if \(fromPosition < 0 \|\| toPosition < 0\) return false;'; Expected = 'Detached holder NO_POSITION' },
     @{ Name = 'stale-owner-pin'; Pattern = 'localPinsOwner <= 0 \|\| localPinsOwner != UserConfig\.getInstance\(currentAccount\)\.getClientUserId\(\)\s*\|\|\s*'; Expected = 'Stale local pin callback' }
 )
 foreach ($control in $negativeControls) {
-    $negative = [regex]::Replace($template, $control.Pattern, '')
+    $replacement = if ($control.ContainsKey('Replacement')) { $control.Replacement } else { '' }
+    $negative = [regex]::Replace($template, $control.Pattern, $replacement)
     if ($negative -eq $template) { throw "Cannot remove production guard for negative control: $($control.Name)" }
     $negativeRun = Join-Path $run $control.Name
     New-Item -ItemType Directory -Path $negativeRun -Force | Out-Null
@@ -63,7 +78,7 @@ foreach ($control in $negativeControls) {
     $negativeOutput = (& $java -Xmx128m -cp $negativeRun LocalGiftsUi102Probe 2>&1 | Out-String)
     if ($LASTEXITCODE -eq 0 -or !$negativeOutput.Contains($control.Expected)) { throw "Negative control did not reproduce its defect: $($control.Name)" }
 }
-Write-Output 'PASS: negative controls reproduce cross-pin-group reorder, detached holder and stale-owner pin defects when their actual production guards are removed.'
+Write-Output 'PASS: negative controls reproduce queued-grid SPACE-only/stuck-layout, cross-pin-group reorder, detached holder and stale-owner pin defects when their actual production guards are removed.'
 if ($preview -match 'ConnectionsManager|new\s+StarGiftSheet|sendRequest\(|TL_payments|saveStarGift|transferStarGift|resellStarGift') { throw 'Read-only local preview must not open server inventory/payment actions.' }
 if ([regex]::Matches($preview, 'StarGiftSheet\.').Count -ne 1 -or !$preview.Contains('StarGiftSheet.getRarityName(')) { throw 'Only the pure static rarity formatter may be reused from the transaction sheet.' }
 foreach ($guard in @('gift.ownerUserId != UserConfig.getInstance(account).getClientUserId()',

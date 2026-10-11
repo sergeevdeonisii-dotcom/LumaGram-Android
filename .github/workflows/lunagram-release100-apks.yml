@@ -54,6 +54,8 @@ jobs:
           ./Tools/tests/run-dialogs-canvas104-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'dialogs-canvas-tests')
           ./Tools/tests/run-blur-capture104-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'blur-capture-tests')
           ./Tools/tests/run-gift-geometry104-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'gift-geometry-tests')
+          ./Tools/tests/run-shared-media-geometry104b-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'shared-media-geometry-tests')
+          ./Tools/tests/run-layout-diagnostics104b-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'layout-diagnostics-tests')
           ./Tools/tests/run-local-gifts102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'local-gifts-tests')
           ./Tools/tests/run-local-gifts-ui102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'local-gifts-ui-tests')
           ./Tools/tests/run-logout102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'logout-tests')

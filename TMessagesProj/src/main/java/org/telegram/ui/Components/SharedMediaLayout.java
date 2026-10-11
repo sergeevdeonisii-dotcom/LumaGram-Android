@@ -2734,7 +2734,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                     super.setTranslationX(translationX);
                     if (tabsAnimationInProgress) {
                         if (mediaPages[0] == this) {
-                            float scrollProgress = Math.abs(mediaPages[0].getTranslationX()) / (float) mediaPages[0].getMeasuredWidth();
+                            float scrollProgress = getFinitePageProgress(mediaPages[0].getTranslationX(), mediaPages[0].getMeasuredWidth());
                             selectTabWithId(mediaPages[1].selectedType, scrollProgress);
                             if (canShowSearchItem()) {
                                 if (searchItemState == 2) {
@@ -5680,7 +5680,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         if (topPanelLayout != null) {
             float addH = 0;
             if (storiesContainer != null) {
-                final float f = 1f - Math.abs((storiesContainer.getTranslationX() / storiesContainer.getMeasuredWidth()));
+                final float f = getFinitePageVisibility(storiesContainer.getTranslationX(), storiesContainer.getMeasuredWidth());
                 addH += dp(38) * storiesContainer.getVisibilityFactor() * f;
             }
             //if (giftsContainer != null) {
@@ -5815,7 +5815,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                     } else {
                         mediaPages[1].setTranslationX(dx - mediaPages[0].getMeasuredWidth());
                     }
-                    float scrollProgress = Math.abs(dx) / (float) mediaPages[0].getMeasuredWidth();
+                    float scrollProgress = getFinitePageProgress(dx, mediaPages[0].getMeasuredWidth());
                     if (!canShowSearchItem()) {
                         searchAlpha = 0;
                     } else {
@@ -11643,6 +11643,18 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
 
     }
 
+    private static float getFinitePageProgress(float translationX, int width) {
+        if (width <= 0 || Float.isNaN(translationX) || Float.isInfinite(translationX)) return 0.0f;
+        return Utilities.clamp01(Math.abs(translationX) / width);
+    }
+
+    private static float getFinitePageVisibility(float translationX, int width) {
+        // Page callbacks also run before the first measure. An unmeasured page
+        // has no visible fraction yet and must not send NaN into a RenderNode.
+        if (width <= 0 || Float.isNaN(translationX) || Float.isInfinite(translationX)) return 0.0f;
+        return 1.0f - getFinitePageProgress(translationX, width);
+    }
+
     public float getBottomButtonStoriesVisibility() {
         if (mediaPages == null || mediaPages[0] == null || mediaPages[1] == null || mediaPages[0].emptyView == null || mediaPages[1].emptyView == null) {
             return 1;
@@ -11677,7 +11689,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             visB = visA;
         }
 
-        return lerp(visA, visB, Math.abs(mediaPages[0].getTranslationX() / mediaPages[0].getMeasuredWidth()));
+        return lerp(visA, visB, getFinitePageProgress(mediaPages[0].getTranslationX(), mediaPages[0].getMeasuredWidth()));
 
         /*
         boolean buttonVisibleA = true;
@@ -11728,7 +11740,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         for (int i = 0; i < mediaPages.length; ++i) {
             if (mediaPages[i] != null) {
                 if (isTab(mediaPages[i].selectedType, type, includeSubtabs)) {
-                    progress += (1f - Math.abs(mediaPages[i].getTranslationX() / getWidth()));
+                    progress += getFinitePageVisibility(mediaPages[i].getTranslationX(), getWidth());
                 }
             }
         }
@@ -11740,7 +11752,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         float progress = 0;
         for (int i = 0; i < mediaPages.length; ++i) {
             if (mediaPages[i] != null) {
-                progress += mediaPages[i].selectedType * (1f - Math.abs(mediaPages[i].getTranslationX() / getWidth()));
+                progress += mediaPages[i].selectedType * getFinitePageVisibility(mediaPages[i].getTranslationX(), getWidth());
             }
         }
         return progress;
@@ -11762,7 +11774,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                 storiesContainer.setTranslationX(a ? 0 : mediaPages[0].getMeasuredWidth());
             } else {
                 storiesContainer.setTranslationX(mediaPages[a ? 0 : 1].getTranslationX());
-                newSubTabsVisibilityFactor = 1f - Math.abs(storiesContainer.getTranslationX()) / storiesContainer.getMeasuredWidth();
+                newSubTabsVisibilityFactor = getFinitePageVisibility(storiesContainer.getTranslationX(), storiesContainer.getMeasuredWidth());
             }
             float tabY = 0;
             for (int i = 0; i < mediaPages.length; ++i) {
@@ -11771,7 +11783,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                 final View firstChild = listView.getChildCount() == 0 ? null : listView.getChildAt(0);
                 final int firstPosition = firstChild == null ? RecyclerView.NO_POSITION : listView.getChildAdapterPosition(firstChild);
                 final float ty = (firstPosition == 0 ? firstChild.getY() - listView.getPaddingTop() : listView.getChildCount() == 0 ? 0 : -dp(48));
-                tabY += ty * Utilities.clamp01(1.0f - mediaPages[i].getTranslationX() / mediaPages[i].getMeasuredWidth());
+                tabY += ty * getFinitePageVisibility(mediaPages[i].getTranslationX(), mediaPages[i].getMeasuredWidth());
             }
             final float tabAlpha = Utilities.clamp01(1.0f - -tabY / dpf2(48));
             final float tabScale = lerp(0.9f, 1.0f, tabAlpha);

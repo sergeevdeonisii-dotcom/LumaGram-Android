@@ -1,0 +1,62 @@
+import java.util.*;
+
+/** Production logger extracted verbatim; Log is the only Android edge replaced here. */
+public final class LayoutDiagnostics104bProbe {
+    static int checks;
+    static void check(boolean value, String description) { checks++; if (!value) throw new AssertionError(description); }
+    static final class Log {
+        static final ArrayList<String> entries = new ArrayList<>();
+        static int w(String tag, String text) { entries.add(tag + " " + text); return 0; }
+    }
+    private static int lumaLayoutFailuresLogged;
+    // PRODUCTION_LAYOUT_DIAGNOSTIC
+    static StackTraceElement[] frames(String phase, int count) {
+        StackTraceElement[] frames = new StackTraceElement[count + 2];
+        frames[0] = new StackTraceElement("java.lang.Thread", "run", "PRIVATE_FILE_SECRET", 123);
+        frames[1] = new StackTraceElement("unrelated.library.Code", "other", "PRIVATE_FILE_SECRET", 124);
+        for (int i = 0; i < count; i++) frames[i + 2] = new StackTraceElement("org.telegram.ui." + phase, "frame" + i, "PRIVATE_FILE_SECRET", 200 + i);
+        return frames;
+    }
+    static int occurrences(String text, String token) { return (text.length() - text.replace(token, "").length()) / token.length(); }
+    public static void main(String[] args) {
+        logLumaLayoutFailure(null);
+        check(Log.entries.isEmpty() && lumaLayoutFailuresLogged == 0, "Null diagnostic does not consume the process budget");
+        RuntimeException omittedCause = new UnsupportedOperationException("PRIVATE_OWNER_SECRET");
+        RuntimeException inner = new RuntimeException("PRIVATE_GIFT_SECRET", omittedCause);
+        RuntimeException middle = new IllegalStateException("PRIVATE_TOKEN_SECRET", inner);
+        RuntimeException outer = new IllegalArgumentException("PRIVATE_CONTENT_SECRET", middle);
+        outer.setStackTrace(frames("ProfileActivity", 40));
+        middle.setStackTrace(frames("GiftPage", 40));
+        inner.setStackTrace(frames("GiftAdapter", 40));
+        omittedCause.setStackTrace(frames("Omitted", 40));
+        logLumaLayoutFailure(outer);
+        check(Log.entries.size() == 1, "First release layout error is visible with logging otherwise disabled");
+        String first = Log.entries.get(0);
+        check(first.startsWith("LunagramLayout Layout failure | java.lang.IllegalArgumentException"), "Fixed phase and exception class identify failure without message");
+        check(first.contains("java.lang.IllegalStateException") && first.contains("java.lang.RuntimeException"), "Bounded cause classes retain the relevant nested layout error");
+        check(!first.contains("UnsupportedOperationException") && !first.contains("Omitted"), "At most three throwable levels are logged");
+        check(occurrences(first, " at ") == 18 && !first.contains("frame6"), "At most six app stack frames per throwable are logged");
+        check(first.contains("org.telegram.ui.ProfileActivity.frame0:200"), "App code location and source line remain available");
+        check(!first.contains("java.lang.Thread.run") && !first.contains("unrelated.library"), "Unrelated system/library frames are omitted");
+        check(!first.contains("PRIVATE_"), "Exception messages, account/gift/content tokens and source filenames never appear");
+
+        RuntimeException cycleA = new IllegalStateException("PRIVATE_CYCLE_SECRET");
+        RuntimeException cycleB = new IllegalArgumentException("PRIVATE_CYCLE_SECRET");
+        cycleA.initCause(cycleB); cycleB.initCause(cycleA);
+        cycleA.setStackTrace(new StackTraceElement[] {new StackTraceElement("androidx.recyclerview.widget.GridLayoutManager", "layoutChunk", "PRIVATE_FILE_SECRET", 541)});
+        cycleB.setStackTrace(frames("ProfileActivity", 1));
+        logLumaLayoutFailure(cycleA);
+        check(Log.entries.size() == 2 && occurrences(Log.entries.get(1), " | ") == 3, "Cyclic cause chains are bounded without a traversal loop");
+        check(Log.entries.get(1).contains("androidx.recyclerview.widget.GridLayoutManager.layoutChunk:541"), "Vendored recycler app frame remains visible");
+        check(!Log.entries.get(1).contains("PRIVATE_"), "Cyclic cause messages and filenames remain private");
+        Error error = new AssertionError("PRIVATE_ERROR_SECRET");
+        error.setStackTrace(frames("ActionBarLayout", 1));
+        logLumaLayoutFailure(error);
+        check(Log.entries.size() == 3 && Log.entries.get(2).contains("java.lang.AssertionError"), "Throwable catch diagnostic supports Error without serializing its message");
+        logLumaLayoutFailure(new RuntimeException("PRIVATE_FOURTH_SECRET"));
+        logLumaLayoutFailure(new RuntimeException("PRIVATE_FIFTH_SECRET"));
+        check(Log.entries.size() == 3 && lumaLayoutFailuresLogged == 3, "Release diagnostics are capped at three events per process");
+        for (String entry : Log.entries) check(!entry.contains("PRIVATE_"), "Every release diagnostic remains free of sensitive test payloads");
+        System.out.println("PASS: " + checks + " production-derived bounded/private release layout diagnostic checks (JVM Log edge, no device layout).");
+    }
+}

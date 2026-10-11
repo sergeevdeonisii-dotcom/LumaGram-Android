@@ -115,6 +115,8 @@ test('release-blocking regression suites execute before either APK is built', ()
       'run-round-concurrent102-regressions.ps1',
       'run-dialogs-canvas104-regressions.ps1', 'run-blur-capture104-regressions.ps1',
       'run-gift-geometry104-regressions.ps1',
+      'run-shared-media-geometry104b-regressions.ps1',
+      'run-layout-diagnostics104b-regressions.ps1',
       'run-local-gifts102-regressions.ps1',
       'run-local-gifts-ui102-regressions.ps1', 'run-logout102-regressions.ps1',
       'run-round-settings100-regressions.ps1', 'run-startup100-regressions.ps1', 'run-glass-contrast100-regressions.ps1',

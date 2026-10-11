@@ -77,6 +77,7 @@ import org.telegram.ui.Components.AnimatedFloat;
 import org.telegram.ui.Components.BackButtonMenu;
 import org.telegram.ui.EmptyBaseFragment;
 import org.telegram.ui.MainTabsActivity;
+import org.telegram.ui.ProfileActivity;
 import org.telegram.ui.bots.BotWebViewSheet;
 import org.telegram.ui.Components.Bulletin;
 import org.telegram.ui.Components.ChatAttachAlert;
@@ -422,6 +423,7 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
             try {
                 return (!passivePreview || this != containerView) && super.dispatchTouchEvent(ev);
             } catch (Throwable e) {
+                ProfileActivity.logLumaLayoutFailure(e);
                 FileLog.e(e);
             }
             return false;

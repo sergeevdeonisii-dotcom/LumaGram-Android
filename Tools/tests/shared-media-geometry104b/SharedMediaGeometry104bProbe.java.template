@@ -1,0 +1,177 @@
+/** Actual SharedMediaLayout methods; fixtures supply only Android view properties. */
+public final class SharedMediaGeometry104bProbe {
+    static int checks;
+    static void check(boolean value, String label) {
+        checks++;
+        if (!value) throw new AssertionError(label);
+    }
+    static boolean finite(float value) { return !Float.isNaN(value) && !Float.isInfinite(value); }
+    static int dp(int value) { return value; }
+    static float dpf2(float value) { return value; }
+    static float lerp(float a, float b, float progress) { return a + (b - a) * progress; }
+    static final class Utilities {
+        // PRODUCTION_CLAMP
+    }
+    static final class RecyclerView { static final int NO_POSITION = -1; }
+    static class View {
+        static final int VISIBLE = 0, GONE = 8;
+        int width, visibility = VISIBLE, height;
+        float translationX, translationY, alpha = 1, scaleX = 1, scaleY = 1;
+        int getWidth() { return width; }
+        int getMeasuredWidth() { return width; }
+        int getHeight() { return height; }
+        int getVisibility() { return visibility; }
+        float getTranslationX() { return translationX; }
+        float getY() { return translationY; }
+        void setTranslationX(float value) { translationX = value; }
+        void setTranslationY(float value) { translationY = value; }
+        void setAlpha(float value) { alpha = value; }
+        void setScaleX(float value) { scaleX = value; }
+        void setScaleY(float value) { scaleY = value; }
+    }
+    static final class RecyclerListView extends View {
+        View first;
+        int paddingTop, firstPosition;
+        int getChildCount() { return first == null ? 0 : 1; }
+        View getChildAt(int index) { return first; }
+        int getChildAdapterPosition(View child) { return firstPosition; }
+        int getPaddingTop() { return paddingTop; }
+    }
+    static class FactorView extends View {
+        float factor;
+        float getVisibilityFactor() { return factor; }
+    }
+    static final class MediaPage extends View {
+        int selectedType;
+        FactorView emptyView = new FactorView();
+        RecyclerListView listView = new RecyclerListView();
+    }
+    static final class TopPanelLayout extends View { }
+    static final class StoriesList {
+        int getCount() { return 0; }
+    }
+    static final class StoriesAdapter { StoriesList storiesList; }
+    static final class Geometry {
+        static final int TAB_STORIES = 8, TAB_ARCHIVED_STORIES = 10, TAB_GIFTS = 9;
+        static final int VISIBLE = View.VISIBLE;
+        MediaPage[] mediaPages = { new MediaPage(), new MediaPage() };
+        FactorView storiesContainer = new FactorView();
+        TopPanelLayout topPanelLayout = new TopPanelLayout();
+        int width, topPadding = 48;
+        float subTabsVisibilityFactor;
+        int invalidations;
+        Geometry() {
+            mediaPages[0].selectedType = TAB_STORIES;
+            mediaPages[1].selectedType = TAB_GIFTS;
+            mediaPages[1].visibility = View.GONE;
+            mediaPages[1].emptyView.factor = .5f;
+            storiesContainer.factor = .75f;
+        }
+        int getWidth() { return width; }
+        boolean isStoryAlbumPageType(int type) { return type >= 100; }
+        boolean isAnyStoryPageType(int type) { return type == TAB_STORIES || type == TAB_ARCHIVED_STORIES || isStoryAlbumPageType(type); }
+        StoriesAdapter storyAlbums_getStoriesAdapterByTabType(int type) { return null; }
+        void invalidateBlur() { invalidations++; }
+        void invalidate() { invalidations++; }
+        // PRODUCTION_METHODS
+    }
+    static void propertiesFinite(Geometry geometry, String label) {
+        geometry.checkStoriesTabsPosition();
+        check(finite(geometry.subTabsVisibilityFactor), label + " subtab visibility");
+        check(finite(geometry.storiesContainer.alpha)
+            && finite(geometry.storiesContainer.scaleX)
+            && finite(geometry.storiesContainer.scaleY)
+            && finite(geometry.storiesContainer.translationY), label + " story RenderNode properties");
+        check(geometry.storiesContainer.alpha >= 0 && geometry.storiesContainer.alpha <= 1,
+            label + " bounded story alpha");
+        check(finite(geometry.topPanelLayout.translationY), label + " top panel RenderNode translation");
+    }
+    static void negativeCase(String name) {
+        Geometry geometry = new Geometry();
+        switch (name) {
+            case "visibility":
+                check(finite(geometry.getTabVisibility(Geometry.TAB_STORIES, true)), "Zero-width tab visibility must be finite");
+                break;
+            case "progress":
+                check(finite(geometry.getTabProgress()), "Zero-width tab progress must be finite");
+                break;
+            case "bottom":
+                check(finite(geometry.getBottomButtonStoriesVisibility()), "Zero-width bottom button interpolation must be finite");
+                break;
+            case "stories":
+                geometry.mediaPages[1].visibility = View.VISIBLE;
+                propertiesFinite(geometry, "Zero-width story animation");
+                break;
+            case "panel":
+                geometry.checkUi_topPanelLayoutY();
+                check(finite(geometry.topPanelLayout.translationY), "Zero-width top panel translation must be finite");
+                break;
+            default: throw new AssertionError("Unknown negative-control case");
+        }
+    }
+    public static void main(String[] args) {
+        if (args.length == 1) { negativeCase(args[0]); return; }
+        for (String name : new String[] { "visibility", "progress", "bottom", "stories", "panel" }) negativeCase(name);
+        Geometry pending = new Geometry();
+        check(pending.getTabVisibility(Geometry.TAB_STORIES, true) == 0, "Unmeasured page has no visible fraction");
+        check(pending.getTabProgress() == 0, "Unmeasured pages do not poison tab progress");
+        check(pending.getBottomButtonStoriesVisibility() == 1, "Unmeasured primary page keeps its bottom state");
+        propertiesFinite(pending, "Initial hidden secondary page");
+        pending.width = 300;
+        pending.mediaPages[0].width = 300;
+        pending.mediaPages[1].width = 300;
+        pending.mediaPages[1].translationX = 300;
+        pending.storiesContainer.width = 300;
+        check(pending.getTabVisibility(Geometry.TAB_STORIES, true) == 1, "First measurement restores primary visibility");
+        check(pending.getTabProgress() == Geometry.TAB_STORIES, "Measured stationary page preserves selected progress");
+        propertiesFinite(pending, "First measurement");
+        check(pending.topPanelLayout.translationY == 48 + 38 * .75f, "Measured top panel preserves placement");
+        for (int sign : new int[] { -1, 1 }) {
+            Geometry transition = new Geometry();
+            transition.width = 300;
+            transition.mediaPages[0].width = transition.mediaPages[1].width = transition.storiesContainer.width = 300;
+            transition.mediaPages[0].translationX = sign * 150;
+            transition.mediaPages[1].translationX = -sign * 150;
+            transition.mediaPages[1].visibility = View.VISIBLE;
+            transition.mediaPages[1].selectedType = Geometry.TAB_ARCHIVED_STORIES;
+            transition.mediaPages[0].listView.first = new View();
+            transition.mediaPages[0].listView.first.translationY = -24;
+            transition.mediaPages[1].listView.first = new View();
+            transition.mediaPages[1].listView.first.translationY = -24;
+            check(transition.getTabVisibility(Geometry.TAB_STORIES, true) == .5f, "Both swipe directions weigh primary visibility once");
+            check(transition.getTabProgress() == 9, "Measured two-page tab progress preserves weighted sum");
+            check(transition.getBottomButtonStoriesVisibility() == 1, "Archived secondary page preserves existing bottom state");
+            propertiesFinite(transition, "Halfway swipe " + sign);
+            check(transition.storiesContainer.translationY == 24, "Story tab offset uses total visible fraction, not signed excess");
+            transition.mediaPages[0].translationX = sign * 450;
+            check(transition.getTabVisibility(Geometry.TAB_STORIES, true) == 0, "Offscreen page cannot have negative visibility");
+        }
+        Geometry album = new Geometry();
+        album.width = album.mediaPages[0].width = album.mediaPages[1].width = 300;
+        album.mediaPages[0].translationX = -150;
+        album.mediaPages[1].translationX = 150;
+        album.mediaPages[1].selectedType = 100;
+        check(album.getBottomButtonStoriesVisibility() == .75f, "Measured story album interpolation preserves halfway state");
+        for (float invalid : new float[] { Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY }) {
+            Geometry geometry = new Geometry();
+            geometry.width = 300;
+            geometry.mediaPages[0].width = geometry.mediaPages[1].width = geometry.storiesContainer.width = 300;
+            geometry.mediaPages[0].translationX = geometry.mediaPages[1].translationX = invalid;
+            geometry.storiesContainer.translationX = invalid;
+            geometry.mediaPages[1].visibility = View.VISIBLE;
+            check(geometry.getTabVisibility(Geometry.TAB_STORIES, true) == 0, "Nonfinite translation excluded from visibility");
+            check(finite(geometry.getTabProgress()), "Nonfinite translation excluded from progress");
+            check(finite(geometry.getBottomButtonStoriesVisibility()), "Nonfinite translation excluded from interpolation");
+            propertiesFinite(geometry, "Invalid translation");
+        }
+        for (int pageWidth : new int[] { -1, 0, 1, 300 }) {
+            for (float translation : new float[] { 0, 150, -150, Float.MAX_VALUE }) {
+                float progress = Geometry.getFinitePageProgress(translation, pageWidth);
+                float visibility = Geometry.getFinitePageVisibility(translation, pageWidth);
+                check(finite(progress) && progress >= 0 && progress <= 1, "Normalized page progress finite and bounded");
+                check(finite(visibility) && visibility >= 0 && visibility <= 1, "Page visibility finite and bounded");
+            }
+        }
+        System.out.println("PASS: " + checks + " production-derived shared media geometry checks; Android HWUI not simulated.");
+    }
+}

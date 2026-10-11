@@ -46,6 +46,11 @@ $gifts=[IO.File]::ReadAllText((Join-Path $src 'ui/Gifts/ProfileGiftsContainer.ja
 $factory=[IO.File]::ReadAllText((Join-Path $src 'ui/Gifts/GiftSheet.java'))
 $stars=[IO.File]::ReadAllText((Join-Path $src 'ui/Stars/StarsController.java'))
 $utilities=[IO.File]::ReadAllText((Join-Path $src 'messenger/Utilities.java'))
+$universal=[IO.File]::ReadAllText((Join-Path $src 'ui/Components/UniversalRecyclerView.java'))
+$adapter=[IO.File]::ReadAllText((Join-Path $src 'ui/Components/UniversalAdapter.java'))
+$item=[IO.File]::ReadAllText((Join-Path $src 'ui/Components/UItem.java'))
+$recycler=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/androidx/recyclerview/widget/RecyclerView.java'))
+$grid=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/androidx/recyclerview/widget/GridLayoutManager.java'))
 $probe=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'local-gifts-ui102/LocalGiftsUi102Probe.java.template'))
 $parent=@('private String getLocalPinsKey()', 'private String getLocalGiftId(', 'private boolean isGiftPinnedLocally(',
     'private boolean hasMissingLocalPins(', 'private void setGiftPinnedLocally(', 'private void reloadLocalGifts()',
@@ -58,6 +63,14 @@ $probe=$probe.Replace('// PRODUCTION_FACTORY',(Method $factory 'public static UI
 $probe=$probe.Replace('// PRODUCTION_PROFILE_SELF_HELPER',(Method $profile 'private boolean hasLocalGiftsForProfile()'))
 $probe=$probe.Replace('// PRODUCTION_SHARED_SELF_HELPER',(Method $shared 'private static boolean hasLocalGiftsForDialog('))
 $probe=$probe.Replace('// PRODUCTION_CLAMP',(Method $utilities 'public static int clamp('))
+$maxSpan=[regex]::Match($item,'public static final int MAX_SPAN_COUNT\s*=\s*-?\d+;')
+if(!$maxSpan.Success){throw 'Missing production full-width span sentinel.'}
+$probe=$probe.Replace('// PRODUCTION_MAX_SPAN_COUNT',$maxSpan.Value)
+$probe=$probe.Replace('// PRODUCTION_SPAN_LOOKUP',(Method $universal 'public int getSpanSize(int position)'))
+$probe=$probe.Replace('// PRODUCTION_DISPATCH_LAYOUT_STEP_2',(Method $recycler 'private void dispatchLayoutStep2()'))
+$probe=$probe.Replace('// PRODUCTION_IS_COMPUTING_LAYOUT',(Method $recycler 'public boolean isComputingLayout()'))
+$probe=$probe.Replace('// PRODUCTION_GRID_SPAN_CONSTRAINT',(Method $grid 'if (spanSize > mSpanCount)'))
+$probe=$probe.Replace('// PRODUCTION_ADAPTER_UPDATE',(Method $adapter 'private void updateInternal(boolean animated)'))
 $profileEvent=Method $profile 'else if (id == NotificationCenter.lumaLocalGiftsChanged)'
 $profileEvent=$profileEvent.Replace('else if (id == NotificationCenter.lumaLocalGiftsChanged)','if (id == 1)')
 $headerEvent="void localEvent(int id, int account, Object... args) { $profileEvent }"

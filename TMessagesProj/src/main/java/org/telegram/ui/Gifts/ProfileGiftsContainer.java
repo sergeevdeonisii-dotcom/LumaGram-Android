@@ -639,10 +639,12 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                     ITEM_TOGGLE_ALL_GIFTS,
                     allGiftsHidden ? R.drawable.msg_message : R.drawable.menu_hide_gift,
                     getString(allGiftsHidden ? R.string.LumaShowAllGifts : R.string.LumaHideAllGifts)
-                ).setSpanCount(spanCount));
+                ).setSpanCount(UItem.MAX_SPAN_COUNT));
             }
             if (!localGifts.isEmpty()) {
-                items.add(UItem.asHeader(getString(R.string.LumaLocalGiftsHeader)).setSpanCount(spanCount));
+                // Column changes are queued below. Full-width rows must follow
+                // the current layout manager until that queued change runs.
+                items.add(UItem.asHeader(getString(R.string.LumaLocalGiftsHeader)).setSpanCount(UItem.MAX_SPAN_COUNT));
                 for (int pinnedPass = 1; pinnedPass >= 0; pinnedPass--) {
                     for (LumaLocalGifts.LocalSavedGift gift : localGifts) {
                         if (parent.isGiftPinnedLocally(gift) != (pinnedPass == 1)) continue;
@@ -652,7 +654,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                         items.add(localItem);
                     }
                 }
-                if (!list.gifts.isEmpty()) items.add(UItem.asHeader(getString(R.string.ProfileGifts)).setSpanCount(spanCount));
+                if (!list.gifts.isEmpty()) items.add(UItem.asHeader(getString(R.string.ProfileGifts)).setSpanCount(UItem.MAX_SPAN_COUNT));
             }
             if (list != null) {
                 int spanCountLeft = spanCount;

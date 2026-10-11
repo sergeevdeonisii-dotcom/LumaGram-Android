@@ -76,6 +76,7 @@ import android.text.style.ClickableSpan;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.URLSpan;
 import android.text.util.Linkify;
+import android.util.Log;
 import android.util.Property;
 import android.util.SparseArray;
 import android.util.SparseIntArray;
@@ -352,6 +353,26 @@ import me.vkryl.android.animator.BoolAnimator;
 import me.vkryl.core.reference.ReferenceList;
 
 public class ProfileActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, DialogsActivity.DialogsActivityDelegate, SharedMediaLayout.SharedMediaPreloaderDelegate, ImageUpdater.ImageUpdaterDelegate, SharedMediaLayout.Delegate, MainTabsActivity.TabFragmentDelegate {
+    private static int lumaLayoutFailuresLogged;
+
+    /** Bounded release diagnostics: code locations only, never exception messages or account data. */
+    public static synchronized void logLumaLayoutFailure(Throwable error) {
+        if (error == null || lumaLayoutFailuresLogged >= 3) return;
+        lumaLayoutFailuresLogged++;
+        final StringBuilder details = new StringBuilder("Layout failure");
+        for (int cause = 0; error != null && cause < 3; cause++, error = error.getCause()) {
+            details.append(" | ").append(error.getClass().getName());
+            int frameCount = 0;
+            for (StackTraceElement frame : error.getStackTrace()) {
+                final String className = frame.getClassName();
+                if (!className.startsWith("org.telegram.") && !className.startsWith("androidx.recyclerview.")) continue;
+                details.append(" at ").append(className).append('.').append(frame.getMethodName()).append(':').append(frame.getLineNumber());
+                if (++frameCount >= 6) break;
+            }
+        }
+        Log.w("LunagramLayout", details.toString());
+    }
+
     private RecyclerListView listView;
     private RecyclerListView searchListView;
     private LinearLayoutManager layoutManager;
@@ -3261,6 +3282,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         try {
                             listView.layout(0, actionBarHeight, listView.getMeasuredWidth(), actionBarHeight + listView.getMeasuredHeight());
                         } catch (Exception e) {
+                            logLumaLayoutFailure(e);
                             FileLog.e(e);
                         }
                     }
