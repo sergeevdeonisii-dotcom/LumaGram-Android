@@ -10543,7 +10543,7 @@ public class MessagesController extends BaseController implements NotificationCe
     public void setLumaGhostModeEnabled(boolean enabled) {
         Utilities.stageQueue.postRunnable(() -> {
             // A second toggle may have superseded this one before the stage queue ran.
-            if (enabled != LumaGhostMode.isEnabled(currentAccount)) {
+            if (enabled != LumaGhostMode.shouldSuppressActivity(currentAccount)) {
                 return;
             }
             cancelStatusUpdate();
@@ -10607,7 +10607,7 @@ public class MessagesController extends BaseController implements NotificationCe
         checkReadTasks();
 
         if (getUserConfig().isClientActivated()) {
-            if (!ignoreSetOnline && !LumaGhostMode.isEnabled(currentAccount) && getConnectionsManager().getPauseTime() == 0 && ApplicationLoader.isScreenOn && !ApplicationLoader.mainInterfacePausedStageQueue) {
+            if (!ignoreSetOnline && !LumaGhostMode.shouldSuppressActivity(currentAccount) && getConnectionsManager().getPauseTime() == 0 && ApplicationLoader.isScreenOn && !ApplicationLoader.mainInterfacePausedStageQueue) {
                 if (ApplicationLoader.mainInterfacePausedStageQueueTime != 0 && Math.abs(ApplicationLoader.mainInterfacePausedStageQueueTime - System.currentTimeMillis()) > 1000) {
                     if (presenceRequestState.canSend(false, SystemClock.elapsedRealtime()) && (lastStatusUpdateTime == 0 || Math.abs(currentTime - lastStatusUpdateTime) >= 55000 || offlineSent)) {
                         sendStatusUpdate(false);
@@ -11432,7 +11432,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean sendTyping(long dialogId, long threadMsgId, int action, String emojicon, int classGuid) {
-        if (LumaGhostMode.isEnabled(currentAccount) || action < 0 || action >= sendingTypings.length || dialogId == 0) {
+        if (LumaGhostMode.shouldSuppressActivity(currentAccount) || action < 0 || action >= sendingTypings.length || dialogId == 0) {
             return false;
         }
         final long selfId = UserConfig.getInstance(UserConfig.selectedAccount).getClientUserId();
@@ -14454,7 +14454,7 @@ public class MessagesController extends BaseController implements NotificationCe
         long dialogId = messageObject.getDialogId();
         getMessagesStorage().markMessagesContentAsRead(dialogId, arrayList, 0, 0);
         getNotificationCenter().postNotificationName(NotificationCenter.messagesReadContent, dialogId, arrayList);
-        if (dialogId > 0 && !messageObject.isOutOwner() && LumaGhostMode.isEnabled(currentAccount)) {
+        if (dialogId > 0 && !messageObject.isOutOwner() && LumaGhostMode.shouldSuppressActivity(currentAccount)) {
             return;
         }
         if (messageObject.getId() < 0) {
@@ -14609,7 +14609,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     private void completeReadTask(ReadTask task) {
-        if (task.dialogId > 0 && LumaGhostMode.isEnabled(currentAccount)) {
+        if (task.dialogId > 0 && LumaGhostMode.shouldSuppressActivity(currentAccount)) {
             return;
         }
         if (task.replyId != 0 && task.monoForumPeerId == 0) {
@@ -14668,7 +14668,7 @@ public class MessagesController extends BaseController implements NotificationCe
         long time = SystemClock.elapsedRealtime();
         for (int a = 0, size = readTasks.size(); a < size; a++) {
             ReadTask task = readTasks.get(a);
-            if (task.dialogId > 0 && LumaGhostMode.isEnabled(currentAccount)) {
+            if (task.dialogId > 0 && LumaGhostMode.shouldSuppressActivity(currentAccount)) {
                 continue;
             }
             if (task.sendRequestTime > time) {
@@ -14682,7 +14682,7 @@ public class MessagesController extends BaseController implements NotificationCe
         }
         for (int a = 0, size = repliesReadTasks.size(); a < size; a++) {
             ReadTask task = repliesReadTasks.get(a);
-            if (task.dialogId > 0 && LumaGhostMode.isEnabled(currentAccount)) {
+            if (task.dialogId > 0 && LumaGhostMode.shouldSuppressActivity(currentAccount)) {
                 continue;
             }
             if (task.sendRequestTime > time) {
@@ -14697,7 +14697,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void markDialogAsReadNow(long dialogId, long replyId) {
-        if (dialogId > 0 && LumaGhostMode.isEnabled(currentAccount)) {
+        if (dialogId > 0 && LumaGhostMode.shouldSuppressActivity(currentAccount)) {
             return;
         }
         Utilities.stageQueue.postRunnable(() -> {
@@ -14759,7 +14759,7 @@ public class MessagesController extends BaseController implements NotificationCe
     public void markDialogAsRead(long dialogId, int maxPositiveId, int maxNegativeId, int maxDate, boolean popup, long threadId, int countDiff, boolean readNow, int scheduledCount) {
         boolean createReadTask;
         // Do not queue reads made in ghost mode, even if it is disabled before execution.
-        final boolean suppressRead = dialogId > 0 && LumaGhostMode.isEnabled(currentAccount);
+        final boolean suppressRead = dialogId > 0 && LumaGhostMode.shouldSuppressActivity(currentAccount);
 
         if (threadId != 0) {
             createReadTask = maxPositiveId != Integer.MAX_VALUE;
@@ -14883,7 +14883,7 @@ public class MessagesController extends BaseController implements NotificationCe
 
         if (createReadTask && !suppressRead) {
             Utilities.stageQueue.postRunnable(() -> {
-                if (dialogId > 0 && LumaGhostMode.isEnabled(currentAccount)) {
+                if (dialogId > 0 && LumaGhostMode.shouldSuppressActivity(currentAccount)) {
                     return;
                 }
                 ReadTask currentReadTask;

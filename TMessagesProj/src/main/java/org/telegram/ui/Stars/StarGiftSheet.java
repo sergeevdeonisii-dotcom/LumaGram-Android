@@ -97,6 +97,9 @@ import org.telegram.messenger.GiftAuctionController;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaLocalGifts;
+import org.telegram.messenger.LumaBuildPolicy;
+import org.telegram.messenger.LunagramFeatureCatalog;
+import org.telegram.messenger.LunagramSubscriptionAccess;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
@@ -166,9 +169,11 @@ import org.telegram.ui.Gifts.GiftMessageBottomSheet;
 import org.telegram.ui.Gifts.GiftMessageView;
 import org.telegram.ui.Gifts.GiftSheet;
 import org.telegram.ui.Gifts.ProfileGiftsContainer;
+import org.telegram.ui.Gifts.LumaLocalGiftPreview;
 import org.telegram.ui.Gifts.ResaleGiftsFragment;
 import org.telegram.ui.GradientClip;
 import org.telegram.ui.LaunchActivity;
+import org.telegram.ui.LunagramFeatureGate;
 import org.telegram.ui.PremiumPreviewFragment;
 import org.telegram.ui.ProfileActivity;
 import org.telegram.ui.StatisticActivity;
@@ -203,7 +208,13 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     private StarGiftSheet left, right;
 
     private final ActionView actionView;
-    private final TopView topView;
+    private TopView topView;
+    private final TopView nativeTopView;
+    private LumaLocalGifts.LocalSavedGift localPreviewGift;
+    private BaseFragment localPreviewFragment;
+    private LumaLocalGiftPreview.PagerSource profilePreviewPager;
+    private int profilePreviewPosition;
+    private int profilePreviewGeneration;
 
     private final LinearLayout infoLayout;
     private final LinkSpanDrawable.LinksTextView beforeTableTextView;
@@ -295,7 +306,17 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
                 super.swapViews();
                 if (currentPosition != (hasNeighbour(false) ? 1 : 0)) {
                     final boolean r = currentPosition > (hasNeighbour(false) ? 1 : 0);
+                    final TL_stars.SavedStarGift previewTarget = profilePreviewPager != null ? getNeighbourSavedGift(r) : null;
+                    final int previewGeneration = ++profilePreviewGeneration;
                     AndroidUtilities.runOnUIThread(() -> {
+                        if (profilePreviewPager != null) {
+                            if (previewGeneration != profilePreviewGeneration || !profilePreviewPager.isCurrent()
+                                    || previewTarget == null || profilePreviewPager.indexOf(previewTarget) < 0) return;
+                            firstSet = true;
+                            bindProfilePreview(previewTarget);
+                            overrideNextIndex = -1;
+                            return;
+                        }
                         final TL_stars.SavedStarGift gift = getNeighbourSavedGift(r);
                         if (gift != null) {
                             firstSet = true;
@@ -561,7 +582,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         wearLayout.setAlpha(0.0f);
         craftLayout.setAlpha(0.0f);
 
-        topView = new TopView(context, resourcesProvider, this::onBackPressed, this::onMenuPressed, v -> openCrafting(true), this::onTransferClick, this::onWearPressed, this::onSharePressed, this::onResellPressed, this::onUpdatePriceClick);
+        nativeTopView = topView = new TopView(context, resourcesProvider, this::onBackPressed, this::onMenuPressed, v -> openCrafting(true), this::onTransferClick, this::onWearPressed, this::onSharePressed, this::onResellPressed, this::onUpdatePriceClick);
         topView.craftTopView.helpButton.setOnClickListener(v -> {
             if (v.getAlpha() < 1) return;
             openCraftInfo();
@@ -692,12 +713,156 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         return -1;
     }
 
+    public StarGiftSheet setProfilePreviewPager(LumaLocalGiftPreview.PagerSource pager) {
+        profilePreviewPager = pager;
+        if (pager != null) giftsList = pager.serverList();
+        return this;
+    }
+
+    private TL_stars.SavedStarGift getProfilePreviewGift() {
+        return localPreviewGift != null ? localPreviewGift : savedStarGift;
+    }
+
+    private int getProfilePreviewPosition() {
+        return profilePreviewPager == null || !profilePreviewPager.isCurrent()
+                ? -1 : profilePreviewPager.indexOf(getProfilePreviewGift());
+    }
+
+    private int getProfilePreviewNeighbourIndex(boolean r) {
+        int position = getProfilePreviewPosition();
+        if (position < 0) return -1;
+        int index = position + (r ? 1 : -1);
+        // Upgrade/craft logic retains SERVER indices. Translate an explicit server jump,
+        // never make its lookup operate on local display entries.
+        if (overrideNextIndex >= 0 && giftsList != null && overrideNextIndex < giftsList.getLoadedCount()) {
+            Object serverGift = giftsList.get(overrideNextIndex);
+            int translated = serverGift instanceof TL_stars.SavedStarGift
+                    ? profilePreviewPager.indexOf((TL_stars.SavedStarGift) serverGift) : -1;
+            if (r ? translated > position : translated >= 0 && translated < position) index = translated;
+        }
+        return index;
+    }
+
+    private void bindProfilePreview(TL_stars.SavedStarGift gift) {
+        if (profilePreviewPager == null || !profilePreviewPager.isCurrent() || gift == null) return;
+        profilePreviewPosition = profilePreviewPager.indexOf(gift);
+        if (gift instanceof LumaLocalGifts.LocalSavedGift) {
+            setLocalPreview(profilePreviewPager.fragment(), (LumaLocalGifts.LocalSavedGift) gift);
+        } else {
+            set(gift, profilePreviewPager.serverList());
+        }
+    }
+
+    private boolean isProfilePreviewRequestCurrent(int generation, TL_stars.SavedStarGift gift) {
+        return profilePreviewPager == null || (generation == profilePreviewGeneration
+                && profilePreviewPager.isCurrent() && localPreviewGift == null && getProfilePreviewGift() == gift);
+    }
+
+    private void refreshProfilePreviewPager() {
+        if (profilePreviewPager == null) return;
+        profilePreviewGeneration++;
+        if (!profilePreviewPager.isCurrent() || profilePreviewPager.size() == 0) {
+            container.setVisibility(View.GONE);
+            dismiss();
+            return;
+        }
+        if (getProfilePreviewPosition() < 0) {
+            firstSet = true;
+            bindProfilePreview(profilePreviewPager.get(Math.max(0, Math.min(profilePreviewPosition, profilePreviewPager.size() - 1))));
+        } else {
+            updateViewPager();
+        }
+    }
+
+    private void restoreNativePreviewHeader() {
+        profilePreviewGeneration++;
+        if (localPreviewGift != null) actionView.setVisibility(View.VISIBLE);
+        localPreviewGift = null;
+        localPreviewFragment = null;
+        if (topView != nativeTopView) {
+            LumaLocalGiftPreview.stopPreviewHeader(topView);
+            final ViewGroup.LayoutParams params = topView.getLayoutParams();
+            container.removeView(topView);
+            topView = nativeTopView;
+            container.addView(topView, params);
+        }
+    }
+
+    public StarGiftSheet setLocalPreview(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift) {
+        if (!LumaBuildPolicy.isPersonalEdition() || fragment == null || gift == null
+                || !LunagramSubscriptionAccess.canUse(currentAccount, LunagramFeatureCatalog.Feature.LOCAL_NFT)
+                || fragment.getCurrentAccount() != currentAccount || currentAccount != UserConfig.selectedAccount
+                || gift.ownerUserId <= 0 || gift.ownerUserId != UserConfig.getInstance(currentAccount).getClientUserId()
+                || !(gift.gift instanceof TL_stars.TL_starGiftUnique)
+                || gift.gift.attributes == null || gift.gift.resell_amount != null
+                || (profilePreviewPager != null && !profilePreviewPager.isCurrent())) return this;
+        profilePreviewGeneration++;
+        localPreviewGift = gift;
+        localPreviewFragment = fragment;
+        savedStarGift = null;
+        slugStarGift = null;
+        messageObject = null;
+        slug = null;
+        myProfile = false;
+        resale = false;
+        rolling = false;
+        upgradedOnce = false;
+        overrideNextIndex = -1;
+        if (switchingPagesAnimator != null) { switchingPagesAnimator.cancel(); switchingPagesAnimator = null; }
+        if (roller != null) { roller.detach(); roller = null; }
+        if (giftsToCraft != null) { giftsToCraft.detach(); giftsToCraft = null; }
+        nativeTopView.imageLayout.setAlpha(1.0f);
+        nativeTopView.imagesRollView.setAlpha(0.0f);
+        sample_attributes = null;
+        prices = null;
+        next_prices = null;
+        upgrade_form = null;
+        requesting_upgrade_form = false;
+        AndroidUtilities.cancelRunOnUIThread(tickUpgradePriceRunnable);
+        LumaLocalGiftPreview.stopPreviewHeader(topView);
+        ViewGroup.LayoutParams params = topView.getLayoutParams();
+        container.removeView(topView);
+        topView = LumaLocalGiftPreview.createPreviewHeader(getContext(), currentAccount, gift, resourcesProvider,
+                () -> { container.setVisibility(View.GONE); dismiss(); }, this::onMenuPressed);
+        topView.setPadding(backgroundPaddingLeft, 0, backgroundPaddingLeft, 0);
+        container.addView(topView, params);
+        title = gift.gift.title + " #" + LocaleController.formatNumber(gift.gift.num, ',');
+        tableView.clear();
+        LumaLocalGiftPreview.fillPreviewTable(tableView, getContext(), currentAccount,
+                (TL_stars.TL_starGiftUnique) gift.gift, resourcesProvider, true);
+        beforeTableTextView.setVisibility(View.GONE);
+        beforeTableTextView.setText(null);
+        afterTableTextView.setVisibility(View.GONE);
+        afterTableTextView.setText(null);
+        underButtonLinkTextView.setText(null);
+        underButtonContainer.setVisibility(View.GONE);
+        actionView.setVisibility(View.GONE);
+        button.setRound();
+        button.setLoading(false);
+        button.setFilled(true);
+        button.setText(getString(R.string.OK), false);
+        button.setSubText(null, false);
+        button.setOnClickListener(v -> dismiss());
+        switchPage(PAGE_INFO, false);
+        layoutManager.scrollToPosition(1);
+        firstSet = false;
+        if (profilePreviewPager != null) profilePreviewPosition = profilePreviewPager.indexOf(gift);
+        actionBar.setTitle(title);
+        updateViewPager();
+        return this;
+    }
+
     private TL_stars.SavedStarGift getNeighbourSavedGift(boolean r) {
+        if (profilePreviewPager != null) {
+            if (!profilePreviewPager.isCurrent()) return null;
+            int index = getProfilePreviewNeighbourIndex(r);
+            return index < 0 || index >= profilePreviewPager.size() ? null : profilePreviewPager.get(index);
+        }
         final int thisPosition = getListPosition();
         if (thisPosition < 0) return null;
         Object gift = null;
-        int index = thisPosition + (r ? +1 : -1);
-        if (overrideNextIndex >= 0 && (r ? overrideNextIndex > thisPosition : overrideNextIndex < thisPosition)) {
+        int index = profilePreviewPager != null ? getProfilePreviewNeighbourIndex(r) : thisPosition + (r ? +1 : -1);
+        if (profilePreviewPager == null && overrideNextIndex >= 0 && (r ? overrideNextIndex > thisPosition : overrideNextIndex < thisPosition)) {
             index = overrideNextIndex;
         }
         if (giftsList != null && index >= 0 && index < giftsList.getLoadedCount()) {
@@ -710,6 +875,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private TL_stars.TL_starGiftUnique getNeighbourSlugGift(boolean r) {
+        if (profilePreviewPager != null) return null;
         final int thisPosition = getListPosition();
         if (thisPosition < 0) return null;
         Object gift = null;
@@ -732,19 +898,21 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
 
     private int overrideNextIndex = -1;
     private void setupNeighbour(boolean r, boolean bind) {
-        int thisPosition = getListPosition();
+        int thisPosition = profilePreviewPager != null ? getProfilePreviewPosition() : getListPosition();
         if (thisPosition < 0) return;
         Object gift = null;
-        int index = thisPosition + (r ? +1 : -1);
-        if (overrideNextIndex >= 0 && (r ? overrideNextIndex > thisPosition : overrideNextIndex < thisPosition)) {
+        int index = profilePreviewPager != null ? getProfilePreviewNeighbourIndex(r) : thisPosition + (r ? +1 : -1);
+        if (profilePreviewPager == null && overrideNextIndex >= 0 && (r ? overrideNextIndex > thisPosition : overrideNextIndex < thisPosition)) {
             index = overrideNextIndex;
         }
-        if (giftsList != null && index >= 0 && index < giftsList.getLoadedCount()) {
+        if (profilePreviewPager != null && profilePreviewPager.isCurrent() && index >= 0 && index < profilePreviewPager.size()) {
+            gift = profilePreviewPager.get(index);
+        } else if (profilePreviewPager == null && giftsList != null && index >= 0 && index < giftsList.getLoadedCount()) {
             gift = giftsList.get(index);
         }
         if (gift == null) return;
         if ((r ? right : left) != null) {
-            if (gift instanceof TL_stars.SavedStarGift && eq((r ? right : left).savedStarGift, (TL_stars.SavedStarGift) gift)) {
+            if (gift instanceof TL_stars.SavedStarGift && eq((r ? right : left).getProfilePreviewGift(), (TL_stars.SavedStarGift) gift)) {
                 return;
             } else if (gift instanceof TL_stars.TL_starGiftUnique && eq((r ? right : left).slugStarGift, (TL_stars.TL_starGiftUnique) gift)) {
                 return;
@@ -756,7 +924,10 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
                 return StarGiftSheet.this.getBottomInset();
             }
         };
-        if (gift instanceof TL_stars.SavedStarGift) {
+        sheet.setProfilePreviewPager(profilePreviewPager);
+        if (gift instanceof LumaLocalGifts.LocalSavedGift && profilePreviewPager != null) {
+            sheet.setLocalPreview(profilePreviewPager.fragment(), (LumaLocalGifts.LocalSavedGift) gift);
+        } else if (gift instanceof TL_stars.SavedStarGift) {
             sheet.set((TL_stars.SavedStarGift) gift, giftsList);
         } else if (gift instanceof TL_stars.TL_starGiftUnique) {
             final TL_stars.TL_starGiftUnique giftUnique = (TL_stars.TL_starGiftUnique) gift;
@@ -773,7 +944,9 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     private void updateViewPager() {
         viewPager.setPosition(hasNeighbour(false) ? 1 : 0);
         viewPager.rebuild(false);
-        if (giftsList != null && !hasNeighbour(true) && giftsList.getLoadedCount() < giftsList.getTotalCount()) {
+        if (profilePreviewPager != null && !hasNeighbour(true)) {
+            profilePreviewPager.loadMore();
+        } else if (profilePreviewPager == null && giftsList != null && !hasNeighbour(true) && giftsList.getLoadedCount() < giftsList.getTotalCount()) {
             giftsList.load();
         }
     }
@@ -787,6 +960,12 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     public boolean eq(TL_stars.SavedStarGift a, TL_stars.SavedStarGift b) {
         if (a == b) return true;
         if (a == null || b == null) return false;
+        if (a instanceof LumaLocalGifts.LocalSavedGift || b instanceof LumaLocalGifts.LocalSavedGift) {
+            if (!(a instanceof LumaLocalGifts.LocalSavedGift) || !(b instanceof LumaLocalGifts.LocalSavedGift)) return false;
+            LumaLocalGifts.LocalSavedGift localA = (LumaLocalGifts.LocalSavedGift) a;
+            LumaLocalGifts.LocalSavedGift localB = (LumaLocalGifts.LocalSavedGift) b;
+            return localA.ownerUserId == localB.ownerUserId && TextUtils.equals(localA.localKey, localB.localKey);
+        }
         if (a.gift == b.gift) return true;
         if (a.gift instanceof TL_stars.TL_starGiftUnique && b.gift instanceof TL_stars.TL_starGiftUnique) {
             return a.gift.id == b.gift.id;
@@ -824,12 +1003,24 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     public void onAttachedToWindow() {
         super.onAttachedToWindow();
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.starUserGiftsLoaded);
+        NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.lunagramSubscriptionChanged);
+        if (profilePreviewPager != null) {
+            profilePreviewPager.setChangedListener(this::refreshProfilePreviewPager);
+            NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.appDidLogout);
+            NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.activeAccountChanged);
+        }
     }
 
     @Override
     public void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.starUserGiftsLoaded);
+        NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.lunagramSubscriptionChanged);
+        if (profilePreviewPager != null) {
+            profilePreviewPager.setChangedListener(null);
+            NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.appDidLogout);
+            NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.activeAccountChanged);
+        }
     }
 
     @Override
@@ -867,6 +1058,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void openCrafting(boolean clear) {
+        if (localPreviewGift != null) return;
         int can_craft_at = 0;
         if (messageObject != null) {
             if (messageObject.messageOwner != null && messageObject.messageOwner.action instanceof TLRPC.TL_messageActionStarGiftUnique) {
@@ -1007,6 +1199,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void openCraftInfo() {
+        if (localPreviewGift != null) return;
         button.setText(getString(R.string.GiftCraftInfoButton), true);
         button.setSubText(null, true);
         button.setOnClickListener(v2 -> openCrafting(false));
@@ -1017,6 +1210,21 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     private ResaleGiftsFragment.SelectGiftSheet.State giftsToCraft;
     private boolean localGiftAdding;
     private void onMenuPressed(View btn) {
+        if (localPreviewGift != null) {
+            final LumaLocalGifts.LocalSavedGift gift = localPreviewGift;
+            final BaseFragment fragment = localPreviewFragment;
+            final LumaLocalGiftPreview.PagerSource pager = profilePreviewPager;
+            if (fragment == null || gift.ownerUserId != UserConfig.getInstance(currentAccount).getClientUserId()
+                    || currentAccount != UserConfig.selectedAccount || (pager != null && !pager.isCurrent())) return;
+            ItemOptions.makeOptions(container, resourcesProvider, btn)
+                    .add(R.drawable.msg_delete, LumaLocalGiftPreview.getRemoveTitle(), () -> {
+                        dismiss();
+                        LumaLocalGiftPreview.confirmRemove(fragment, gift, () -> currentAccount == UserConfig.selectedAccount
+                                && gift.ownerUserId == UserConfig.getInstance(currentAccount).getClientUserId()
+                                && (pager == null || pager.isCurrent()));
+                    }).setGravity(Gravity.RIGHT).show();
+            return;
+        }
         final String link = getLink();
         final TL_stars.TL_starGiftUnique giftUnique = getUniqueGift();
         ItemOptions.makeOptions(container, resourcesProvider, btn)
@@ -1079,13 +1287,22 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     private void addGiftLocally(TL_stars.TL_starGiftUnique gift) {
         final long owner = UserConfig.getInstance(currentAccount).getClientUserId();
         if (gift == null || owner <= 0 || localGiftAdding) return;
+        if (!LunagramSubscriptionAccess.canUse(currentAccount, LunagramFeatureCatalog.Feature.LOCAL_NFT)) {
+            BaseFragment host = LaunchActivity.getSafeLastFragment();
+            if (host != null && host.getCurrentAccount() == currentAccount) {
+                LunagramFeatureGate.require(host, LunagramFeatureCatalog.Feature.LOCAL_NFT);
+            }
+            return;
+        }
         localGiftAdding = true;
         Utilities.globalQueue.postRunnable(() -> {
             boolean added = owner == UserConfig.getInstance(currentAccount).getClientUserId()
+                    && LunagramSubscriptionAccess.canUse(currentAccount, LunagramFeatureCatalog.Feature.LOCAL_NFT)
                     && (LumaLocalGifts.contains(currentAccount, gift) || LumaLocalGifts.add(currentAccount, owner, gift));
             AndroidUtilities.runOnUIThread(() -> {
                 localGiftAdding = false;
-                if (owner != UserConfig.getInstance(currentAccount).getClientUserId()) return;
+                if (owner != UserConfig.getInstance(currentAccount).getClientUserId()
+                        || !LunagramSubscriptionAccess.canUse(currentAccount, LunagramFeatureCatalog.Feature.LOCAL_NFT)) return;
                 if (added) NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.lumaLocalGiftsChanged, owner);
                 if (!isShowing()) return;
                 getBulletinFactory().createSimpleBulletin(added ? R.raw.done : R.raw.chats_infotip,
@@ -1095,6 +1312,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void showGiftOfferSheet() {
+        if (localPreviewGift != null) return;
         final TL_stars.TL_starGiftUnique giftUnique = getUniqueGift();
         new GiftOfferSheet(getContext(), currentAccount, DialogObject.getPeerDialogId(giftUnique.owner_id), giftUnique, resourcesProvider, () -> {
             if (closeParentSheet != null) {
@@ -1105,6 +1323,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private boolean canSetAsTheme() {
+        if (localPreviewGift != null) return false;
         final TL_stars.TL_starGiftUnique giftUnique = getUniqueGift();
         if (giftUnique == null || !giftUnique.theme_available) {
             return false;
@@ -1119,6 +1338,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void openSetAsTheme() {
+        if (localPreviewGift != null) return;
         dismiss();
 
         final BaseFragment lastFragment = LaunchActivity.getSafeLastFragment();
@@ -1158,6 +1378,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     private ColoredImageSpan lockSpan;
     private boolean shownWearInfo;
     private void onWearPressed(View v) {
+        if (localPreviewGift != null) return;
         if (UserConfig.getInstance(currentAccount).isPremium() && (isWorn(currentAccount, getUniqueGift()) || shownWearInfo)) {
             toggleWear();
             return;
@@ -1235,6 +1456,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         toggleWear(false);
     }
     public void toggleWear(boolean checkedLevel) {
+        if (localPreviewGift != null) return;
         final TL_stars.TL_starGiftUnique gift = getUniqueGift();
         if (gift == null) return;
         MessagesController.getGlobalMainSettings().edit().putInt("statusgiftpage", 3).apply();
@@ -1333,6 +1555,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
 
     private ShareAlert shareAlert;
     public void onSharePressed(View btn) {
+        if (localPreviewGift != null) return;
         if (shareAlert != null && shareAlert.isShown()) {
             shareAlert.dismiss();
         }
@@ -1385,6 +1608,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public void onUpdatePriceClick(View btn) {
+        if (localPreviewGift != null) return;
         final TL_stars.TL_starGiftUnique gift = getUniqueGift();
         if (gift == null) return;
         StarsIntroActivity.showGiftResellPriceSheet(getContext(), currentAccount, gift, null, (price, done) -> {
@@ -1422,6 +1646,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public void onResellPressed(View btn) {
+        if (localPreviewGift != null) return;
         if (btn.getAlpha() < 0.99f) {
             cantWithBlockchainGiftAlert(1);
             return;
@@ -1525,6 +1750,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void repostStory(View cell) {
+        if (localPreviewGift != null) return;
         Activity activity = LaunchActivity.instance;
         if (activity == null) {
             return;
@@ -3114,6 +3340,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         switchPage(page, animated, null);
     }
     public void switchPage(int page, boolean animated, Runnable done) {
+        if (localPreviewGift != null && page != PAGE_INFO) return;
         if (switchingPagesAnimator != null) {
             switchingPagesAnimator.cancel();
             switchingPagesAnimator = null;
@@ -3234,6 +3461,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public boolean canTransfer() {
+        if (localPreviewGift != null) return false;
         if (getInputStarGift() == null) return false;
         TL_stars.TL_starGiftUnique gift;
         if (messageObject != null && messageObject.messageOwner != null && messageObject.messageOwner.action instanceof TLRPC.TL_messageActionStarGiftUnique) {
@@ -3565,6 +3793,8 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
 
         public void detach() {
             rolling = false;
+            whenDone = null;
+            whenDone2 = null;
             topView.imagesRollView.resetDrawing();
             if (modelRoller != null) {
                 modelRoller.detach();
@@ -4055,6 +4285,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     private boolean firstSet = true;
 
     public StarGiftSheet set(String slug, TL_stars.TL_starGiftUnique gift, StarsController.IGiftsList list) {
+        restoreNativePreviewHeader();
         this.slug = slug;
         this.slugStarGift = gift;
         this.giftsList = list;
@@ -4176,6 +4407,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public void set(TL_stars.TL_starGiftUnique gift, boolean refunded, TLObject fromObject, TLRPC.TL_textWithEntities message) {
+        if (localPreviewGift != null) return;
         final long owner_id = DialogObject.getPeerDialogId(gift.owner_id);
         final long host_id = DialogObject.getPeerDialogId(gift.host_id);
 
@@ -4626,6 +4858,13 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         if (savedStarGift == null) {
             return this;
         }
+        if (savedStarGift instanceof LumaLocalGifts.LocalSavedGift) {
+            // Never allow a marker to reach owned/server gift binding, even via an old caller.
+            return setLocalPreview(profilePreviewPager != null ? profilePreviewPager.fragment() : LaunchActivity.getSafeLastFragment(),
+                    (LumaLocalGifts.LocalSavedGift) savedStarGift);
+        }
+        restoreNativePreviewHeader();
+        if (profilePreviewPager != null) profilePreviewPosition = Math.max(0, profilePreviewPager.indexOf(savedStarGift));
 
         this.myProfile = isMine(currentAccount, dialogId);
         this.savedStarGift = savedStarGift;
@@ -4875,6 +5114,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public TL_stars.StarGift getGift() {
+        if (localPreviewGift != null) return null;
         if (messageObject != null) {
             if (messageObject.messageOwner == null) return null;
             if (messageObject.messageOwner.action instanceof TLRPC.TL_messageActionStarGift) {
@@ -4891,6 +5131,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public boolean showCraft() {
+        if (localPreviewGift != null) return false;
         final TL_stars.TL_starGiftUnique gift = getUniqueGift();
         if (gift == null || gift.crafted) return false;
         if (!isMineWithActions(currentAccount, DialogObject.getPeerDialogId(gift.owner_id))) return false;
@@ -4909,6 +5150,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public boolean canCraft() {
+        if (localPreviewGift != null) return false;
         final TL_stars.TL_starGiftUnique gift = getUniqueGift();
         if (gift == null || gift.crafted) return false;
         if (!isMineWithActions(currentAccount, DialogObject.getPeerDialogId(gift.owner_id))) return false;
@@ -4936,6 +5178,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public StarGiftSheet set(MessageObject messageObject, StarsController.IGiftsList list) {
+        restoreNativePreviewHeader();
         if (messageObject == null || messageObject.messageOwner == null) {
             return this;
         }
@@ -5408,6 +5651,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private boolean canSomeoneConvert() {
+        if (localPreviewGift != null) return false;
         if (getInputStarGift() == null) return false;
         if (messageObject != null) {
             if (messageObject.messageOwner.action instanceof TLRPC.TL_messageActionStarGift) {
@@ -5428,6 +5672,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private boolean canConvert() {
+        if (localPreviewGift != null) return false;
         if (getInputStarGift() == null) return false;
         if (messageObject != null) {
             if (messageObject.messageOwner.action instanceof TLRPC.TL_messageActionStarGift) {
@@ -5448,6 +5693,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void convert() {
+        if (localPreviewGift != null) return;
         final long selfId = UserConfig.getInstance(currentAccount).getClientUserId();
         final long fromId;
         final long dialogId;
@@ -5562,6 +5808,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void toggleShow() {
+        if (localPreviewGift != null) return;
         if (button.isLoading()) return;
 
         final boolean saved;
@@ -5652,6 +5899,10 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
 
     @Override
     public void dismiss() {
+        profilePreviewGeneration++;
+        LumaLocalGiftPreview.stopPreviewHeader(topView);
+        if (left != null) LumaLocalGiftPreview.stopPreviewHeader(left.topView);
+        if (right != null) LumaLocalGiftPreview.stopPreviewHeader(right.topView);
         if (currentPage.is(PAGE_CRAFTING) && topView.craftTopView.crafting) {
             return;
         }
@@ -5667,6 +5918,14 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
 
     @Override
     public void show() {
+        if (profilePreviewPager != null && !profilePreviewPager.isCurrent()) return;
+        if (localPreviewGift != null) {
+            if (!LunagramSubscriptionAccess.canUse(currentAccount, LunagramFeatureCatalog.Feature.LOCAL_NFT)
+                    || currentAccount != UserConfig.selectedAccount
+                    || localPreviewGift.ownerUserId != UserConfig.getInstance(currentAccount).getClientUserId()) return;
+            super.show();
+            return;
+        }
         if (MessagesController.getInstance(currentAccount).isFrozen()) {
             AccountFrozenAlert.show(currentAccount);
             return;
@@ -5789,6 +6048,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     private boolean requesting_upgrade_form;
     private TLRPC.PaymentForm upgrade_form;
     private void openUpgrade() {
+        if (localPreviewGift != null) return;
         if (currentHintView != null) {
             currentHintView.hide();
             currentHintView = null;
@@ -5845,9 +6105,12 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         }
         checkbox.setChecked(!name_hidden && paid_stars > 0 && !was_prepaid_by_not_gift_sender, false);
 
+        final int previewGeneration = profilePreviewGeneration;
+        final TL_stars.SavedStarGift previewGift = getProfilePreviewGift();
         if (sample_attributes == null || paid_stars <= 0 && upgrade_form == null) {
             if (sample_attributes == null) {
                 StarsController.getInstance(currentAccount).getStarGiftPreview(gift_id, preview -> {
+                    if (!isProfilePreviewRequestCurrent(previewGeneration, previewGift)) return;
                     if (preview == null) return;
                     sample_attributes = preview.sample_attributes;
                     prices = preview.prices;
@@ -5879,6 +6142,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
                 }
 
                 ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
+                    if (!isProfilePreviewRequestCurrent(previewGeneration, previewGift)) return;
                     requesting_upgrade_form = false;
                     if (res instanceof TLRPC.PaymentForm) {
                         TLRPC.PaymentForm form = (TLRPC.PaymentForm) res;
@@ -5896,6 +6160,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void openUpgradeAfter() {
+        if (localPreviewGift != null) return;
         long stars;
         boolean prepaying;
         TL_stars.StarGift stargift;
@@ -5999,6 +6264,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void openUpgradePrices() {
+        if (localPreviewGift != null) return;
         if (upgrade_form == null) return;
 
         long form_price = 0;
@@ -6054,6 +6320,8 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
             }
         }
         if (nextIndex > 0 && !requesting_upgrade_form) {
+            final int previewGeneration = profilePreviewGeneration;
+            final TL_stars.SavedStarGift previewGift = getProfilePreviewGift();
             requesting_upgrade_form = true;
             if (next_prices != null) {
                 for (int i = 0; i < nextIndex; ++i) {
@@ -6081,6 +6349,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
             }
 
             ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
+                if (!isProfilePreviewRequestCurrent(previewGeneration, previewGift)) return;
                 requesting_upgrade_form = false;
                 if (res instanceof TLRPC.PaymentForm) {
                     TLRPC.PaymentForm form = (TLRPC.PaymentForm) res;
@@ -6210,6 +6479,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void doUpgrade() {
+        if (localPreviewGift != null) return;
         if (button.isLoading()) return;
 
         long stars;
@@ -6414,6 +6684,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public void onTransferClick(View view) {
+        if (localPreviewGift != null) return;
         if (view.getAlpha() < 0.99f) {
             cantWithBlockchainGiftAlert(0);
             return;
@@ -6422,6 +6693,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public void openTransfer() {
+        if (localPreviewGift != null) return;
         if (currentHintView != null) {
             currentHintView.hide();
             currentHintView = null;
@@ -6585,6 +6857,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public void openTransferAlert(long dialogId, Utilities.Callback<Browser.Progress> confirmed) {
+        if (localPreviewGift != null) return;
         final long transfer_stars;
         if (savedStarGift != null && savedStarGift.gift instanceof TL_stars.TL_starGiftUnique) {
             transfer_stars = savedStarGift.transfer_stars;
@@ -6601,6 +6874,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void openTransferAlert(long dialogId, long stars, Utilities.Callback<Browser.Progress> confirmed) {
+        if (localPreviewGift != null) return;
         final TL_stars.TL_starGiftUnique gift = getUniqueGift();
         if (gift == null) return;
 
@@ -6647,6 +6921,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private void initTONTransfer(TLRPC.InputCheckPasswordSRP password, TwoStepVerificationActivity passwordFragment) {
+        if (localPreviewGift != null) return;
         TL_stars.getStarGiftWithdrawalUrl req = new TL_stars.getStarGiftWithdrawalUrl();
         req.stargift = getInputStarGift();
         if (req.stargift == null) {
@@ -6775,6 +7050,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public static TL_stars.InputSavedStarGift getInputStarGift(long dialogId, TL_stars.SavedStarGift g) {
+        if (g == null || g instanceof LumaLocalGifts.LocalSavedGift || g.gift == null) return null;
         if (!TextUtils.isEmpty(g.gift.slug)) {
             final TL_stars.TL_inputSavedStarGiftSlug inputSavedStarGiftSlug = new TL_stars.TL_inputSavedStarGiftSlug();
             inputSavedStarGiftSlug.slug = g.gift.slug;
@@ -6787,6 +7063,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     private TL_stars.InputSavedStarGift getInputStarGift() {
+        if (localPreviewGift != null || savedStarGift instanceof LumaLocalGifts.LocalSavedGift) return null;
         if (dialogId < 0) {
             final TL_stars.TL_inputSavedStarGiftChat stargift = new TL_stars.TL_inputSavedStarGiftChat();
             stargift.peer = MessagesController.getInstance(currentAccount).getInputPeer(dialogId);
@@ -6847,6 +7124,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public void doTransfer(long dialogId, Utilities.Callback<TLRPC.TL_error> done) {
+        if (localPreviewGift != null) return;
         final long transfer_stars;
         final TL_stars.InputSavedStarGift inputStarGift = getInputStarGift();
         final long fromDialogId;
@@ -7023,6 +7301,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public void onBuyPressed() {
+        if (localPreviewGift != null) return;
         final TL_stars.TL_starGiftUnique gift = getUniqueGift();
         if (button.isLoading() || gift == null) return;
 
@@ -7049,13 +7328,16 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
                                    TLRPC.TL_textWithEntities message, boolean hideMyName,
                                    GiftMessageBottomSheet giftMessageBottomSheet
     ) {
-
+        if (localPreviewGift != null) return;
+        final int previewGeneration = profilePreviewGeneration;
+        final TL_stars.SavedStarGift previewGift = getProfilePreviewGift();
         button.setLoading(true);
         if (giftMessageBottomSheet != null) {
             giftMessageBottomSheet.setLoading(true);
         }
 
         StarsController.getInstance(currentAccount, currency).getResellingGiftForm(gift, to, message, hideMyName, form -> {
+            if (!isProfilePreviewRequestCurrent(previewGeneration, previewGift)) return;
             button.setLoading(false);
             if (giftMessageBottomSheet != null) {
                 giftMessageBottomSheet.setLoading(false);
@@ -7064,6 +7346,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
             final PaymentFormState initial = new PaymentFormState(currency, form);
 
             new ResaleBuyTransferAlert(getContext(), resourcesProvider, gift, initial, currentAccount, to, getGiftName(), false, (state, progress) -> {
+                if (!isProfilePreviewRequestCurrent(previewGeneration, previewGift)) return;
                 progress.init();
                 StarsController.getInstance(currentAccount, state.currency).buyResellingGift(state.form, gift, to, message, hideMyName, (status, err) -> {
                     progress.end();
@@ -7812,6 +8095,20 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.lunagramSubscriptionChanged) {
+            if (account != currentAccount) return;
+            if (localPreviewGift != null && !LunagramSubscriptionAccess.canUse(currentAccount, LunagramFeatureCatalog.Feature.LOCAL_NFT)) {
+                container.setVisibility(View.GONE);
+                dismiss();
+            } else if (profilePreviewPager != null) {
+                refreshProfilePreviewPager();
+            }
+            return;
+        }
+        if (profilePreviewPager != null && (id == NotificationCenter.appDidLogout || id == NotificationCenter.activeAccountChanged)) {
+            refreshProfilePreviewPager();
+            return;
+        }
         if (id == NotificationCenter.starUserGiftsLoaded) {
             StarsController.GiftsList notifiedList = (StarsController.GiftsList) args[1];
             if (giftsList == notifiedList && !(topView.craftTopView != null && topView.craftTopView.crafting)) {

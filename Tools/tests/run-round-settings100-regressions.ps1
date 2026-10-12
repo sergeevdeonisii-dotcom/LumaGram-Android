@@ -67,6 +67,7 @@ foreach($edition in @('personal','public','friends')) {
     $public=if($edition -eq 'public'){'true'}else{'false'}
     [IO.File]::WriteAllText($buildConfig,"package org.telegram.messenger; public final class BuildConfig { public static final boolean DEBUG_VERSION=false; public static final boolean DEBUG_PRIVATE_VERSION=false; public static final boolean LUMA_FRIENDS_EDITION=$friends; public static final boolean LUMA_PUBLIC_EDITION=$public; }",[Text.UTF8Encoding]::new($false))
     $sources=@($production[0..6]) + @($production[9],$generatedSession,$generatedUi,$generatedNavigation,$buildConfig) + $fixtures
+    . (Join-Path $PSScriptRoot 'round-access150/add-fixtures.ps1')
     & $javac -J-Xmx128m -encoding UTF-8 -d $classes $sources
     if($LASTEXITCODE -ne 0){throw "$edition round settings compilation failed."}
     & $java -Xmx128m -cp $classes org.telegram.utils.settings.RoundSettings100Test

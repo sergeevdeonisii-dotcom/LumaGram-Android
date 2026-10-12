@@ -32,6 +32,7 @@ $sources += @('TMessagesProj/src/main/java/org/telegram/messenger/LumaRoundVideo
     'TMessagesProj/src/main/java/org/telegram/messenger/LumaRoundVideoQuality.java',
     'Tools/tests/typing-fixtures/org/telegram/messenger/MessagesController.java',
     'Tools/tests/fixtures/android/content/SharedPreferences.java') | ForEach-Object { Join-Path $repo $_ }
+. (Join-Path $PSScriptRoot 'round-access150/add-fixtures.ps1')
 & $javac -J-Xmx128m -encoding UTF-8 -d $classes $sources
 if ($LASTEXITCODE -ne 0) { throw 'Round size-limit regression compilation failed.' }
 & $java -Xmx128m -cp $classes org.telegram.messenger.RoundLimits100Test

@@ -49,8 +49,8 @@ function fixture(t, { claimed = true, sales = true } = {}) {
     const count = table => [...storage.sql.exec(`SELECT COUNT(*) AS n FROM ${table}`)][0].n;
     return { storage, store, control, auth, state, calls, dispatch, message, callback, deliveries, replies, count };
 }
-async function purchase(f, plan = 'based') {
-    await f.dispatch(f.callback(ALICE, `accept_${plan}`));
+async function purchase(f, plan = 'based', months = 1) {
+    await f.dispatch(f.callback(ALICE, `accept3_${plan}_${months}`));
     const invoice = f.deliveries().filter(item => item.method === 'sendInvoice').at(-1);
     assert.ok(invoice);
     const pre = { update_id: f.state.updateId++, pre_checkout_query: { id: `pre-${f.state.updateId}`,
@@ -66,6 +66,10 @@ async function purchase(f, plan = 'based') {
     const code = keyReply.text.match(/\b[A-Z0-9]{16}\b/)[0];
     return { invoice, pre, paid, code, chargeId };
 }
+function activate(f, userId, code) {
+    const preview = f.store.previewRedeemV2(userId, code);
+    return f.store.confirmRedeemV2(userId, preview.quote.quoteId);
+}
 
 test('private start -> explicit consent -> immutable invoice -> checkout -> encrypted key -> redeem end to end', async t => {
     const f = fixture(t);
@@ -74,10 +78,12 @@ test('private start -> explicit consent -> immutable invoice -> checkout -> encr
     assert.equal(f.count('live_orders'), 0);
     await f.dispatch(f.callback(ALICE, 'buy_based'));
     assert.equal(f.store.getConsent(ALICE).accepted, false);
+    assert.match(f.replies(ALICE).at(-1).text, /выберите срок/);
+    await f.dispatch(f.callback(ALICE, 'buy_based_1'));
     assert.match(f.replies(ALICE).at(-1).text, /Условия Lunagram/);
     assert.equal(f.count('live_orders'), 0);
     const { invoice, pre, paid, code } = await purchase(f);
-    assert.equal(invoice.start_parameter, 'buy_based');
+    assert.equal(invoice.start_parameter, 'buy_based_1');
     assert.equal(invoice.provider_token, '');
     assert.equal(invoice.subscription_period, undefined);
     assert.equal(f.store.getSubscription(ALICE).active, false);
@@ -89,6 +95,10 @@ test('private start -> explicit consent -> immutable invoice -> checkout -> encr
     await f.dispatch({ ...pre, update_id: f.state.updateId++, pre_checkout_query: { ...pre.pre_checkout_query, id: 'different-pre' } });
     assert.equal(f.calls.at(-1).args.ok, false);
     await f.dispatch(f.message(ALICE, `/redeem ${code}`));
+    assert.equal(f.store.getSubscription(ALICE).active, false);
+    const confirmation = f.replies(ALICE).at(-1).reply_markup.inline_keyboard[0][0].callback_data;
+    assert.match(confirmation, /^activate_[0-9a-f]{48}$/);
+    await f.dispatch(f.callback(ALICE, confirmation));
     assert.equal(f.store.getSubscription(ALICE).active, true);
     await f.dispatch(f.message(BOB, `/redeem ${code}`));
     assert.match(f.replies(BOB).at(-1).text, /другим аккаунтом/);
@@ -104,12 +114,40 @@ test('repeated conversation update is a durable no-op even after mutable subscri
     await f.dispatch(status);
     const beforeText = f.replies(ALICE).at(-1).text;
     const value = await purchase(f);
-    f.store.redeem(ALICE, value.code);
+    activate(f, ALICE, value.code);
     const before = f.count('billing_bot_outbox');
     await f.dispatch(status);
     assert.equal(f.count('billing_bot_outbox'), before);
     assert.ok(f.replies(ALICE).some(row => row.text === beforeText));
-    assert.equal(f.count('live_grants'), 1);
+    assert.equal(f.count('live_fixed_grants'), 1);
+});
+
+test('old consent buttons cannot accept revised terms; three-month Standard invoice freezes 180 Stars', async t => {
+    const f = fixture(t);
+    await f.dispatch(f.callback(ALICE, 'accept_standard'));
+    assert.equal(f.store.getConsent(ALICE).accepted, false);
+    assert.equal(f.count('live_orders'), 0);
+    assert.equal(f.replies(ALICE).at(-1).reply_markup.inline_keyboard[0][0].callback_data, 'accept3_terms');
+    await f.dispatch(f.callback(ALICE, 'accept2_standard_3'));
+    assert.equal(f.store.getConsent(ALICE).accepted, false, 'pre-tier v2 button cannot accept paid restrictions');
+    assert.equal(f.count('live_orders'), 0);
+    await f.dispatch(f.message(ALICE, '/buy standard 3'));
+    const terms = f.replies(ALICE).at(-1);
+    assert.match(terms.text, /не сдвигая даты остальных/);
+    assert.match(terms.text, /После окончания срока платные функции отключаются с предупреждением/);
+    assert.match(terms.text, /раз в 24 часа/);
+    assert.doesNotMatch(terms.text, /функции сейчас не ограничены|тарифы не дают разных возможностей/);
+    assert.match(terms.text, /Поддержка Telegram не рассматривает покупки в этом боте; обращайтесь через \/paysupport\./);
+    assert.equal(terms.reply_markup.inline_keyboard[0][0].callback_data, 'accept3_standard_3');
+    const value = await purchase(f, 'standard', 3);
+    assert.equal(value.invoice.prices[0].amount, 180);
+    assert.equal(f.store.getOrder(value.invoice.payload).months, 3);
+    await f.dispatch(f.message(ALICE, `/redeem ${value.code}`));
+    const preview = f.replies(ALICE).at(-1);
+    assert.match(preview.text, /на 3 мес/);assert.match(preview.text, /Начало:/);assert.match(preview.text, /Окончание:/);
+    assert.equal(f.store.getSubscriptionV2(ALICE).active, false);
+    await f.dispatch(f.callback(ALICE, preview.reply_markup.inline_keyboard[0][0].callback_data));
+    assert.equal(f.store.getSubscriptionV2(ALICE).current.months, 3);
 });
 
 test('group, cross-chat, bot, edited and stale text updates cannot create invoices or keys', async t => {
@@ -148,7 +186,7 @@ test('sale switch denies purchases/checkout while late genuine paid and refunded
 test('non-owner cannot inspect support or refund; owner gets anonymous tickets and explicit refund confirmation', async t => {
     const f = fixture(t);
     const value = await purchase(f);
-    f.store.redeem(ALICE, value.code);
+    activate(f, ALICE, value.code);
     await f.dispatch(f.message(ALICE, '/support Проверка оплаты'));
     const ticket = f.store.listTickets()[0];
     await f.dispatch(f.message(BOB, `/ticket ${ticket.id}`));
@@ -177,7 +215,7 @@ test('non-owner cannot inspect support or refund; owner gets anonymous tickets a
 test('ambiguous refund response retains blocked key and grants until authoritative confirmation', async t => {
     const f = fixture(t);
     const value = await purchase(f);
-    f.store.redeem(ALICE, value.code);
+    activate(f, ALICE, value.code);
     f.state.apiResult = { ok: false, retryable: true, error: 'TEST_TIMEOUT' };
     await f.dispatch(f.callback(OWNER, `refund_${value.invoice.payload}`));
     assert.equal(f.store.getOrder(value.invoice.payload).status, 'refund_pending');

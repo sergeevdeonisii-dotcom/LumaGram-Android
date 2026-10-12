@@ -108,6 +108,10 @@ public final class LumaFriendsBuildPolicy531Test {
         check(!LumaDeletedMessages.isDeleted(ACCOUNT, 777, 55), "full explicit removal retained");
         LumaEditHistory.rememberEdit(ACCOUNT, 777, message(55, "before", 0), message(55, "after", 101));
         check(LumaEditHistory.getVersions(ACCOUNT, 777, 55).length() == 2, "full edit history retained");
+        LunagramSubscriptionAccess.setTier(ACCOUNT, LunagramFeatureCatalog.Tier.FREE);
+        LumaEditHistory.rememberEdit(ACCOUNT, 777, message(55, "after", 101), message(55, "expired", 102));
+        check(LumaEditHistory.getVersions(ACCOUNT, 777, 55).length() == 2, "expiry stops new edit snapshots but preserves old history");
+        LunagramSubscriptionAccess.reset();
         LumaDelayedSend.setEnabled(true);
         LumaDelayedSend.setDelayStep(10);
         check(LumaDelayedSend.isEnabled() && LumaDelayedSend.getDelayMs() == 2000, "full delay retained");
@@ -130,7 +134,7 @@ public final class LumaFriendsBuildPolicy531Test {
         Map<String, Object> work = BlackHoleSettings.profile(ACCOUNT, BlackHoleSettings.PROFILE_WORK);
         check(work.size() == 28, "profile contains all portable fields");
         check(Boolean.TRUE.equals(work.get("send.roundStartRear")), "new profile preserves initial camera choice");
-        check(Boolean.FALSE.equals(work.get("typing.enabled")) && Boolean.FALSE.equals(work.get("glass.enabled")), "work profile retains quiet appearance");
+        check(Boolean.FALSE.equals(work.get("typing.enabled")) && Boolean.TRUE.equals(work.get("glass.enabled")), "work profile disables typing but preserves built-in baseline glass");
         check(Boolean.valueOf(!friends).equals(work.get("send.delayed")), "work only enables delay where supported");
         if (!friends) check(((Number) work.get("send.step")).intValue() == 10, "full Work delay remains two seconds");
         BlackHoleSettings.apply(ACCOUNT, work);

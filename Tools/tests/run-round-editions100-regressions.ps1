@@ -17,6 +17,7 @@ $sources = @(
     'Tools/tests/round-editions100/RoundEditions100Test.java'
 ) | ForEach-Object { Join-Path $repo $_ }
 $sources += (Get-ChildItem (Join-Path $PSScriptRoot 'round-editions100/fixtures') -Recurse -Filter '*.java').FullName
+. (Join-Path $PSScriptRoot 'round-access150/add-fixtures.ps1')
 foreach ($edition in @('full', 'public', 'friends')) {
     $classes = Join-Path $OutputRoot ($edition + '-' + [guid]::NewGuid().ToString('N') + '/classes')
     New-Item -ItemType Directory -Path $classes -Force | Out-Null

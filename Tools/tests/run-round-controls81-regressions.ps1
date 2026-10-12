@@ -17,6 +17,7 @@ $sources=@(
     'Tools/tests/fixtures/android/content/SharedPreferences.java',
     'Tools/tests/round-video-fixtures/org/telegram/messenger/VideoEditedInfo.java'
 ) | ForEach-Object { Join-Path $repo $_ }
+. (Join-Path $PSScriptRoot 'round-access150/add-fixtures.ps1')
 & $javac -J-Xmx128m -encoding UTF-8 -d $classes $sources
 if($LASTEXITCODE -ne 0){throw 'Round controls compilation failed.'}
 & $java -Xmx128m -cp $classes org.telegram.messenger.RoundControls81Test

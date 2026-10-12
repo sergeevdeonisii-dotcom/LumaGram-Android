@@ -1,0 +1,215 @@
+import java.text.DateFormat;
+import java.util.*;
+import org.telegram.messenger.LunagramSubscriptionCatalog;
+import org.telegram.messenger.LunagramSubscriptionCatalog.Plan;
+import org.telegram.messenger.LunagramSubscriptionCatalog.Period;
+import org.telegram.messenger.LunagramSubscriptionCatalog.PaymentMethod;
+import org.telegram.messenger.LunagramFeatureCatalog;
+import org.telegram.messenger.LunagramFeatureCatalog.Feature;
+
+/** Actual extracted screen methods with modeled native cells/client; not a device renderer. */
+public final class SubscriptionScreen150Probe {
+    private static int assertions;
+    private static void check(boolean value, String message) { assertions++; if (!value) throw new AssertionError(message); }
+    private static String getString(int id) { return Resources.name(id); }
+    static final class LocaleController {
+        static String formatString(int id, Object... args) { return getString(id) + Arrays.toString(args); }
+    }
+    static final class LumaBuildPolicy {
+        static boolean isPersonalEdition() { return false; }
+    }
+    static final class UserConfig {
+        static UserConfig getInstance(int account) { return new UserConfig(); }
+        long getClientUserId() { return 42; }
+    }
+    static class View {
+        static final int GONE=8, VISIBLE=0;
+        int visibility=VISIBLE;
+        boolean enabled=true;
+        void setVisibility(int value) { visibility=value; }
+        void setEnabled(boolean value) { enabled=value; }
+    }
+    static class TextView extends View { String text=""; void setText(CharSequence value) { text=value.toString(); } }
+    static final class Field extends TextView { String error; void setError(CharSequence value) { error=value==null?null:value.toString(); } }
+    static final class TextInfoPrivacyCell extends View { String text; void setText(CharSequence value) { text=value.toString(); } }
+    static final class DialogInterface { static final int BUTTON_POSITIVE=-1; }
+    static final class AlertDialog {
+        boolean showing=true;
+        String message;
+        final TextView button=new TextView();
+        boolean isShowing() { return showing; }
+        void dismiss() { showing=false; }
+        void setMessage(CharSequence value) { message=value.toString(); }
+        View getButton(int id) { return button; }
+    }
+    static final class UItem {
+        final String type;
+        String text, value;
+        int id;
+        boolean checked, enabled=true;
+        private UItem(String type, CharSequence text) { this.type=type; this.text=text==null?null:text.toString(); }
+        static UItem asShadow(CharSequence text) { return new UItem("shadow",text); }
+        static UItem asHeader(CharSequence text) { return new UItem("header",text); }
+        static UItem asCustom(View view) { return new UItem("custom",null); }
+        static UItem asButton(int id,CharSequence text) { UItem item=new UItem("button",text);item.id=id;return item; }
+        static UItem asRadio2(int id,CharSequence text,CharSequence value) { UItem item=new UItem("radio",text);item.id=id;item.value=value.toString();return item; }
+        UItem setEnabled(boolean enabled) { this.enabled=enabled;return this; }
+        UItem setChecked(boolean checked) { this.checked=checked;return this; }
+    }
+    static final class UniversalAdapter { int updates; void update(boolean animated) { updates++; } }
+    static final class ListView { final UniversalAdapter adapter=new UniversalAdapter(); }
+    static final class AndroidUtilities {
+        static final IdentityHashMap<Runnable,Long> pending=new IdentityHashMap<>();
+        static void cancelRunOnUIThread(Runnable task) { pending.remove(task); }
+        static void runOnUIThread(Runnable task,long delay) { pending.put(task,delay); }
+        static void hideKeyboard(View view) {}
+    }
+    static final class Browser { static int opens; static void openUrl(Object context,String url,boolean allowCustom) { opens++; } }
+    static class Base {
+        boolean isPaused, isFinished;
+        void onResume() { isPaused=false; }
+        void onPause() { isPaused=true; }
+        void onFragmentDestroy() { isFinished=true; }
+        void finishFragment() { isFinished=true; }
+        Object getParentActivity() { return new Object(); }
+    }
+    static final class LunagramSubscriptionClient {
+        enum Error { NONE, NETWORK, SERVER, BAD_RESPONSE, ACCOUNT_CHANGED, AUTH_REQUIRED, EXPIRED, STORAGE,
+            INVALID_CODE, RATE_LIMITED, NOT_CONFIGURED, UPGRADE_REQUIRED, LEGACY_TERM_ACTIVE, QUOTE_EXPIRED, QUOTE_STALE, QUEUE_FULL }
+        static final class Term {
+            final String planId;
+            final int months;
+            final long startsAtMs, expiresAtMs;
+            Term(String plan,int months,long start,long end) { planId=plan;this.months=months;startsAtMs=start;expiresAtMs=end; }
+        }
+        static final class Subscription {
+            boolean legacy;
+            long legacyExpiresAtMs, paidUntilMs, serverNowMs;
+            Term current;
+            List<Term> queued=new ArrayList<>();
+        }
+        static final class Quote {
+            String planId="pro";
+            int months=3, starsAmount=350;
+            long startsAtMs=1_800_000_000_000L, expiresAtMs=1_807_800_000_000L;
+        }
+        boolean busy, authenticated=true, pairing, persistent=true, owner=true, test, fresh=true;
+        int refreshes, restores, paused, disposed, clears;
+        long now=1_800_000_000_000L;
+        Error failure=Error.NONE;
+        Subscription snapshot;
+        Quote proposal;
+        boolean isBusy() { return busy; }
+        boolean isAuthenticated() { return authenticated; }
+        boolean isAccountCurrent() { return owner; }
+        boolean isTestAccount() { return test; }
+        boolean isPairing() { return pairing; }
+        boolean isPersistentStorageAvailable() { return persistent; }
+        boolean subscriptionIsFresh() { return fresh; }
+        long estimatedServerNowMs() { return now; }
+        Error error() { return failure; }
+        Subscription subscription() { return owner?snapshot:null; }
+        Quote quote() { return owner?proposal:null; }
+        String authenticationUrl() { return null; }
+        void refresh() { refreshes++;busy=true; }
+        void restore() { restores++; }
+        void checkAuthentication() {}
+        void clearQuote() { proposal=null;clears++; }
+        void pause() { busy=false;paused++; }
+        void dispose() { disposed++; }
+    }
+    static final class Screen extends Base {
+        static final int PLAN_ROW_START=100, PERIOD_ROW_START=150, ROW_CRYPTO_BOT=200, ROW_TON=201,
+            ROW_PAY=202, ROW_STARS=203, ROW_ACTIVATE_CODE=300, ROW_CONNECT=400, ROW_CHECK=401,
+            ROW_CANCEL_AUTH=402, ROW_DISCONNECT=403;
+        static final int ACTIVATION_IDLE=0, ACTIVATION_PREVIEW=1, ACTIVATION_CONFIRM=2;
+        int currentAccount, activationOperation;
+        boolean statusRequested;
+        String openedPairUrl;
+        Plan selectedPlan=Plan.BASED;
+        Period selectedPeriod=Period.MONTH_1;
+        PaymentMethod selectedMethod=PaymentMethod.TELEGRAM_STARS;
+        LunagramSubscriptionClient client=new LunagramSubscriptionClient();
+        ListView listView=new ListView();
+        TextInfoPrivacyCell connectionCell=new TextInfoPrivacyCell();
+        TextInfoPrivacyCell featuresCell=new TextInfoPrivacyCell();
+        TextInfoPrivacyCell termCell=new TextInfoPrivacyCell();
+        AlertDialog activationDialog;
+        Field activationField;
+        final Runnable poll=()->{};
+        /* ACTUAL_BOUNDARY */
+        /* ACTUAL_METHODS */
+    }
+    public static void main(String[] args) {
+        for (Plan plan:Plan.values()) for (Period period:Period.values()) {
+            Screen screen=new Screen(); screen.selectedPlan=plan;screen.selectedPeriod=period;
+            ArrayList<UItem> items=new ArrayList<>();screen.fillItems(items,new UniversalAdapter());
+            int planChecked=0,periodChecked=0;
+            for (UItem item:items) {
+                if (item.id>=100&&item.id<105) {
+                    Plan rowPlan=Plan.values()[item.id-100];
+                    check(item.value.contains(Integer.toString(rowPlan.totalStars(period))),"plan total Stars");
+                    check(item.value.contains(rowPlan.totalUsdAmount(period)),"plan total USD");
+                    if(item.checked)planChecked++;
+                }
+                if (item.id>=150&&item.id<154) {
+                    Period rowPeriod=Period.values()[item.id-150];
+                    check(item.value.contains(Integer.toString(plan.totalStars(rowPeriod))),"period total Stars");
+                    if(item.checked)periodChecked++;
+                }
+            }
+            check(planChecked==1&&periodChecked==1,"independent checked selections");
+            check(items.get(1).type.equals("header")&&items.get(2).type.equals("custom"),"account normal row within section");
+            int periodHeader=-1;for(int i=0;i<items.size();i++)if(getString(R.string.LunagramSubscriptionPeriod).equals(items.get(i).text))periodHeader=i;
+            check(periodHeader>3&&items.get(periodHeader-1).type.equals("shadow"),"account section ends before duration");
+            for(int i=1;i<periodHeader-1;i++)check(!items.get(i).type.equals("shadow"),"no thin header pill or split account actions");
+            check(items.get(items.size()-3).text.equals(getString(R.string.LunagramSubscriptionTermStatus)),"expiration section is bottommost");
+            check(items.get(items.size()-2).type.equals("custom"),"expiration text shares its header card");
+            for(int i=0;i<items.size()-1;i++) {
+                if(items.get(i).type.equals("header"))check(!items.get(i+1).type.equals("shadow"),"no isolated thin header-only pills anywhere");
+            }
+            String features=screen.plannedFeaturesText(plan);
+            for(Feature feature:Feature.values()) {
+                int resource=screen.featureResource(feature);
+                if(resource==0)continue;
+                check(features.contains(getString(resource))==LunagramFeatureCatalog.includes(plan.id,feature.id),"cumulative display "+plan+feature);
+            }
+        }
+        Screen screen=new Screen();
+        LunagramSubscriptionClient.Subscription snapshot=new LunagramSubscriptionClient.Subscription();
+        snapshot.serverNowMs=screen.client.now;snapshot.paidUntilMs=screen.client.now+100_000;
+        snapshot.current=new LunagramSubscriptionClient.Term("based",1,screen.client.now-10_000,screen.client.now+20_000);
+        snapshot.queued.add(new LunagramSubscriptionClient.Term("pro",3,screen.client.now+20_000,screen.client.now+100_000));
+        screen.client.snapshot=snapshot;
+        check(screen.subscriptionFooter().contains("CurrentTerm"),"fresh current term label");
+        screen.scheduleTermBoundary();
+        check(AndroidUtilities.pending.get(screen.termBoundary)==20_050,"one precise nearest-boundary timer");
+        screen.client.now+=20_000;
+        check(!screen.subscriptionFooter().contains("CurrentTerm"),"ended term is not called current");
+        check(screen.subscriptionFooter().contains("TermNeedsRefresh"),"started queue waits for server, not local promotion");
+        screen.client.fresh=false;screen.client.authenticated=false;screen.client.failure=LunagramSubscriptionClient.Error.AUTH_REQUIRED;
+        check(screen.subscriptionFooter().contains("LastConfirmed"),"401 preserves historical label");
+        check(!screen.subscriptionFooter().contains("CurrentTerm"),"stale observation grants no active status");
+        for(int i=0;i<100;i++)snapshot.queued.add(new LunagramSubscriptionClient.Term("pro",3,screen.client.now+50_000,screen.client.now+100_000));
+        check(screen.subscriptionFooter().contains("MoreTerms"),"large queue is bounded in footer");
+        screen.scheduleTermBoundary();check(!AndroidUtilities.pending.containsKey(screen.termBoundary),"stale snapshot cancels boundary timer");
+        screen.client.authenticated=true;screen.client.busy=false;screen.statusRequested=false;
+        screen.onSubscriptionChanged();check(screen.client.refreshes==1,"nonnull durable snapshot does not skip refresh");
+        screen.onSubscriptionChanged();check(screen.client.refreshes==1,"no refresh recursion while busy");
+        screen.activationDialog=new AlertDialog();screen.activationField=new Field();screen.activationField.text="KEEP-CODE";
+        screen.client.busy=false;screen.client.failure=LunagramSubscriptionClient.Error.NETWORK;
+        screen.activationOperation=Screen.ACTIVATION_PREVIEW;screen.updateActivationDialog();
+        check(screen.activationField.text.equals("KEEP-CODE")&&screen.activationDialog.showing,"preview error preserves input/dialog");
+        screen.client.failure=LunagramSubscriptionClient.Error.NONE;screen.client.proposal=new LunagramSubscriptionClient.Quote();
+        screen.activationOperation=Screen.ACTIVATION_PREVIEW;screen.updateActivationDialog();
+        check(screen.activationField.visibility==View.GONE,"code replaced by confirmation summary");
+        check(screen.activationDialog.message.contains("ConfirmDetails")&&screen.activationDialog.message.contains("Pro")&&screen.activationDialog.message.contains("350"),"server plan/price/date preview");
+        check(screen.activationDialog.button.text.contains("ConfirmCode"),"explicit second action");
+        screen.client.failure=LunagramSubscriptionClient.Error.NETWORK;screen.activationOperation=Screen.ACTIVATION_CONFIRM;
+        screen.updateActivationDialog();check(screen.activationDialog.showing&&screen.activationField.text.equals("KEEP-CODE"),"confirm failure does not clear code or dismiss");
+        screen.client.failure=LunagramSubscriptionClient.Error.NONE;screen.activationOperation=Screen.ACTIVATION_CONFIRM;
+        screen.updateActivationDialog();check(!screen.activationDialog.showing&&screen.activationField.text.isEmpty(),"only confirmed success clears/dismisses");
+        screen.onPause();check(screen.isPaused&&screen.client.paused==1&&!AndroidUtilities.pending.containsKey(screen.termBoundary),"pause invalidates timer and client work");
+        System.out.println("PASS: "+assertions+" actual-extracted subscription screen checks; modeled native cells/client, not rendered device UI.");
+    }
+}

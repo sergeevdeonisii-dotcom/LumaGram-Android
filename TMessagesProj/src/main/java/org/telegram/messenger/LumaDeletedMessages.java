@@ -22,10 +22,12 @@ public final class LumaDeletedMessages {
     }
 
     public static boolean isEnabled(int account) {
-        return LumaBuildPolicy.allowsPrivacyTools() && preferences(account).getBoolean(KEY_ENABLED, false);
+        return LumaBuildPolicy.allowsPrivacyTools() && LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.RETAIN_DELETED)
+                && preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
+        if (enabled && !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.RETAIN_DELETED)) return;
         if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
     }

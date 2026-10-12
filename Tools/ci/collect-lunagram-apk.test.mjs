@@ -247,18 +247,19 @@ test('1.5 is the active exact two-part version and strictly upgrades every histo
   for (const edition of ['full', 'public']) {
     const expected = expectedArtifact(edition);
     assert.equal(expected.versionName, '1.5');
-    assert.equal(expected.versionCode, 71689);
+    assert.equal(expected.versionCode, 71699);
+    assert.ok(expected.versionCode > 71689, 'Fix build must update the already installed 1.5 candidate');
     assert.ok(expected.versionCode > expectedArtifact(edition, '105').versionCode);
     assert.equal(expected.fileName, `Lunagram-1.5-${edition}-temporary.apk`);
     assert.equal(expected.friendsEdition, false);
     assert.equal(expected.publicEdition, edition === 'public');
     validateGeneratedFlag(flags102(edition), edition);
-    validateOutputMetadata({ applicationId: 'org.luma.liquid.web', elements: [{ versionName: '1.5', versionCode: 71689, outputFile: 'app.apk' }] }, edition);
-    validateApkBadging("package: name='org.luma.liquid.web' versionCode='71689' versionName='1.5'\nnative-code: 'arm64-v8a'\n", edition);
+    validateOutputMetadata({ applicationId: 'org.luma.liquid.web', elements: [{ versionName: '1.5', versionCode: 71699, outputFile: 'app.apk' }] }, edition);
+    validateApkBadging("package: name='org.luma.liquid.web' versionCode='71699' versionName='1.5'\nnative-code: 'arm64-v8a'\n", edition);
     for (const other of ['full', 'public', 'friends'].filter(value => value !== edition)) {
       assert.throws(() => validateGeneratedFlag(flags102(other), edition));
     }
-    for (const [name, code] of [['1.0.5', 71679], ['1.5.0', 71689], ['1.5', 71679], ['2.0', 71689]]) {
+    for (const [name, code] of [['1.0.5', 71679], ['1.5.0', 71699], ['1.5', 71689], ['1.5', 71679], ['2.0', 71699]]) {
       assert.throws(() => validateOutputMetadata({ applicationId: 'org.luma.liquid.web', elements: [{ versionName: name, versionCode: code, outputFile: 'app.apk' }] }, edition));
       assert.throws(() => validateApkBadging(`package: name='org.luma.liquid.web' versionCode='${code}' versionName='${name}'\nnative-code: 'arm64-v8a'\n`, edition));
     }

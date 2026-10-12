@@ -881,7 +881,7 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
     }
 
     private void sendCurrentTaps() {
-        if (LumaGhostMode.isEnabled(currentAccount)) {
+        if (LumaGhostMode.shouldSuppressActivity(currentAccount)) {
             clearSendingInfo();
             return;
         }

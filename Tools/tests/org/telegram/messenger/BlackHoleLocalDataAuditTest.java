@@ -30,6 +30,7 @@ public final class BlackHoleLocalDataAuditTest {
         check(ApplicationLoader.applicationContext.root.mkdirs()
                 || ApplicationLoader.applicationContext.root.isDirectory(), "isolated test root");
         exportOwnerAndLifecycle();
+        exportSubscriptionExpiry();
         archiveReservation();
         journalErrorLogging();
         journalRecoveryAndOwnerRace();
@@ -129,6 +130,37 @@ public final class BlackHoleLocalDataAuditTest {
         awaitWorker(changedBeforeStart);
         check(constructorEvents.cancelled.get() == 1 && LumaChatExportManager.queuedCompletion == null,
                 "identity changed after selection but before start cannot export");
+    }
+
+    private static void exportSubscriptionExpiry() throws Exception {
+        UserConfig.ids[0] = 91501;
+        LunagramSubscriptionAccess.setTier(0, LunagramFeatureCatalog.Tier.FREE);
+        LumaChatExportManager.queuedCompletion = null;
+        Events blocked = new Events();
+        LumaAccountExportManager denied = new LumaAccountExportManager(config(), blocked);
+        denied.start(); awaitWorker(denied);
+        check(blocked.errors.get() == 1 && LumaChatExportManager.queuedCompletion == null,
+                "unpaid direct export cannot create history request");
+        LunagramSubscriptionAccess.setTier(0, LunagramFeatureCatalog.Tier.ULTRA);
+        Events events = new Events();
+        LumaAccountExportManager manager = new LumaAccountExportManager(config(), events);
+        manager.start();
+        LumaChatExportManager.Listener child = LumaChatExportManager.queuedCompletion;
+        Field sessionField = LumaAccountExportManager.class.getDeclaredField("sessionDir");
+        sessionField.setAccessible(true);
+        File session = (File) sessionField.get(manager);
+        File completedBefore = new File(ApplicationLoader.applicationContext.root, "previous-completed-export.zip");
+        check(completedBefore.createNewFile(), "completed historical export fixture");
+        File late = new File(ApplicationLoader.applicationContext.root, "expired-current-chat.zip");
+        check(late.createNewFile(), "late current export fixture");
+        LunagramSubscriptionAccess.setTier(0, LunagramFeatureCatalog.Tier.FREE);
+        child.onComplete(late, new LumaChatExportManager.Progress());
+        awaitWorker(manager);
+        check(events.cancelled.get() == 1 && events.total() == 1 && !session.exists() && !late.exists(),
+                "known expiry atomically stops export progression and cleans only unfinished owned files");
+        check(completedBefore.isFile() && child == LumaChatExportManager.queuedCompletion,
+                "expiry retains completed exports and makes no next-dialog request");
+        LunagramSubscriptionAccess.reset();
     }
 
     private static void archiveReservation() throws Exception {

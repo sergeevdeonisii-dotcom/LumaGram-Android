@@ -84,33 +84,69 @@ public final class BlackHoleSettings {
     public static void apply(int account, Map<String, Object> changes) {
         // Validate the entire merged result before the first write: malformed imports are atomic no-ops.
         validate(changes);
+        if (!LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.SETTINGS_TRANSFER)
+                || account != UserConfig.selectedAccount || missingAccess(account, changes) != null)
+            throw new SecurityException("subscription required");
         Map<String, Object> v = capture(account); v.putAll(changes); validate(v);
-        LumaTextAnimation.setEnabled(b(v, "typing.enabled"));
-        LumaTextAnimation.setSpeedLevel(i(v, "typing.speed"));
-        LumaTextAnimation.setBlurLevel(i(v, "typing.blur"));
-        LumaTextAnimation.setHeightLevel(i(v, "typing.height"));
-        LumaTextAnimation.setSwipeMode(i(v, "typing.swipe"));
-        LumaMessageFormatting.setAutomaticStyle(i(v, "format.style"));
-        LumaDelayedSend.setEnabled(b(v, "send.delayed")); LumaDelayedSend.setDelayStep(i(v, "send.step"));
+        // Write only requested keys: effective fallbacks must not overwrite paid preferences on expiry.
+        if (changes.containsKey("typing.enabled")) LumaTextAnimation.setEnabled(b(v, "typing.enabled"));
+        if (changes.containsKey("typing.speed")) LumaTextAnimation.setSpeedLevel(i(v, "typing.speed"));
+        if (changes.containsKey("typing.blur")) LumaTextAnimation.setBlurLevel(i(v, "typing.blur"));
+        if (changes.containsKey("typing.height")) LumaTextAnimation.setHeightLevel(i(v, "typing.height"));
+        if (changes.containsKey("typing.swipe")) LumaTextAnimation.setSwipeMode(i(v, "typing.swipe"));
+        if (changes.containsKey("format.style")) LumaMessageFormatting.setAutomaticStyle(i(v, "format.style"));
+        if (changes.containsKey("send.delayed")) LumaDelayedSend.setEnabled(b(v, "send.delayed"));
+        if (changes.containsKey("send.step")) LumaDelayedSend.setDelayStep(i(v, "send.step"));
         // Accept legacy switches in imports, but keep the built-in appearance.
-        LiteMode.setLiquidGlassOpacityLevel(i(v, "glass.opacity"));
-        LiteMode.setLiquidGlassIntensityLevel(i(v, "glass.intensity"));
-        LiteMode.setLiquidGlassInputSizeLevel(i(v, "glass.inputSize"));
-        LiteMode.setLiquidGlassAdaptiveColorEnabled(false); LiteMode.setLiquidGlassWallpaperRefractionEnabled(false);
-        LiteMode.setLiquidGlassAdaptiveColorEnabled(b(v, "glass.adaptive"));
-        LiteMode.setLiquidGlassWallpaperRefractionEnabled(b(v, "glass.wallpaper"));
-        LiteMode.setLiquidGlassSeparateColors(b(v, "glass.separate"));
-        LiteMode.setLiquidGlassColorStrengthLevel(i(v, "glass.strength"));
-        LiteMode.setLiquidGlassColorTransitionLevel(i(v, "glass.transition"));
-        LumaGhostMode.setScheduledSendEnabled(account, b(v, "ghost.schedule"));
-        LumaGhostMode.setEnabled(account, b(v, "ghost.enabled"));
-        LumaDeletedMessages.setEnabled(account, b(v, "deleted.keep"));
-        LumaStarRating.setLevel(account, i(v, "rating.level")); LumaStarRating.setEnabled(account, b(v, "rating.enabled"));
-        LumaAnonymousNumber.setDigits(account, (String) v.get("number.digits"));
-        LumaAnonymousNumber.setEnabled(account, b(v, "number.enabled"));
-        LumaProfileVerification.setEnabled(account, b(v, "verification.enabled"));
-        LumaRoundVideoQuality.setEnabled(b(v, "send.roundHighQuality"));
-        LumaRoundVideoCamera.setStartWithRearCameraEnabled(b(v, "send.roundStartRear"));
+        if (changes.containsKey("glass.opacity")) LiteMode.setLiquidGlassOpacityLevel(i(v, "glass.opacity"));
+        if (changes.containsKey("glass.intensity")) LiteMode.setLiquidGlassIntensityLevel(i(v, "glass.intensity"));
+        if (changes.containsKey("glass.inputSize")) LiteMode.setLiquidGlassInputSizeLevel(i(v, "glass.inputSize"));
+        if (changes.containsKey("glass.adaptive") || changes.containsKey("glass.wallpaper")) {
+            LiteMode.setLiquidGlassAdaptiveColorEnabled(false); LiteMode.setLiquidGlassWallpaperRefractionEnabled(false);
+            LiteMode.setLiquidGlassAdaptiveColorEnabled(b(v, "glass.adaptive"));
+            LiteMode.setLiquidGlassWallpaperRefractionEnabled(b(v, "glass.wallpaper"));
+        }
+        if (changes.containsKey("glass.separate")) LiteMode.setLiquidGlassSeparateColors(b(v, "glass.separate"));
+        if (changes.containsKey("glass.strength")) LiteMode.setLiquidGlassColorStrengthLevel(i(v, "glass.strength"));
+        if (changes.containsKey("glass.transition")) LiteMode.setLiquidGlassColorTransitionLevel(i(v, "glass.transition"));
+        if (changes.containsKey("ghost.schedule")) LumaGhostMode.setScheduledSendEnabled(account, b(v, "ghost.schedule"));
+        if (changes.containsKey("ghost.enabled")) LumaGhostMode.setEnabled(account, b(v, "ghost.enabled"));
+        if (changes.containsKey("deleted.keep")) LumaDeletedMessages.setEnabled(account, b(v, "deleted.keep"));
+        if (changes.containsKey("rating.level")) LumaStarRating.setLevel(account, i(v, "rating.level"));
+        if (changes.containsKey("rating.enabled")) LumaStarRating.setEnabled(account, b(v, "rating.enabled"));
+        if (changes.containsKey("number.digits")) LumaAnonymousNumber.setDigits(account, (String) v.get("number.digits"));
+        if (changes.containsKey("number.enabled")) LumaAnonymousNumber.setEnabled(account, b(v, "number.enabled"));
+        if (changes.containsKey("verification.enabled")) LumaProfileVerification.setEnabled(account, b(v, "verification.enabled"));
+        if (changes.containsKey("send.roundHighQuality")) LumaRoundVideoQuality.setEnabled(b(v, "send.roundHighQuality"));
+        if (changes.containsKey("send.roundStartRear")) LumaRoundVideoCamera.setStartWithRearCameraEnabled(b(v, "send.roundStartRear"));
+    }
+
+    public static LunagramFeatureCatalog.Feature missingAccess(int account, Map<String, Object> changes) {
+        validate(changes);
+        for (Map.Entry<String, Object> entry : changes.entrySet()) {
+            // Explicitly disabling an effect is always safe; enabling/configuration requires its tier.
+            if (Boolean.FALSE.equals(entry.getValue()) || (entry.getKey().equals("format.style")
+                    && ((Number) entry.getValue()).intValue() == 0)) continue;
+            LunagramFeatureCatalog.Feature feature = featureForSetting(entry.getKey());
+            if (!LunagramSubscriptionAccess.canUse(account, feature)) return feature;
+        }
+        return null;
+    }
+
+    private static LunagramFeatureCatalog.Feature featureForSetting(String key) {
+        if (key.startsWith("typing.")) return LunagramFeatureCatalog.Feature.TYPING_MOTION;
+        if (key.startsWith("format.")) return LunagramFeatureCatalog.Feature.AUTOMATIC_MESSAGE_FORMATTING;
+        if (key.equals("send.roundStartRear")) return LunagramFeatureCatalog.Feature.USABILITY_FIXES;
+        if (key.equals("send.roundHighQuality")) return LunagramFeatureCatalog.Feature.ROUND_VIDEO_CONTROLS;
+        if (key.startsWith("send.")) return LunagramFeatureCatalog.Feature.SEND_UNDO;
+        if (key.equals("glass.enabled") || key.equals("glass.powerSaver")) return LunagramFeatureCatalog.Feature.BASIC_GLASS;
+        if (key.startsWith("glass.")) return LunagramFeatureCatalog.Feature.ADVANCED_GLASS;
+        if (key.startsWith("ghost.")) return LunagramFeatureCatalog.Feature.GHOST;
+        if (key.startsWith("deleted.")) return LunagramFeatureCatalog.Feature.RETAIN_DELETED;
+        if (key.startsWith("rating.")) return LunagramFeatureCatalog.Feature.LOCAL_LEVEL;
+        if (key.startsWith("number.")) return LunagramFeatureCatalog.Feature.LOCAL_NUMBER;
+        if (key.startsWith("verification.")) return LunagramFeatureCatalog.Feature.LOCAL_VERIFICATION;
+        throw new IllegalArgumentException("unknown setting");
     }
 
     private static boolean b(Map<String, Object> v, String k) { return (Boolean) v.get(k); }
@@ -150,7 +186,8 @@ public final class BlackHoleSettings {
             }
         }
         values = effectiveProfile(account, values);
-        LumaAccountData.preferences(account).edit().putString(PROFILE_KEY + id, encode(values)).apply();
+        if (LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.SETTINGS_PROFILES))
+            LumaAccountData.preferences(account).edit().putString(PROFILE_KEY + id, encode(values)).apply();
         return values;
     }
 
@@ -177,6 +214,8 @@ public final class BlackHoleSettings {
     }
 
     public static void saveProfile(int account, int id) throws Exception {
+        if (!LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.SETTINGS_PROFILES))
+            throw new SecurityException("subscription required");
         checkProfile(id);
         LumaAccountData.preferences(account).edit().putString(PROFILE_KEY + id, encode(capture(account))).apply();
     }

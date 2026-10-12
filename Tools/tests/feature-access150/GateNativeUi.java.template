@@ -1,0 +1,40 @@
+// FILE: org/telegram/ui/ActionBar/Theme.java
+package org.telegram.ui.ActionBar;
+public final class Theme { public interface ResourcesProvider {} }
+// FILE: org/telegram/ui/ActionBar/BaseFragment.java
+package org.telegram.ui.ActionBar;
+public class BaseFragment {
+    public int getCurrentAccount() { return 0; }
+    public void setCurrentAccount(int account) {}
+    public android.app.Activity getParentActivity() { return null; }
+    public Theme.ResourcesProvider getResourceProvider() { return null; }
+    public android.app.Dialog showDialog(android.app.Dialog dialog) { return dialog; }
+    public boolean presentFragment(BaseFragment fragment) { return true; }
+}
+// FILE: org/telegram/ui/ActionBar/AlertDialog.java
+package org.telegram.ui.ActionBar;
+public class AlertDialog extends android.app.Dialog {
+    public AlertDialog(android.content.Context context) { super(context); }
+    public static final class Builder {
+        public Builder(android.content.Context context, Theme.ResourcesProvider provider) {}
+        public Builder setTitle(CharSequence text) { return this; }
+        public Builder setMessage(CharSequence text) { return this; }
+        public Builder setPositiveButton(CharSequence text, android.content.DialogInterface.OnClickListener listener) { return this; }
+        public Builder setNegativeButton(CharSequence text, android.content.DialogInterface.OnClickListener listener) { return this; }
+        public AlertDialog create() { return new AlertDialog(null); }
+    }
+}
+// FILE: org/telegram/ui/LunagramSubscriptionActivity.java
+package org.telegram.ui;
+public final class LunagramSubscriptionActivity extends org.telegram.ui.ActionBar.BaseFragment {}
+// FILE: org/telegram/messenger/LocaleController.java
+package org.telegram.messenger;
+public final class LocaleController {
+    public static String getString(int id) { return ""; }
+    public static String formatString(int id, Object... args) { return ""; }
+}
+// FILE: org/telegram/messenger/R.java
+package org.telegram.messenger;
+public final class R { public static final class string {
+    public static final int LunagramSubscriptionTitle = 1, LunagramFeatureRequiresTier = 2, Cancel = 3;
+} }

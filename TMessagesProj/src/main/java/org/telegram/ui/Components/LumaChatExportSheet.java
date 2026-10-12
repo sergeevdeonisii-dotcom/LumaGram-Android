@@ -1,5 +1,8 @@
 package org.telegram.ui.Components;
 
+import org.telegram.ui.LunagramFeatureGate;
+import org.telegram.messenger.LunagramFeatureCatalog.Feature;
+
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -72,6 +75,7 @@ public final class LumaChatExportSheet {
     }
 
     private static void startExport(ChatActivity chatActivity, int outputFormat, boolean includeMedia) {
+        if (!LunagramFeatureGate.require(chatActivity, outputFormat == LumaChatExportManager.OUTPUT_PDF ? Feature.CHAT_PDF : Feature.CHAT_EXPORT)) return;
         if (chatActivity.getParentActivity() == null) {
             return;
         }

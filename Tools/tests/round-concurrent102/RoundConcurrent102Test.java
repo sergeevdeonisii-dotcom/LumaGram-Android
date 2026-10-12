@@ -159,10 +159,52 @@ public final class RoundConcurrent102Test {
         check(!s.cameras.isSupported(), "Concurrent high-speed mode is not inferred from ordinary dual streams");
         s = new Scenario(60, 30, 60);
         check(!s.cameras.isSupported(), "A 30 FPS standby can never downgrade a 60 FPS recording just for fast switching");
-        s = new Scenario(60, 60, 15);
-        check(!s.cameras.isSupported(), "Adaptive 15-60 ranges do not prove simultaneous fixed 60 support");
-        s.cameras.start(); s.handler.drain();
-        check(s.failures == 1 && s.manager.devices.isEmpty(), "Unqualified rate configuration fails before opening either camera");
+        for (int lower : new int[]{15, 30}) {
+            s = new Scenario(60, 60, lower);
+            check(s.cameras.isSupported(), "Adaptive " + lower + "-60 can enter actual sensor qualification");
+            check(s.manager.checkedConfigurations == 2, "Adaptive candidate still validates both actual surface configurations");
+            s.cameras.start(); s.open("front"); s.open("back");
+            front = s.configure("front"); back = s.configure("back");
+            check(!s.cameras.isReady() && s.ready == 0, "Adaptive metadata alone cannot enable concurrent recording");
+            for (int i = 1; i <= 17; i++) front.frame(i * 16_666_667L);
+            check(s.ready == 0, "Adaptive standby must separately establish actual 60");
+            for (int i = 1; i <= 17; i++) back.frame(i * 16_666_667L);
+            check(s.ready == 1 && s.cameras.activeSpec().frameRate == 60, "Adaptive candidate is accepted only after both actual 60 timelines");
+            for (int i = 0; i < 20; i++) {
+                check(s.cameras.select(i % 2 == 0 ? RoundVideoSession.CameraFacing.BACK : RoundVideoSession.CameraFacing.FRONT),
+                        "Rapid verified-60 switches reuse their qualified warm cameras");
+            }
+            check(s.device("front").configs == 1 && s.device("back").configs == 1, "Repeated adaptive flips never reconfigure either camera");
+            timestamp = 17 * 16_666_667L;
+            for (int i = 1; i <= 30; i++) back.frame(timestamp + i * 33_333_333L);
+            check(!s.cameras.isReady() && front.closed && back.closed, "Adaptive 60 is monitored after qualification and cannot silently fall to 30");
+            s.closed("front"); s.closed("back");
+            check(s.failures == 1, "Adaptive cadence loss returns to the existing single-camera recovery exactly once");
+
+            s = new Scenario(60, 60, lower); s.cameras.start(); s.open("front"); s.open("back");
+            front = s.configure("front"); back = s.configure("back");
+            for (int i = 1; i <= 17; i++) { front.frame(i * 16_666_667L); back.frame(i * 33_333_333L); }
+            check(s.ready == 0 && front.closed && back.closed, "Adaptive range producing actual 30 never announces dual 60");
+            s.closed("front"); s.closed("back");
+            check(s.failures == 1, "Rejected adaptive cadence completes bounded single-camera recovery");
+
+            s = new Scenario(60, 60, lower); s.manager.advertised = false;
+            check(!s.cameras.isSupported(), "Adaptive range cannot bypass the advertised physical-pair gate");
+            s.manager.advertised = true; s.manager.supported = false;
+            check(!s.cameras.isSupported(), "Adaptive range cannot bypass actual concurrent surface support");
+        }
+        for (int lower : new int[]{0, -1}) {
+            s = new Scenario(60, 60, lower);
+            check(!s.cameras.isSupported(), "Nonpositive advertised lower bound is rejected");
+            s.cameras.start(); s.handler.drain();
+            check(s.failures == 1 && s.manager.devices.isEmpty(), "Invalid range fails before opening either camera");
+        }
+        s = new Scenario(60, 60, 15); s.cameras.start(); s.open("front"); s.open("back");
+        front = s.configure("front"); back = s.configure("back");
+        s.cameras.close(null);
+        for (int i = 1; i <= 17; i++) { front.frame(i * 16_666_667L); back.frame(i * 16_666_667L); }
+        s.closed("front"); s.closed("back"); s.handler.timeout();
+        check(s.ready == 0 && s.failures == 0, "Recorder close during adaptive qualification cannot restart cameras from late frames");
         s = new Scenario(60); s.cameras.start(); s.open("front"); s.open("back");
         front = s.configure("front"); back = s.configure("back");
         timestamp = 1L;

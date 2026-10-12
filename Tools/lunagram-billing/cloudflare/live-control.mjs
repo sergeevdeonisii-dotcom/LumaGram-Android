@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer';
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { requireBilling, telegramUserId } from '../catalog.mjs';
 
-export const TERMS_VERSION = '2026-10-12-v1';
+export const TERMS_VERSION = '2026-10-12-v3-tiers';
 export function secretMatches(actual, expected) {
     if (typeof actual !== 'string' || typeof expected !== 'string'
         || !/^[A-Za-z0-9_-]{43}$/.test(actual) || !/^[A-Za-z0-9_-]{43}$/.test(expected)) return false;

@@ -8,6 +8,7 @@ public final class LumaRoundVideoCamera {
     private LumaRoundVideoCamera() {}
 
     public static boolean isFastSwitchEnabled() {
+        if (!LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.ROUND_VIDEO_CONTROLS)) return false;
         try {
             return MessagesController.getGlobalMainSettings().getBoolean(FAST_SWITCH_KEY, true);
         } catch (ClassCastException invalidRestoredPreference) {

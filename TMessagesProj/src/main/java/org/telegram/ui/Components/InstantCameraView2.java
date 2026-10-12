@@ -397,8 +397,8 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
                 .setOutputDirectory(new File(ApplicationLoader.getFilesDirFixed(), "cache"))
                 .setInitialFacing(getInitialCameraFacing(fromPaused))
                 .setOutputResolution(activeOutputResolution)
-                .setVideoBitrate(SharedSettings.roundVideoVideoBitrate.get())
-                .setCameraResolution(SharedSettings.roundVideoCameraResolution.get())
+                .setVideoBitrate(SharedSettings.getRoundVideoBitrate())
+                .setCameraResolution(SharedSettings.getRoundVideoCameraResolution())
                 .setFrameRate(RoundVideoSession.FrameRate.fromValue(requestedRecordingFps))
                 .setCompositionEnabled(SharedSettings.roundVideoComposition.get())
                 .setListener(sessionListener)
@@ -1221,7 +1221,9 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
                 return;
             }
             bitmap = applyPreviewBitmapTransform(bitmap);
-            Utilities.stackBlurBitmap(bitmap, 15);
+            // A switch snapshot is temporary UI feedback on the main thread.
+            // Keep it sharp; only the persisted next-open placeholder needs blur.
+            if (persist) Utilities.stackBlurBitmap(bitmap, 15);
             Bitmap previous = lastBitmap;
             lastBitmap = bitmap;
             if (previous != null && previous != bitmap && !previous.isRecycled()) {

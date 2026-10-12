@@ -45,7 +45,7 @@ public final class BlackHoleSearchActivity extends BaseFragment {
                 R.string.LiquidGlassSeparateColors, R.string.LiquidGlassColorStrength, R.string.LiquidGlassColorTransition);
         group(3, R.string.TextAnimationSettingsTitle, R.string.TextAnimationEnable, R.string.LumaAutomaticMessageStyle);
         if (LumaBuildPolicy.allowsBuiltInUpdates()) {
-            group(4, R.string.LumaUpdatesTitle, R.string.LumaUpdatesTitle, R.string.LumaUpdateAutomaticHeader);
+            group(4, R.string.LumaUpdatesTitle, R.string.LumaUpdatesTitle, R.string.LumaUpdateCheckNow);
         }
         if (LumaBuildPolicy.allowsPrivacyTools()) {
             group(101, R.string.BlackHoleAdvancedPrivacyTitle, R.string.ExperimentalGhostEnable,

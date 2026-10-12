@@ -1,0 +1,12 @@
+{
+  "name": "lunagram-billing-v2-local-only",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "observability": { "enabled": false },
+  "durable_objects": { "bindings": [{ "name": "LOCAL_TERMS", "class_name": "LocalTermsV2Store" }] },
+  "migrations": [{ "tag": "local-v2-only", "new_sqlite_classes": ["LocalTermsV2Store"] }]
+}

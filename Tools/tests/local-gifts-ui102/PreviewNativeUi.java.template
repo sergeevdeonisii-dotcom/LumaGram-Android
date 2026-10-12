@@ -5,19 +5,26 @@ public final class AndroidUtilities { public static int dp(float n){return (int)
 package org.telegram.messenger; public final class SharedConfig {public static boolean animationsEnabled(){return true;}}
 // FILE: org/telegram/messenger/LocaleController.java
 package org.telegram.messenger;
-public final class LocaleController { public static String getString(int n){return "";} public static String formatNumber(int n,char sep){return "";} }
+public final class LocaleController { public static String getString(int n){return "";} public static String formatNumber(int n,char sep){return "";} public static String formatPluralStringComma(String key,int value){return "";} }
+// FILE: org/telegram/messenger/BillingController.java
+package org.telegram.messenger;
+public final class BillingController { public static BillingController getInstance(){return null;} public int getCurrencyExp(String currency){return 2;} public String formatCurrency(long amount,String currency,int exp,boolean rounded){return "";} }
 // FILE: org/telegram/messenger/LumaBuildPolicy.java
 package org.telegram.messenger; public final class LumaBuildPolicy { public static boolean isPersonalEdition(){return true;} }
+// FILE: org/telegram/messenger/LunagramFeatureCatalog.java
+package org.telegram.messenger; public final class LunagramFeatureCatalog {public enum Feature{LOCAL_NFT}}
+// FILE: org/telegram/messenger/LunagramSubscriptionAccess.java
+package org.telegram.messenger; public final class LunagramSubscriptionAccess {public static boolean canUse(int account,LunagramFeatureCatalog.Feature feature){return true;}}
 // FILE: org/telegram/messenger/ImageReceiver.java
 package org.telegram.messenger;
 public class ImageReceiver { public void setCurrentAccount(int a){} public void setAllowDecodeSingleFrame(boolean v){} public void setAutoRepeat(int v){} public void setAllowStartAnimation(boolean v){} public void setAllowStartLottieAnimation(boolean v){} public void startAnimation(){} public void stopAnimation(){} public void setUniqKeyPrefix(String s){} }
 // FILE: org/telegram/messenger/LumaLocalGifts.java
 package org.telegram.messenger;
-public final class LumaLocalGifts { public static final class LocalSavedGift { public long ownerUserId; public org.telegram.tgnet.tl.TL_stars.StarGift gift; } public static boolean remove(int a,LocalSavedGift g){return false;} }
+public final class LumaLocalGifts { public static final class LocalSavedGift extends org.telegram.tgnet.tl.TL_stars.SavedStarGift { public long ownerUserId; } public static boolean remove(int a,LocalSavedGift g){return false;} }
 // FILE: org/telegram/messenger/NotificationCenter.java
 package org.telegram.messenger;
 public final class NotificationCenter {
- public static final int lumaLocalGiftsChanged=1,appDidLogout=2,activeAccountChanged=3;
+ public static final int lumaLocalGiftsChanged=1,appDidLogout=2,activeAccountChanged=3,lunagramSubscriptionChanged=4;
  public interface NotificationCenterDelegate {void didReceivedNotification(int id,int account,Object... args);}
  public static NotificationCenter getInstance(int a){return null;} public static NotificationCenter getGlobalInstance(){return null;}
  public void postNotificationName(int id,Object... args){} public void addObserver(NotificationCenterDelegate who,int id){} public void removeObserver(NotificationCenterDelegate who,int id){}
@@ -34,7 +41,8 @@ package org.telegram.tgnet; public class TLRPC { public static class User{} publ
 // FILE: org/telegram/tgnet/tl/TL_stars.java
 package org.telegram.tgnet.tl;
 public class TL_stars {
- public static class StarGift { public String title; public int num; public Object resell_amount; public java.util.ArrayList<StarGiftAttribute> attributes; }
+ public static class StarGift { public String title,value_currency; public int num,flags,availability_total,availability_issued; public long value_amount; public Object resell_amount; public java.util.ArrayList<StarGiftAttribute> attributes; }
+ public static class SavedStarGift { public StarGift gift; }
  public static class TL_starGiftUnique extends StarGift{}
  public static class StarGiftAttribute { public String name; public Object rarity; }
  public static class starGiftAttributeModel extends StarGiftAttribute{}
@@ -90,7 +98,10 @@ package org.telegram.ui.Stories.recorder;
 public class ButtonWithCounterView extends android.widget.FrameLayout { public ButtonWithCounterView(android.content.Context c,org.telegram.ui.ActionBar.Theme.ResourcesProvider r){super(c);} public void setText(CharSequence s,boolean a){} }
 // FILE: org/telegram/ui/Stars/StarGiftSheet.java
 package org.telegram.ui.Stars;
-public class StarGiftSheet {
+public class StarGiftSheet extends android.app.Dialog {
+ public StarGiftSheet(android.content.Context c,int account,long dialog,org.telegram.ui.ActionBar.Theme.ResourcesProvider r){super(c);}
+ public StarGiftSheet setProfilePreviewPager(org.telegram.ui.Gifts.LumaLocalGiftPreview.PagerSource pager){return this;}
+ public StarGiftSheet setLocalPreview(org.telegram.ui.ActionBar.BaseFragment fragment,org.telegram.messenger.LumaLocalGifts.LocalSavedGift gift){return this;}
  public static CharSequence getRarityName(Object r,Integer[] color){return "";} public static void addAttributeRow(org.telegram.ui.Components.TableView t,org.telegram.tgnet.tl.TL_stars.StarGiftAttribute a){}
  public static class TopView extends android.widget.FrameLayout {
   public final android.widget.FrameLayout imageLayout=null; public final android.widget.ImageView optionsView=null;
@@ -100,6 +111,9 @@ public class StarGiftSheet {
   protected org.telegram.ui.Components.AnimatedEmojiDrawable createReadOnlyPatternDrawable(int page,org.telegram.tgnet.TLRPC.Document document){return null;}
  }
 }
+// FILE: org/telegram/ui/Stars/StarsController.java
+package org.telegram.ui.Stars;
+public final class StarsController { public interface IGiftsList {} }
 // FILE: org/telegram/ui/Gifts/GiftSheet.java
 package org.telegram.ui.Gifts;
 public class GiftSheet { public static class GiftCell extends android.widget.FrameLayout { public GiftCell(android.content.Context c,int a,org.telegram.ui.ActionBar.Theme.ResourcesProvider r){super(c);} public void setStarsGift(org.telegram.messenger.LumaLocalGifts.LocalSavedGift g,boolean n,boolean b){} } }

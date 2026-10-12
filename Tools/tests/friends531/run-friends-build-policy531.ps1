@@ -24,6 +24,8 @@ foreach ($name in @('LumaBuildPolicy', 'LumaGhostMode', 'LumaDeletedMessages', '
         'LumaRoundVideoCamera', 'BlackHoleSettings')) {
     $sources += Join-Path $repo ('TMessagesProj/src/main/java/org/telegram/messenger/' + $name + '.java')
 }
+. (Join-Path $PSScriptRoot '../feature-access150/add-fixtures.ps1')
+$sources = @(Add-FeatureAccessFixtures $sources $repo)
 foreach ($edition in @('full', 'friends')) {
     $run = Join-Path $OutputRoot ($edition + '-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path (Join-Path $run 'classes') -Force | Out-Null

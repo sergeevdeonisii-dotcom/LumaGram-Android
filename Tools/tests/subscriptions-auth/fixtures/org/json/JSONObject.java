@@ -13,6 +13,8 @@ public final class JSONObject {
     }
     public JSONObject put(String key,Object value) { values.put(key,value == null ? NULL : value); return this; }
     public Object get(String key) { if (!values.containsKey(key)) throw new IllegalArgumentException("Missing field"); return values.get(key); }
+    public boolean has(String key) { return values.containsKey(key); }
+    public Iterator<String> keys() { return values.keySet().iterator(); }
     @Override public String toString() {
         String reference = "fixture-object-" + (++sequence); responses.put(reference,new HashMap<>(values)); return reference;
     }

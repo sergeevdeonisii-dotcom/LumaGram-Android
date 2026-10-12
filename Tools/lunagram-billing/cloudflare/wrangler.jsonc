@@ -9,7 +9,7 @@
   "observability": { "enabled": false },
   "vars": {
     "LIVE_BOT_ENABLED": "true",
-    "BILLING_PAYMENTS_ENABLED": "false",
+    "BILLING_PAYMENTS_ENABLED": "true",
     "TELEGRAM_WEBHOOK_IP": "172.66.44.64"
   },
   "durable_objects": {

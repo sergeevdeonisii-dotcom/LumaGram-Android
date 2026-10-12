@@ -189,11 +189,16 @@ public class LiteMode {
         return true;
     }
 
+    private static boolean canCustomizeLiquidGlass() {
+        return LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.ADVANCED_GLASS);
+    }
+
     public static boolean getLiquidGlassKeepInPowerSaver() {
         return true;
     }
 
     public static int getLiquidGlassOpacityLevel() {
+        if (!canCustomizeLiquidGlass()) return 1;
         if (liquidGlassOpacity < 0) {
             liquidGlassOpacity = MathUtils.clamp(MessagesController.getGlobalMainSettings().getInt(LIQUID_GLASS_OPACITY, 1), 0, 2);
         }
@@ -201,6 +206,7 @@ public class LiteMode {
     }
 
     public static void setLiquidGlassOpacityLevel(int value) {
+        if (!canCustomizeLiquidGlass()) return;
         liquidGlassOpacity = MathUtils.clamp(value, 0, 2);
         MessagesController.getGlobalMainSettings().edit().putInt(LIQUID_GLASS_OPACITY, liquidGlassOpacity).apply();
     }
@@ -223,6 +229,7 @@ public class LiteMode {
     }
 
     public static int getLiquidGlassIntensityLevel() {
+        if (!canCustomizeLiquidGlass()) return 1;
         if (liquidGlassIntensity < 0) {
             liquidGlassIntensity = MathUtils.clamp(MessagesController.getGlobalMainSettings().getInt(LIQUID_GLASS_INTENSITY, 1), 0, 2);
         }
@@ -230,6 +237,7 @@ public class LiteMode {
     }
 
     public static void setLiquidGlassIntensityLevel(int value) {
+        if (!canCustomizeLiquidGlass()) return;
         liquidGlassIntensity = MathUtils.clamp(value, 0, 2);
         MessagesController.getGlobalMainSettings().edit().putInt(LIQUID_GLASS_INTENSITY, liquidGlassIntensity).apply();
     }
@@ -243,6 +251,7 @@ public class LiteMode {
     }
 
     public static int getLiquidGlassInputSizeLevel() {
+        if (!canCustomizeLiquidGlass()) return 0;
         if (liquidGlassInputSize < 0) {
             liquidGlassInputSize = MathUtils.clamp(MessagesController.getGlobalMainSettings().getInt(LIQUID_GLASS_INPUT_SIZE, 0), 0, 2);
         }
@@ -250,6 +259,7 @@ public class LiteMode {
     }
 
     public static void setLiquidGlassInputSizeLevel(int value) {
+        if (!canCustomizeLiquidGlass()) return;
         liquidGlassInputSize = MathUtils.clamp(value, 0, 2);
         MessagesController.getGlobalMainSettings().edit().putInt(LIQUID_GLASS_INPUT_SIZE, liquidGlassInputSize).apply();
     }
@@ -259,6 +269,7 @@ public class LiteMode {
     }
 
     public static boolean getLiquidGlassAdaptiveColorEnabled() {
+        if (!canCustomizeLiquidGlass()) return true;
         if (liquidGlassAdaptiveColor == null) {
             liquidGlassAdaptiveColor = MessagesController.getGlobalMainSettings().getBoolean(LIQUID_GLASS_ADAPTIVE_COLOR, true);
         }
@@ -266,6 +277,7 @@ public class LiteMode {
     }
 
     public static void setLiquidGlassAdaptiveColorEnabled(boolean value) {
+        if (!canCustomizeLiquidGlass()) return;
         if (value && getLiquidGlassWallpaperRefractionEnabled()) {
             return;
         }
@@ -274,6 +286,7 @@ public class LiteMode {
     }
 
     public static boolean getLiquidGlassWallpaperRefractionEnabled() {
+        if (!canCustomizeLiquidGlass()) return false;
         if (liquidGlassWallpaperRefraction == null) {
             liquidGlassWallpaperRefraction = MessagesController.getGlobalMainSettings()
                 .getBoolean(LIQUID_GLASS_WALLPAPER_REFRACTION, false);
@@ -288,6 +301,7 @@ public class LiteMode {
     }
 
     public static void setLiquidGlassWallpaperRefractionEnabled(boolean value) {
+        if (!canCustomizeLiquidGlass()) return;
         if (value && getLiquidGlassAdaptiveColorEnabled()) {
             return;
         }
@@ -298,6 +312,7 @@ public class LiteMode {
     }
 
     public static int getLiquidGlassColorStrengthLevel() {
+        if (!canCustomizeLiquidGlass()) return 1;
         if (liquidGlassColorStrength < 0) {
             liquidGlassColorStrength = MathUtils.clamp(MessagesController.getGlobalMainSettings().getInt(LIQUID_GLASS_COLOR_STRENGTH, 1), 0, 2);
         }
@@ -305,6 +320,7 @@ public class LiteMode {
     }
 
     public static void setLiquidGlassColorStrengthLevel(int value) {
+        if (!canCustomizeLiquidGlass()) return;
         liquidGlassColorStrength = MathUtils.clamp(value, 0, 2);
         MessagesController.getGlobalMainSettings().edit().putInt(LIQUID_GLASS_COLOR_STRENGTH, liquidGlassColorStrength).apply();
     }
@@ -318,6 +334,7 @@ public class LiteMode {
     }
 
     public static boolean getLiquidGlassSeparateColors() {
+        if (!canCustomizeLiquidGlass()) return true;
         if (liquidGlassSeparateColors == null) {
             liquidGlassSeparateColors = MessagesController.getGlobalMainSettings().getBoolean(LIQUID_GLASS_SEPARATE_COLORS, true);
         }
@@ -325,11 +342,13 @@ public class LiteMode {
     }
 
     public static void setLiquidGlassSeparateColors(boolean value) {
+        if (!canCustomizeLiquidGlass()) return;
         liquidGlassSeparateColors = value;
         MessagesController.getGlobalMainSettings().edit().putBoolean(LIQUID_GLASS_SEPARATE_COLORS, value).apply();
     }
 
     public static int getLiquidGlassColorTransitionLevel() {
+        if (!canCustomizeLiquidGlass()) return 1;
         if (liquidGlassColorTransition < 0) {
             liquidGlassColorTransition = MathUtils.clamp(MessagesController.getGlobalMainSettings().getInt(LIQUID_GLASS_COLOR_TRANSITION, 1), 0, 2);
         }
@@ -337,6 +356,7 @@ public class LiteMode {
     }
 
     public static void setLiquidGlassColorTransitionLevel(int value) {
+        if (!canCustomizeLiquidGlass()) return;
         liquidGlassColorTransition = MathUtils.clamp(value, 0, 2);
         MessagesController.getGlobalMainSettings().edit().putInt(LIQUID_GLASS_COLOR_TRANSITION, liquidGlassColorTransition).apply();
     }
@@ -353,6 +373,7 @@ public class LiteMode {
     }
 
     public static void resetLiquidGlassSettings() {
+        if (!canCustomizeLiquidGlass()) return;
         liquidGlassAdaptiveColor = true;
         liquidGlassWallpaperRefraction = false;
         liquidGlassSeparateColors = true;

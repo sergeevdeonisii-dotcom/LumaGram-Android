@@ -24,6 +24,7 @@ $sources = @(
     (Join-Path $PSScriptRoot 'fixtures/android/content/SharedPreferences.java'),
     (Join-Path $PSScriptRoot 'round-video-fixtures/org/telegram/messenger/VideoEditedInfo.java')
 )
+. (Join-Path $PSScriptRoot 'round-access150/add-fixtures.ps1')
 & (Join-Path $JavaHome 'bin/javac.exe') -J-Xmx128m -encoding UTF-8 -d $classes $sources
 if ($LASTEXITCODE -ne 0) { throw 'Round FPS .77 regression compilation failed.' }
 if ((Get-FileHash -LiteralPath $production -Algorithm SHA256).Hash -ne $initialHash) {

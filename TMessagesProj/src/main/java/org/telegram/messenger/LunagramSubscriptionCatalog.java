@@ -33,6 +33,49 @@ public final class LunagramSubscriptionCatalog {
         public String monthlyUsdAmount() {
             return String.format(Locale.US, "%d.%02d", monthlyUsdCents / 100, monthlyUsdCents % 100);
         }
+
+        public int totalUsdCents(Period period) {
+            requirePeriod(period);
+            // All five approved monthly amounts are even cents; no fractional cent is lost.
+            return monthlyUsdCents * period.priceNumerator / Period.PRICE_DENOMINATOR;
+        }
+
+        public int totalStars(Period period) {
+            requirePeriod(period);
+            // Apply the duration factor to the approved monthly Stars price, then HALF_UP
+            // to the nearest ten. Work in half-Stars throughout (175 becomes 180).
+            int halfStars = monthlyStars * period.priceNumerator;
+            return (halfStars + 10) / 20 * 10;
+        }
+
+        public String totalUsdAmount(Period period) {
+            int cents = totalUsdCents(period);
+            return String.format(Locale.US, "%d.%02d", cents / 100, cents % 100);
+        }
+    }
+
+    /** Exact display-only duration factors: 1, 2.5, 4 and 7 monthly prices. */
+    public enum Period {
+        MONTH_1(1, 2),
+        MONTH_3(3, 5),
+        MONTH_6(6, 8),
+        MONTH_12(12, 14);
+
+        public static final int PRICE_DENOMINATOR = 2;
+        public final int months;
+        public final int priceNumerator;
+
+        Period(int months, int priceNumerator) {
+            this.months = months;
+            this.priceNumerator = priceNumerator;
+        }
+
+        public static Period fromMonths(int months) {
+            for (Period period : values()) {
+                if (period.months == months) return period;
+            }
+            throw new IllegalArgumentException("Unsupported subscription period");
+        }
     }
 
     public enum PaymentMethod {
@@ -42,8 +85,13 @@ public final class LunagramSubscriptionCatalog {
     }
 
     public static final List<Plan> PLANS = Collections.unmodifiableList(Arrays.asList(Plan.values()));
+    public static final List<Period> PERIODS = Collections.unmodifiableList(Arrays.asList(Period.values()));
 
     private LunagramSubscriptionCatalog() {
+    }
+
+    private static void requirePeriod(Period period) {
+        if (period == null) throw new IllegalArgumentException("Subscription period is required");
     }
 
     /** Fail closed until the authenticated invoice/redemption service is actually connected. */

@@ -79,11 +79,11 @@ test('1.5 workflow and scripts enforce the owner repository, source commit and e
   }
   for (const text of [build, prepare]) {
     assert.match(text, /APP_VERSION_NAME=.*1\.5/);
-    assert.match(text, /APP_VERSION_CODE=.*7168/);
+    assert.match(text, /APP_VERSION_CODE=.*7169/);
     assert.ok(text.includes('GITHUB_SHA'));
   }
   assert.match(properties, /^APP_VERSION_NAME=1\.5\r?$/m);
-  assert.match(properties, /^APP_VERSION_CODE=7168\r?$/m);
+  assert.match(properties, /^APP_VERSION_CODE=7169\r?$/m);
   assert.match(build, /source_commit.*GITHUB_SHA/);
   assert.ok(!workflow.includes('pull_request'));
 });
@@ -183,7 +183,11 @@ test('release-blocking regression suites execute before either APK is built', ()
       'check-release100-security.ps1', 'run-svg101-regressions.ps1', 'run-http-url100-regressions.ps1', 'run-media-browser100-regressions.ps1',
       'run-playback-privacy100-regressions.ps1', 'run-update-presentation100-regressions.ps1',
       'lunagram-support100.test.mjs', 'run-subscription-auth-regressions.ps1',
-      'run-subscriptions-regressions.ps1', 'run-subscription-ui-compile.ps1']) {
+      'run-subscriptions-regressions.ps1', 'run-subscription-ui-compile.ps1',
+      'run-feature-catalog150-regressions.ps1', 'run-subscription-screen150-regressions.ps1',
+      'run-feature-gate150-compile.ps1', 'run-local-phone-expiry150-regressions.ps1',
+      'run-subscription-access150-regressions.ps1', 'run-round-access150-regressions.ps1',
+      'run-gift-pager150-regressions.ps1']) {
     assert.ok(workflow.indexOf(script) > 0 && workflow.indexOf(script) < buildStep, script);
   }
   for (const line of workflow.split('\n').filter(x => x.includes('-JavaHome'))) {

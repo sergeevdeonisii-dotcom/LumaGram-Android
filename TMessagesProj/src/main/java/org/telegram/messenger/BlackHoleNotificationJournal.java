@@ -29,9 +29,11 @@ public final class BlackHoleNotificationJournal {
     public static boolean isEnabled(int account) {
         // History is opt-in. A legacy/corrupt preference with another type must not
         // crash the settings UI (SharedPreferences.getBoolean throws ClassCastException).
-        return Boolean.TRUE.equals(LumaAccountData.preferences(account).getAll().get(ENABLED));
+        return LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.NOTIFICATION_JOURNAL)
+                && Boolean.TRUE.equals(LumaAccountData.preferences(account).getAll().get(ENABLED));
     }
     public static synchronized void setEnabled(int account, boolean enabled) {
+        if (enabled && !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.NOTIFICATION_JOURNAL)) return;
         LumaAccountData.preferences(account).edit().putBoolean(ENABLED, enabled).apply();
     }
     private static String limit(String text, int max) {

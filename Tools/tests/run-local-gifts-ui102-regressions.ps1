@@ -85,10 +85,11 @@ foreach ($control in $negativeControls) {
     if ($LASTEXITCODE -eq 0 -or !$negativeOutput.Contains($control.Expected)) { throw "Negative control did not reproduce its defect: $($control.Name)" }
 }
 Write-Output 'PASS: negative controls reproduce queued-grid SPACE-only/stuck-layout, personal section/pin/loading defects, cross-pin-group reorder, detached holder and stale-owner pin defects when their actual production guards are removed.'
-if ($preview -match 'ConnectionsManager|new\s+StarGiftSheet|sendRequest\(|TL_payments|saveStarGift|transferStarGift|resellStarGift') { throw 'Read-only local preview must not open server inventory/payment actions.' }
+if ($preview -match 'ConnectionsManager|sendRequest\(|TL_payments|saveStarGift|transferStarGift|resellStarGift') { throw 'Read-only local preview must not open server inventory/payment actions.' }
+if (!(Method $preview 'private static void showPersonal(').Contains('.setLocalPreview(fragment, gift)')) { throw 'Native local sheet construction must use its isolated local-first binder.' }
 $pureGiftVisuals = @('TopView', 'addAttributeRow', 'getRarityName')
 $giftSheetReferences = @([regex]::Matches($preview, 'StarGiftSheet\.(\w+)') | ForEach-Object { $_.Groups[1].Value })
-if ($giftSheetReferences.Count -ne 3 -or @($giftSheetReferences | Where-Object { $_ -notin $pureGiftVisuals }).Count -gt 0) { throw 'Only the pure NFT header and static attribute/rarity formatting may be reused from the transaction sheet.' }
+if (@($giftSheetReferences | Where-Object { $_ -notin $pureGiftVisuals }).Count -gt 0) { throw 'Only pure NFT header and static attribute/rarity formatting may be reused from the transaction sheet.' }
 foreach ($guard in @('gift.ownerUserId != UserConfig.getInstance(account).getClientUserId()',
         '!(gift.gift instanceof TL_stars.TL_starGiftUnique)', 'getString(R.string.LumaLocalGiftPreviewInfo)',
         'TLRPC.User self = UserConfig.getInstance(account).getCurrentUser()', 'LumaLocalGifts.remove(account, gift)')) {

@@ -54,7 +54,7 @@ $options = @([regex]::Matches($chat, 'public (?:final static|static final) int (
 $read = @($options | Where-Object { $_.Groups[1].Value -eq 'OPTION_GHOST_READ' })
 Check ($read.Count -eq 1 -and @($options | Where-Object { $_.Groups[2].Value -eq $read[0].Groups[2].Value }).Count -eq 1) 'Manual ghost read action has a unique menu ID'
 Check ($chat.Contains('case OPTION_GHOST_READ:') -and $chat.Contains('LumaEditHistory.getVersions')) 'Manual read and local edit-history actions survive'
-Check ($controller.Contains('setLumaGhostModeEnabled') -and $controller.Contains('suppressRead = dialogId > 0 && LumaGhostMode.isEnabled')) 'Presence and automatic read-receipt guards survive'
+Check ($controller.Contains('setLumaGhostModeEnabled') -and $controller.Contains('suppressRead = dialogId > 0 && LumaGhostMode.shouldSuppressActivity')) 'Presence and automatic read-receipt guards survive'
 Check ([regex]::Matches($sender, 'LumaGhostMode\.getAutomaticScheduleDate').Count -ge 2 -and $sender.Contains('lumaGhostAutoScheduled')) 'Regular and forwarded ghost scheduling hooks survive'
 Check ($sender.Contains('if (!isWelcomeMessageTemplate) {') -and $chat.Contains('LumaDeletedMessages.shouldRetain(currentAccount, forceLocalRemoval,') -and $chat.Contains('chatMode == MODE_QUICK_REPLIES || chatMode == MODE_WELCOME_MESSAGES')) 'New welcome-message templates are not auto-scheduled or retained as deleted chats'
 Check ($gifts.Contains('LumaAccountData.preferences') -and $gifts.Contains('LumaLocalPinGift') -and $gifts.Contains('ITEM_TOGGLE_ALL_GIFTS')) 'Local gift pins and hide/show-all survive'

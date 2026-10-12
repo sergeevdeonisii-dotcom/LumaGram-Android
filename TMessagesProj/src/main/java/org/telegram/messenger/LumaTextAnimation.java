@@ -34,10 +34,12 @@ public final class LumaTextAnimation {
     }
 
     public static boolean isEnabled() {
-        return preferences().getBoolean(KEY_ENABLED, true);
+        return LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.TYPING_MOTION)
+                && preferences().getBoolean(KEY_ENABLED, true);
     }
 
     public static void setEnabled(boolean enabled) {
+        if (enabled && !LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.TYPING_MOTION)) return;
         preferences().edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
 
@@ -46,6 +48,7 @@ public final class LumaTextAnimation {
     }
 
     public static void setSpeedLevel(int level) {
+        if (!LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.TYPING_MOTION)) return;
         preferences().edit().putInt(KEY_SPEED_LEVEL, clampLevel(level)).apply();
     }
 
@@ -69,6 +72,7 @@ public final class LumaTextAnimation {
     }
 
     public static void setBlurLevel(int level) {
+        if (!LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.TYPING_MOTION)) return;
         preferences().edit().putInt(KEY_BLUR_LEVEL, clampLevel(level)).apply();
     }
 
@@ -92,6 +96,7 @@ public final class LumaTextAnimation {
     }
 
     public static void setHeightLevel(int level) {
+        if (!LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.TYPING_MOTION)) return;
         preferences().edit().putInt(KEY_HEIGHT_LEVEL, clampLevel(level)).apply();
     }
 
@@ -115,10 +120,12 @@ public final class LumaTextAnimation {
     }
 
     public static void setSwipeMode(int mode) {
+        if (!LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.TYPING_MOTION)) return;
         preferences().edit().putInt(KEY_SWIPE_MODE, clampLevel(mode)).apply();
     }
 
     public static void resetTuningSettings() {
+        if (!LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.TYPING_MOTION)) return;
         preferences().edit()
             .remove(KEY_SPEED_LEVEL)
             .remove(KEY_BLUR_LEVEL)

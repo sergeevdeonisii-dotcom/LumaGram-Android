@@ -41,17 +41,19 @@ public final class RoundCameraFlip105Test {
         near(first.target.rotation,0f,"HAL wait never parks edge-on");
         first.flip.firstFrame(true);
         ValueAnimator animator=last();
-        check(animator.started && animator.duration==280L,"one finite280ms timeline starts only after target frame");
+        check(animator.started && animator.duration==140L,"one finite140ms arrival starts only after target frame");
         check(animator.from==0f && animator.to==1f,"single0..1 timeline");
-        check(AndroidUtilities.delay==360L && AndroidUtilities.pending.size()==1,"developer-scale wallclock guard is bounded");
+        check(AndroidUtilities.delay==220L && AndroidUtilities.pending.size()==1,"developer-scale wallclock guard is bounded");
+        check(!first.target.placeholder && first.target.hides==1,"actual target is uncovered at time zero, without an extra old-face half-turn");
+        near(first.target.rotation,-90f,"arrival keeps the existing incoming flip direction");
         animator.advance(0.25f);
-        near(first.target.rotation,67.5f,"old face turns outward");
-        check(first.target.placeholder,"old overlay remains before midpoint");
+        near(first.target.rotation,-50.625f,"actual target turns inward immediately");
+        check(!first.target.placeholder,"old overlay cannot cover the first quarter of the target arrival");
         animator.advance(0.5f);
-        near(first.target.rotation,-90f,"new face enters exactly at midpoint");
-        check(!first.target.placeholder && first.target.hides==1,"midpoint swaps the old overlay once");
+        near(first.target.rotation,-22.5f,"actual target is mostly facing the user by midpoint");
+        check(first.target.hides==1,"midpoint does not swap the overlay a second time");
         animator.advance(0.75f);
-        near(first.target.rotation,-22.5f,"new face turns inward");
+        near(first.target.rotation,-5.625f,"target settles without a second phase");
         first.flip.firstFrame(true);
         check(ValueAnimator.instances.size()==1,"duplicate first-frame callback cannot restart a valid turn");
         animator.advance(1f);
@@ -81,8 +83,8 @@ public final class RoundCameraFlip105Test {
         repeated.flip.firstFrame(true);
         ValueAnimator replacement=last(); replacement.advance(0.25f);
         old.value=0.75f; staleUpdate.onAnimationUpdate(old); staleEnd.onAnimationEnd(old); staleDeadline.run();
-        check(repeated.target.placeholder,"old callbacks cannot swap a replacement animator overlay");
-        near(repeated.target.rotation,67.5f,"old callbacks cannot alter replacement progress");
+        check(!repeated.target.placeholder,"replacement immediately uncovers its actual frame");
+        near(repeated.target.rotation,-50.625f,"old callbacks cannot alter replacement progress");
         replacement.advance(1f);
         check(AndroidUtilities.pending.isEmpty(),"replacement completion clears the deadline");
 
@@ -111,6 +113,20 @@ public final class RoundCameraFlip105Test {
         check(stretched.cancelled && !timed.target.placeholder,"wallclock deadline ends a stretched animation");
         near(timed.target.rotation,0f,"deadline never leaves the target edge-on");
         check(AndroidUtilities.pending.isEmpty(),"deadline removes its own scheduled work");
+
+        for (String reason : new String[]{"pause", "recorder close", "hidden window", "destroy"}) {
+            reset(); Fixture terminal=new Fixture(); terminal.flip.firstFrame(true);
+            ValueAnimator stopped=last();
+            ValueAnimator.AnimatorUpdateListener delayedUpdate=stopped.updates.get(0);
+            AnimatorListenerAdapter delayedEnd=stopped.listeners.get(0);
+            Runnable delayedDeadline=AndroidUtilities.pending.get(0);
+            terminal.flip.cancel(); stopped.value=0.4f;
+            delayedUpdate.onAnimationUpdate(stopped); delayedEnd.onAnimationEnd(stopped); delayedDeadline.run();
+            terminal.flip.firstFrame(true);
+            check(ValueAnimator.instances.size()==1 && !terminal.target.placeholder,reason+" rejects all queued callbacks");
+            near(terminal.target.rotation,0f,reason+" cannot leave a stale transform");
+            check(AndroidUtilities.pending.isEmpty(),reason+" leaves no timer");
+        }
 
         for (int index=0;index<100;index++) {
             reset(); Fixture cycle=new Fixture(); cycle.flip.firstFrame(true); ValueAnimator active=last();

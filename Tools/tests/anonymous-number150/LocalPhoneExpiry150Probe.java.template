@@ -1,0 +1,84 @@
+import java.util.*;
+
+/** Actual observer/owner guard with modeled native sheet/events, not Android rendering. */
+public final class LocalPhoneExpiry150Probe {
+    static int checks;
+    static void check(boolean condition,String label){checks++;if(!condition)throw new AssertionError(label);}
+    static class BottomSheet {int dismissals;boolean deliverDismiss=true;Runnable dismissed;void setOnDismissListener(Runnable listener){dismissed=listener;}void dismiss(){dismissals++;if(deliverDismiss&&dismissed!=null)dismissed.run();}}
+    static class UserConfig {
+        static int selectedAccount;static final long[] owners={42,99};
+        final int account;UserConfig(int a){account=a;}static UserConfig getInstance(int a){return new UserConfig(a);}
+        long getClientUserId(){return owners[account];}
+    }
+    static class LumaAnonymousNumber {static boolean allowed=true;static boolean isEnabled(int account){return allowed;}}
+    static class NotificationCenter {
+        static final int lunagramSubscriptionChanged=1,appDidLogout=2,activeAccountChanged=3;
+        static final NotificationCenter[] accounts={new NotificationCenter(),new NotificationCenter()};
+        static final NotificationCenter global=new NotificationCenter();
+        final Map<Integer,Set<NotificationCenterDelegate>> observers=new HashMap<>();
+        interface NotificationCenterDelegate {void didReceivedNotification(int id,int account,Object... args);}
+        static NotificationCenter getInstance(int account){return accounts[account];}
+        static NotificationCenter getGlobalInstance(){return global;}
+        void addObserver(NotificationCenterDelegate who,int id){observers.computeIfAbsent(id,k->new HashSet<>()).add(who);}
+        void removeObserver(NotificationCenterDelegate who,int id){observers.computeIfAbsent(id,k->new HashSet<>()).remove(who);}
+        void post(int id,int account){for(NotificationCenterDelegate who:new ArrayList<>(observers.getOrDefault(id,Collections.emptySet())))who.didReceivedNotification(id,account);}
+        int count(){return observers.values().stream().mapToInt(Set::size).sum();}
+    }
+    /* ACTUAL_GUARD */
+    static class Rating {final int level;Rating(int level){this.level=level;}}
+    static class UserInfo {Rating stars_rating=new Rating(5);}
+    static class RatingView {Rating rating;void set(Rating value){rating=value;}}
+    static class LumaStarRating {
+        static boolean allowed=true;
+        static boolean isEnabled(int account){return allowed;}
+        static Rating getDisplayRating(int account,long peer,Rating original){return allowed&&peer==42?new Rating(100):original;}
+    }
+    static class Profile {
+        final int currentAccount=0;long userId=42;UserInfo userInfo=new UserInfo();RatingView ratingView=new RatingView();
+        BottomSheet localStarRatingSheet;long localStarRatingSheetOwner;
+        int headerRefreshes,rowRefreshes;
+        void updateProfileData(boolean reload){check(reload,"native header fully rebound");headerRefreshes++;}
+        void updateListAnimated(boolean online){check(!online,"no extra online side effect");rowRefreshes++;}
+        /* ACTUAL_PROFILE_REFRESH */
+        /* ACTUAL_PROFILE_SHEET */
+    }
+    static LocalPhonePreviewGuard create(BottomSheet sheet){return new LocalPhonePreviewGuard(sheet,0,42);}
+    public static void main(String[] args){
+        BottomSheet sheet=new BottomSheet();LocalPhonePreviewGuard guard=create(sheet);guard.attach();guard.attach();
+        check(NotificationCenter.accounts[0].count()==2&&NotificationCenter.global.count()==1,"one balanced observer set");
+        check(guard.allowAction()&&sheet.dismissals==0,"current paid local display usable");
+        NotificationCenter.accounts[1].post(1,1);check(sheet.dismissals==0,"other account expiry irrelevant");
+        LumaAnonymousNumber.allowed=false;NotificationCenter.accounts[0].post(1,0);
+        check(sheet.dismissals==1,"expiry closes already-open local phone");
+        check(NotificationCenter.accounts[0].count()==0&&NotificationCenter.global.count()==0,"expiry removes every observer");
+        LumaAnonymousNumber.allowed=true;guard.attach();check(!guard.allowAction()&&sheet.dismissals==1,"renewal cannot revive disposed sheet");
+        sheet=new BottomSheet();guard=create(sheet);guard.attach();guard.detach();
+        check(NotificationCenter.accounts[0].count()==0&&NotificationCenter.global.count()==0,"normal dismissal removes every observer");
+        sheet=new BottomSheet();guard=create(sheet);guard.attach();NotificationCenter.accounts[0].post(2,0);
+        check(sheet.dismissals==1&&!guard.allowAction(),"same-ID logout cannot revive local sheet");
+        sheet=new BottomSheet();guard=create(sheet);guard.attach();UserConfig.selectedAccount=1;NotificationCenter.global.post(3,-1);
+        check(sheet.dismissals==1&&NotificationCenter.accounts[0].count()==0,"account switch closes old owner sheet");
+        UserConfig.selectedAccount=0;sheet=new BottomSheet();guard=create(sheet);guard.attach();UserConfig.owners[0]=88;
+        check(!guard.allowAction()&&sheet.dismissals==1,"stale click checks actual owner before copy/open");
+        UserConfig.owners[0]=42;sheet=new BottomSheet();guard=create(sheet);LumaAnonymousNumber.allowed=false;guard.attach();
+        check(sheet.dismissals==1&&NotificationCenter.accounts[0].count()==0,"denied initial attach exposes no retained local display");
+        LumaAnonymousNumber.allowed=true;
+        Profile profile=new Profile();profile.refreshLocalSubscriptionDisplay();check(profile.ratingView.rating.level==100,"allowed local level shown");
+        LumaStarRating.allowed=false;profile.refreshLocalSubscriptionDisplay();check(profile.ratingView.rating==profile.userInfo.stars_rating,"open self-profile resets local rating on expiry");
+        check(profile.headerRefreshes==2&&profile.rowRefreshes==2,"prefix/phone/footer visible rows rebound on tier transition");
+        LumaStarRating.allowed=true;profile.userId=99;profile.refreshLocalSubscriptionDisplay();check(profile.ratingView.rating==profile.userInfo.stars_rating,"genuine other-peer rating unchanged");
+        profile=new Profile();BottomSheet local=new BottomSheet();profile.trackLocalStarRatingSheet(local);
+        profile.refreshLocalSubscriptionDisplay();check(local.dismissals==0,"valid local level popup remains open");
+        LumaStarRating.allowed=false;profile.refreshLocalSubscriptionDisplay();
+        check(local.dismissals==1&&profile.localStarRatingSheet==null,"expired local level popup closes");
+        BottomSheet genuine=new BottomSheet();profile.refreshLocalSubscriptionDisplay();check(genuine.dismissals==0,"genuine server rating popup remains untouched");
+        LumaStarRating.allowed=true;BottomSheet old=new BottomSheet();old.deliverDismiss=false;profile.trackLocalStarRatingSheet(old);
+        BottomSheet newer=new BottomSheet();profile.trackLocalStarRatingSheet(newer);old.dismissed.run();
+        check(profile.localStarRatingSheet==newer,"delayed old dismissal cannot clear newer local sheet");
+        UserConfig.owners[0]=88;profile.refreshLocalSubscriptionDisplay();
+        check(newer.dismissals==1&&profile.localStarRatingSheet==null,"owner reuse dismisses old local level popup");
+        UserConfig.owners[0]=42;local=new BottomSheet();profile.trackLocalStarRatingSheet(local);profile.dismissLocalStarRatingSheet();
+        check(local.dismissals==1&&profile.localStarRatingSheetOwner==0,"fragment/pause cleanup releases only local popup");
+        System.out.println("PASS: "+checks+" extracted local-phone observer/expiry/owner/action lifecycle checks; modeled native UI.");
+    }
+}

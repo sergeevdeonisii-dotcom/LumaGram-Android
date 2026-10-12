@@ -1,0 +1,212 @@
+import java.util.*;
+import java.lang.ref.WeakReference;
+import java.util.function.BooleanSupplier;
+
+/** Extracted native binder/navigation/input methods with modeled collaborators, not device UI. */
+public final class GiftPager150Probe {
+    static int checks;
+    static void check(boolean value,String label){checks++;if(!value)throw new AssertionError(label);}
+    static String getString(int value){return "r"+value;}
+    static class Context{}
+    static class Theme{static class ResourcesProvider{}}
+    static class View {
+        static final int GONE=8,VISIBLE=0;
+        int visibility=VISIBLE; float alpha=1; OnClickListener click;
+        interface OnClickListener{void onClick(View view);}
+        void setVisibility(int value){visibility=value;}
+        void setAlpha(float value){alpha=value;}
+        void setPadding(int l,int t,int r,int b){}
+        void setOnClickListener(OnClickListener listener){click=listener;}
+        ViewGroup.LayoutParams getLayoutParams(){return new ViewGroup.LayoutParams();}
+    }
+    static class ViewGroup extends View{static class LayoutParams{}void removeView(View view){}void addView(View view,LayoutParams params){}}
+    static class TextView extends View{String text;void setText(CharSequence value){text=value==null?null:value.toString();}}
+    static class RollView extends View{void resetDrawing(){}}
+    static class TopView extends View{boolean stopped;final View imageLayout=new View();final RollView imagesRollView=new RollView();}
+    static class Button extends TextView{boolean loading;void setRound(){}void setLoading(boolean value){loading=value;}void setFilled(boolean value){}void setText(String value,boolean animated){text=value;}void setSubText(String value,boolean animated){}}
+    static class TableView{final Map<String,String> rows=new HashMap<>();void clear(){rows.clear();}void addRow(String title,String value){rows.put(title,value);}}
+    static class Cancelable{int cancellations;void cancel(){cancellations++;}void detach(){cancellations++;}}
+    static class LayoutManager{void scrollToPosition(int position){}}
+    static class ActionBar{void setTitle(String title){}}
+    static class TextUtils{static boolean isEmpty(String text){return text==null||text.isEmpty();}static boolean equals(String a,String b){return Objects.equals(a,b);}}
+    static class LocaleController{static String formatNumber(int n,char sep){return Integer.toString(n);}static String formatPluralStringComma(String key,int n){return key+"="+n;}}
+    static class BillingController{
+        static BillingController getInstance(){return new BillingController();}
+        int getCurrencyExp(String currency){if(!currency.equals("USD"))throw new IllegalArgumentException();return 2;}
+        String formatCurrency(long amount,String currency,int exp,boolean rounded){return currency+amount;}
+    }
+    static class UserConfig{
+        static int selectedAccount=0;static long user=42;
+        static UserConfig getInstance(int account){return new UserConfig();}long getClientUserId(){return user;}
+    }
+    static class MessagesController{static MessagesController getInstance(int account){return new MessagesController();}Object getInputPeer(long peer){return peer;}}
+    static class TLRPC{
+        static class Action{int flags;}
+        static class TL_messageActionStarGift extends Action{long saved_id;int gift_msg_id;TL_stars.StarGift gift;}
+        static class TL_messageActionStarGiftUnique extends Action{long saved_id;TL_stars.StarGift gift;}
+    }
+    static class MessageObject{
+        static class Owner{TLRPC.Action action;}
+        Owner messageOwner=new Owner();long getDialogId(){return 42;}int getId(){return 9;}
+    }
+    static class TL_stars{
+        static class StarGift{String title="Gift",slug,value_currency;long id,value_amount;int flags,num=7,availability_total,availability_issued;Object resell_amount;ArrayList<Object> attributes=new ArrayList<>();}
+        static class TL_starGiftUnique extends StarGift{}
+        static class TL_starGift extends StarGift{}
+        static class SavedStarGift{StarGift gift;int flags,msg_id,date,gift_num;long saved_id;}
+        static class InputSavedStarGift{}
+        static class TL_inputSavedStarGiftSlug extends InputSavedStarGift{String slug;}
+        static class TL_inputSavedStarGiftChat extends InputSavedStarGift{Object peer;long saved_id;}
+        static class TL_inputSavedStarGiftUser extends InputSavedStarGift{int msg_id;}
+    }
+    static class LumaLocalGifts{
+        static int removes;
+        static class LocalSavedGift extends TL_stars.SavedStarGift{long ownerUserId=42;String localKey;}
+        static boolean remove(int account,LocalSavedGift gift){removes++;return true;}
+    }
+    static class LumaBuildPolicy{static boolean personal=true;static boolean isPersonalEdition(){return personal;}}
+    static class LunagramFeatureCatalog{enum Feature{LOCAL_NFT}}
+    static class LunagramSubscriptionAccess{static boolean allowed=true;static boolean canUse(int account,LunagramFeatureCatalog.Feature feature){return allowed;}}
+    static class BaseFragment{
+        int getCurrentAccount(){return 0;}Context getParentActivity(){return new Context();}Theme.ResourcesProvider getResourceProvider(){return new Theme.ResourcesProvider();}
+        void showDialog(AlertDialog dialog){}
+    }
+    static class StarsController{
+        interface IGiftsList{int getLoadedCount();Object get(int index);int indexOf(Object gift);}
+        static class GiftsList implements IGiftsList{
+            final ArrayList<TL_stars.SavedStarGift> gifts=new ArrayList<>();boolean loading,endReached;int loads;
+            public int getLoadedCount(){return gifts.size();}public Object get(int i){return gifts.get(i);}public int indexOf(Object gift){return gifts.indexOf(gift);}void load(){loads++;}
+        }
+    }
+    static class Queue{final ArrayList<Runnable> tasks=new ArrayList<>();void postRunnable(Runnable task){tasks.add(task);}void drain(){while(!tasks.isEmpty())tasks.remove(0).run();}}
+    static class Utilities{static final Queue globalQueue=new Queue();}
+    static class AndroidUtilities{static final Queue ui=new Queue();static void runOnUIThread(Runnable task){ui.postRunnable(task);}static void cancelRunOnUIThread(Runnable task){ui.tasks.remove(task);}}
+    static class DialogInterface{interface OnClickListener{void onClick(Object dialog,int which);}}
+    static class AlertDialog{
+        static DialogInterface.OnClickListener positive;
+        static class Builder{
+            Builder(Context c,Theme.ResourcesProvider r){}Builder setTitle(String text){return this;}Builder setMessage(String text){return this;}
+            Builder setPositiveButton(String text,DialogInterface.OnClickListener callback){positive=callback;return this;}Builder setNegativeButton(String text,Object callback){return this;}AlertDialog create(){return new AlertDialog();}
+        }
+    }
+    static class NotificationCenter{static final int lumaLocalGiftsChanged=1;static NotificationCenter getInstance(int account){return new NotificationCenter();}void postNotificationName(int id,Object... args){}}
+    static class BulletinFactory{static BulletinFactory of(BaseFragment f){return new BulletinFactory();}BulletinFactory createSimpleBulletin(int raw,String text){return this;}void show(){}}
+    static class LumaLocalGiftPreview{
+        interface PagerSource{BaseFragment fragment();boolean isCurrent();int size();TL_stars.SavedStarGift get(int index);int indexOf(TL_stars.SavedStarGift gift);void loadMore();StarsController.IGiftsList serverList();void setChangedListener(Runnable listener);}
+        static TopView createPreviewHeader(Context c,int account,LumaLocalGifts.LocalSavedGift gift,Theme.ResourcesProvider r,Runnable dismiss,View.OnClickListener menu){return new TopView();}
+        static void stopPreviewHeader(TopView top){top.stopped=true;}
+        static void fillPreviewTable(TableView table,Context c,int account,TL_stars.TL_starGiftUnique gift,Theme.ResourcesProvider r,boolean nativeAttributes){addStoredMetadataRows(table,gift);}
+        static String getRemoveTitle(){return "Remove";}static String getRemoveInfo(){return "Remove local copy";}static String getRemovedMessage(){return "Removed";}
+        /* ACTUAL_METADATA */
+        /* ACTUAL_REMOVE */
+    }
+    static class Parent{
+        final BaseFragment fragment=new BaseFragment();final int currentAccount=0;final long dialogId=42,localPinsOwner=42;
+        volatile long localPreviewEpoch;
+        final StarsController.GiftsList list=new StarsController.GiftsList();
+        final ArrayList<LumaLocalGifts.LocalSavedGift> localProfileGifts=new ArrayList<>();
+        final HashSet<String> localPinnedGiftIds=new HashSet<>();
+        final ArrayList<WeakReference<ProfilePreviewPager>> previewPagers=new ArrayList<>();
+        /* ACTUAL_LOCAL_DISPLAY */
+        /* ACTUAL_PARENT */
+    }
+    static class Roller{
+        boolean rolling=true;Runnable whenDone,whenDone2;
+        final TopView topView=new TopView();Cancelable modelRoller,symbolRoller,backdropRoller,backdropRoller2;
+        void stopPreload(){}
+        /* ACTUAL_ROLLER_DETACH */
+        void queueCompletions(){/* ACTUAL_ROLLER_COMPLETIONS */}
+    }
+    static class StarGiftSheet{
+        static final int PAGE_INFO=0;
+        final int currentAccount=0;long dialogId=42;
+        final Theme.ResourcesProvider resourcesProvider=new Theme.ResourcesProvider();
+        final ViewGroup container=new ViewGroup();final TopView nativeTopView=new TopView();TopView topView=nativeTopView;
+        LumaLocalGifts.LocalSavedGift localPreviewGift;BaseFragment localPreviewFragment;LumaLocalGiftPreview.PagerSource profilePreviewPager;
+        int profilePreviewPosition,profilePreviewGeneration,overrideNextIndex=-1,backgroundPaddingLeft;
+        boolean myProfile,resale,rolling,upgradedOnce,firstSet=true;
+        TL_stars.SavedStarGift savedStarGift;TL_stars.TL_starGiftUnique slugStarGift;MessageObject messageObject;String slug,title;
+        StarsController.IGiftsList giftsList;
+        Cancelable switchingPagesAnimator,roller,giftsToCraft;
+        Object sample_attributes,prices,next_prices,upgrade_form;boolean requesting_upgrade_form;
+        final Runnable tickUpgradePriceRunnable=()->{};
+        final TableView tableView=new TableView();final TextView beforeTableTextView=new TextView(),afterTableTextView=new TextView(),underButtonLinkTextView=new TextView();
+        final View underButtonContainer=new View(),actionView=new View();final Button button=new Button();
+        final ActionBar actionBar=new ActionBar();final LayoutManager layoutManager=new LayoutManager();int dismissed,updates;
+        Context getContext(){return new Context();}void dismiss(){dismissed++;}void switchPage(int page,boolean animated){}
+        void updateViewPager(){updates++;}
+        StarGiftSheet set(TL_stars.SavedStarGift gift,StarsController.IGiftsList list){restoreNativePreviewHeader();savedStarGift=gift;giftsList=list;profilePreviewPosition=profilePreviewPager==null?0:profilePreviewPager.indexOf(gift);return this;}
+        boolean eq(TL_stars.StarGift gift,TL_stars.SavedStarGift saved){return gift!=null&&saved!=null&&gift==saved.gift;}
+        void onMenuPressed(View view){}
+        /* ACTUAL_SHEET */
+    }
+    static TL_stars.SavedStarGift real(long id,boolean unique){TL_stars.SavedStarGift g=new TL_stars.SavedStarGift();g.msg_id=(int)id;g.flags=8;g.gift=unique?new TL_stars.TL_starGiftUnique():new TL_stars.TL_starGift();g.gift.id=id;return g;}
+    static LumaLocalGifts.LocalSavedGift local(long id){LumaLocalGifts.LocalSavedGift g=new LumaLocalGifts.LocalSavedGift();g.localKey="unique:"+id;g.gift=new TL_stars.TL_starGiftUnique();g.gift.id=id;return g;}
+    public static void main(String[] args){
+        for(int pins=0;pins<16;pins++){
+            Parent p=new Parent();TL_stars.SavedStarGift a=real(1,false),b=real(2,true);LumaLocalGifts.LocalSavedGift clone=local(2),c=local(3);
+            p.list.gifts.add(a);p.list.gifts.add(b);p.localProfileGifts.add(clone);p.localProfileGifts.add(c);
+            TL_stars.SavedStarGift[] all={a,b,clone,c};for(int i=0;i<4;i++)if((pins&(1<<i))!=0)p.localPinnedGiftIds.add(p.getLocalGiftId(all[i]));
+            LumaLocalGiftPreview.PagerSource source=p.createPreviewPager(p.list);StarGiftSheet s=new StarGiftSheet();s.setProfilePreviewPager(source);
+            check(source.size()==4,"combined count");check(source.indexOf(b)!=source.indexOf(clone),"real unique and local clone stay distinct");
+            check(!s.eq(b,clone),"native neighbor equality separates local clone from server gift");
+            for(int index=0;index<4;index++){
+                TL_stars.SavedStarGift item=source.get(index);s.bindProfilePreview(item);
+                check(s.getProfilePreviewPosition()==index,"display position");
+                check(s.getNeighbourSavedGift(false)==(index==0?null:source.get(index-1)),"left neighbor matches displayed order");
+                check(s.getNeighbourSavedGift(true)==(index==3?null:source.get(index+1)),"right neighbor matches displayed order");
+                if(item instanceof LumaLocalGifts.LocalSavedGift){
+                    check(s.savedStarGift==null&&s.slugStarGift==null&&s.messageObject==null&&s.slug==null,"transaction identities cleared");
+                    check(s.getInputStarGift()==null&&StarGiftSheet.getInputStarGift(42,item)==null,"private/static input conversion fails closed");
+                    check(s.getGift()==null&&s.getListPosition()==-1,"local does not become server gift or upgrade index");
+                    check(s.beforeTableTextView.visibility==View.GONE&&s.afterTableTextView.visibility==View.GONE&&s.underButtonContainer.visibility==View.GONE,"no transaction footer links");
+                }else{
+                    check(s.topView==s.nativeTopView&&s.localPreviewGift==null,"local to real restores native header");
+                    check(s.getListPosition()==p.list.gifts.indexOf(item),"upgrade lookup remains SERVER index");
+                    s.overrideNextIndex=1;int translated=source.indexOf(b);int expected=translated>index?translated:index+1;
+                    check(s.getProfilePreviewNeighbourIndex(true)==expected,"explicit server jump translated to UI order");s.overrideNextIndex=-1;
+                }
+            }
+            s.bindProfilePreview(a);int requestGeneration=s.profilePreviewGeneration;
+            s.nativeTopView.imageLayout.alpha=0;s.nativeTopView.imagesRollView.alpha=1;
+            s.sample_attributes=new Object();s.upgrade_form=new Object();s.requesting_upgrade_form=true;
+            s.button.loading=true;
+            int unchanged=p.list.gifts.size();s.bindProfilePreview(clone);
+            check(s.nativeTopView.imageLayout.alpha==1&&s.nativeTopView.imagesRollView.alpha==0,"roll artwork normalized before real rebind");
+            check(s.sample_attributes==null&&s.upgrade_form==null&&!s.requesting_upgrade_form,"upgrade cache cleared at local boundary");
+            check(!s.button.loading,"local OK does not inherit server spinner");
+            s.bindProfilePreview(a);
+            check(!s.isProfilePreviewRequestCurrent(requestGeneration,a),"A request after local back to A rejected");
+            s.bindProfilePreview(b);
+            check(!s.isProfilePreviewRequestCurrent(requestGeneration,a),"A request after local to B rebind rejected");
+            check(s.isProfilePreviewRequestCurrent(s.profilePreviewGeneration,b),"current B request allowed");
+            s.bindProfilePreview(clone);p.localProfileGifts.remove(clone);s.refreshProfilePreviewPager();
+            check(s.localPreviewGift!=clone&&s.getProfilePreviewPosition()>=0,"removed current selects deterministic survivor");
+            check(p.list.gifts.size()==unchanged,"local removal never changes real inventory");
+            p.localPreviewEpoch++;s.refreshProfilePreviewPager();check(s.dismissed==1&&s.container.visibility==View.GONE,"epoch invalidation closes owner view");
+            check(!source.isCurrent()&&source.size()==0,"same user ID cannot revive stale epoch");
+        }
+        TableView table=new TableView();TL_stars.TL_starGiftUnique unique=new TL_stars.TL_starGiftUnique();
+        LumaLocalGiftPreview.addStoredMetadataRows(table,unique);check(table.rows.isEmpty(),"unknown metadata is not invented");
+        unique.availability_issued=9;unique.availability_total=100;unique.flags=256;unique.value_amount=1500;unique.value_currency="USD";
+        LumaLocalGiftPreview.addStoredMetadataRows(table,unique);check(table.rows.size()==2,"real stored quantity and value");
+        for(String currency:new String[]{null,"USD<script>","XYZ"}){table.clear();unique.value_currency=currency;LumaLocalGiftPreview.addStoredMetadataRows(table,unique);check(table.rows.size()==1,"invalid currency omitted");}
+        Parent p=new Parent();LumaLocalGifts.LocalSavedGift gift=local(8);p.localProfileGifts.add(gift);LumaLocalGiftPreview.PagerSource owner=p.createPreviewPager(p.list);
+        LumaLocalGiftPreview.confirmRemove(p.fragment,gift,owner::isCurrent);AlertDialog.positive.onClick(null,0);p.localPreviewEpoch++;
+        Utilities.globalQueue.drain();AndroidUtilities.ui.drain();check(LumaLocalGifts.removes==0,"queued delete rejects stale same-owner epoch");
+        owner=p.createPreviewPager(p.list);LumaLocalGiftPreview.confirmRemove(p.fragment,gift,owner::isCurrent);AlertDialog.positive.onClick(null,0);
+        Utilities.globalQueue.drain();AndroidUtilities.ui.drain();check(LumaLocalGifts.removes==1,"explicit current-owner local delete works");
+        Roller roller=new Roller();int[] completions={0};roller.whenDone=()->completions[0]++;roller.whenDone2=()->completions[0]++;
+        roller.queueCompletions();AndroidUtilities.ui.drain();check(completions[0]==2,"current native roll completion preserved");
+        roller=new Roller();roller.whenDone=()->completions[0]++;roller.whenDone2=()->completions[0]++;
+        roller.queueCompletions();roller.detach();AndroidUtilities.ui.drain();check(completions[0]==2,"queued detached roller completion discarded");
+        p=new Parent();p.list.gifts.add(real(10,false));gift=local(11);p.localProfileGifts.add(gift);owner=p.createPreviewPager(p.list);
+        StarGiftSheet sheet=new StarGiftSheet();sheet.setProfilePreviewPager(owner);sheet.bindProfilePreview(gift);
+        LunagramSubscriptionAccess.allowed=false;sheet.refreshProfilePreviewPager();
+        check(owner.size()==1&&sheet.localPreviewGift==null&&sheet.savedStarGift==p.list.gifts.get(0),"expiry removes overlay and selects real survivor");
+        check(p.localProfileGifts.size()==1,"expiry preserves local data");
+        sheet.setLocalPreview(p.fragment,gift);check(sheet.localPreviewGift==null,"direct local bind denied after expiry");
+        LunagramSubscriptionAccess.allowed=true;check(owner.size()==2,"reactivation restores local overlay from retained data");
+        System.out.println("PASS: "+checks+" extracted native gift binder/pager/input/metadata/delete checks; modeled UI, no server or device operations.");
+    }
+}

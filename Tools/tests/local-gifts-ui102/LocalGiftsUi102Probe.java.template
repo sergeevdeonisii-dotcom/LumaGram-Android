@@ -35,6 +35,8 @@ public final class LocalGiftsUi102Probe {
     static final class LumaBuildPolicy {
         // PRODUCTION_PERSONAL_EDITION
     }
+    static final class LunagramFeatureCatalog {enum Feature{LOCAL_NFT}}
+    static final class LunagramSubscriptionAccess {static boolean allowed=true;static boolean canUse(int account,LunagramFeatureCatalog.Feature feature){return allowed;}}
     static final class LumaLocalGiftPreview {
         // PRODUCTION_PREVIEW_LABELS
     }
@@ -63,6 +65,7 @@ public final class LocalGiftsUi102Probe {
         static final ArrayList<LocalSavedGift> entries = new ArrayList<>();
         static int availabilityCalls;
         static List<LocalSavedGift> entries(int account) { return entries; }
+        static List<LocalSavedGift> entriesForUi(int account) { return entries(account); }
         static boolean hasAny(int account) { availabilityCalls++; return !entries.isEmpty(); }
         static boolean hasAnyForUi(int account) { return hasAny(account); }
         static final class LocalSavedGift extends TL_stars.SavedStarGift {
@@ -221,6 +224,7 @@ public final class LocalGiftsUi102Probe {
         int currentAccount;
         final long localPinsOwner = UserConfig.getInstance(currentAccount).getClientUserId();
         int localGiftsLoadGeneration;
+        void notifyPreviewPagers() {} // Covered by the separate actual-extracted native pager probe.
         StarsController.GiftsList list = new StarsController.GiftsList();
         HashSet<String> localPinnedGiftIds = new HashSet<>();
         ArrayList<LumaLocalGifts.LocalSavedGift> localProfileGifts = new ArrayList<>();
@@ -473,6 +477,13 @@ public final class LocalGiftsUi102Probe {
         UserConfig.identity = 1001;
         p.reloadLocalGifts(); Utilities.globalQueue.drain(); p.localGiftsLoadGeneration++; AndroidUtilities.ui.drain();
         check(p.localProfileGifts.equals(Collections.singletonList(l2)), "Detach generation invalidates an outstanding UI apply");
+        p.localPinnedGiftIds.clear();
+        LunagramSubscriptionAccess.allowed=false;
+        p.setGiftPinnedLocally(l1,true);
+        check(p.localPinnedGiftIds.isEmpty(), "Expired stale local menu cannot mutate paid pin state");
+        LunagramSubscriptionAccess.allowed=true;
+        p.setGiftPinnedLocally(l1,true);
+        check(p.localPinnedGiftIds.contains(p.getLocalGiftId(l1)), "Current local pin mutation preserved");
         System.out.println("PASS: " + checks + " production-derived local gift grid/self/reorder/stale-owner UI checks (JVM edges, not rendered device UI).");
     }
 }

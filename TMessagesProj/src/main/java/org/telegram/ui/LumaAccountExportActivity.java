@@ -1,5 +1,7 @@
 package org.telegram.ui;
 
+import org.telegram.messenger.LunagramFeatureCatalog.Feature;
+
 import android.content.Context;
 import android.view.Gravity;
 import android.view.View;
@@ -480,6 +482,7 @@ public class LumaAccountExportActivity extends BaseFragment {
     }
 
     private void startExport(ArrayList<LumaAccountExportManager.ChatSpec> chats) {
+        if (!LunagramFeatureGate.require(this, Feature.CHAT_EXPORT)) return;
         if (getParentActivity() == null) return;
         LumaAccountExportManager.Config config = new LumaAccountExportManager.Config();
         config.account = currentAccount;

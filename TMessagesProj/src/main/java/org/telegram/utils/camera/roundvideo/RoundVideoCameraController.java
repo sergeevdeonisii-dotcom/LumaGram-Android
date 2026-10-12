@@ -1725,9 +1725,9 @@ final class RoundVideoCameraController {
     }
 
     private boolean tryStartConcurrentCameras() {
-        // Concurrent support alone does not establish FPS support. Regular 60
-        // requires fixed advertised ranges on BOTH cameras and a bounded sensor
-        // cadence qualification before the recorder starts (in the pair actor).
+        // Concurrent support and advertised AE ranges alone do not establish
+        // FPS support. Even adaptive ranges ending at 60 must pass bounded
+        // sensor cadence qualification on BOTH cameras before recording.
         int targetFps = requestedFrameRate.getValue();
         if (Build.VERSION.SDK_INT < 30 || !LumaRoundVideoCamera.isFastSwitchEnabled()
                 || targetFps != 30 && targetFps != 60 || activeFrameRate.getValue() != targetFps || highSpeed) return false;
@@ -1751,7 +1751,8 @@ final class RoundVideoCameraController {
             boolean advertised = cameraManager.getConcurrentCameraIds().stream()
                     .anyMatch(ids -> ids.contains(first.id) && ids.contains(second.id));
             if (!advertised || first.fps == null || second.fps == null) return false;
-            if (targetFps == 60 && (first.fps.getLower() != 60 || second.fps.getLower() != 60)) return false;
+            if (first.fps.getLower() <= 0 || second.fps.getLower() <= 0
+                    || first.fps.getUpper() != targetFps || second.fps.getUpper() != targetFps) return false;
             processedPreview = true;
             SurfaceTexture texture = previewView.getSurfaceTexture();
             if (texture == null) return false;

@@ -75,6 +75,8 @@ $sources += (Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'logout102/fixt
 $sources += @('TMessagesProj/src/main/java/org/telegram/messenger/BlackHoleNotes.java',
     'TMessagesProj/src/main/java/org/telegram/messenger/BlackHoleNotificationJournal.java',
     'Tools/tests/fixtures/org/json/JSONObject.java','Tools/tests/fixtures/org/json/JSONArray.java') | ForEach-Object { Join-Path $repo $_ }
+. (Join-Path $PSScriptRoot 'feature-access150/add-fixtures.ps1')
+$sources = @(Add-FeatureAccessFixtures $sources $repo)
 & $javac -J-Xmx128m -encoding UTF-8 -cp $baseClasses -d $classes $sources
 if ($LASTEXITCODE -ne 0) { throw 'Logout regression compilation failed.' }
 $separator = [IO.Path]::PathSeparator

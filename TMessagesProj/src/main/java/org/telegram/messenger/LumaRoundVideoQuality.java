@@ -18,6 +18,7 @@ public final class LumaRoundVideoQuality {
     private LumaRoundVideoQuality() {}
 
     public static boolean isEnabled() {
+        if (!LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.ROUND_VIDEO_CONTROLS)) return false;
         return MessagesController.getGlobalMainSettings().getBoolean(PREFERENCE_KEY, true);
     }
 
@@ -35,6 +36,8 @@ public final class LumaRoundVideoQuality {
 
     /** Preserve each recorder's old default until the common slider is changed. */
     public static int getPreferredFrameRate(int fallback) {
+        // An unavailable paid override must not rewrite the user's stored preference.
+        if (!LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.ROUND_VIDEO_CONTROLS)) return FRAME_RATE;
         android.content.SharedPreferences preferences = MessagesController.getGlobalMainSettings();
         int stored;
         boolean invalidType = false;

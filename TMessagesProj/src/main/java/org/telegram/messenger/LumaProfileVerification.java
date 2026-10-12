@@ -18,7 +18,8 @@ public final class LumaProfileVerification {
     }
 
     public static boolean isEnabled(int account) {
-        return LumaBuildPolicy.allowsProfileVerification() && preferences(account).getBoolean(KEY_ENABLED, false);
+        return LumaBuildPolicy.allowsProfileVerification() && LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_VERIFICATION)
+                && preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     /** Only view-local decoration; the caller must keep real server markers and lock icons. */
@@ -38,6 +39,7 @@ public final class LumaProfileVerification {
     }
 
     public static void setEnabled(int account, boolean enabled) {
+        if (enabled && !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_VERIFICATION)) return;
         if (!LumaBuildPolicy.allowsProfileVerification()) return;
         preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
     }

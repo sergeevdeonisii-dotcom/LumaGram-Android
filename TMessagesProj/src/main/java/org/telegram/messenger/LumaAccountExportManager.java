@@ -139,6 +139,10 @@ public final class LumaAccountExportManager {
 
     public void start() {
         if (!session.startOnce(cancelled, terminal)) return;
+        if (!LunagramSubscriptionAccess.canUse(config.account, LunagramFeatureCatalog.Feature.CHAT_EXPORT)) {
+            fail(localized("Для экспорта нужна подписка Ultra.", "Export requires an Ultra subscription."), null);
+            return;
+        }
         if (!session.hasOwner()) {
             fail(localized("Для экспорта необходимо войти в аккаунт.", "Sign in before exporting an account."), null);
             return;
@@ -559,7 +563,7 @@ public final class LumaAccountExportManager {
     }
 
     private boolean ownsAccount() {
-        return session.isCurrent();
+        return session.isCurrent() && LunagramSubscriptionAccess.canUse(config.account, LunagramFeatureCatalog.Feature.CHAT_EXPORT);
     }
 
     private static String initial(String title) {

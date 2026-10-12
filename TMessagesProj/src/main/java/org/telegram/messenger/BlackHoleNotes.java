@@ -13,6 +13,8 @@ public final class BlackHoleNotes {
     }
     public static synchronized void save(int account, long dialogId, String note) throws Exception {
         if (dialogId == 0 || note == null || note.length() > MAX_LENGTH) throw new IllegalArgumentException("note");
+        if (!note.trim().isEmpty() && !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.CHAT_NOTES))
+            throw new SecurityException("subscription required");
         long owner = UserConfig.getInstance(account).getClientUserId();
         android.content.SharedPreferences prefs = LumaAccountData.preferences(account);
         requireOwner(account, owner);

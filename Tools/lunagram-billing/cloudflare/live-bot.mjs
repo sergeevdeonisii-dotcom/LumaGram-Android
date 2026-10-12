@@ -2,18 +2,26 @@ import { LIVE_PLANS } from './live-store.mjs';
 import { readJson, webhookAdmission } from './bot-webhook.mjs';
 import { jsonResponse } from './live-http.mjs';
 import { TERMS_VERSION } from './live-control.mjs';
+import { SUBSCRIPTION_DURATIONS } from '../catalog.mjs';
+import { roundedStarsForDuration } from '../stars-tariffs.mjs';
 
 const id = value => Number.isSafeInteger(value) && value > 0 && value < 2 ** 52 ? String(value) : null;
 const bounded = (value, max) => typeof value === 'string' && value.length > 0 && value.length <= max;
 const keyboard = buttons => ({ inline_keyboard: buttons.map(([text, callback_data]) => [{ text, callback_data }]) });
 const PLAN_BUTTONS = keyboard(LIVE_PLANS.map(p => [`${p.title} · ${p.starsAmount} ⭐`, `buy_${p.id}`]));
 const orderLines = orders => orders.map(o => `${o.planId} · ${o.starsAmount} ⭐ · ${o.status} · ${new Date(o.createdAtMs).toISOString().slice(0, 10)} UTC\n/refund ${o.id}`).join('\n\n');
-const PLAN_TEXT = 'Lunagram · подписки на месяц\n\n' + LIVE_PLANS.map(p => `${p.title} — ${p.starsAmount} ⭐`).join('\n')
-    + '\n\nРучное продление, без автосписаний. Все функции пока доступны без подписки. После оплаты вы получите одноразовый ключ из 16 символов.';
-export const TERMS_TEXT = 'Условия Lunagram\n\nПодписка добровольная: функции сейчас не ограничены и тарифы не дают разных возможностей. '
-    + 'Оплата разовая, только Stars. Автосписаний нет. Оплата выдаёт один одноразовый ключ; месяц начинается после активации, '
-    + 'при продлении добавляется к оставшемуся сроку. Ключ можно передать другому человеку до активации — храните его в секрете. '
+const PLAN_TEXT = 'Lunagram · подписки\n\n' + LIVE_PLANS.map(p => `${p.title} — от ${p.starsAmount} ⭐ за месяц`).join('\n')
+    + '\n\nBased: расширенное стекло и форматирование. Standard: также анимация ввода и отмена отправки. Plus: также настройки кружков. Pro: также локальное оформление профиля и NFT, заметки и профили настроек. Ultra: все перечисленное, призрак, история изменений и удалений, защищённые чаты, журнал и экспорт.'
+    + '\n\nСроки: 1, 3, 6 или 12 календарных месяцев. Ручное продление, без автосписаний. После оплаты вы получите одноразовый ключ из 16 символов. Тарифы относятся к общей версии Lunagram с поддержкой подписок.';
+export const TERMS_TEXT = 'Условия Lunagram\n\nТариф открывает указанные в /plans функции общей версии Lunagram с поддержкой подписок. Следующий уровень включает предыдущие; Ultra включает все платные функции общей версии. '
+    + 'После окончания срока платные функции отключаются с предупреждением. Данные и настройки не удаляются; защищённые чаты не разблокируются. Telegram и базовые возможности бесплатны. '
+    + 'Для работы без сети нужна проверка подписки раз в 24 часа и после перезагрузки телефона. Локальное оформление не меняет реальные данные Telegram и не видно другим пользователям. '
+    + 'Оплата разовая, только Stars. Автосписаний нет. Оплата выдаёт один одноразовый ключ на выбранные 1, 3, 6 или 12 календарных месяцев. '
+    + 'Точные даты показываются отдельно перед подтверждением активации. Новый срок начинается после уже назначенной очереди, '
+    + 'даже если тариф другой. Возврат отзывает только оплаченный им срок, не сдвигая даты остальных; в очереди может остаться перерыв. '
+    + 'Старая месячная подписка должна закончиться перед активацией нового формата. Ключ можно передать другому человеку до активации — храните его в секрете. '
     + 'Lunagram — независимый клиент, не Telegram Premium.\n\nВопросы по оплате и запросы на возврат: /paysupport в этом боте. '
+    + 'Поддержка Telegram не рассматривает покупки в этом боте; обращайтесь через /paysupport. '
     + 'Для обработки платежей храним идентификатор Telegram, сведения о покупке, согласие с условиями и обращения. '
     + 'Ключи и обращения зашифрованы на сервере. Личный аккаунт автора покупателям не раскрывается.';
 const SAFE_ERRORS = new Map([
@@ -22,6 +30,11 @@ const SAFE_ERRORS = new Map([
     ['INVALID_CODE', 'Ключ не найден. Проверьте 16 букв и цифр.'],
     ['CODE_ALREADY_USED', 'Этот ключ уже активирован другим аккаунтом.'],
     ['CODE_UNAVAILABLE', 'Ключ недоступен. Напишите /paysupport.'],
+    ['UPGRADE_REQUIRED', 'Обновите Lunagram для выбора срока и подтверждения дат активации. Ключ не использован.'],
+    ['LEGACY_TERM_ACTIVE', 'Сначала дождитесь окончания старой подписки: /status. Ключ не использован.'],
+    ['QUOTE_EXPIRED', 'Предпросмотр истёк. Повторите /redeem КЛЮЧ и проверьте новые даты.'],
+    ['QUOTE_STALE', 'Очередь изменилась. Повторите /redeem КЛЮЧ и подтвердите новые даты.'],
+    ['QUEUE_FULL', 'Очередь сроков заполнена. Ключ не использован. Напишите /paysupport.'],
     ['TERMS_REQUIRED', 'Перед покупкой примите условия: /plans.'],
     ['TICKET_NOT_FOUND', 'Обращение не найдено.'],
     ['ORDER_NOT_FOUND', 'Заказ не найден.'],
@@ -75,25 +88,41 @@ export async function dispatchLiveUpdate(update, { store, auth, control, api, cl
     control.rate(userId, 'bot-user', 30, now);
     if (store.hasReply(userId, requestKey)) return;
     const reply = (text, markup) => store.enqueueMessage(userId, text, requestKey, markup);
-    const sendTerms = plan => reply(TERMS_TEXT, keyboard([['Принимаю условия', plan ? `accept_${plan}` : 'accept_terms']]));
-    const buy = plan => {
-        if (!LIVE_PLANS.some(p => p.id === plan)) return reply('Выберите тариф: /plans.');
+    const sendTerms = (plan, months) => reply(TERMS_TEXT, keyboard([['Принимаю условия', plan && months ? `accept3_${plan}_${months}` : 'accept3_terms']]));
+    const buy = (plan, months) => {
+        const selected = LIVE_PLANS.find(p => p.id === plan);
+        if (!selected) return reply('Выберите тариф: /plans.');
         if (!control.paymentsReady()) return reply('Продажа подписок ещё не открыта. Средства не списываются.');
-        if (!store.getConsent(userId).accepted) return sendTerms(plan);
-        store.createOrder(userId, plan, requestKey);
+        if (months === undefined) return reply(`${selected.title}: выберите срок. Это покупка ключа, не автоматическое списание. Даты будут показаны перед активацией.`,
+            keyboard(SUBSCRIPTION_DURATIONS.map(d => [`${d.months} мес. · ${roundedStarsForDuration(selected.starsAmount, d.months)} ⭐`, `buy_${plan}_${d.months}`])));
+        if (!SUBSCRIPTION_DURATIONS.some(d => d.months === months)) return reply('Выберите срок: /plans.');
+        if (!store.getConsent(userId).accepted) return sendTerms(plan, months);
+        store.createOrder(userId, plan, requestKey, months);
     };
+    const buySelection = selection => {
+        const match = /^(based|standard|plus|pro|ultra)(?:_(1|3|6|12))?$/.exec(selection);
+        return match ? buy(match[1], match[2] ? Number(match[2]) : undefined) : reply('Выберите тариф и срок: /plans.');
+    };
+    const statusText = status => (status.active ? `Подписка ${status.planId} активна до ${new Date(status.expiresAtMs).toISOString().slice(0, 10)} UTC.` : 'Сейчас активного срока нет.')
+        + (status.queued?.length ? `\nСледующий: ${status.queued[0].planId}, ${status.queued[0].months} мес., ${new Date(status.queued[0].startsAtMs).toISOString().slice(0, 10)} — ${new Date(status.queued[0].expiresAtMs).toISOString().slice(0, 10)} UTC.` : '')
+        + '\nВ общей версии доступны возможности текущего тарифа. По окончании срока платные функции отключаются, данные сохраняются.';
     try {
         if (callback) {
             // Stop the spinner best-effort. Business effects below are durable and
             // idempotent even if a Telegram callback acknowledgement gets lost.
             await api.call('answerCallbackQuery', { callback_query_id: callback.id }).catch(() => {});
             const data = callback.data;
-            if (data.startsWith('buy_')) return buy(data.slice(4));
-            if (data.startsWith('accept_')) {
-                const plan = data.slice(7);
-                if (plan !== 'terms' && !LIVE_PLANS.some(p => p.id === plan)) return;
+            if (data.startsWith('buy_')) return buySelection(data.slice(4));
+            if (data.startsWith('accept_') || data.startsWith('accept2_')) return sendTerms(); // Old terms cannot consent to tier restrictions.
+            if (data.startsWith('accept3_')) {
+                const plan = data.slice(8);
+                if (plan !== 'terms' && !/^(based|standard|plus|pro|ultra)_(1|3|6|12)$/.test(plan)) return;
                 store.acceptTerms(userId, TERMS_VERSION);
-                return plan === 'terms' ? reply('Условия приняты. Выберите тариф: /plans.') : buy(plan);
+                return plan === 'terms' ? reply('Условия приняты. Выберите тариф: /plans.') : buySelection(plan);
+            }
+            if (/^activate_[a-f0-9]{48}$/.test(data)) {
+                const result = store.confirmRedeemV2(userId, data.slice(9));
+                return reply(`Ключ активирован.\n${statusText(result)}`);
             }
             if (/^pair_[A-Za-z0-9_-]{43}$/.test(data)) {
                 auth.approve(data.slice(5), userId, now);
@@ -108,7 +137,7 @@ export async function dispatchLiveUpdate(update, { store, auth, control, api, cl
                 const refund = store.prepareRefund(orderId);
                 if (refund.status === 'refunded') return reply('Возврат уже выполнен.');
                 const result = await api.call('refundStarPayment', { user_id: Number(refund.userId), telegram_payment_charge_id: refund.chargeId });
-                if (result.ok) { store.recordRefund({ chargeId: refund.chargeId }); return reply('Stars возвращены. Ключ и соответствующий месяц подписки отозваны.'); }
+                if (result.ok) { store.recordRefund({ chargeId: refund.chargeId }); return reply('Stars возвращены. Ключ и соответствующий оплаченный срок отозваны.'); }
                 return reply('Результат возврата не подтверждён. Ключ заблокирован до сверки. Повторите /refund с тем же номером заказа; новый платёж не создаётся.');
             }
             if (/^review_[a-f0-9]{48}$/.test(data) && control.isOwner(userId)) {
@@ -133,15 +162,16 @@ export async function dispatchLiveUpdate(update, { store, auth, control, api, cl
             if (!control.canClaim(arg.slice(6), now)) return reply('Ссылка администратора недоступна или истекла.');
             return reply('Эта одноразовая ссылка назначает ваш аккаунт владельцем поддержки Lunagram. Вы сможете читать обращения, отвечать и выполнять возвраты. Подтвердите только если вы владелец проекта.', keyboard([['Я владелец, подключить поддержку', arg]]));
         }
-        if (command === 'start' && arg.startsWith('buy_')) return buy(arg.slice(4));
-        if (command === 'buy') return buy(arg.toLowerCase());
+        if (command === 'start' && arg.startsWith('buy_')) return buySelection(arg.slice(4));
+        if (command === 'buy') return buySelection(arg.toLowerCase().replace(' ', '_'));
         if (command === 'start' || command === 'plans') return reply(PLAN_TEXT, PLAN_BUTTONS);
         if (command === 'terms') return sendTerms();
         if (command === 'keys') return store.enqueueKeys(userId, requestKey);
-        if (command === 'status' || command === 'redeem') {
-            const status = command === 'redeem' ? store.redeem(userId, arg) : store.getSubscription(userId, now);
-            return reply(status.active ? `Подписка ${status.planId} активна до ${new Date(status.expiresAtMs).toISOString().slice(0, 10)}. Все функции пока доступны без ограничений.`
-                : 'Активной подписки нет. Ключ можно активировать в настройках Lunagram или командой /redeem КЛЮЧ.');
+        if (command === 'status') return reply(statusText(store.getSubscriptionV2(userId, now)));
+        if (command === 'redeem') {
+            const { quote } = store.previewRedeemV2(userId, arg);
+            return reply(`Активировать ${quote.planId} на ${quote.months} мес.?\nНачало: ${new Date(quote.startsAtMs).toISOString()}\nОкончание: ${new Date(quote.expiresAtMs).toISOString()}\nДаты в UTC. Предпросмотр действует 2 минуты. Деньги при активации не списываются.`,
+                keyboard([['Подтверждаю даты и активацию', `activate_${quote.quoteId}`]]));
         }
         if (command === 'paysupport' || command === 'help') return reply('Поддержка работает прямо здесь. Отправьте /support и описание проблемы одним сообщением. Для возврата укажите номер заказа из сообщения с ключом или /keys; если не нашли — дату и тариф. Сам ключ, пароль, код входа, seed-фразу или банковские данные не присылайте.');
         if (command === 'support') {
@@ -188,7 +218,7 @@ export async function dispatchLiveUpdate(update, { store, auth, control, api, cl
                 if (!/^[a-f0-9]{48}$/.test(arg)) return reply('/refund номер_заказа');
                 const order = store.getOrder(arg);
                 if (!order) return reply('Заказ не найден.');
-                return reply(`Вернуть платёж за заказ ${arg}? Ключ и оплаченный им месяц будут отозваны.`, keyboard([['Подтверждаю возврат Stars', `refund_${arg}`]]));
+                return reply(`Вернуть платёж за заказ ${arg}? Ключ и оплаченный им срок будут отозваны. Остальные новые сроки не сдвигаются.`, keyboard([['Подтверждаю возврат Stars', `refund_${arg}`]]));
             }
         }
         return reply('Команды: /plans, /keys, /status, /paysupport.');

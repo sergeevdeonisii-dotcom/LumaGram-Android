@@ -16,7 +16,7 @@ const RELEASES = {
   '103': { version: '1.0.3', code: 71659, unifiedVersionName: true, separatePublicEdition: true },
   '104': { version: '1.0.4', code: 71669, unifiedVersionName: true, separatePublicEdition: true },
   '105': { version: '1.0.5', code: 71679, unifiedVersionName: true, separatePublicEdition: true, friendsEditionAllowed: false },
-  '150': { version: '1.5', code: 71689, unifiedVersionName: true, separatePublicEdition: true, friendsEditionAllowed: false },
+  '150': { version: '1.5', code: 71699, unifiedVersionName: true, separatePublicEdition: true, friendsEditionAllowed: false },
 };
 
 function requireValue(condition, message) {

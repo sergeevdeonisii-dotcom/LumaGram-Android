@@ -1,5 +1,8 @@
 package org.telegram.ui;
 
+import org.telegram.messenger.LunagramFeatureCatalog.Feature;
+import org.telegram.messenger.LunagramSubscriptionAccess;
+
 import static org.telegram.messenger.LocaleController.getString;
 
 import android.app.Activity;
@@ -154,10 +157,16 @@ public final class BlackHoleToolsActivity extends BaseFragment {
         if (item.id == UNLOCK) { unlock(); return; }
         if (item.id == SETUP) { presentFragment(new PasscodeActivity(PasscodeActivity.TYPE_SETUP_CODE)); return; }
         if (needsUnlock()) return;
+        if ((page == PROFILES || item.id == SAVE_PROFILE) && !LunagramFeatureGate.require(this, Feature.SETTINGS_PROFILES)) return;
+        if ((item.id == IMPORT || item.id == EXPORT) && !LunagramFeatureGate.require(this, Feature.SETTINGS_TRANSFER)) return;
+        if (item.id == ENABLED && !BlackHoleNotificationJournal.isEnabled(currentAccount)
+                && !LunagramFeatureGate.require(this, Feature.NOTIFICATION_JOURNAL)) return;
+        if (item.id == ADD && !LunagramFeatureGate.require(this, page == VAULT ? Feature.CHAT_VAULT : Feature.CHAT_NOTES)) return;
         if (page == PROFILES && item.id >= 100 && item.id < 103) { applyProfile(this, item.id - 100); refresh(); }
         else if (item.id == SAVE_PROFILE) showDialog(new AlertDialog.Builder(getParentActivity(), resourceProvider)
                 .setTitle(getString(R.string.BHGSaveProfile)).setItems(profileNames(), (d, which) -> {
                     if (!currentOwner()) return;
+                    if (!LunagramFeatureGate.require(this, Feature.SETTINGS_PROFILES)) return;
                     try { BlackHoleSettings.saveProfile(currentAccount, profileIds()[which]); done(); } catch (Exception e) { error(e); }
                 }).setNegativeButton(getString(R.string.Cancel), null).create());
         else if (item.id == EXPORT) exportSettings();
@@ -232,6 +241,7 @@ public final class BlackHoleToolsActivity extends BaseFragment {
     }
     private void protectDialog(long did) {
         if (!currentOwner() || needsUnlock()) return;
+        if (!LunagramFeatureGate.require(this, Feature.CHAT_VAULT)) return;
         BlackHoleVault.setProtected(currentAccount, did, true);
         getParentActivity().getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         NotificationsController.getInstance(currentAccount).removeNotificationsForDialog(did);
@@ -263,6 +273,7 @@ public final class BlackHoleToolsActivity extends BaseFragment {
                     .setMessage(getString(R.string.BHGNotesInfo)).setView(LumaDialogInput.wrap(field))
                     .setPositiveButton(getString(R.string.Save), (d, w) -> {
                         if (!currentOwner() || needsUnlock()) return;
+                        if (!field.getText().toString().trim().isEmpty() && !LunagramFeatureGate.require(this, Feature.CHAT_NOTES)) return;
                         try { BlackHoleNotes.save(currentAccount, did, field.getText().toString()); refresh(); } catch (Exception e) { error(e); }
                     }).setNegativeButton(getString(R.string.Cancel), null).create());
         } catch (Exception e) { error(e); }
@@ -280,6 +291,7 @@ public final class BlackHoleToolsActivity extends BaseFragment {
         ChatActivity chat = new ChatActivity(args); chat.setCurrentAccount(currentAccount); presentFragment(chat);
     }
     private void exportSettings() {
+        if (!LunagramFeatureGate.require(this, Feature.SETTINGS_TRANSFER)) return;
         try {
             exportText = BlackHoleSettings.encode(BlackHoleSettings.capture(currentAccount));
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE)
@@ -291,10 +303,12 @@ public final class BlackHoleToolsActivity extends BaseFragment {
         super.onActivityResultFragment(requestCode, resultCode, data);
         if (requestCode != CREATE_FILE && requestCode != OPEN_FILE) return;
         if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null || !currentOwner()) { exportText = null; return; }
+        if (!LunagramFeatureGate.require(this, Feature.SETTINGS_TRANSFER)) { exportText = null; return; }
         final Uri uri = data.getData(); final String content = exportText; exportText = null; busy = true; refresh();
         Utilities.globalQueue.postRunnable(() -> {
             try {
                 if (UserConfig.getInstance(currentAccount).getClientUserId() != owner) return;
+                if (!LunagramSubscriptionAccess.canUse(currentAccount, Feature.SETTINGS_TRANSFER)) throw new SecurityException("subscription required");
                 if (requestCode == CREATE_FILE) {
                     if (content == null) throw new IllegalStateException("no export snapshot");
                     try (OutputStream output = ApplicationLoader.applicationContext.getContentResolver().openOutputStream(uri, "wt")) {
@@ -315,6 +329,7 @@ public final class BlackHoleToolsActivity extends BaseFragment {
                     AndroidUtilities.runOnUIThread(() -> {
                         busy = false; if (!currentOwner()) return; refresh();
                         confirm(getString(R.string.BHGImportConfirm), () -> {
+                            if (!canApplySettings(this, values)) return;
                             try { BlackHoleSettings.apply(currentAccount, values); reloadDialogs(); done(); } catch (Exception e) { error(e); }
                         });
                     });
@@ -355,15 +370,25 @@ public final class BlackHoleToolsActivity extends BaseFragment {
         return names;
     }
     public static void showProfiles(BaseFragment host) {
+        if (!LunagramFeatureGate.require(host, Feature.SETTINGS_PROFILES)) return;
         final long owner = UserConfig.getInstance(host.getCurrentAccount()).getClientUserId();
         host.showDialog(new AlertDialog.Builder(host.getParentActivity(), host.getResourceProvider()).setTitle(getString(R.string.BHGProfiles))
                 .setItems(profileNames(), (d, id) -> {
                     if (!host.isFinished && owner > 0 && owner == UserConfig.getInstance(host.getCurrentAccount()).getClientUserId()) applyProfile(host, profileIds()[id]);
                 }).setNegativeButton(getString(R.string.Cancel), null).create());
     }
+    private static boolean canApplySettings(BaseFragment host, Map<String, Object> settings) {
+        if (!LunagramFeatureGate.require(host, Feature.SETTINGS_TRANSFER)) return false;
+        Feature missing = BlackHoleSettings.missingAccess(host.getCurrentAccount(), settings);
+        return missing == null || LunagramFeatureGate.require(host, missing);
+    }
+
     private static void applyProfile(BaseFragment host, int id) {
         try {
-            BlackHoleSettings.apply(host.getCurrentAccount(), BlackHoleSettings.profile(host.getCurrentAccount(), id));
+            if (!LunagramFeatureGate.require(host, Feature.SETTINGS_PROFILES)) return;
+            Map<String, Object> settings = BlackHoleSettings.profile(host.getCurrentAccount(), id);
+            if (!canApplySettings(host, settings)) return;
+            BlackHoleSettings.apply(host.getCurrentAccount(), settings);
             NotificationCenter.getInstance(host.getCurrentAccount()).postNotificationName(NotificationCenter.dialogsNeedReload);
             BulletinFactory.of(host).createSimpleBulletin(R.raw.info, getString(R.string.BHGDone)).show();
         } catch (Exception e) { FileLog.e(e); BulletinFactory.of(host).createSimpleBulletin(R.raw.info, getString(R.string.BHGOperationFailed)).show(); }

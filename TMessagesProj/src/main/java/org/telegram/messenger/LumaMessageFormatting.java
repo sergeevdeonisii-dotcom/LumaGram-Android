@@ -38,6 +38,11 @@ public final class LumaMessageFormatting {
     }
 
     public static int getAutomaticStyle() {
+        return getAutomaticStyle(UserConfig.selectedAccount);
+    }
+
+    public static int getAutomaticStyle(int account) {
+        if (!LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.AUTOMATIC_MESSAGE_FORMATTING)) return STYLE_NONE;
         final SharedPreferences preferences = preferences();
         if (!preferences.contains(KEY_AUTO_STYLE)) {
             return preferences.getBoolean(KEY_AUTO_BOLD, false) ? STYLE_BOLD : STYLE_NONE;
@@ -47,6 +52,7 @@ public final class LumaMessageFormatting {
 
     public static void setAutomaticStyle(int style) {
         style = clampStyle(style);
+        if (style != STYLE_NONE && !LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.AUTOMATIC_MESSAGE_FORMATTING)) return;
         preferences().edit()
             .putInt(KEY_AUTO_STYLE, style)
             .putBoolean(KEY_AUTO_BOLD, style == STYLE_BOLD)
@@ -57,7 +63,12 @@ public final class LumaMessageFormatting {
         CharSequence text,
         ArrayList<TLRPC.MessageEntity> entities
     ) {
-        final int style = getAutomaticStyle();
+        return applyAutomaticStyle(UserConfig.selectedAccount, text, entities);
+    }
+
+    public static ArrayList<TLRPC.MessageEntity> applyAutomaticStyle(int account, CharSequence text,
+            ArrayList<TLRPC.MessageEntity> entities) {
+        final int style = getAutomaticStyle(account);
         if (style == STYLE_NONE || text == null || text.length() == 0) {
             return entities;
         }

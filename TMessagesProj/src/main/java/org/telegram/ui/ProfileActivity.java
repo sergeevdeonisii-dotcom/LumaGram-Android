@@ -405,6 +405,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private SharedMediaLayout.SharedMediaPreloader sharedMediaPreloader;
     private boolean preloadedChannelEmojiStatuses;
     private StarRatingView ratingView;
+    private BottomSheet localStarRatingSheet;
+    private long localStarRatingSheetOwner;
 
     private View blurredView;
 
@@ -2256,6 +2258,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         sharedMediaPreloader.addDelegate(this);
 
         getNotificationCenter().addObserver(this, NotificationCenter.updateInterfaces);
+        getNotificationCenter().addObserver(this, NotificationCenter.lunagramSubscriptionChanged);
         getNotificationCenter().addObserver(this, NotificationCenter.didReceiveNewMessages);
         getNotificationCenter().addObserver(this, NotificationCenter.closeChats);
         getNotificationCenter().addObserver(this, NotificationCenter.closeProfileActivity);
@@ -2386,6 +2389,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
     @Override
     public void onFragmentDestroy() {
+        dismissLocalStarRatingSheet();
         super.onFragmentDestroy();
         if (sharedMediaLayout != null) {
             sharedMediaLayout.onDestroy();
@@ -2398,6 +2402,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         }
 
         getNotificationCenter().removeObserver(this, NotificationCenter.updateInterfaces);
+        getNotificationCenter().removeObserver(this, NotificationCenter.lunagramSubscriptionChanged);
         getNotificationCenter().removeObserver(this, NotificationCenter.closeChats);
         getNotificationCenter().removeObserver(this, NotificationCenter.closeProfileActivity);
         getNotificationCenter().removeObserver(this, NotificationCenter.didReceiveNewMessages);
@@ -9099,7 +9104,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     @SuppressWarnings("unchecked")
     @Override
     public void didReceivedNotification(int id, int account, final Object... args) {
-        if (id == NotificationCenter.uploadStoryEnd || id == NotificationCenter.chatWasBoostedByUser) {
+        if (id == NotificationCenter.lunagramSubscriptionChanged) {
+            if (account != currentAccount) return;
+            refreshLocalSubscriptionDisplay();
+        } else if (id == NotificationCenter.uploadStoryEnd || id == NotificationCenter.chatWasBoostedByUser) {
             checkCanSendStoryForPosting();
         } else if (id == NotificationCenter.updateInterfaces) {
             int mask = (Integer) args[0];
@@ -9675,6 +9683,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
     @Override
     public void onPause() {
+        dismissLocalStarRatingSheet();
         super.onPause();
         if (org.telegram.messenger.BlackHoleVault.contains(currentAccount, userId != 0 ? userId : -chatId) && fragmentView != null)
             fragmentView.setVisibility(View.INVISIBLE);
@@ -11342,6 +11351,38 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     }
 
     private MessagesController.PeerColor peerColor;
+
+    private void refreshLocalSubscriptionDisplay() {
+        if (localStarRatingSheet != null && (!LumaStarRating.isEnabled(currentAccount)
+                || currentAccount != UserConfig.selectedAccount
+                || localStarRatingSheetOwner != UserConfig.getInstance(currentAccount).getClientUserId())) {
+            dismissLocalStarRatingSheet();
+        }
+        if (ratingView != null && userInfo != null) {
+            ratingView.set(LumaStarRating.getDisplayRating(currentAccount, userId, userInfo.stars_rating));
+        }
+        updateProfileData(true);
+        updateListAnimated(false);
+    }
+
+    private void dismissLocalStarRatingSheet() {
+        final BottomSheet sheet = localStarRatingSheet;
+        localStarRatingSheet = null;
+        localStarRatingSheetOwner = 0;
+        if (sheet != null) sheet.dismiss();
+    }
+
+    private void trackLocalStarRatingSheet(BottomSheet sheet) {
+        dismissLocalStarRatingSheet();
+        localStarRatingSheet = sheet;
+        localStarRatingSheetOwner = UserConfig.getInstance(currentAccount).getClientUserId();
+        sheet.setOnDismissListener(() -> {
+            if (localStarRatingSheet == sheet) {
+                localStarRatingSheet = null;
+                localStarRatingSheetOwner = 0;
+            }
+        });
+    }
 
     private void updateProfileData(boolean reload) {
         if (avatarContainer == null || nameTextView == null || getParentActivity() == null) {
@@ -16998,7 +17039,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             linearLayout.addView(button, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 16, 10, 16, 8));
         }
         b.setCustomView(linearLayout);
-        b.show();
+        final BottomSheet sheet = b.show();
+        if (displayRating != userFull.stars_rating) trackLocalStarRatingSheet(sheet);
     }
 
     private static CharSequence createNewSpan(String str, int color) {

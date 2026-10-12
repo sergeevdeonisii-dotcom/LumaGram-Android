@@ -208,6 +208,10 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
 
     public void start() {
         if (!session.startOnce(cancelled, terminalCallbackSent)) return;
+        if (!hasSubscriptionAccess()) {
+            fail(localized("Для экспорта нужна подписка Ultra.", "Export requires an Ultra subscription."), null);
+            return;
+        }
         if (!session.hasOwner()) {
             fail(localized("Для экспорта необходимо войти в аккаунт.", "Sign in before exporting a chat."), null);
             return;
@@ -947,9 +951,14 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         AndroidUtilities.runOnUIThread(listener::onCancelled);
     }
 
+    private boolean hasSubscriptionAccess() {
+        return LunagramSubscriptionAccess.canUse(options.account, options.outputFormat == OUTPUT_PDF
+                ? LunagramFeatureCatalog.Feature.CHAT_PDF : LunagramFeatureCatalog.Feature.CHAT_EXPORT);
+    }
+
     private boolean stoppedOrOwnerChanged() {
         if (cancelled.get() || terminalCallbackSent.get()) return true;
-        if (!session.isCurrent()) {
+        if (!session.isCurrent() || !hasSubscriptionAccess()) {
             cancel();
             return true;
         }

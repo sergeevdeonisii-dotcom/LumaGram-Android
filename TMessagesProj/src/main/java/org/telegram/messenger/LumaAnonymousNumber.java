@@ -28,11 +28,13 @@ public final class LumaAnonymousNumber {
 
     public static boolean isEnabled(int account) {
         return LumaBuildPolicy.allowsAnonymousNumber()
+                && LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_NUMBER)
                 && UserConfig.getInstance(account).getClientUserId() > 0
                 && preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
+        if (enabled && !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_NUMBER)) return;
         if (!LumaBuildPolicy.allowsAnonymousNumber() || UserConfig.getInstance(account).getClientUserId() <= 0) return;
         preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
@@ -42,6 +44,7 @@ public final class LumaAnonymousNumber {
     }
 
     public static void setDigits(int account, String digits) {
+        if (!LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_NUMBER)) return;
         if (!LumaBuildPolicy.allowsAnonymousNumber() || UserConfig.getInstance(account).getClientUserId() <= 0) return;
         preferences(account).edit().putString(KEY_DIGITS, normalize(digits)).apply();
     }
@@ -86,6 +89,7 @@ public final class LumaAnonymousNumber {
     }
 
     public static boolean setPriceTon(int account, long expectedOwnerId, String value) {
+        if (!LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_NUMBER)) return false;
         String price = normalizePriceTon(value);
         if (price == null) return false;
         SharedPreferences prefs = ownerPreferences(account, expectedOwnerId);
@@ -107,13 +111,14 @@ public final class LumaAnonymousNumber {
         if (prefs == null) return initialDate;
         int date = prefs.getInt(KEY_PURCHASE_DATE, 0);
         if (date > 0 && date <= now) return date;
-        if (prefs.getBoolean(KEY_ENABLED, false) && UserConfig.getInstance(account).getClientUserId() == owner) {
+        if (isEnabled(account) && UserConfig.getInstance(account).getClientUserId() == owner) {
             prefs.edit().putInt(KEY_PURCHASE_DATE, initialDate).apply();
         }
         return initialDate;
     }
 
     public static synchronized boolean setPurchaseDate(int account, long expectedOwnerId, long seconds) {
+        if (!LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_NUMBER)) return false;
         if (seconds <= 0 || seconds > Integer.MAX_VALUE || seconds > currentDate()) return false;
         SharedPreferences prefs = ownerPreferences(account, expectedOwnerId);
         if (prefs == null) return false;

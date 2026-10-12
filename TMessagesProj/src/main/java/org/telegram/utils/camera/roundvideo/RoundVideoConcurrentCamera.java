@@ -243,8 +243,7 @@ final class RoundVideoConcurrentCamera {
         if (target != 30 && target != 60) return false;
         for (Slot slot : slots) {
             if (slot.spec.frameRate != target || slot.spec.fps == null
-                    || slot.spec.fps.getUpper() != target || slot.spec.fps.getLower() <= 0
-                    || target == 60 && slot.spec.fps.getLower() != 60) return false;
+                    || slot.spec.fps.getUpper() != target || slot.spec.fps.getLower() <= 0) return false;
         }
         return true;
     }

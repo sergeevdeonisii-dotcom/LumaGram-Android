@@ -159,6 +159,8 @@ foreach ($fixture in @('android/content/Context', 'android/content/SharedPrefere
 foreach ($actual in @('LumaBuildPolicy', 'LumaAccountData', 'LumaDeletedMessages')) {
     $sources += Join-Path $repo ($javaRoot + 'messenger/' + $actual + '.java')
 }
+. (Join-Path $PSScriptRoot 'feature-access150/add-fixtures.ps1')
+$sources = @(Add-FeatureAccessFixtures $sources $repo)
 & (Join-Path $javaBin 'javac.exe') '-J-Xmx384m' -encoding UTF-8 -d $classes $sources
 if ($LASTEXITCODE -ne 0) { throw 'Focused personal message regression compilation failed.' }
 & (Join-Path $javaBin 'java.exe') '-Xmx384m' -cp $classes org.telegram.messenger.LumaPersonalMessage80Test

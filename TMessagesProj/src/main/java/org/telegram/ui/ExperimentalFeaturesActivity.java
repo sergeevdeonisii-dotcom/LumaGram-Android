@@ -1,5 +1,7 @@
 package org.telegram.ui;
 
+import org.telegram.messenger.LunagramFeatureCatalog.Feature;
+
 import static org.telegram.messenger.LocaleController.getString;
 
 import android.content.Context;
@@ -205,7 +207,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             getString(R.string.ExperimentalTypingFast),
             getString(R.string.ExperimentalTypingBalanced),
             getString(R.string.ExperimentalTypingSmooth)
-        }, LumaTextAnimation.getSpeedLevel(), LumaTextAnimation::setSpeedLevel)
+        }, LumaTextAnimation.getSpeedLevel(), value -> { if (LunagramFeatureGate.require(this, Feature.TYPING_MOTION)) LumaTextAnimation.setSpeedLevel(value); })
             .setEnabled(enabled));
 
         items.add(UItem.asHeader(getString(R.string.ExperimentalTypingBlur)));
@@ -213,7 +215,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             getString(R.string.ExperimentalTypingLight),
             getString(R.string.ExperimentalTypingBalanced),
             getString(R.string.ExperimentalTypingStrong)
-        }, LumaTextAnimation.getBlurLevel(), LumaTextAnimation::setBlurLevel)
+        }, LumaTextAnimation.getBlurLevel(), value -> { if (LunagramFeatureGate.require(this, Feature.TYPING_MOTION)) LumaTextAnimation.setBlurLevel(value); })
             .setEnabled(enabled));
 
         items.add(UItem.asHeader(getString(R.string.ExperimentalTypingHeight)));
@@ -221,7 +223,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             getString(R.string.ExperimentalTypingLow),
             getString(R.string.ExperimentalTypingMedium),
             getString(R.string.ExperimentalTypingHigh)
-        }, LumaTextAnimation.getHeightLevel(), LumaTextAnimation::setHeightLevel)
+        }, LumaTextAnimation.getHeightLevel(), value -> { if (LunagramFeatureGate.require(this, Feature.TYPING_MOTION)) LumaTextAnimation.setHeightLevel(value); })
             .setEnabled(enabled));
 
         items.add(UItem.asHeader(getString(R.string.ExperimentalTypingSwipe)));
@@ -229,7 +231,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             getString(R.string.ExperimentalTypingSwipeWord),
             getString(R.string.ExperimentalTypingSwipeLetters),
             getString(R.string.ExperimentalTypingSwipeOff)
-        }, LumaTextAnimation.getSwipeMode(), LumaTextAnimation::setSwipeMode)
+        }, LumaTextAnimation.getSwipeMode(), value -> { if (LunagramFeatureGate.require(this, Feature.TYPING_MOTION)) LumaTextAnimation.setSwipeMode(value); })
             .setEnabled(enabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalTypingSwipeInfo)));
 
@@ -249,7 +251,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             LumaDelayedSend.getDelayStep(),
             LumaDelayedSend.MAX_STEP,
             step -> String.format(Locale.getDefault(), "%.1f %s", step / 5.0f, getString(R.string.ExperimentalDelayedSendSeconds)),
-            LumaDelayedSend::setDelayStep
+            value -> { if (LunagramFeatureGate.require(this, Feature.SEND_UNDO)) LumaDelayedSend.setDelayStep(value); }
         ).setEnabled(delayedSendEnabled));
         items.add(UItem.asShadow(getString(R.string.ExperimentalDelayedSendInfo)));
     }
@@ -277,7 +279,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
 
     private void fillPrivacyItems(ArrayList<UItem> items) {
         if (!LumaBuildPolicy.allowsPrivacyTools()) return;
-        final boolean ghostEnabled = LumaGhostMode.isEnabled(currentAccount);
+        final boolean ghostEnabled = LumaGhostMode.shouldSuppressActivity(currentAccount);
         items.add(UItem.asHeader(getString(R.string.ExperimentalGhostHeader)));
         items.add(UItem.asCheck(ROW_GHOST_ENABLED, getString(R.string.ExperimentalGhostEnable))
             .setChecked(ghostEnabled));
@@ -336,7 +338,24 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         }
     }
 
+    private Feature featureForAction(int id) {
+        if (id == ROW_ENABLED || id == ROW_RESET) return Feature.TYPING_MOTION;
+        if (id == ROW_DELAYED_SEND_ENABLED) return Feature.SEND_UNDO;
+        if (id == ROW_EMERGENCY_ENABLED || id == ROW_EMERGENCY_CHAT) return Feature.EMERGENCY;
+        if (id == ROW_GHOST_ENABLED) return LumaGhostMode.shouldSuppressActivity(currentAccount) ? null : Feature.GHOST;
+        if (id == ROW_GHOST_SCHEDULE_SEND_ENABLED) return Feature.GHOST;
+        if (id == ROW_DELETED_MESSAGES_ENABLED) return Feature.RETAIN_DELETED;
+        if (id == ROW_STAR_RATING_ENABLED || id == ROW_STAR_RATING_LEVEL) return Feature.LOCAL_LEVEL;
+        if (id == ROW_ANONYMOUS_NUMBER_ENABLED || id == ROW_ANONYMOUS_NUMBER
+                || id == ROW_ANONYMOUS_NUMBER_PRICE || id == ROW_ANONYMOUS_NUMBER_DATE) return Feature.LOCAL_NUMBER;
+        if (id == ROW_PROFILE_VERIFICATION_ENABLED) return Feature.LOCAL_VERIFICATION;
+        if (id == ROW_ACCOUNT_EXPORT) return Feature.CHAT_EXPORT;
+        return null;
+    }
+
     private void onItemClick(UItem item, View view, int position, float x, float y) {
+        Feature required = featureForAction(item.id);
+        if (required != null && !LunagramFeatureGate.require(this, required)) return;
         if (!LumaBuildPolicy.allowsPrivacyTools() && (item.id == ROW_DELAYED_SEND_ENABLED
                 || item.id == ROW_GHOST_ENABLED || item.id == ROW_GHOST_SCHEDULE_SEND_ENABLED
                 || item.id == ROW_DELETED_MESSAGES_ENABLED || item.id == Section.PRIVACY.id
@@ -405,7 +424,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
         } else if (item.id == ROW_EMERGENCY_CHAT) {
             openEmergencyChatPicker();
         } else if (item.id == ROW_GHOST_ENABLED) {
-            final boolean enabled = !LumaGhostMode.isEnabled(currentAccount);
+            final boolean enabled = !LumaGhostMode.shouldSuppressActivity(currentAccount);
             LumaGhostMode.setEnabled(currentAccount, enabled);
             if (view instanceof TextCheckCell) {
                 ((TextCheckCell) view).setChecked(enabled);
@@ -500,6 +519,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     }
 
     private void showStarRatingLevelDialog() {
+        if (!LunagramFeatureGate.require(this, Feature.LOCAL_LEVEL)) return;
         final EditTextBoldCursor editText = LumaDialogInput.create(
                 getParentActivity(), InputType.TYPE_CLASS_NUMBER, false, resourceProvider);
         editText.setText(String.valueOf(LumaStarRating.getLevel(currentAccount)));
@@ -522,6 +542,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 ).show();
                 return;
             }
+            if (!LunagramFeatureGate.require(this, Feature.LOCAL_LEVEL)) return;
             LumaStarRating.setLevel(currentAccount, level);
             if (listView != null && listView.adapter != null) {
                 listView.adapter.update(false);
@@ -531,6 +552,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     }
 
     private void showAnonymousNumberDialog() {
+        if (!LunagramFeatureGate.require(this, Feature.LOCAL_NUMBER)) return;
         final EditTextBoldCursor editText = LumaDialogInput.create(
                 getParentActivity(), InputType.TYPE_CLASS_NUMBER, false, resourceProvider);
         editText.setHint("00000000");
@@ -550,6 +572,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 ).show();
                 return;
             }
+            if (!LunagramFeatureGate.require(this, Feature.LOCAL_NUMBER)) return;
             LumaAnonymousNumber.setDigits(currentAccount, value);
             if (listView != null && listView.adapter != null) {
                 listView.adapter.update(false);
@@ -559,6 +582,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     }
 
     private void showAnonymousNumberPriceDialog() {
+        if (!LunagramFeatureGate.require(this, Feature.LOCAL_NUMBER)) return;
         if (getParentActivity() == null) return;
         final long ownerId = getUserConfig().getClientUserId();
         if (ownerId <= 0) return;
@@ -584,6 +608,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                     dialog.dismiss();
                     return;
                 }
+                if (!LunagramFeatureGate.require(this, Feature.LOCAL_NUMBER)) return;
                 if (!LumaAnonymousNumber.setPriceTon(currentAccount, ownerId, editText.getText().toString())) {
                     editText.setError(getString(R.string.LumaAnonymousNumberPriceInvalid));
                     return;
@@ -604,6 +629,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     }
 
     private void showAnonymousNumberDateDialog() {
+        if (!LunagramFeatureGate.require(this, Feature.LOCAL_NUMBER)) return;
         if (getParentActivity() == null) return;
         final long ownerId = getUserConfig().getClientUserId();
         if (ownerId <= 0) return;
@@ -631,6 +657,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
                 } catch (IllegalArgumentException invalidDate) {
                     seconds = -1;
                 }
+                if (!LunagramFeatureGate.require(this, Feature.LOCAL_NUMBER)) return;
                 if (!LumaAnonymousNumber.setPurchaseDate(currentAccount, ownerId, seconds)) {
                     BulletinFactory.of(this).createSimpleBulletin(R.raw.info,
                             getString(R.string.LumaAnonymousNumberDateInvalid)).show();
@@ -660,6 +687,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
     }
 
     private void openEmergencyChatPicker() {
+        if (!LunagramFeatureGate.require(this, Feature.EMERGENCY)) return;
         Bundle args = new Bundle();
         args.putBoolean("onlySelect", true);
         args.putBoolean("checkCanWrite", true);
@@ -670,6 +698,7 @@ public class ExperimentalFeaturesActivity extends BaseFragment {
             if (dids.isEmpty()) {
                 return true;
             }
+            if (!LunagramFeatureGate.require(this, Feature.EMERGENCY)) return true;
             LumaEmergencyMode.selectDialog(currentAccount, dids.get(0).dialogId);
             activity.finishFragment();
             if (listView != null && listView.adapter != null) {

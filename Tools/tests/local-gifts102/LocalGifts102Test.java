@@ -411,6 +411,15 @@ public final class LocalGifts102Test {
         availabilityUiTests();
         writeThroughAvailabilityTests();
         svgThumbnailCloneRegression();
+        reset();
+        check(LumaLocalGifts.add(0,gift(81)), "access fixture stores current allowed local gift");
+        String retained = LumaAccountData.preferences(0).getString(STORE,null);
+        LunagramSubscriptionAccess.allowed=false;
+        check(!LumaLocalGifts.add(0,gift(82)), "denied runtime service creation fails closed");
+        check(LumaLocalGifts.entriesForUi(0).isEmpty() && !LumaLocalGifts.hasAnyForUi(0), "expired local profile overlay hidden");
+        check(LumaLocalGifts.entries(0).size()==1 && retained.equals(LumaAccountData.preferences(0).getString(STORE,null)), "expiry preserves readable encrypted data");
+        check(LumaLocalGifts.remove(0,LumaLocalGifts.entries(0).get(0)), "existing local data remains removable after expiry");
+        LunagramSubscriptionAccess.allowed=true;
         System.out.println("PASS: " + checks + " local gift checks, real TL serialization/AES-GCM/isolation/bounds, with JVM Android and key adapters.");
     }
 }

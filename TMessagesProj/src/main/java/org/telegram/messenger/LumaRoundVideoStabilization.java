@@ -8,6 +8,7 @@ public final class LumaRoundVideoStabilization {
     private LumaRoundVideoStabilization() {}
 
     public static int getMode() {
+        if (!LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.ROUND_VIDEO_CONTROLS)) return OFF;
         try {
             return clamp(MessagesController.getGlobalMainSettings().getInt(PREFERENCE_KEY, OFF));
         } catch (ClassCastException ignored) {

@@ -30,21 +30,23 @@ foreach ($import in [regex]::Matches($source,'(?m)^import (org\.telegram\.[\w.]+
     }
 }
 $personal=Body $source 'private static void showPersonal('
-$show=Body $source 'public static void show('
+$show=Body $source 'public static void show(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift, PagerSource pager)'
 foreach ($guard in @('gift.ownerUserId <= 0','gift.ownerUserId != UserConfig.getInstance(account).getClientUserId()',
     '!(gift.gift instanceof TL_stars.TL_starGiftUnique)','unique.attributes == null || unique.resell_amount != null',
     'if (LumaBuildPolicy.isPersonalEdition())','if (account != UserConfig.selectedAccount) return;',
-    'showPersonal(fragment, gift, unique, context, account, resources);')) {
+    'showPersonal(fragment, gift, unique, context, account, resources, pager);')) {
     if (!$show.Contains($guard)) { throw "Missing read-only native preview boundary: $guard" }
 }
-foreach ($guard in @('new BottomSheet(context, false, resources)', 'new PreviewTopView(',
-    'top.setGift(unique, false, false, false, false, false)', 'top.optionsView.setVisibility(View.GONE)',
-    'content.setVisibility(View.GONE)', 'createTable(context, account, unique, resources, true)',
-    'new NestedScrollView(context)', 'sheet.setAllowNestedScroll(true)', 'sheet.setOnDismissListener(top::stopPreview)')) {
+foreach ($guard in @('new StarGiftSheet(context, account, gift.ownerUserId, resources)',
+    '.setProfilePreviewPager(pager)', '.setLocalPreview(fragment, gift)', 'fragment.showDialog(sheet)')) {
     if (!$personal.Contains($guard)) { throw "Missing native NFT preview integration: $guard" }
 }
-if ($personal -match 'GiftCell|LumaLocalGiftPreviewInfo|new AlertDialog|new\s+StarGiftSheet\s*\(') { throw 'Personal NFT preview must not reuse a normal gift tile, disclaimer dialog, or transaction sheet.' }
-if ($source -match 'ConnectionsManager|sendRequest\(|TL_payments|saveStarGift|transferStarGift|resellStarGift|new\s+StarGiftSheet\s*\(') { throw 'Preview must never acquire transaction capabilities.' }
+if ($personal -match 'GiftCell|LumaLocalGiftPreviewInfo|new AlertDialog|\.set\(gift') { throw 'Personal preview must use the local binder, never a normal gift tile or generic owned gift setter.' }
+if ($source -match 'ConnectionsManager|sendRequest\(|TL_payments|saveStarGift|transferStarGift|resellStarGift') { throw 'Preview must never acquire transaction capabilities.' }
+$header=Body $source 'public static StarGiftSheet.TopView createPreviewHeader('
+foreach($guard in @('top.setGift(unique, false, false, false, false, false)', 'modelName, null, null', 'top.optionsView.setVisibility(View.VISIBLE)')) {
+    if(!$header.Contains($guard)){throw "Missing read-only native header/menu/model subtitle guard: $guard"}
+}
 if (!$source.Contains('if (!LumaBuildPolicy.isPersonalEdition())') -or !$source.Contains('local.setText(getString(R.string.LumaLocalGiftPreviewInfo))')) { throw 'Public preview must retain its local-only notice.' }
 
 $native=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/ui/Stars/StarGiftSheet.java'))

@@ -14,6 +14,8 @@ $actual = @('LumaBuildPolicy', 'LumaRoundVideoCamera', 'LumaAccountData', 'LumaA
 foreach ($name in $actual) {
     $sources += Join-Path $repo ('TMessagesProj/src/main/java/org/telegram/messenger/' + $name + '.java')
 }
+. (Join-Path $PSScriptRoot 'feature-access150/add-fixtures.ps1')
+$sources = @(Add-FeatureAccessFixtures $sources $repo)
 & (Join-Path $javaBin 'javac.exe') -encoding UTF-8 -d (Join-Path $run 'classes') $sources
 if ($LASTEXITCODE -ne 0) { throw 'Regression test compilation failed.' }
 & (Join-Path $javaBin 'java.exe') -cp (Join-Path $run 'classes') org.telegram.messenger.LumaPresenceRequestStateTest
@@ -33,4 +35,7 @@ if ($LASTEXITCODE -ne 0) { throw '.74 notification merge regressions failed.' }
 if ($LASTEXITCODE -ne 0) { throw '.74 local data regressions failed.' }
 & (Join-Path $javaBin 'java.exe') -cp (Join-Path $run 'classes') org.telegram.messenger.LumaExportSessionTest (Join-Path $run 'export74-sandbox') $repo
 if ($LASTEXITCODE -ne 0) { throw '.74 export session regressions failed.' }
+& (Join-Path $javaBin 'java.exe') -cp (Join-Path $run 'classes') org.telegram.messenger.LunagramFeatureGuards150Test (Join-Path $run 'feature150-sandbox')
+if ($LASTEXITCODE -ne 0) { throw 'Paid feature runtime guard regressions failed.' }
+& (Join-Path $PSScriptRoot 'run-feature-effects150-regressions.ps1') -JavaHome $JavaHome -BaseClasses (Join-Path $run 'classes') -OutputRoot $OutputRoot
 & (Join-Path $PSScriptRoot 'run-bot-layout-regressions.ps1') -JavaHome $JavaHome -OutputRoot $OutputRoot

@@ -5,7 +5,7 @@ import { notReadyResponse, publicPath, publicResponse } from './public-http.mjs'
 import { randomBytes } from 'node:crypto';
 import { createLiveAuth } from '../live-auth.mjs';
 import { createLiveStore } from './live-store.mjs';
-import { createLiveControl, liveKeys, secretMatches } from './live-control.mjs';
+import { createLiveControl, liveKeys, secretMatches, TERMS_VERSION } from './live-control.mjs';
 import { createTelegramApi } from './telegram-api.mjs';
 import { handleLiveWebhook } from './live-bot.mjs';
 import { appPath, handleAppRequest, jsonResponse, SETUP_PATH } from './live-http.mjs';
@@ -54,7 +54,7 @@ export class BillingStore {
 
     runtime(keys) {
         const control = createLiveControl(this.storage, keys, this.env);
-        return { control, store: createLiveStore(this.storage, { ...keys, ownerUserId: control.owner() }),
+        return { control, store: createLiveStore(this.storage, { ...keys, ownerUserId: control.owner(), termsVersion: TERMS_VERSION }),
             auth: createLiveAuth({ storage: this.storage, authPepper: keys.authPepper }),
             api: createTelegramApi(this.env.TELEGRAM_BOT_TOKEN) };
     }

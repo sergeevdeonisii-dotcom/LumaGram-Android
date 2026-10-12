@@ -13,17 +13,17 @@ $screenPath=Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/ui/Lunagra
 $client=[IO.File]::ReadAllText($clientPath);$screen=[IO.File]::ReadAllText($screenPath)
 foreach ($required in @('https://lunagram-billing.pages.dev','https://t.me/LunagramAppPayBot?start=',
     'SSLContext.getInstance("TLSv1.2")','tls.init(null, null, null)','setInstanceFollowRedirects(false)',
-    'setConnectTimeout(10_000)','setReadTimeout(10_000)','BODY_LIMIT = 16 * 1024',
+    'setConnectTimeout(10_000)','setReadTimeout(10_000)','BODY_LIMIT = 32 * 1024',
     'REQUEST_TIMEOUT_MS = 15_000','WATCHDOG.schedule(timeout, REQUEST_TIMEOUT_MS)','requireDeadline(deadline)',
     'BlackHolePrivateData.write(account, owner','UserConfig.selectedAccount == account','ticket == generation')) {
     if (!$client.Contains($required)) { throw "Missing billing safety contract: $required" }
 }
-if (($screen+$client) -match 'FileLog|System\.out|android\.util\.Log|setHostnameVerifier|TrustManager|setPremium\(|\.setSubscription\(|LumaBuildPolicy') {
+if (($screen+$client) -match 'FileLog|System\.out|android\.util\.Log|setHostnameVerifier|TrustManager|setPremium\(|\.setSubscription\(') {
     throw 'Subscription code must not log secrets, weaken TLS or gate Telegram features.'
 }
 foreach ($required in @('client.dispose()','client.pause()','cancelRunOnUIThread(poll)','runOnUIThread(poll, 3000)',
-    'LunagramSubscriptionEphemeral','LunagramSubscriptionStarsPrice','client.redeem(code)',
-    'LunagramSubscriptionClient.purchaseUrl(selectedPlan)','field.setSaveEnabled(false)')) {
+    'LunagramSubscriptionEphemeral','LunagramSubscriptionTotalPrice','client.previewCode(code)', 'client.confirmCode()',
+    'LunagramSubscriptionClient.purchaseUrl(selectedPlan, selectedPeriod)','field.setSaveEnabled(false)')) {
     if (!$screen.Contains($required)) { throw "Missing subscription UI lifecycle contract: $required" }
 }
 $run=Join-Path $output ([guid]::NewGuid().ToString('N'));New-Item -ItemType Directory -Path $run -Force | Out-Null
@@ -35,5 +35,5 @@ $sources+=Join-Path $PSScriptRoot 'subscriptions-auth/LunagramSubscriptionClient
 if ($LASTEXITCODE -ne 0) { throw 'Subscription client model compilation failed.' }
 & $java -Xmx128m -cp $run org.telegram.messenger.LunagramSubscriptionClientTest
 if ($LASTEXITCODE -ne 0) { throw 'Subscription auth contracts failed.' }
-Write-Output 'PASS: fixed TLS host/paths, no redirects/logs/features gating, and source UI lifetime/polling guards.'
+Write-Output 'PASS: fixed TLS host/paths, no redirects/logs/Telegram Premium mutation, and source UI lifetime/polling guards.'
 Write-Output "Test artifacts: $run"

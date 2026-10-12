@@ -17,6 +17,9 @@ foreach($path in $production){
         [IO.File]::WriteAllText($target,$text,[Text.UTF8Encoding]::new($false));$sources+=$target
     }else{$sources+=Join-Path $repo $path}
 }
+. (Join-Path $PSScriptRoot 'feature-access150/add-fixtures.ps1')
+$sources = @(Add-FeatureAccessFixtures $sources $repo)
+$sources += Join-Path $PSScriptRoot 'fixtures/org/telegram/messenger/UserConfig.java'
 & (Join-Path $JavaHome 'bin/javac.exe') -J-Xmx128m -encoding UTF-8 -d (Join-Path $run 'classes') $sources
 if($LASTEXITCODE -ne 0){throw 'Typing regression compilation failed.'}
 & (Join-Path $JavaHome 'bin/java.exe') -Xmx96m -cp (Join-Path $run 'classes') org.telegram.ui.Components.LumaTypingAnimatorRegressionTest

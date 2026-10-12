@@ -24,6 +24,7 @@ import org.telegram.messenger.Emoji;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaAnonymousNumber;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
@@ -62,7 +63,17 @@ public class FragmentUsernameBottomSheet {
     private static void open(Context context, int type, String name, TLObject owner,
                              TL_fragment.TL_collectibleInfo info, Theme.ResourcesProvider resourcesProvider,
                              boolean localPhonePreview) {
+        open(context, type, name, owner, info, resourcesProvider, localPhonePreview, UserConfig.selectedAccount);
+    }
+
+    private static void open(Context context, int type, String name, TLObject owner,
+                             TL_fragment.TL_collectibleInfo info, Theme.ResourcesProvider resourcesProvider,
+                             boolean localPhonePreview, int previewAccount) {
         BottomSheet sheet = new BottomSheet(context, false, resourcesProvider);
+        final LocalPhonePreviewGuard guard = localPhonePreview
+                ? new LocalPhonePreviewGuard(sheet, previewAccount, owner instanceof TLRPC.User ? ((TLRPC.User) owner).id : 0)
+                : null;
+        if (guard != null) sheet.setOnDismissListener(guard::detach);
         sheet.fixNavigationBar(Theme.getColor(Theme.key_dialogBackground, resourcesProvider));
 
         LinearLayout layout = new LinearLayout(context);
@@ -116,6 +127,7 @@ public class FragmentUsernameBottomSheet {
         }
 
         Runnable copy = link != null ? () -> {
+            if (guard != null && !guard.allowAction()) return;
             AndroidUtilities.addToClipboard(link);
             if (type == TYPE_PHONE) {
                 BulletinFactory.of(sheet.getContainer(), resourcesProvider).createCopyBulletin(getString(R.string.PhoneCopied)).show();
@@ -170,6 +182,7 @@ public class FragmentUsernameBottomSheet {
         ButtonWithCounterView button = new ButtonWithCounterView(context, resourcesProvider).setRound();
         button.setText(getString(R.string.FragmentUsernameOpen), false);
         button.setOnClickListener(v -> {
+            if (guard != null && !guard.allowAction()) return;
             Browser.openUrl(context, info.url);
         });
         layout.addView(button, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 6, 0, 6, 0));
@@ -186,6 +199,7 @@ public class FragmentUsernameBottomSheet {
 
         sheet.setCustomView(layout);
         sheet.show();
+        if (guard != null) guard.attach();
     }
 
     /**
@@ -202,6 +216,7 @@ public class FragmentUsernameBottomSheet {
     ) {
         if (context == null || owner == null || TextUtils.isEmpty(phone)
                 || currentAccount < 0 || currentAccount >= UserConfig.MAX_ACCOUNT_COUNT
+                || currentAccount != UserConfig.selectedAccount
                 || owner.id <= 0 || owner.id != UserConfig.getInstance(currentAccount).getClientUserId()
                 || !LumaAnonymousNumber.isEnabled(currentAccount)
                 || !phone.equals(LumaAnonymousNumber.getPhone(currentAccount))) {
@@ -217,7 +232,62 @@ public class FragmentUsernameBottomSheet {
                 MessagesController.getInstance(currentAccount).config.tonUsdRate.get());
         // A general information link, never a claim that this user owns a real listing.
         preview.url = "https://fragment.com/numbers";
-        open(context, TYPE_PHONE, phone, owner, preview, resourcesProvider, true);
+        open(context, TYPE_PHONE, phone, owner, preview, resourcesProvider, true, currentAccount);
+    }
+
+    /** A local display cannot survive expiry/logout and become a different account's sheet. */
+    private static final class LocalPhonePreviewGuard implements NotificationCenter.NotificationCenterDelegate {
+        private final BottomSheet sheet;
+        private final int account;
+        private final long owner;
+        private boolean attached, closed;
+
+        LocalPhonePreviewGuard(BottomSheet sheet, int account, long owner) {
+            this.sheet = sheet;
+            this.account = account;
+            this.owner = owner;
+        }
+
+        private boolean isCurrent() {
+            return !closed && owner > 0 && account == UserConfig.selectedAccount
+                    && owner == UserConfig.getInstance(account).getClientUserId()
+                    && LumaAnonymousNumber.isEnabled(account);
+        }
+
+        boolean allowAction() {
+            if (isCurrent()) return true;
+            close();
+            return false;
+        }
+
+        void attach() {
+            if (!allowAction() || attached) return;
+            attached = true;
+            NotificationCenter.getInstance(account).addObserver(this, NotificationCenter.lunagramSubscriptionChanged);
+            NotificationCenter.getInstance(account).addObserver(this, NotificationCenter.appDidLogout);
+            NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.activeAccountChanged);
+        }
+
+        void detach() {
+            closed = true;
+            if (!attached) return;
+            attached = false;
+            NotificationCenter.getInstance(account).removeObserver(this, NotificationCenter.lunagramSubscriptionChanged);
+            NotificationCenter.getInstance(account).removeObserver(this, NotificationCenter.appDidLogout);
+            NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.activeAccountChanged);
+        }
+
+        private void close() {
+            if (closed) return;
+            detach();
+            sheet.dismiss();
+        }
+
+        @Override
+        public void didReceivedNotification(int id, int changedAccount, Object... args) {
+            if (id == NotificationCenter.appDidLogout || id == NotificationCenter.activeAccountChanged
+                    || !isCurrent()) close();
+        }
     }
 
 }

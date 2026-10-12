@@ -43,6 +43,7 @@ public final class LumaEditHistory {
     }
 
     public static synchronized void rememberEdit(int account, long dialogId, TLRPC.Message before, TLRPC.Message after) {
+        if (!LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.EDIT_RETENTION)) return;
         if (!LumaBuildPolicy.allowsPrivacyTools() || before == null || after == null || before.id <= 0 || before.id != after.id
                 || (after.flags & TLRPC.MESSAGE_FLAG_EDITED) == 0
                 || after.edit_date == 0 || after.edit_date < before.edit_date

@@ -62,6 +62,8 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.LumaAccountData;
 import org.telegram.messenger.LumaLocalGifts;
 import org.telegram.messenger.LumaBuildPolicy;
+import org.telegram.messenger.LunagramFeatureCatalog;
+import org.telegram.messenger.LunagramSubscriptionAccess;
 import org.telegram.messenger.LumaGiftVisibilityOperation;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -116,6 +118,7 @@ import org.telegram.ui.Stars.StarsController;
 import org.telegram.ui.Stories.recorder.ButtonWithCounterView;
 
 import java.util.ArrayList;
+import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Objects;
@@ -136,6 +139,8 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
     private final long localPinsOwner;
     private final ArrayList<LumaLocalGifts.LocalSavedGift> localProfileGifts = new ArrayList<>();
     private int localGiftsLoadGeneration;
+    private volatile long localPreviewEpoch;
+    private final ArrayList<WeakReference<ProfilePreviewPager>> previewPagers = new ArrayList<>();
     private LumaGiftVisibilityOperation visibilityOperation;
     private AlertDialog visibilityProgress;
     private int backgroundColor;
@@ -727,7 +732,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         public void onItemClick(UItem item, View view, int position, float x, float y) {
             if (list == null) return;
             if (item.object instanceof LumaLocalGifts.LocalSavedGift) {
-                LumaLocalGiftPreview.show(parent.fragment, (LumaLocalGifts.LocalSavedGift) item.object);
+                LumaLocalGiftPreview.show(parent.fragment, (LumaLocalGifts.LocalSavedGift) item.object, parent.createPreviewPager(list));
                 return;
             }
             if (item.id == ITEM_TOGGLE_ALL_GIFTS) {
@@ -760,6 +765,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                     }
                 } else {
                     new StarGiftSheet(getContext(), currentAccount, parent.dialogId, resourcesProvider)
+                        .setProfilePreviewPager(parent.createPreviewPager(list))
                         .setOnGiftUpdatedListener(() -> {
                             update(false);
                         })
@@ -802,7 +808,10 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                             update(true);
                         })
                         .add(R.drawable.msg_delete, LumaLocalGiftPreview.getRemoveTitle(),
-                                () -> LumaLocalGiftPreview.confirmRemove(parent.fragment, gift))
+                                () -> {
+                                    LumaLocalGiftPreview.PagerSource pager = parent.createPreviewPager(list);
+                                    LumaLocalGiftPreview.confirmRemove(parent.fragment, gift, () -> pager == null || pager.isCurrent());
+                                })
                         .show();
                 return true;
             }
@@ -1770,6 +1779,8 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
     }
 
     private void setGiftPinnedLocally(TL_stars.SavedStarGift gift, boolean pinned) {
+        if (gift instanceof LumaLocalGifts.LocalSavedGift
+                && !LunagramSubscriptionAccess.canUse(currentAccount, LunagramFeatureCatalog.Feature.LOCAL_NFT)) return;
         if (localPinsOwner <= 0 || localPinsOwner != UserConfig.getInstance(currentAccount).getClientUserId()
                 || (gift instanceof LumaLocalGifts.LocalSavedGift
                 && ((LumaLocalGifts.LocalSavedGift) gift).ownerUserId != localPinsOwner)) return;
@@ -1932,7 +1943,18 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
-        if (id == NotificationCenter.lumaLocalGiftsChanged) {
+        if (id == NotificationCenter.appDidLogout || (id == NotificationCenter.activeAccountChanged && currentAccount != UserConfig.selectedAccount)) {
+            localPreviewEpoch++;
+            notifyPreviewPagers();
+            return;
+        } else if (id == NotificationCenter.lunagramSubscriptionChanged) {
+            if (account != currentAccount) return;
+            notifyPreviewPagers();
+            for (View view : viewPager.getViewPages()) if (view instanceof Page) ((Page) view).update(true);
+            if (fragment instanceof ProfileActivity) ((ProfileActivity) fragment).updateSelectedMediaTabText();
+            reloadLocalGifts();
+            return;
+        } else if (id == NotificationCenter.lumaLocalGiftsChanged) {
             if (account != currentAccount || args == null || args.length != 1 || !(args[0] instanceof Long)
                     || dialogId <= 0 || (Long) args[0] != dialogId
                     || dialogId != UserConfig.getInstance(currentAccount).getClientUserId()) return;
@@ -1972,9 +1994,12 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         super.onAttachedToWindow();
         reloadLocalGifts();
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.lumaLocalGiftsChanged);
+        NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.lunagramSubscriptionChanged);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.starUserGiftsLoaded);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.starUserGiftCollectionsLoaded);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.updateInterfaces);
+        NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.appDidLogout);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.activeAccountChanged);
         final Page currentPage = getCurrentPage();
         if (currentPage != null) {
             currentPage.update(false);
@@ -1993,6 +2018,8 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
 
     @Override
     protected void onDetachedFromWindow() {
+        localPreviewEpoch++;
+        notifyPreviewPagers();
         if (visibilityOperation != null) {
             LumaGiftVisibilityOperation operation = visibilityOperation;
             operation.cancel();
@@ -2006,9 +2033,12 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         super.onDetachedFromWindow();
         localGiftsLoadGeneration++;
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.lumaLocalGiftsChanged);
+        NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.lunagramSubscriptionChanged);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.starUserGiftsLoaded);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.starUserGiftCollectionsLoaded);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.updateInterfaces);
+        NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.appDidLogout);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.activeAccountChanged);
         if (list != null) {
             list.shown = false;
         }
@@ -2050,12 +2080,13 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
             return;
         }
         Utilities.globalQueue.postRunnable(() -> {
-            final ArrayList<LumaLocalGifts.LocalSavedGift> loaded = new ArrayList<>(LumaLocalGifts.entries(currentAccount));
+            final ArrayList<LumaLocalGifts.LocalSavedGift> loaded = new ArrayList<>(LumaLocalGifts.entriesForUi(currentAccount));
             AndroidUtilities.runOnUIThread(() -> {
                 if (generation != localGiftsLoadGeneration
                         || owner != UserConfig.getInstance(currentAccount).getClientUserId()) return;
                 localProfileGifts.clear();
                 localProfileGifts.addAll(loaded);
+                notifyPreviewPagers();
                 for (View view : viewPager.getViewPages()) if (view instanceof Page) ((Page) view).update(true);
                 if (fragment instanceof ProfileActivity) {
                     ((ProfileActivity) fragment).updateSelectedMediaTabText();
@@ -2065,9 +2096,72 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
     }
 
     private ArrayList<LumaLocalGifts.LocalSavedGift> localDisplayGifts(StarsController.GiftsList pageList) {
+        if (!LunagramSubscriptionAccess.canUse(currentAccount, LunagramFeatureCatalog.Feature.LOCAL_NFT)) return new ArrayList<>();
         if (pageList == list && dialogId > 0 && dialogId == UserConfig.getInstance(currentAccount).getClientUserId())
             return localProfileGifts;
         return new ArrayList<>();
+    }
+
+    private LumaLocalGiftPreview.PagerSource createPreviewPager(StarsController.GiftsList pageList) {
+        if (!LumaBuildPolicy.isPersonalEdition() || pageList != list || dialogId <= 0 || dialogId != localPinsOwner) return null;
+        ProfilePreviewPager pager = new ProfilePreviewPager(pageList);
+        previewPagers.add(new WeakReference<>(pager));
+        return pager;
+    }
+
+    private ArrayList<TL_stars.SavedStarGift> previewGiftOrder(StarsController.GiftsList pageList) {
+        ArrayList<TL_stars.SavedStarGift> order = new ArrayList<>();
+        ArrayList<LumaLocalGifts.LocalSavedGift> localGifts = localDisplayGifts(pageList);
+        // Match the actual personal grid: pinned local/server, then unpinned local/server.
+        for (int pinnedPass = 1; pinnedPass >= 0; pinnedPass--) {
+            for (LumaLocalGifts.LocalSavedGift gift : localGifts) {
+                if (gift.ownerUserId == localPinsOwner && isGiftPinnedLocally(gift) == (pinnedPass == 1)) order.add(gift);
+            }
+            for (TL_stars.SavedStarGift gift : pageList.gifts) {
+                if (!(gift instanceof LumaLocalGifts.LocalSavedGift) && isGiftPinnedLocally(gift) == (pinnedPass == 1)) order.add(gift);
+            }
+        }
+        return order;
+    }
+
+    private void notifyPreviewPagers() {
+        for (int i = previewPagers.size() - 1; i >= 0; i--) {
+            ProfilePreviewPager pager = previewPagers.get(i).get();
+            if (pager == null) previewPagers.remove(i);
+            else if (pager.listener != null) pager.listener.run();
+        }
+    }
+
+    private final class ProfilePreviewPager implements LumaLocalGiftPreview.PagerSource {
+        private final StarsController.GiftsList serverList;
+        private final long owner = localPinsOwner;
+        private final long epoch = localPreviewEpoch;
+        private Runnable listener;
+
+        ProfilePreviewPager(StarsController.GiftsList serverList) { this.serverList = serverList; }
+        @Override public BaseFragment fragment() { return fragment; }
+        @Override public boolean isCurrent() {
+            return epoch == localPreviewEpoch && owner > 0 && currentAccount == UserConfig.selectedAccount
+                    && owner == UserConfig.getInstance(currentAccount).getClientUserId();
+        }
+        @Override public int size() { return isCurrent() ? previewGiftOrder(serverList).size() : 0; }
+        @Override public TL_stars.SavedStarGift get(int index) {
+            if (!isCurrent()) return null;
+            ArrayList<TL_stars.SavedStarGift> order = previewGiftOrder(serverList);
+            return index < 0 || index >= order.size() ? null : order.get(index);
+        }
+        @Override public int indexOf(TL_stars.SavedStarGift gift) {
+            if (!isCurrent() || gift == null) return -1;
+            if (gift instanceof LumaLocalGifts.LocalSavedGift && ((LumaLocalGifts.LocalSavedGift) gift).ownerUserId != owner) return -1;
+            String id = getLocalGiftId(gift);
+            if (id == null) return -1;
+            ArrayList<TL_stars.SavedStarGift> order = previewGiftOrder(serverList);
+            for (int i = 0; i < order.size(); i++) if (Objects.equals(id, getLocalGiftId(order.get(i)))) return i;
+            return -1;
+        }
+        @Override public void loadMore() { if (isCurrent() && !serverList.loading && !serverList.endReached) serverList.load(); }
+        @Override public StarsController.IGiftsList serverList() { return serverList; }
+        @Override public void setChangedListener(Runnable listener) { this.listener = listener; }
     }
 
     private final static HashMap<Pair<Integer, Long>, CharSequence> cachedLastEmojis = new HashMap<>();

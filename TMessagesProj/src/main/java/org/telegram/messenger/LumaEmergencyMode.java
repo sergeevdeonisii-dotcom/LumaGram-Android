@@ -18,10 +18,12 @@ public final class LumaEmergencyMode {
     }
 
     public static boolean isEnabled(int account) {
-        return getDialogId(account) != 0 && preferences(account).getBoolean(KEY_ENABLED, false);
+        return LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.EMERGENCY)
+                && getDialogId(account) != 0 && preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
+        if (enabled && !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.EMERGENCY)) return;
         preferences(account).edit().putBoolean(KEY_ENABLED, enabled && getDialogId(account) != 0).apply();
         apply(account);
     }
@@ -31,6 +33,7 @@ public final class LumaEmergencyMode {
     }
 
     public static void selectDialog(int account, long dialogId) {
+        if (dialogId != 0 && !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.EMERGENCY)) return;
         preferences(account).edit()
                 .putLong(KEY_DIALOG_ID, dialogId)
                 .putBoolean(KEY_ENABLED, dialogId != 0)

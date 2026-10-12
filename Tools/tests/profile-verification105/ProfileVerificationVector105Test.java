@@ -3,6 +3,8 @@ package org.telegram.messenger;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.Shape;
+import java.awt.geom.AffineTransform;
 import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -41,13 +43,16 @@ public final class ProfileVerificationVector105Test {
         }
         return result;
     }
+    private static String vectorPath(DocumentBuilderFactory factory, String file) throws Exception {
+        org.w3c.dom.Document xml = factory.newDocumentBuilder().parse(new File(file));
+        return ((org.w3c.dom.Element) xml.getElementsByTagName("path").item(0))
+                .getAttributeNS("http://schemas.android.com/apk/res/android", "pathData");
+    }
     public static void main(String[] args) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-        org.w3c.dom.Document xml = factory.newDocumentBuilder().parse(new File(args[0]));
-        String data = ((org.w3c.dom.Element) xml.getElementsByTagName("path").item(0))
-                .getAttributeNS("http://schemas.android.com/apk/res/android", "pathData");
+        String data = vectorPath(factory, args[0]);
         Path2D evenOdd = path(data, Path2D.WIND_EVEN_ODD);
         Path2D nonzero = path(data, Path2D.WIND_NON_ZERO);
         int holeSamples = 0;
@@ -59,6 +64,37 @@ public final class ProfileVerificationVector105Test {
         check(holeSamples > 200 && holeSamples < 800, "visible bounded transparent plane cutout");
         check(evenOdd.getBounds2D().getMinX() >= 0 && evenOdd.getBounds2D().getMaxX() <= 72, "horizontal viewport bounds");
         check(evenOdd.getBounds2D().getMinY() >= 0 && evenOdd.getBounds2D().getMaxY() <= 72, "vertical viewport bounds");
+        // Compare with the real bundled Telegram art, not a second hand-drawn plane.
+        // Its artboard center is the optical anchor; bounding-box centering shifts
+        // the heavy right wing right/up (the regression in the supplied screenshots).
+        Path2D plane = path(data.substring(data.indexOf('Z') + 1), Path2D.WIND_NON_ZERO);
+        Path2D nativePlane = path(vectorPath(factory, args[2]), Path2D.WIND_NON_ZERO);
+        AffineTransform opticalPlacement = new AffineTransform();
+        opticalPlacement.translate(35.55, 35.55);
+        opticalPlacement.scale(1.2, 1.2);
+        opticalPlacement.translate(-45, -45);
+        Shape expectedPlane = opticalPlacement.createTransformedShape(nativePlane);
+        String contour = vectorPath(factory, args[3]);
+        Path2D nativeOuter = path(contour.substring(0, contour.indexOf('Z') + 1), Path2D.WIND_NON_ZERO);
+        double planeX = 0, planeY = 0, outerX = 0, outerY = 0;
+        int planeCount = 0, outerCount = 0;
+        for (int ix = 0; ix < 288; ix++) for (int iy = 0; iy < 288; iy++) {
+            double x = (ix + .5) / 4, y = (iy + .5) / 4;
+            boolean cutout = plane.contains(x, y);
+            check(cutout == expectedPlane.contains(x, y), "native plane contour and optical anchor");
+            check(outer.contains(x, y) == nativeOuter.contains(x, y), "native rosette contour unchanged");
+            if (cutout) {
+                check(outer.contains(x, y), "plane remains fully inside rosette");
+                planeCount++; planeX += x; planeY += y;
+            }
+            if (outer.contains(x, y)) { outerCount++; outerX += x; outerY += y; }
+        }
+        double dx = planeX / planeCount - outerX / outerCount;
+        double dy = planeY / planeCount - outerY / outerCount;
+        check(dx > 2.4 && dx < 2.6, "native optical horizontal balance, not right-heavy bounds centering");
+        check(dy > .75 && dy < .95, "native optical vertical balance");
+        System.out.printf(java.util.Locale.ROOT,
+                "Optical cutout centroid relative to rosette: %.3f, %.3f / 72 units.%n", dx, dy);
         BufferedImage image = new BufferedImage(320, 160, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = image.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);

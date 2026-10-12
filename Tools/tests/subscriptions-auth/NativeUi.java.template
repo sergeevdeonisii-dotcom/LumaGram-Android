@@ -58,6 +58,8 @@ package org.telegram.ui.ActionBar;
 public class AlertDialog extends android.app.Dialog {
     public AlertDialog(android.content.Context context) { super(context); }
     public void setDismissDialogByButtons(boolean enabled) {}
+    public void setMessage(CharSequence message) {}
+    public android.view.View getButton(int type) { return null; }
     public static final class Builder {
         public Builder(android.content.Context context,Theme.ResourcesProvider provider) {}
         public Builder setTitle(CharSequence text) { return this; }
@@ -72,6 +74,14 @@ public class AlertDialog extends android.app.Dialog {
 package org.telegram.ui.Components;
 public class EditTextBoldCursor extends android.widget.EditText {
     public EditTextBoldCursor(android.content.Context context) { super(context); }
+}
+// FILE: org/telegram/ui/Cells/TextInfoPrivacyCell.java
+package org.telegram.ui.Cells;
+public class TextInfoPrivacyCell extends android.widget.FrameLayout {
+    public TextInfoPrivacyCell(android.content.Context context,org.telegram.ui.ActionBar.Theme.ResourcesProvider provider) { super(context); }
+    public void setTopPadding(int padding) {}
+    public void setBottomPadding(int padding) {}
+    public void setText(CharSequence text) {}
 }
 // FILE: org/telegram/ui/Components/LumaDialogInput.java
 package org.telegram.ui.Components;
@@ -91,6 +101,7 @@ public final class UItem {
     public int id;
     public static UItem asShadow(CharSequence text) { return null; }
     public static UItem asHeader(CharSequence text) { return null; }
+    public static UItem asCustom(android.view.View view) { return null; }
     public static UItem asButton(int id,CharSequence text) { return null; }
     public static UItem asRadio2(int id,CharSequence title,CharSequence value) { return null; }
     public UItem setEnabled(boolean enabled) { return this; }

@@ -1,5 +1,6 @@
 package org.telegram.messenger;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Field;
@@ -8,6 +9,8 @@ public final class LunagramSubscriptionClientTest {
     private static int checks;
     private static final String TOKEN = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     private static final String PAIR = "abcdefghijklmnopqrstuv";
+    private static final String ORDER = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private static final String QUOTE = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     private static final class Transport implements LunagramSubscriptionClient.Transport {
         int calls, cancels;
         String path, token;
@@ -29,9 +32,29 @@ public final class LunagramSubscriptionClientTest {
                 .put("expiresAtMs",System.currentTimeMillis()+86_400_000L);
     }
     private static JSONObject subscription(boolean active) {
-        return new JSONObject().put("telegramUserId","101").put("planId",active ? "based" : null)
-                .put("expiresAtMs",active ? System.currentTimeMillis()+86_400_000L : null)
-                .put("active",active).put("featuresGated",false);
+        long now = System.currentTimeMillis();
+        return new JSONObject().put("schemaVersion",2).put("telegramUserId","101").put("planId",active ? "based" : null)
+                .put("expiresAtMs",active ? now+86_400_000L : 0L).put("serverNowMs",now)
+                .put("entitlementVersion",1).put("queueVersion",1).put("paidUntilMs",active ? now+86_400_000L : 0L)
+                .put("current",active ? term(ORDER,"based",1,now-1000,now+86_400_000L) : null)
+                .put("queued",new JSONArray()).put("active",active).put("featuresGated",false);
+    }
+    private static JSONObject term(String id,String plan,int months,long start,long end) {
+        return new JSONObject().put("orderId",id).put("planId",plan).put("months",months).put("startsAtMs",start).put("expiresAtMs",end);
+    }
+    private static JSONObject preview() {
+        JSONObject status = subscription(false);
+        long now = ((Number)status.get("serverNowMs")).longValue();
+        return status.put("quote", new JSONObject().put("quoteId",QUOTE).put("planId","based").put("months",3)
+                .put("starsAmount",100).put("startsAtMs",now).put("expiresAtMs",now+90L*86_400_000)
+                .put("validUntilMs",now+120_000).put("queueVersion",1));
+    }
+    private static JSONObject confirmed(LunagramSubscriptionClient.Quote quote) {
+        return subscription(false).put("entitlementVersion",2).put("queueVersion",2)
+                .put("planId",quote.planId).put("active",true).put("expiresAtMs",quote.expiresAtMs)
+                .put("paidUntilMs",quote.expiresAtMs)
+                .put("current",term(ORDER,quote.planId,quote.months,quote.startsAtMs,quote.expiresAtMs))
+                .put("activation",term(ORDER,quote.planId,quote.months,quote.startsAtMs,quote.expiresAtMs));
     }
     private static LunagramSubscriptionClient started(Transport transport) {
         LunagramSubscriptionClient client = new LunagramSubscriptionClient(0,transport);
@@ -60,27 +83,40 @@ public final class LunagramSubscriptionClientTest {
                 "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk".getBytes(StandardCharsets.US_ASCII))),"RFC7636 S256 vector");
         for (LunagramSubscriptionCatalog.Plan plan : LunagramSubscriptionCatalog.PLANS) {
             check(LunagramSubscriptionClient.purchaseUrl(plan).equals("https://t.me/LunagramAppPayBot?start=buy_"+plan.id),"Purchase links use fixed trusted bot/catalog plan");
+            for (LunagramSubscriptionCatalog.Period period : LunagramSubscriptionCatalog.PERIODS) {
+                check(LunagramSubscriptionClient.purchaseUrl(plan,period).equals("https://t.me/LunagramAppPayBot?start=buy_"+plan.id+"_"+period.months),"Duration deep links are exact catalog values");
+            }
         }
         BlackHolePrivateData.reset(); Transport transport = new Transport(); LunagramSubscriptionClient client = connected(transport);
         check(BlackHolePrivateData.writes == 1,"Session uses private-storage interface after verified exchange");
         transport.next = new LunagramSubscriptionClient.Response(200,subscription(true));
         client.refresh(); DispatchQueue.drain();
-        check("/v1/subscription".equals(transport.path) && TOKEN.equals(transport.token),"Status uses authenticated fixed endpoint");
+        check("/v2/subscription".equals(transport.path) && TOKEN.equals(transport.token),"Status uses authenticated fixed v2 endpoint");
         check(client.subscription().active && "based".equals(client.subscription().planId),"Only server status establishes optional active subscription");
-        client.redeem("abcd-1234-efgh-5678"); DispatchQueue.drain();
-        check("/v1/redeem".equals(transport.path) && "ABCD1234EFGH5678".equals(transport.body.get("code")),"Redeem sends normalized code with bearer");
-        int previous = transport.calls; client.redeem("short"); DispatchQueue.drain();
+        check(client.subscriptionIsFresh() && client.estimatedServerNowMs() >= client.subscription().serverNowMs,"Fresh display clock uses server anchor");
+        transport.next = new LunagramSubscriptionClient.Response(200,preview());
+        client.previewCode("abcd-1234-efgh-5678"); DispatchQueue.drain();
+        check("/v2/redeem/preview".equals(transport.path) && "ABCD1234EFGH5678".equals(transport.body.get("code")),"Preview sends normalized code without consuming it");
+        check(client.quote() != null && client.quote().months == 3 && client.quote().starsAmount == 100,"Preview exposes exact server terms before confirmation");
+        transport.next = new LunagramSubscriptionClient.Response(200,confirmed(client.quote()));
+        client.confirmCode(); DispatchQueue.drain();
+        check("/v2/redeem/confirm".equals(transport.path) && QUOTE.equals(transport.body.get("quoteId")) && !transport.body.has("code"),"Confirmation sends only opaque owner-bound quote");
+        check(client.subscription().active && client.quote() == null,"Successful confirmation clears quote and installs observed state");
+        int previous = transport.calls; client.previewCode("short"); DispatchQueue.drain();
         check(transport.calls == previous && client.error() == LunagramSubscriptionClient.Error.INVALID_CODE,"Malformed codes never reach server");
-        transport.next = new LunagramSubscriptionClient.Response(200,subscription(true).put("featuresGated",true));
+        transport.next = new LunagramSubscriptionClient.Response(200,subscription(true).put("featuresGated","true"));
         client.refresh(); DispatchQueue.drain();
-        check(client.error() == LunagramSubscriptionClient.Error.BAD_RESPONSE,"Feature-gating server response is rejected");
-        transport.next = new LunagramSubscriptionClient.Response(200,subscription(false)); client.refresh(); DispatchQueue.drain();
+        check(client.error() == LunagramSubscriptionClient.Error.BAD_RESPONSE,"Non-boolean feature-gating response is rejected");
+        transport.next = new LunagramSubscriptionClient.Response(200,subscription(false).put("entitlementVersion",3).put("queueVersion",3)); client.refresh(); DispatchQueue.drain();
         check(!client.subscription().active && client.subscription().planId == null,"Nullable inactive entitlement is supported");
         LunagramSubscriptionClient restored = new LunagramSubscriptionClient(0,new Transport()); restored.restore(); DispatchQueue.drain();
-        check(restored.isAuthenticated() && restored.subscription() == null,"Restored session does not invent a cached paid entitlement");
+        check(restored.isAuthenticated() && restored.subscription() != null && !restored.subscriptionIsFresh(),"Restored snapshot is explicitly stale, never an offline entitlement");
         transport.next = new LunagramSubscriptionClient.Response(401,new JSONObject().put("error","UNAUTHENTICATED"));
         client.refresh(); DispatchQueue.drain();
-        check(!client.isAuthenticated() && BlackHolePrivateData.stored.isEmpty() && client.error() == LunagramSubscriptionClient.Error.AUTH_REQUIRED,"401 clears local session and requires reconnect");
+        check(!client.isAuthenticated() && client.subscription() != null && !client.subscriptionIsFresh()
+                && !BlackHolePrivateData.stored.containsKey("101:lunagram_subscription_session_v1_prod")
+                && BlackHolePrivateData.stored.containsKey("101:lunagram_subscription_snapshot_v2_prod")
+                && client.error() == LunagramSubscriptionClient.Error.AUTH_REQUIRED,"401 drops credential but preserves last confirmed paid dates for display");
 
         BlackHolePrivateData.reset(); transport = new Transport(); client = connected(transport);
         transport.network = true; client.disconnect(); DispatchQueue.drain();
@@ -153,15 +189,15 @@ public final class LunagramSubscriptionClientTest {
         BlackHolePrivateData.reset(); transport = new Transport(); client = connected(transport);
         for (String code : new String[]{"CODE_ALREADY_USED","CODE_UNAVAILABLE"}) {
             transport.next = new LunagramSubscriptionClient.Response(400,new JSONObject().put("error",code));
-            client.redeem("ABCD1234EFGH5678"); DispatchQueue.drain();
+            client.previewCode("ABCD1234EFGH5678"); DispatchQueue.drain();
             check(client.error() == LunagramSubscriptionClient.Error.INVALID_CODE,"Backend redemption failures are actionable code errors");
         }
         transport.next = new LunagramSubscriptionClient.Response(503,new JSONObject().put("error","NOT_READY"));
         client.refresh(); DispatchQueue.drain();
         check(client.error() == LunagramSubscriptionClient.Error.NOT_CONFIGURED,"Unavailable merchant/auth service has an honest configuration error");
-        check(LunagramSubscriptionClient.readLimited(new ByteArrayInputStream(new byte[16*1024])).length == 16*1024,"16KiB response limit accepts exact boundary");
+        check(LunagramSubscriptionClient.readLimited(new ByteArrayInputStream(new byte[32*1024])).length == 32*1024,"32KiB v2 response limit accepts exact boundary");
         boolean rejected = false;
-        try { LunagramSubscriptionClient.readLimited(new ByteArrayInputStream(new byte[16*1024+1])); } catch(Exception expected) { rejected = true; }
+        try { LunagramSubscriptionClient.readLimited(new ByteArrayInputStream(new byte[32*1024+1])); } catch(Exception expected) { rejected = true; }
         check(rejected,"Response stream is bounded even without Content-Length");
         rejected = false;
         try { LunagramSubscriptionClient.readLimited(new ByteArrayInputStream(new byte[1]),System.nanoTime()-1); }
@@ -174,6 +210,109 @@ public final class LunagramSubscriptionClientTest {
         BlackHolePrivateData.reset(); transport = new Transport(); client = connected(transport);
         org.telegram.tgnet.ConnectionsManager.test = true; client.refresh(); DispatchQueue.drain();
         check(!client.isAuthenticated() && client.subscription() == null,"Test backend switch clears memory session and hides old entitlement");
+
+        BlackHolePrivateData.reset(); transport = new Transport(); client = connected(transport);
+        JSONObject initial = subscription(true);
+        transport.next = new LunagramSubscriptionClient.Response(200,initial); client.refresh(); DispatchQueue.drain();
+        long initialEnd = client.subscription().expiresAtMs;
+        transport.network = true; client.refresh(); DispatchQueue.drain();
+        check(client.subscription().expiresAtMs == initialEnd && !client.subscriptionIsFresh(),"Network failure preserves exact last confirmed end with stale state");
+        transport.network = false;
+        client.dispose();
+        Transport cacheTransport = new Transport(); client = new LunagramSubscriptionClient(0,cacheTransport);
+        client.restore(); DispatchQueue.drain();
+        check(client.subscription().expiresAtMs == initialEnd && client.estimatedServerNowMs() == 0 && !client.subscriptionIsFresh(),"Restart never pretends cached wall clock is fresh server time");
+        cacheTransport.next = new LunagramSubscriptionClient.Response(401,new JSONObject()); client.refresh(); DispatchQueue.drain();
+        check(client.subscription().expiresAtMs == initialEnd && !client.isAuthenticated(),"Credential expiry is not paid-term expiry");
+        UserConfig.logout(0); UserConfig.ids[0] = 101;
+        restored = new LunagramSubscriptionClient(0,new Transport()); restored.restore(); DispatchQueue.drain();
+        check(restored.subscription() == null,"Logout removes both token and cached paid dates even for same-user slot reuse");
+
+        BlackHolePrivateData.reset(); transport = new Transport(); client = connected(transport);
+        LunagramSubscriptionClient cancelledPreview = client;
+        transport.beforeReturn = cancelledPreview::clearQuote;
+        transport.next = new LunagramSubscriptionClient.Response(200,preview()); client.previewCode("ABCD1234EFGH5678"); DispatchQueue.drain();
+        check(client.quote() == null && client.subscription() == null && !client.isBusy(),"Closing code dialog discards late preview and does not change subscription");
+        transport.next = new LunagramSubscriptionClient.Response(200,preview()); client.previewCode("ABCD1234EFGH5678"); DispatchQueue.drain();
+        LunagramSubscriptionClient.Quote observed = client.quote();
+        transport.network = true; client.confirmCode(); DispatchQueue.drain();
+        check(client.error() == LunagramSubscriptionClient.Error.NETWORK && client.quote() == observed,"Ambiguous confirmation keeps same quote for idempotent retry");
+        android.os.SystemClock.offset = 180_000;
+        transport.network = false; transport.next = new LunagramSubscriptionClient.Response(200,confirmed(observed));
+        previous = transport.calls; client.confirmCode(); DispatchQueue.drain();
+        check(transport.calls == previous+1 && QUOTE.equals(transport.body.get("quoteId")) && client.error() == LunagramSubscriptionClient.Error.NONE,
+                "Lost confirmation can retry identical quote after deadline without creating another activation");
+        check(client.subscription().expiresAtMs == observed.expiresAtMs,"Confirmation never locally adds or extends months");
+        android.os.SystemClock.offset = 1_200_000;
+        check(!client.subscriptionIsFresh(),"Freshness expires on monotonic clock, not an unbounded active flag");
+        android.os.SystemClock.offset = 0;
+
+        BlackHolePrivateData.reset(); transport = new Transport(); client = connected(transport);
+        transport.next = new LunagramSubscriptionClient.Response(200,preview()); client.previewCode("ABCD1234EFGH5678"); DispatchQueue.drain();
+        android.os.SystemClock.offset = 180_000;
+        previous = transport.calls; client.confirmCode(); DispatchQueue.drain();
+        check(transport.calls == previous && client.error() == LunagramSubscriptionClient.Error.QUOTE_EXPIRED,"Never-confirmed expired quote cannot consume a code");
+        android.os.SystemClock.offset = 0;
+
+        BlackHolePrivateData.reset(); transport = new Transport(); client = connected(transport);
+        JSONObject future = subscription(false);
+        long at = ((Number)future.get("serverNowMs")).longValue();
+        future.put("queued",new JSONArray().put(term(ORDER,"ultra",12,at+1000,at+366L*86_400_000)))
+                .put("paidUntilMs",at+366L*86_400_000);
+        transport.next = new LunagramSubscriptionClient.Response(200,future); client.refresh(); DispatchQueue.drain();
+        check(!client.subscription().active && client.subscription().planId == null && client.subscription().queued.size() == 1,
+                "Future Ultra never grants immediate Ultra in current summary");
+        boolean immutable = false;
+        try { client.subscription().queued.clear(); } catch(UnsupportedOperationException expected) { immutable = true; }
+        check(immutable,"Caller cannot rewrite paid queue observations");
+        future.put("active",true).put("planId","ultra");
+        transport.next = new LunagramSubscriptionClient.Response(200,future); client.refresh(); DispatchQueue.drain();
+        check(client.error() == LunagramSubscriptionClient.Error.BAD_RESPONSE && !client.subscription().active,"Inconsistent current/queued summary rejected atomically");
+
+        for (String field : new String[]{"months","startsAtMs","orderId","planId"}) {
+            BlackHolePrivateData.reset(); transport = new Transport(); client = connected(transport);
+            JSONObject malformed = subscription(true);
+            JSONObject current = (JSONObject)malformed.get("current");
+            current.put(field,field.equals("months") ? 2 : field.equals("startsAtMs") ? -1 : "invalid");
+            transport.next = new LunagramSubscriptionClient.Response(200,malformed); client.refresh(); DispatchQueue.drain();
+            check(client.error() == LunagramSubscriptionClient.Error.BAD_RESPONSE && client.subscription() == null,"Malformed fixed term rejected: "+field);
+        }
+        BlackHolePrivateData.reset(); transport = new Transport(); client = connected(transport);
+        JSONObject legacy = subscription(false); at = ((Number)legacy.get("serverNowMs")).longValue();
+        legacy.put("legacy",true).put("legacyExpiresAtMs",at+86_400_000L).put("active",true).put("planId","pro")
+                .put("expiresAtMs",at+86_400_000L).put("paidUntilMs",at+86_400_000L);
+        transport.next = new LunagramSubscriptionClient.Response(200,legacy); client.refresh(); DispatchQueue.drain();
+        check(client.subscription().legacy && client.subscription().current == null && client.subscription().queued.isEmpty(),"Legacy paid pool is explicit, never fabricated as an order");
+        for (String code : new String[]{"UPGRADE_REQUIRED","LEGACY_TERM_ACTIVE","QUOTE_EXPIRED","QUOTE_STALE"}) {
+            transport.next = new LunagramSubscriptionClient.Response(400,new JSONObject().put("error",code));
+            client.previewCode("ABCD1234EFGH5678"); DispatchQueue.drain();
+            check(client.error().name().equals(code),"V2 actionable error mapping: "+code);
+        }
+
+        BlackHolePrivateData.reset(); transport = new Transport(); client = connected(transport);
+        transport.next = new LunagramSubscriptionClient.Response(200,preview()); client.previewCode("ABCD1234EFGH5678"); DispatchQueue.drain();
+        observed = client.quote();
+        transport.next = new LunagramSubscriptionClient.Response(200,confirmed(observed));
+        client.confirmCode();
+        client.previewCode("short");
+        check(client.quote() == observed && client.isBusy(),"A concurrent preview call cannot discard in-flight confirmation identity");
+        BlackHolePrivateData.fail = true;
+        DispatchQueue.drain();
+        check(client.error() == LunagramSubscriptionClient.Error.STORAGE && client.quote() == observed,
+                "A committed response followed by local Keystore failure retains the exact retry quote");
+        BlackHolePrivateData.fail = false;
+        client.confirmCode(); DispatchQueue.drain();
+        check(client.error() == LunagramSubscriptionClient.Error.NONE && client.subscription().expiresAtMs == observed.expiresAtMs,
+                "Keystore recovery retries committed quote without re-entering or consuming a second key");
+
+        BlackHolePrivateData.reset(); transport = new Transport(); client = connected(transport);
+        transport.next = new LunagramSubscriptionClient.Response(200,preview()); client.previewCode("ABCD1234EFGH5678"); DispatchQueue.drain();
+        observed = client.quote();
+        transport.next = new LunagramSubscriptionClient.Response(200,new JSONObject()); client.confirmCode(); DispatchQueue.drain();
+        check(client.error() == LunagramSubscriptionClient.Error.BAD_RESPONSE && client.quote() == observed,
+                "Malformed confirmation response is ambiguous, not proof activation failed");
+        transport.next = new LunagramSubscriptionClient.Response(200,confirmed(observed)); client.confirmCode(); DispatchQueue.drain();
+        check(client.error() == LunagramSubscriptionClient.Error.NONE && client.quote() == null,"Malformed-response retry reconciles the original activation");
         System.out.println("PASS: "+checks+" billing-client contracts with fake transport/storage; no network, purchases, Android Keystore runtime, or JSON parser proof.");
     }
 }

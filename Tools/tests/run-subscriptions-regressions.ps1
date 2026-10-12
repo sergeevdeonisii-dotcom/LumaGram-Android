@@ -25,7 +25,7 @@ if ($settings -notmatch 'case LUNAGRAM_SUBSCRIPTION_ROW:\s*\{\s*BaseFragment scr
 }
 foreach ($required in @('UItem.asRadio2(', '.setChecked(plan == selectedPlan)',
         'PaymentMethod.TELEGRAM_STARS', 'PaymentMethod.CRYPTO_BOT_USDT', 'PaymentMethod.TON',
-        'LunagramSubscriptionClient.purchaseUrl(selectedPlan)', 'client.isAuthenticated()',
+        'LunagramSubscriptionClient.purchaseUrl(selectedPlan, selectedPeriod)', 'client.isAuthenticated()',
         'LunagramSubscriptionAccessInfo', 'LunagramSubscriptionUnavailableInfo', 'LunagramSubscriptionConnectToActivate',
         'field.setSaveEnabled(false)', 'IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS',
         'IME_FLAG_NO_PERSONALIZED_LEARNING', 'field.setText("")', 'Theme.key_windowBackgroundGray')) {
@@ -34,8 +34,8 @@ foreach ($required in @('UItem.asRadio2(', '.setChecked(plan == selectedPlan)',
 if (($screen + $catalog) -match '(?i)https?://|ton://|tg://|SharedPreferences|FileLog|System\.out|android\.util\.Log|sendRequest\(|startActivity\(|setPremium\(|\.setSubscription\(') {
     throw 'Subscription UI must delegate trusted links/private sessions to the client, never log codes or grant Telegram entitlements.'
 }
-if ($screen -match 'LumaBuildPolicy|LumaGhostMode|BlackHoleVault') {
-    throw 'Selecting a subscription must not split or gate existing client features.'
+if ($screen -match 'LumaGhostMode|BlackHoleVault|LunagramSubscriptionAccess\.canUse') {
+    throw 'Selecting a plan must not itself mutate runtime access or privacy settings; the authority owns access.'
 }
 $run = Join-Path $OutputRoot ([guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $run -Force | Out-Null

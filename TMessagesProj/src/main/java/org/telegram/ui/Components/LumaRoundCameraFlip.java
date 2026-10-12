@@ -11,8 +11,8 @@ import org.telegram.messenger.SharedConfig;
 
 /** A UI-only camera turn after the target has actually produced a preview frame. */
 public final class LumaRoundCameraFlip {
-    private static final long DURATION_MS = 280L;
-    private static final long MAX_LIFETIME_MS = 360L;
+    private static final long DURATION_MS = 140L;
+    private static final long MAX_LIFETIME_MS = 220L;
 
     public interface Target {
         void setRotationY(float rotation);
@@ -24,7 +24,6 @@ public final class LumaRoundCameraFlip {
     private Runnable deadline;
     private long generation;
     private boolean awaitingFirstFrame;
-    private boolean swapped;
 
     public LumaRoundCameraFlip(Target target) {
         this.target = target;
@@ -54,6 +53,10 @@ public final class LumaRoundCameraFlip {
             return;
         }
         final long ticket = generation;
+        // The target frame is already rendered. Do not cover it for another
+        // outward half-turn: only turn the new face in, keeping the HAL wait
+        // full-sized and preserving the familiar camera-flip feedback.
+        target.hidePlaceholder();
         final ValueAnimator created = ValueAnimator.ofFloat(0f, 1f);
         animator = created;
         created.setDuration(DURATION_MS);
@@ -61,17 +64,8 @@ public final class LumaRoundCameraFlip {
         created.addUpdateListener(animation -> {
             if (ticket != generation || animation != animator) return;
             float progress = (float) animation.getAnimatedValue();
-            // One finite timeline: old face 0..90, then target face -90..0.
-            // The midpoint is never waiting for an asynchronous camera callback.
-            if (progress >= 0.5f && !swapped) {
-                swapped = true;
-                target.hidePlaceholder();
-            }
-            float phase = progress < 0.5f ? progress * 2f : (progress - 0.5f) * 2f;
-            float deceleration = 1f - (1f - phase) * (1f - phase);
-            target.setRotationY(progress < 0.5f
-                    ? 90f * deceleration
-                    : -90f * (1f - deceleration));
+            float deceleration = 1f - (1f - progress) * (1f - progress);
+            target.setRotationY(-90f * (1f - deceleration));
         });
         created.addListener(new AnimatorListenerAdapter() {
             @Override
@@ -90,7 +84,6 @@ public final class LumaRoundCameraFlip {
         generation++;
         clearAnimation();
         awaitingFirstFrame = false;
-        swapped = false;
         target.setRotationY(0f);
         target.hidePlaceholder();
     }
@@ -98,7 +91,6 @@ public final class LumaRoundCameraFlip {
     private void finish(long ticket, ValueAnimator animation) {
         if (ticket != generation || animation != animator) return;
         clearAnimation();
-        swapped = false;
         target.setRotationY(0f);
         target.hidePlaceholder();
     }

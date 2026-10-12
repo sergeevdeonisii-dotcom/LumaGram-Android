@@ -14,12 +14,13 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import androidx.core.widget.NestedScrollView;
-
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.BillingController;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaBuildPolicy;
+import org.telegram.messenger.LunagramFeatureCatalog;
+import org.telegram.messenger.LunagramSubscriptionAccess;
 import org.telegram.messenger.LumaLocalGifts;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -31,7 +32,6 @@ import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tl.TL_stars;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
-import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.AnimatedEmojiDrawable;
@@ -40,11 +40,25 @@ import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.TableView;
 import org.telegram.ui.Stars.StarGiftSheet;
-import org.telegram.ui.Stories.recorder.ButtonWithCounterView;
+import org.telegram.ui.Stars.StarsController;
 
-/** Read-only local display. Never opens the real gift transaction sheet. */
+import java.util.function.BooleanSupplier;
+
+/** Read-only local display. Native presentation never acquires gift transaction identities. */
 public final class LumaLocalGiftPreview {
     private LumaLocalGiftPreview() {}
+
+    /** UI navigation only. Never substitute this order for a server gift inventory. */
+    public interface PagerSource {
+        BaseFragment fragment();
+        boolean isCurrent();
+        int size();
+        TL_stars.SavedStarGift get(int index);
+        int indexOf(TL_stars.SavedStarGift gift);
+        void loadMore();
+        StarsController.IGiftsList serverList();
+        void setChangedListener(Runnable listener);
+    }
 
     public static String getRemoveTitle() {
         return getString(LumaBuildPolicy.isPersonalEdition() ? R.string.LumaPersonalGiftRemove : R.string.LumaLocalGiftRemove);
@@ -59,10 +73,15 @@ public final class LumaLocalGiftPreview {
     }
 
     public static void show(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift) {
+        show(fragment, gift, null);
+    }
+
+    public static void show(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift, PagerSource pager) {
         if (fragment == null || gift == null) return;
         int account = fragment.getCurrentAccount();
         Context context = fragment.getParentActivity();
-        if (context == null || gift.ownerUserId <= 0
+        if (context == null || !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_NFT)
+                || gift.ownerUserId <= 0
                 || gift.ownerUserId != UserConfig.getInstance(account).getClientUserId()
                 || !(gift.gift instanceof TL_stars.TL_starGiftUnique)) return;
         TL_stars.TL_starGiftUnique unique = (TL_stars.TL_starGiftUnique) gift.gift;
@@ -70,7 +89,7 @@ public final class LumaLocalGiftPreview {
         Theme.ResourcesProvider resources = fragment.getResourceProvider();
         if (LumaBuildPolicy.isPersonalEdition()) {
             if (account != UserConfig.selectedAccount) return;
-            showPersonal(fragment, gift, unique, context, account, resources);
+            showPersonal(fragment, gift, unique, context, account, resources, pager);
             return;
         }
         LinearLayout content = new LinearLayout(context);
@@ -102,59 +121,51 @@ public final class LumaLocalGiftPreview {
             }
         };
         scroll.addView(content);
-        fragment.showDialog(new AlertDialog.Builder(context, resources)
+        AlertDialog preview = new AlertDialog.Builder(context, resources)
                 .setTitle(unique.title + " #" + LocaleController.formatNumber(unique.num, ','))
                 .setView(scroll)
                 .setPositiveButton(getString(R.string.OK), null)
                 .setNegativeButton(getRemoveTitle(), (dialog, which) -> confirmRemove(fragment, gift))
-                .create());
+                .create();
+        NotificationCenter.NotificationCenterDelegate accessObserver = (id, changedAccount, args) -> {
+            if (!LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_NFT)) preview.dismiss();
+        };
+        preview.setOnDismissListener(dialog -> NotificationCenter.getInstance(account)
+                .removeObserver(accessObserver, NotificationCenter.lunagramSubscriptionChanged));
+        if (fragment.showDialog(preview) != null) {
+            NotificationCenter.getInstance(account).addObserver(accessObserver, NotificationCenter.lunagramSubscriptionChanged);
+        }
     }
 
     private static void showPersonal(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift,
             TL_stars.TL_starGiftUnique unique, Context context, int account,
-            Theme.ResourcesProvider resources) {
-        BottomSheet sheet = new BottomSheet(context, false, resources);
-        sheet.setApplyTopPadding(false);
-        sheet.setApplyBottomPadding(false);
-        sheet.setAllowNestedScroll(true);
-        sheet.fixNavigationBar(Theme.getColor(Theme.key_dialogBackground, resources));
-
-        LinearLayout content = new LinearLayout(context);
-        content.setOrientation(LinearLayout.VERTICAL);
-        PreviewTopView top = new PreviewTopView(context, account, gift.ownerUserId, resources, () -> {
-            content.setVisibility(View.GONE);
-            sheet.dismiss();
-        });
-        // TopView is Telegram's visual header only. All transaction callbacks are null,
-        // and owner/host/link capabilities remain false even for this account's marker.
-        top.setGift(unique, false, false, false, false, false);
-        top.setText(0, unique.title + " #" + LocaleController.formatNumber(unique.num, ','), null, null, null);
-        top.optionsView.setVisibility(View.GONE);
-        content.addView(top, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-        content.addView(createTable(context, account, unique, resources, true),
-                LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 20, 20, 16));
-
-        ButtonWithCounterView done = new ButtonWithCounterView(context, resources);
-        done.setText(getString(R.string.OK), false);
-        done.setOnClickListener(v -> sheet.dismiss());
-        content.addView(done, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 20, 0, 20, 0));
-        BottomSheet.BottomSheetCell remove = new BottomSheet.BottomSheetCell(context, 0, resources);
-        remove.setTextAndIcon(getRemoveTitle(), 0);
-        remove.setTextColor(Theme.getColor(Theme.key_text_RedBold, resources));
-        remove.setGravity(Gravity.CENTER);
-        remove.setOnClickListener(v -> {
-            sheet.dismiss();
-            confirmRemove(fragment, gift);
-        });
-        content.addView(remove, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 20, 4, 20, 8));
-
-        NestedScrollView scroll = new NestedScrollView(context);
-        scroll.setFillViewport(false);
-        scroll.setVerticalScrollBarEnabled(false);
-        scroll.addView(content);
-        sheet.setCustomView(scroll);
-        sheet.setOnDismissListener(top::stopPreview);
+            Theme.ResourcesProvider resources, PagerSource pager) {
+        // A dedicated native binder keeps this payload outside saved/slug/message transaction fields.
+        StarGiftSheet sheet = new StarGiftSheet(context, account, gift.ownerUserId, resources)
+                .setProfilePreviewPager(pager)
+                .setLocalPreview(fragment, gift);
         fragment.showDialog(sheet);
+    }
+
+    public static StarGiftSheet.TopView createPreviewHeader(Context context, int account,
+            LumaLocalGifts.LocalSavedGift gift, Theme.ResourcesProvider resources,
+            Runnable dismiss, View.OnClickListener menu) {
+        PreviewTopView top = new PreviewTopView(context, account, gift.ownerUserId, resources, dismiss);
+        TL_stars.TL_starGiftUnique unique = (TL_stars.TL_starGiftUnique) gift.gift;
+        top.setGift(unique, false, false, false, false, false);
+        String modelName = null;
+        for (TL_stars.StarGiftAttribute attribute : unique.attributes) {
+            if (attribute instanceof TL_stars.starGiftAttributeModel) { modelName = attribute.name; break; }
+        }
+        top.setText(0, unique.title + " #" + LocaleController.formatNumber(unique.num, ','), modelName, null, null);
+        top.optionsView.setVisibility(View.VISIBLE);
+        top.optionsView.setOnClickListener(menu);
+        top.optionsView.setContentDescription(getString(R.string.AccDescrMoreOptions));
+        return top;
+    }
+
+    public static void stopPreviewHeader(StarGiftSheet.TopView top) {
+        if (top instanceof PreviewTopView) ((PreviewTopView) top).stopPreview();
     }
 
     /** Reuses NFT artwork, pattern and radial backdrop, never the transaction sheet. */
@@ -175,6 +186,10 @@ public final class LumaLocalGiftPreview {
             for (int i = 0; i < imageLayout.getChildCount(); i++) {
                 View child = imageLayout.getChildAt(i);
                 if (child instanceof BackupImageView) {
+                    // Keep the native160dp header slot, but give dense outline models the same
+                    // breathing room as native NFT art rather than filling the complete slot.
+                    child.setScaleX(.75f);
+                    child.setScaleY(.75f);
                     ImageReceiver receiver = ((BackupImageView) child).getImageReceiver();
                     receiver.setCurrentAccount(account);
                     receiver.setUniqKeyPrefix("luma_gift_preview_model_" + java.util.UUID.randomUUID() + "_");
@@ -279,6 +294,12 @@ public final class LumaLocalGiftPreview {
     private static TableView createTable(Context context, int account, TL_stars.TL_starGiftUnique unique,
             Theme.ResourcesProvider resources, boolean nativeAttributes) {
         TableView table = new TableView(context, resources);
+        fillPreviewTable(table, context, account, unique, resources, nativeAttributes);
+        return table;
+    }
+
+    public static void fillPreviewTable(TableView table, Context context, int account, TL_stars.TL_starGiftUnique unique,
+            Theme.ResourcesProvider resources, boolean nativeAttributes) {
         LinearLayout owner = new LinearLayout(context);
         owner.setOrientation(LinearLayout.HORIZONTAL);
         owner.setGravity(Gravity.CENTER_VERTICAL);
@@ -316,21 +337,45 @@ public final class LumaLocalGiftPreview {
                 table.addRow(getString(label), attribute.name + (rarity.length() == 0 ? "" : " · " + rarity));
             }
         }
-        return table;
+        if (nativeAttributes) addStoredMetadataRows(table, unique);
+    }
+
+    private static void addStoredMetadataRows(TableView table, TL_stars.TL_starGiftUnique unique) {
+        if (unique.availability_total > 0 && unique.availability_issued >= 0
+                && unique.availability_issued <= unique.availability_total) {
+            table.addRow(getString(R.string.Gift2Quantity),
+                    LocaleController.formatPluralStringComma("Gift2QuantityIssued1", unique.availability_issued)
+                            + LocaleController.formatPluralStringComma("Gift2QuantityIssued2", unique.availability_total));
+        }
+        if ((unique.flags & 256) != 0 && unique.value_amount >= 0
+                && unique.value_currency != null && unique.value_currency.matches("[A-Z]{3}")) {
+            try {
+                BillingController billing = BillingController.getInstance();
+                table.addRow(getString(R.string.GiftValue2), "~" + billing.formatCurrency(unique.value_amount,
+                        unique.value_currency, billing.getCurrencyExp(unique.value_currency), true));
+            } catch (IllegalArgumentException ignored) {
+                // Unknown stored currencies have no truthful valuation to display.
+            }
+        }
     }
 
     public static void confirmRemove(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift) {
+        confirmRemove(fragment, gift, () -> true);
+    }
+
+    public static void confirmRemove(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift, BooleanSupplier ownerCurrent) {
         Context context = fragment.getParentActivity();
         final int account = fragment.getCurrentAccount();
         final long owner = gift.ownerUserId;
-        if (context == null || owner != UserConfig.getInstance(account).getClientUserId()) return;
+        if (context == null || !ownerCurrent.getAsBoolean() || owner != UserConfig.getInstance(account).getClientUserId()) return;
         fragment.showDialog(new AlertDialog.Builder(context, fragment.getResourceProvider())
                 .setTitle(getRemoveTitle())
                 .setMessage(getRemoveInfo())
                 .setPositiveButton(getString(R.string.Delete), (dialog, which) -> Utilities.globalQueue.postRunnable(() -> {
+                    if (!ownerCurrent.getAsBoolean() || owner != UserConfig.getInstance(account).getClientUserId()) return;
                     boolean removed = LumaLocalGifts.remove(account, gift);
                     AndroidUtilities.runOnUIThread(() -> {
-                        if (owner != UserConfig.getInstance(account).getClientUserId()) return;
+                        if (!ownerCurrent.getAsBoolean() || owner != UserConfig.getInstance(account).getClientUserId()) return;
                         if (removed) NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.lumaLocalGiftsChanged, owner);
                         if (fragment.getParentActivity() != null) BulletinFactory.of(fragment).createSimpleBulletin(
                                 removed ? R.raw.done : R.raw.chats_infotip,

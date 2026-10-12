@@ -22,10 +22,16 @@ public final class LumaDelayedSend {
     }
 
     public static boolean isEnabled() {
-        return LumaBuildPolicy.allowsPrivacyTools() && preferences().getBoolean(KEY_ENABLED, false);
+        return isEnabled(UserConfig.selectedAccount);
+    }
+
+    public static boolean isEnabled(int account) {
+        return LumaBuildPolicy.allowsPrivacyTools() && LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.SEND_UNDO)
+                && preferences().getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(boolean enabled) {
+        if (enabled && !LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.SEND_UNDO)) return;
         if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         preferences().edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
@@ -35,15 +41,20 @@ public final class LumaDelayedSend {
     }
 
     public static void setDelayStep(int step) {
+        if (!LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.SEND_UNDO)) return;
         if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         preferences().edit().putInt(KEY_DELAY_STEP, clampStep(step)).apply();
     }
 
     public static long getDelayMs() {
-        return LumaBuildPolicy.allowsPrivacyTools() ? getDelayStep() * 200L : 0L;
+        return getDelayMs(UserConfig.selectedAccount);
     }
 
-    /** Preserve the deadline after closing a chat, without retaining its UI or a reused account slot. */
+    public static long getDelayMs(int account) {
+        return isEnabled(account) ? getDelayStep() * 200L : 0L;
+    }
+
+    /** Complete an already accepted send after closing a chat, without losing it on later expiry. */
     public static void sendDetached(int account, long ownerId,
                                     ArrayList<SendMessagesHelper.SendMessageParams> messages, long sendAt) {
         AndroidUtilities.runOnUIThread(() -> {

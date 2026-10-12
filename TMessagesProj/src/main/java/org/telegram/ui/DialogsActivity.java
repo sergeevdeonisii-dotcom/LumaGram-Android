@@ -13723,8 +13723,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return;
         }
 
-        if (LumaBuildPolicy.allowsPrivacyTools()) io.addChecked(LumaGhostMode.isEnabled(currentAccount), getString(R.string.ExperimentalGhostHeader), () -> {
-            boolean enabled = !LumaGhostMode.isEnabled(currentAccount);
+        if (LumaBuildPolicy.allowsPrivacyTools()) io.addChecked(LumaGhostMode.shouldSuppressActivity(currentAccount), getString(R.string.ExperimentalGhostHeader), () -> {
+            boolean enabled = !LumaGhostMode.shouldSuppressActivity(currentAccount);
+            if (enabled && !LunagramFeatureGate.require(this, org.telegram.messenger.LunagramFeatureCatalog.Feature.GHOST)) return;
             LumaGhostMode.setEnabled(currentAccount, enabled);
             BulletinFactory.of(this).createSimpleBulletin(
                     R.raw.info,

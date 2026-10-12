@@ -67,7 +67,8 @@ public final class LumaLocalGifts {
     /** Stamp asynchronous UI work with the identity that initiated it, not a reusable slot. */
     public static synchronized boolean add(int account, long expectedOwner, TL_stars.TL_starGiftUnique source) {
         final long owner = expectedOwner;
-        if (owner <= 0 || owner(account) != owner || !valid(source)) return false;
+        if (owner <= 0 || owner(account) != owner || !valid(source)
+                || !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_NFT)) return false;
         String phase = "storage-read";
         try {
             ArrayList<Record> records = new ArrayList<>(readRecords(account, owner));
@@ -87,6 +88,7 @@ public final class LumaLocalGifts {
             decode(bytes, owner); // Validate the exact persisted bytes with the real TL decoder.
             records.add(0, new Record(wanted, bytes));
             phase = "storage-write";
+            if (!LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_NFT)) return false;
             writeRecords(account, owner, records);
             return true;
         } catch (Exception error) {
@@ -111,6 +113,12 @@ public final class LumaLocalGifts {
         } catch (Exception ignored) {
             return new ArrayList<>();
         }
+    }
+
+    /** Paid profile overlay only. Raw entries remain readable/removable after expiry. */
+    public static List<LocalSavedGift> entriesForUi(int account) {
+        return LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_NFT)
+                ? entries(account) : Collections.emptyList();
     }
 
     public static synchronized boolean contains(int account, TL_stars.TL_starGiftUnique unique) {
@@ -149,7 +157,7 @@ public final class LumaLocalGifts {
      */
     public static boolean hasAnyForUi(int account) {
         final long owner = owner(account);
-        if (owner <= 0) {
+        if (owner <= 0 || !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_NFT)) {
             invalidateAvailability(account);
             return false;
         }

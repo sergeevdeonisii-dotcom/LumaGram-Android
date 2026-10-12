@@ -19,6 +19,16 @@ if ($LASTEXITCODE -ne 0) { throw 'Update presentation compilation failed.' }
 & $java -Xmx64m -cp $classes org.telegram.messenger.UpdatePresentation100Test
 if ($LASTEXITCODE -ne 0) { throw 'Update presentation regressions failed.' }
 $screen = [IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/ui/LumaUpdateActivity.java'))
+$fillStart = $screen.IndexOf('private void fillItems(')
+$fillEnd = $screen.IndexOf('private void onItemClick(', $fillStart)
+$fill = $screen.Substring($fillStart, $fillEnd - $fillStart)
+if ([regex]::Matches($fill, 'UItem\.asButton\(').Count -ne 2 -or
+        $fill -notmatch 'LumaUpdateCurrentVersion' -or $fill -notmatch 'LumaUpdateCheckNow' -or
+        $screen -match 'ROW_AUTO|ROW_REPAIR|ROW_UPDATE|LumaUpdateAutomatic|LumaUpdateSecureInfo|setManifestUrl\(' -or
+        $screen -notmatch 'controller.checkForUpdate\(true' -or
+        $screen -notmatch 'showCustomUpdateAppPopup\(getContext\(\), update, currentAccount\)') {
+    throw 'Updates must expose only current version and manual check while retaining the verified update popup.'
+}
 $popup = [IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj_AppStandalone/src/main/java/org/telegram/messenger/ApplicationLoaderImpl.java'))
 if ($screen -match 'ROW_SOURCE|LumaUpdateSourceInfo|LumaUpdateAdvancedHeader' -or
         $popup -match '\.append\(update.changelog\)' -or

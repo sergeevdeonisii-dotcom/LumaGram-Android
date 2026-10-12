@@ -7080,6 +7080,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         }
         checkAppUpdate(false, null);
         LumaUpdaterController.getInstance().checkForUpdate(false, null);
+        org.telegram.messenger.LunagramSubscriptionAccess.refresh(UserConfig.selectedAccount);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             ApplicationLoader.canDrawOverlays = Settings.canDrawOverlays(this);

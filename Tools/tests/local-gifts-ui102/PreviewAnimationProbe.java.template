@@ -22,6 +22,9 @@ public class PreviewAnimationProbe {
     static class Outline { void setRoundRect(int l, int t, int r, int b, float radius) { } }
     static abstract class ViewOutlineProvider { abstract void getOutline(View view, Outline outline); }
     static class View {
+        float scaleX=1,scaleY=1;
+        void setScaleX(float value) { scaleX=value; }
+        void setScaleY(float value) { scaleY=value; }
         int getWidth() { return 360; }
         int getHeight() { return 260; }
         static class MeasureSpec { static final int UNSPECIFIED = 0; static int makeMeasureSpec(int size, int mode) { return size; } }
@@ -122,6 +125,7 @@ public class PreviewAnimationProbe {
         check(!patternReceiver.running && !patternReceiver.allowFile && !patternReceiver.allowLottie, "pattern binding must not bypass motion gate through Swap.play");
         check(patternReceiver.prefix.startsWith("luma_gift_preview_"), "private pattern image-cache namespace");
         for (int i = 0; i < 5; i++) {
+            check(top.imageLayout.getChildAt(i).scaleX==.75f && top.imageLayout.getChildAt(i).scaleY==.75f,"proportional native header model");
             ImageReceiver r = receiver(top, i);
             check(r.account == 1 && r.decode && r.repeat == 2, "correct account and one-shot animated document");
             check(r.prefix.startsWith("luma_gift_preview_model_"), "main gift Lottie cache isolated from other screens");

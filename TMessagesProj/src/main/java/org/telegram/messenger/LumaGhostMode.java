@@ -22,20 +22,32 @@ public final class LumaGhostMode {
     }
 
     public static boolean isEnabled(int account) {
-        return LumaBuildPolicy.allowsPrivacyTools() && preferences(account).getBoolean(KEY_ENABLED, false);
+        return LumaBuildPolicy.allowsPrivacyTools() && LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.GHOST)
+                && preferences(account).getBoolean(KEY_ENABLED, false);
+    }
+
+    /** Do not disclose an already armed ghost's activity while billing is still unknown. */
+    public static boolean shouldSuppressActivity(int account) {
+        if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT || UserConfig.getInstance(account).getClientUserId() <= 0) return false;
+        if (!LumaBuildPolicy.allowsPrivacyTools() || !preferences(account).getBoolean(KEY_ENABLED, false)) return false;
+        return LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.GHOST)
+                || LunagramSubscriptionAccess.shouldProtectExistingPrivacy(account);
     }
 
     public static void setEnabled(int account, boolean enabled) {
+        if (enabled && !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.GHOST)) return;
         if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
         MessagesController.getInstance(account).setLumaGhostModeEnabled(enabled);
     }
 
     public static boolean isScheduledSendEnabled(int account) {
-        return LumaBuildPolicy.allowsPrivacyTools() && preferences(account).getBoolean(KEY_SCHEDULE_SEND, false);
+        return LumaBuildPolicy.allowsPrivacyTools() && LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.GHOST)
+                && preferences(account).getBoolean(KEY_SCHEDULE_SEND, false);
     }
 
     public static void setScheduledSendEnabled(int account, boolean enabled) {
+        if (enabled && !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.GHOST)) return;
         if (!LumaBuildPolicy.allowsPrivacyTools()) return;
         preferences(account).edit().putBoolean(KEY_SCHEDULE_SEND, enabled).apply();
     }
@@ -46,7 +58,7 @@ public final class LumaGhostMode {
 
     /** Viewing ephemeral cloud media requires a server receipt. Do not bypass its TTL. */
     public static boolean shouldBlockEphemeralMedia(int account, long dialogId, boolean outgoing, boolean ephemeral) {
-        return ephemeral && !outgoing && dialogId > 0 && !DialogObject.isEncryptedDialog(dialogId) && isEnabled(account);
+        return ephemeral && !outgoing && dialogId > 0 && !DialogObject.isEncryptedDialog(dialogId) && shouldSuppressActivity(account);
     }
 
     public static int getAutomaticScheduleDate(int account, long dialogId, int requestedScheduleDate) {

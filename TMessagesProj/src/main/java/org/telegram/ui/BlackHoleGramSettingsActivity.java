@@ -1,5 +1,7 @@
 package org.telegram.ui;
 
+import org.telegram.messenger.LunagramFeatureCatalog.Feature;
+
 import static org.telegram.messenger.LocaleController.getString;
 
 import android.content.Context;
@@ -84,6 +86,8 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
         } else if (item.id == ROW_ROUND_CAMERA) {
             openSettings(new RoundVideoSettingsActivity());
         } else if (item.id >= 101 && item.id <= 105) {
+            if (item.id == 101 && !LunagramFeatureGate.require(this, Feature.SETTINGS_PROFILES)) return;
+            if (item.id == 104 && !LunagramFeatureGate.require(this, Feature.SETTINGS_TRANSFER)) return;
             openSettings(new BlackHoleToolsActivity(item.id - 100));
         }
     }

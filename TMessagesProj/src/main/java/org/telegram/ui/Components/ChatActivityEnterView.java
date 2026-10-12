@@ -8084,7 +8084,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 }
                 CharSequence[] message = new CharSequence[]{ part };
                 ArrayList<TLRPC.MessageEntity> entities = MediaDataController.getInstance(currentAccount).getEntities(message, supportsNewEntities);
-                entities = LumaMessageFormatting.applyAutomaticStyle(message[0], entities);
+                entities = LumaMessageFormatting.applyAutomaticStyle(currentAccount, message[0], entities);
                 MessageObject.SendAnimationData sendAnimationData = null;
 
                 if (!delegate.hasForwardingMessages()) {
@@ -8177,7 +8177,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (chat != null && chat.slowmode_enabled && !ChatObject.hasAdminRights(chat)) {
             return false;
         }
-        return LumaDelayedSend.isEnabled()
+        return LumaDelayedSend.isEnabled(currentAccount)
             && scheduleDate == 0
             && !isInScheduleMode()
             && payStars <= 0
@@ -8223,7 +8223,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         final long now = SystemClock.uptimeMillis();
         final PendingTextSend previous = pendingTextSends.peekLast();
         pending.sendAt = Math.max(
-            now + LumaDelayedSend.getDelayMs(),
+            now + LumaDelayedSend.getDelayMs(currentAccount),
             previous == null ? 0L : previous.sendAt + 1L
         );
         pending.sendRunnable = this::commitPendingDelayedSendsDue;

@@ -10,12 +10,14 @@ $sources += Join-Path $PSScriptRoot 'profile-verification105/ProfileVerification
 foreach ($name in @('LumaProfileVerification', 'LumaBuildPolicy')) {
     $sources += Join-Path $repo "TMessagesProj/src/main/java/org/telegram/messenger/$name.java"
 }
+. (Join-Path $PSScriptRoot 'feature-access150/add-fixtures.ps1')
+$sources = @(Add-FeatureAccessFixtures $sources $repo)
 & (Join-Path $JavaHome ('bin/javac' + $suffix)) -J-Xmx128m -encoding UTF-8 -d $run $sources
 if ($LASTEXITCODE -ne 0) { throw 'Local verification policy compilation failed.' }
 & (Join-Path $JavaHome ('bin/java' + $suffix)) -Xmx128m -cp $run org.telegram.messenger.ProfileVerification105Test
 if ($LASTEXITCODE -ne 0) { throw 'Local verification policy regression failed.' }
 $iconPath = Join-Path $repo 'TMessagesProj/src/main/res/drawable/luma_profile_verification.xml'
-& (Join-Path $JavaHome ('bin/java' + $suffix)) '-Djava.awt.headless=true' -Xmx128m -cp $run org.telegram.messenger.ProfileVerificationVector105Test $iconPath (Join-Path $run 'vector-geometry-preview.png')
+& (Join-Path $JavaHome ('bin/java' + $suffix)) '-Djava.awt.headless=true' -Xmx128m -cp $run org.telegram.messenger.ProfileVerificationVector105Test $iconPath (Join-Path $run 'vector-geometry-preview.png') (Join-Path $repo 'TMessagesProj/src/main/res/drawable/icon_plane.xml') (Join-Path $repo 'TMessagesProj/src/main/res/drawable/menu_verification.xml')
 if ($LASTEXITCODE -ne 0) { throw 'Local verification vector geometry failed.' }
 if ($Aapt2) {
     & $Aapt2 compile $iconPath -o $run

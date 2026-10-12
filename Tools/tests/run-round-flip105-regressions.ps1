@@ -58,15 +58,22 @@ foreach ($terminal in @('PAUSING','PREVIEWING','FINISHING','COMPLETED','ERROR','
 }
 if (!(Method $view 'private void hideInitialPlaceholder(').Contains('if (switchPlaceholderVisible) return;')) { throw 'An initial placeholder fade must not hide a switch placeholder.' }
 $hide=Method $view 'private void hideCameraSwitchPlaceholder('
-if (!$hide.Contains('setAlpha(0f)') -or $hide.Contains('.alpha(0f)')) { throw 'The old overlay must swap immediately at the finite timeline midpoint.' }
+if (!$hide.Contains('setAlpha(0f)') -or $hide.Contains('.alpha(0f)')) { throw 'The old overlay must uncover the actual first frame without another fade.' }
+$snapshot=Method $view 'private void saveLastCameraBitmap('
+if (!$snapshot.Contains('if (persist) Utilities.stackBlurBitmap(bitmap, 15);')) { throw 'Transient switch snapshots must not synchronously blur on the UI thread.' }
+if (!$snapshot.Contains('if (!textureView.isAvailable()) return;') -or !$snapshot.Contains('if (bitmap == null) return;') -or $snapshot.Contains('lastBitmap = null')) { throw 'Unavailable snapshot must retain the last available overlay.' }
+$show=Method $view 'private void showCameraSwitchPlaceholder('
+if (!$show.Contains('saveLastCameraBitmap(false);') -or !$show.Contains('textureOverlayView.setImageBitmap(lastBitmap);')) { throw 'Switch overlay must retain captured-frame feedback without persistence work.' }
 $button=Method $view 'private void switchCamera('
 if (!$button.Contains('switchCameraDrawable.setCurrentFrame(0);') -or !$button.Contains('switchCameraDrawable.start();')) { throw 'Existing RLottie button response must remain.' }
 if ($helper -match 'RoundVideoSession|RoundVideoGlProcessor|CameraDevice|SurfaceTexture|recorder|FileLog') { throw 'The flip helper must remain UI-only and cannot alter camera/video data.' }
-foreach ($required in @('DURATION_MS = 280L','MAX_LIFETIME_MS = 360L','ValueAnimator.ofFloat(0f, 1f)',
-    'ticket != generation || animation != animator','progress >= 0.5f && !swapped',
+foreach ($required in @('DURATION_MS = 140L','MAX_LIFETIME_MS = 220L','ValueAnimator.ofFloat(0f, 1f)',
+    'ticket != generation || animation != animator','target.setRotationY(-90f * (1f - deceleration))',
     'SharedConfig.animationsEnabled()','Build.VERSION.SDK_INT < 26','ValueAnimator.areAnimatorsEnabled()')) {
     if (!$helper.Contains($required)) { throw "Missing bounded motion contract: $required" }
 }
+$firstMotion=Method $helper 'public void firstFrame('
+if ($firstMotion.IndexOf('target.hidePlaceholder();') -lt 0 -or $firstMotion.IndexOf('target.hidePlaceholder();') -gt $firstMotion.IndexOf('ValueAnimator.ofFloat(') -or $firstMotion.Contains('progress >= 0.5f')) { throw 'An available target frame must not wait behind the old snapshot for a second animation phase.' }
 $run=Join-Path $output ([guid]::NewGuid().ToString('N'))
 $jvm=Join-Path $run 'jvm';$native=Join-Path $run 'android36'
 New-Item -ItemType Directory -Path $jvm,$native -Force | Out-Null

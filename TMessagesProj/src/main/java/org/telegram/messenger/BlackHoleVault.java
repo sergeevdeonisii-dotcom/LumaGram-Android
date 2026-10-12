@@ -22,6 +22,8 @@ public final class BlackHoleVault {
     }
     public static boolean hasDialogs(int account) { return !dialogs(account).isEmpty(); }
     public static void setProtected(int account, long id, boolean protect) {
+        // Existing locks and native PIN authentication remain effective even after expiry.
+        if (protect && !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.CHAT_VAULT)) return;
         if (id == 0 || UserConfig.getInstance(account).getClientUserId() <= 0) return;
         Set<String> copy = new HashSet<>(LumaAccountData.preferences(account).getStringSet(KEY, new HashSet<>()));
         if (protect) copy.add(Long.toString(id)); else copy.remove(Long.toString(id));

@@ -1,5 +1,7 @@
 package org.telegram.ui;
 
+import org.telegram.messenger.LunagramFeatureCatalog.Feature;
+
 import static org.telegram.messenger.LocaleController.getString;
 
 import android.app.Dialog;
@@ -75,17 +77,20 @@ public class TextAnimationSettingsActivity extends BaseFragment {
     private void onItemClick(UItem item, View view, int position, float x, float y) {
         if (item.id == ROW_ENABLED) {
             final boolean enabled = !LumaTextAnimation.isEnabled();
+            if (enabled && !LunagramFeatureGate.require(this, Feature.TYPING_MOTION)) return;
             LumaTextAnimation.setEnabled(enabled);
             if (view instanceof TextCheckCell) {
                 ((TextCheckCell) view).setChecked(enabled);
             }
         } else if (item.id == ROW_AUTO_STYLE) {
+            if (!LunagramFeatureGate.require(this, Feature.AUTOMATIC_MESSAGE_FORMATTING)) return;
             final Dialog dialog = AlertsCreator.createSingleChoiceDialog(
                 getParentActivity(),
                 getStyleNames(),
                 getString(R.string.LumaAutomaticMessageStyle),
                 LumaMessageFormatting.getAutomaticStyle(),
                 (dialogInterface, which) -> {
+                    if (which != LumaMessageFormatting.STYLE_NONE && !LunagramFeatureGate.require(this, Feature.AUTOMATIC_MESSAGE_FORMATTING)) return;
                     LumaMessageFormatting.setAutomaticStyle(which);
                     if (listView != null && listView.adapter != null) {
                         listView.adapter.update(false);

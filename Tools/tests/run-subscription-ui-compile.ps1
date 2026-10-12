@@ -37,10 +37,15 @@ foreach ($key in $keys) { $fields+='public static final int '+$key+'='+($counter
 $resourcePath=Join-Path $run 'org/telegram/messenger/R.java'
 [IO.File]::WriteAllText($resourcePath,'package org.telegram.messenger; public final class R { public static final class string {'+$fields+'} public static final class drawable { public static final int ic_ab_back=1; } }',[Text.UTF8Encoding]::new($false))
 $sources+=$resourcePath
-$sources+=@((Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'subscriptions-auth/fixtures') -Filter '*.java' -Recurse | Where-Object Name -ne 'AndroidUtilities.java').FullName)
+# Native API probe must use the real platform Base64/SystemClock/JSONObject/JSONArray.
+# Only Telegram collaborators remain modeled; JVM behavior tests own their fake parser/clock.
+$sources+=@((Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'subscriptions-auth/fixtures') -Filter '*.java' -Recurse | Where-Object {
+    $_.Name -ne 'AndroidUtilities.java' -and $_.FullName.Replace('\','/') -notmatch '/(?:android|org/json)/'
+}).FullName)
 $sources+=$screen
 $sources+=Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/messenger/LunagramSubscriptionClient.java'
 $sources+=Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/messenger/LunagramSubscriptionCatalog.java'
+$sources+=Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/messenger/LunagramFeatureCatalog.java'
 & $javac -J-Xmx128m -encoding UTF-8 -cp $AndroidJar -d $classes $sources
 if ($LASTEXITCODE -ne 0) { throw 'Subscription UI Android API/model contract compilation failed.' }
 Write-Output 'PASS: actual subscription screen/client compile against Android36 with modeled Telegram UI collaborators; not a full app compile or rendered UI test.'

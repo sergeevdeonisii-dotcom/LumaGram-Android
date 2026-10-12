@@ -1,5 +1,7 @@
 package org.telegram.ui;
 
+import org.telegram.messenger.LunagramFeatureCatalog.Feature;
+
 import static org.telegram.messenger.LocaleController.getString;
 
 import android.content.Context;
@@ -92,6 +94,7 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
             getString(R.string.LiquidGlassBalanced),
             getString(R.string.LiquidGlassDense)
         }, LiteMode.getLiquidGlassOpacityLevel(), value -> {
+            if (!LunagramFeatureGate.require(this, Feature.ADVANCED_GLASS)) return;
             LiteMode.setLiquidGlassOpacityLevel(value);
             settingsChanged = true;
         }));
@@ -102,6 +105,7 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
             getString(R.string.LiquidGlassBalanced),
             getString(R.string.LiquidGlassStrong)
         }, LiteMode.getLiquidGlassIntensityLevel(), value -> {
+            if (!LunagramFeatureGate.require(this, Feature.ADVANCED_GLASS)) return;
             LiteMode.setLiquidGlassIntensityLevel(value);
             settingsChanged = true;
         }));
@@ -112,6 +116,7 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
             getString(R.string.LiquidGlassMedium),
             getString(R.string.LiquidGlassLarge)
         }, LiteMode.getLiquidGlassInputSizeLevel(), value -> {
+            if (!LunagramFeatureGate.require(this, Feature.ADVANCED_GLASS)) return;
             LiteMode.setLiquidGlassInputSizeLevel(value);
             settingsChanged = true;
         }));
@@ -136,6 +141,7 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
             getString(R.string.LiquidGlassBalanced),
             getString(R.string.LiquidGlassStrong)
         }, LiteMode.getLiquidGlassColorStrengthLevel(), value -> {
+            if (!LunagramFeatureGate.require(this, Feature.ADVANCED_GLASS)) return;
             LiteMode.setLiquidGlassColorStrengthLevel(value);
             settingsChanged = true;
         }).setEnabled(adaptiveColor));
@@ -146,6 +152,7 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
             getString(R.string.LiquidGlassTransitionSmooth),
             getString(R.string.LiquidGlassTransitionGentle)
         }, LiteMode.getLiquidGlassColorTransitionLevel(), value -> {
+            if (!LunagramFeatureGate.require(this, Feature.ADVANCED_GLASS)) return;
             LiteMode.setLiquidGlassColorTransitionLevel(value);
             settingsChanged = true;
         }).setEnabled(adaptiveColor));
@@ -155,6 +162,7 @@ public class LiquidGlassSettingsActivity extends BaseFragment {
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {
+        if (!LunagramFeatureGate.require(this, Feature.ADVANCED_GLASS)) return;
         if (item.id == ROW_ADVANCED) {
             presentFragment(new LiquidGlassSettingsActivity(true));
         } else if (item.id == ROW_ADAPTIVE_COLOR) {

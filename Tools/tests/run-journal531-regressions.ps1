@@ -35,6 +35,8 @@ $sourcePaths = @(
     'Tools/tests/fixtures/android/app/Activity.java'
 )
 $sources = @($sourcePaths | ForEach-Object { Join-Path $repo $_ })
+. (Join-Path $PSScriptRoot 'feature-access150/add-fixtures.ps1')
+$sources = @(Add-FeatureAccessFixtures $sources $repo)
 & (Join-Path $JavaHome 'bin/javac.exe') -J-Xmx96m -encoding UTF-8 -d $classes $sources
 if ($LASTEXITCODE -ne 0) { throw 'Journal preference/content test compilation failed.' }
 if ((Get-FileHash -LiteralPath $production -Algorithm SHA256).Hash -ne $initialHash) {

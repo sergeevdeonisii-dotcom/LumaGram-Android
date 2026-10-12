@@ -21,7 +21,7 @@ cd "$repo_root"
 source_commit="$(git rev-parse HEAD)"
 [[ "$source_commit" == "${GITHUB_SHA:-}" ]] || fail 'Checkout does not match the workflow source commit.'
 [[ "$(sed -n 's/^APP_VERSION_NAME=//p' gradle.properties | tr -d '\r')" == 1.5 ]] || fail 'Version 1.5 only.'
-[[ "$(sed -n 's/^APP_VERSION_CODE=//p' gradle.properties | tr -d '\r')" == 7168 ]] || fail 'Unexpected monotonic Android version code.'
+[[ "$(sed -n 's/^APP_VERSION_CODE=//p' gradle.properties | tr -d '\r')" == 7169 ]] || fail 'Unexpected monotonic Android version code.'
 [[ "${LUMA_BUILD_FRIENDS_EDITION:-false}" == false ]] || fail 'This release builds personal and public APKs only.'
 submodule_status="$(git submodule status --recursive)"
 if grep -q '^[+U-]' <<< "$submodule_status"; then fail 'Pinned submodules are missing or mismatched.'; fi

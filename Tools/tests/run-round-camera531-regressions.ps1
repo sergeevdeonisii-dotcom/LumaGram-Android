@@ -21,6 +21,7 @@ $sources = @(
     (Join-Path $PSScriptRoot 'typing-fixtures/org/telegram/messenger/MessagesController.java'),
     (Join-Path $PSScriptRoot 'fixtures/android/content/SharedPreferences.java')
 )
+. (Join-Path $PSScriptRoot 'round-access150/add-fixtures.ps1')
 & (Join-Path $JavaHome 'bin/javac.exe') -J-Xmx96m -encoding UTF-8 -d $classes $sources
 if ($LASTEXITCODE -ne 0) { throw 'Rear-camera preference test compilation failed.' }
 if ((Get-FileHash -LiteralPath $production -Algorithm SHA256).Hash -ne $initialHash) {

@@ -71,6 +71,7 @@ $sources = @(
     (Join-Path $PSScriptRoot 'fixtures/android/content/SharedPreferences.java'),
     (Join-Path $PSScriptRoot 'round-video-fixtures/org/telegram/messenger/VideoEditedInfo.java')
 )
+. (Join-Path $PSScriptRoot 'round-access150/add-fixtures.ps1')
 & $javac -J-Xmx128m -encoding UTF-8 -d $classes $sources
 if ($LASTEXITCODE -ne 0) { throw 'Round export .82 test compilation failed.' }
 & $java -Xmx128m -cp $classes org.telegram.messenger.RoundExport82RegressionTest

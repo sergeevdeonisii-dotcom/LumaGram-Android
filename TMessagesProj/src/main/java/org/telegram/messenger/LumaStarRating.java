@@ -42,10 +42,12 @@ public final class LumaStarRating {
     }
 
     public static boolean isEnabled(int account) {
-        return preferences(account).getBoolean(KEY_ENABLED, false);
+        return LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_LEVEL)
+                && preferences(account).getBoolean(KEY_ENABLED, false);
     }
 
     public static void setEnabled(int account, boolean enabled) {
+        if (enabled && !LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_LEVEL)) return;
         preferences(account).edit().putBoolean(KEY_ENABLED, enabled).apply();
     }
 
@@ -54,6 +56,7 @@ public final class LumaStarRating {
     }
 
     public static void setLevel(int account, int level) {
+        if (!LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_LEVEL)) return;
         preferences(account).edit().putInt(KEY_LEVEL, clampLevel(level)).apply();
     }
 

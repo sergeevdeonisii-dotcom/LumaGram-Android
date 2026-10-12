@@ -194,6 +194,7 @@ $sources=@($source,(Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/me
     (Join-Path $PSScriptRoot 'typing-fixtures/org/telegram/messenger/MessagesController.java'),
     (Join-Path $PSScriptRoot 'fixtures/android/content/SharedPreferences.java'),
     (Join-Path $PSScriptRoot 'round-video-fixtures/org/telegram/messenger/VideoEditedInfo.java'))
+. (Join-Path $PSScriptRoot 'round-access150/add-fixtures.ps1')
 & (Join-Path $JavaHome 'bin/javac.exe') -J-Xmx128m -encoding UTF-8 -d (Join-Path $run 'classes') $sources
 if($LASTEXITCODE -ne 0){throw 'Round-video regression compilation failed.'}
 & (Join-Path $JavaHome 'bin/java.exe') -Xmx64m -cp (Join-Path $run 'classes') org.telegram.messenger.RoundVideoRegressionTest
@@ -201,7 +202,8 @@ if($LASTEXITCODE -ne 0){throw 'Round-video regressions failed.'}
 $prepare=Method $instant 'private void prepareEncoder(boolean fromPause)'
 if($prepare.IndexOf('prepareRecordingCodecs(fromPause)') -gt $prepare.IndexOf('audioRecorder.startRecording()')){throw 'Codec fallback must finish before AudioRecord starts.'}
 if($instant -match 'videoEditedInfo\.framerate = 25|videoEditedInfo\.resultWidth = videoEditedInfo\.originalWidth = 360|videoEditedInfo\.bitrate = 1000000'){throw 'Legacy round-video metadata/compression constants remain.'}
-if(([regex]::Matches($instant,'LumaRoundVideoQuality.applyMetadata\(videoEditedInfo, encodingProfile\)')).Count -ne 4){throw 'All preview/send/trim metadata paths must use the captured encoder profile.'}
+if(([regex]::Matches($instant,'LumaRoundVideoQuality.applyMetadata\(videoEditedInfo, encodingProfile\)')).Count -ne 3 -or
+    ([regex]::Matches($instant,'LumaRoundVideoQuality.applyMetadata\(videoEditedInfo, getRecordingQualityProfile\(\)\)')).Count -ne 1){throw 'All preview/send/trim metadata paths must use the captured encoder profile.'}
 $cameraCreates = [regex]::Matches($instant, 'Camera2Session\.create\(([^;]+)\);')
 if ($cameraCreates.Count -ne 4) { throw 'Camera2 must cover dual, initial, unavailable-facing fallback, and flip capture paths.' }
 foreach ($create in $cameraCreates) {

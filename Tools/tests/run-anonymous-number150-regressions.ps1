@@ -16,6 +16,8 @@ $sources = @(
 foreach ($name in @('LumaAnonymousNumber', 'LumaAccountData', 'LumaBuildPolicy')) {
     $sources += Join-Path $repo "TMessagesProj/src/main/java/org/telegram/messenger/$name.java"
 }
+. (Join-Path $PSScriptRoot 'feature-access150/add-fixtures.ps1')
+$sources = @(Add-FeatureAccessFixtures $sources $repo)
 & (Join-Path $JavaHome ('bin/javac' + $suffix)) -J-Xmx128m -encoding UTF-8 -d $run $sources
 if ($LASTEXITCODE -ne 0) { throw 'Anonymous-number production model compilation failed.' }
 & (Join-Path $JavaHome ('bin/java' + $suffix)) -Xmx128m -cp $run org.telegram.messenger.AnonymousNumber150Test
@@ -34,7 +36,7 @@ foreach ($guard in @('owner.id != UserConfig.getInstance(currentAccount).getClie
         'LumaAnonymousNumber.getPriceNanoTon(currentAccount)', 'LumaAnonymousNumber.getUsdCents(preview.crypto_amount,',
         'MessagesController.getInstance(currentAccount).config.tonUsdRate.get()',
         'preview.url = "https://fragment.com/numbers"',
-        'open(context, TYPE_PHONE, phone, owner, preview, resourcesProvider, true)')) {
+        'open(context, TYPE_PHONE, phone, owner, preview, resourcesProvider, true, currentAccount)')) {
     if (!$local.Contains($guard)) { throw "Missing native phone-card source contract: $guard" }
 }
 if ($local -match 'sendRequest|ConnectionsManager|nextInt|Random|owner\.\w+\s*=|LumaAnonymousNumberSheetMessage') {

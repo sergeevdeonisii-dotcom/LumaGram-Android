@@ -83,7 +83,14 @@ jobs:
           ./Tools/tests/run-round-flip105-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-flip-tests') -AndroidJar (Join-Path $sdkRoot 'platforms/android-36/android.jar')
           ./Tools/tests/run-profile-verification105-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'profile-verification-tests') -Aapt2 (Join-Path $sdkRoot 'build-tools/36.0.0/aapt2')
           ./Tools/tests/run-subscription-auth-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'subscription-auth-tests')
+          ./Tools/tests/run-subscription-access150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'subscription-access-tests') -AndroidJar (Join-Path $sdkRoot 'platforms/android-36/android.jar')
+          ./Tools/tests/run-round-access150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-access-tests')
+          ./Tools/tests/run-gift-pager150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'gift-pager-tests')
           ./Tools/tests/run-subscriptions-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'subscription-catalog-tests') -Aapt2 (Join-Path $sdkRoot 'build-tools/36.0.0/aapt2')
+          ./Tools/tests/run-feature-catalog150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'feature-catalog-tests')
+          ./Tools/tests/run-feature-gate150-compile.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'feature-gate-tests') -AndroidJar (Join-Path $sdkRoot 'platforms/android-36/android.jar')
+          ./Tools/tests/run-local-phone-expiry150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'local-phone-expiry-tests')
+          ./Tools/tests/run-subscription-screen150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'subscription-screen-tests')
           ./Tools/tests/run-subscription-ui-compile.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'subscription-ui-tests') -AndroidJar (Join-Path $sdkRoot 'platforms/android-36/android.jar')
       - name: Build personal and public APKs with a disposable signing key
         shell: bash

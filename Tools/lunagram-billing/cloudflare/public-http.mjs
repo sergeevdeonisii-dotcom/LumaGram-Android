@@ -24,7 +24,7 @@ export function publicPayload(path, { live = false, payments = false } = {}) {
         paymentsAvailable: live && payments, activationAvailable: live, storageStatus: live ? 'ready' : 'unverified',
     };
     if (path === '/v1/catalog') return {
-        currency: 'USD', period: 'calendar_month', manualRenewal: true, featuresGated: false,
+        currency: 'USD', period: 'calendar_month', manualRenewal: true, featuresGated: true,
         paymentsAvailable: live && payments, activationAvailable: live,
         plans: CATALOG.map(plan => ({ id: plan.id, title: plan.title, usdCents: plan.usdCents, starsAmount: STARS_TARIFFS[plan.id] })),
         paymentMethods: [

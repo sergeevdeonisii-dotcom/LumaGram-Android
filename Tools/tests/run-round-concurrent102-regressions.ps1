@@ -19,12 +19,17 @@ $root=Join-Path $repo 'TMessagesProj/src/main/java/org/telegram'
 $camera=[IO.File]::ReadAllText((Join-Path $root 'utils/camera/roundvideo/RoundVideoCameraController.java'))
 $gl=[IO.File]::ReadAllText((Join-Path $root 'utils/camera/roundvideo/RoundVideoGlProcessor.java'))
 $view=[IO.File]::ReadAllText((Join-Path $root 'ui/Components/InstantCameraView2.java'))
-foreach($guard in @('targetFps != 30 && targetFps != 60','activeFrameRate.getValue() != targetFps','first.fps.getLower() != 60','Build.VERSION.SDK_INT < 30','candidate.isSupported()',
+foreach($guard in @('targetFps != 30 && targetFps != 60','activeFrameRate.getValue() != targetFps',
+        'first.fps.getLower() <= 0 || second.fps.getLower() <= 0',
+        'first.fps.getUpper() != targetFps || second.fps.getUpper() != targetFps','Build.VERSION.SDK_INT < 30','candidate.isSupported()',
         'glProcessor.addConcurrentInput','processor.selectConcurrentInput','concurrentCamera.close(null)',
         'glProcessor.resetToPrimaryInput()')) {
     if(!$camera.Contains($guard)){throw "Missing concurrent safety guard: $guard"}
 }
 $concurrent=[IO.File]::ReadAllText((Join-Path $root 'utils/camera/roundvideo/RoundVideoConcurrentCamera.java'))
+if($camera.Contains('first.fps.getLower() != 60') -or $concurrent.Contains('target == 60 && slot.spec.fps.getLower() != 60')) {
+    throw 'Advertised adaptive 60 candidates must reach real dual-sensor qualification instead of being discarded by their lower AE bound.'
+}
 foreach($guard in @('QUALIFICATION_TIMEOUT_MS = 1_000L','CaptureResult.SENSOR_TIMESTAMP',
         '!slots[0].cadenceQualified || !slots[1].cadenceQualified','measured < 57d || measured > 63d')) {
     if(!$concurrent.Contains($guard)){throw "Missing actual concurrent FPS qualification: $guard"}

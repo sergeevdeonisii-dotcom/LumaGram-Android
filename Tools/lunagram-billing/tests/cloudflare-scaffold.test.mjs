@@ -40,7 +40,7 @@ test('health is liveness only and explicitly does not claim storage/payment read
 test('catalog prices stay exact; every purchase method is unavailable and features ungated', async () => {
     const payload = await (await core.fetch(request('/v1/catalog'))).json();
     assert.deepEqual(payload.plans.map(p => p.usdCents), [50, 100, 140, 200, 500]);
-    assert.equal(payload.featuresGated, false);
+    assert.equal(payload.featuresGated, true);
     assert.equal(payload.manualRenewal, true);
     assert.ok(payload.paymentMethods.every(p => p.available === false));
     assert.deepEqual(payload.plans.map(p => p.starsAmount), [40, 70, 100, 140, 360]);
@@ -166,7 +166,7 @@ test('source-only configs keep private Worker, SQLite migration, neutral Pages n
     assert.equal(proxy.pages_build_output_dir, './public');
     assert.deepEqual(proxy.services, [{ binding: 'BILLING_SERVICE', service: 'lunagram-billing-core' }]);
     for (const config of [worker, proxy]) for (const forbidden of ['account_id','secrets','triggers']) assert.equal(config[forbidden], undefined);
-    assert.deepEqual(worker.vars, { LIVE_BOT_ENABLED: 'true', BILLING_PAYMENTS_ENABLED: 'false', TELEGRAM_WEBHOOK_IP: '172.66.44.64' });
+    assert.deepEqual(worker.vars, { LIVE_BOT_ENABLED: 'true', BILLING_PAYMENTS_ENABLED: 'true', TELEGRAM_WEBHOOK_IP: '172.66.44.64' });
     assert.equal(proxy.vars, undefined);
     assert.deepEqual(readConfig('../cloudflare/pages/public/_routes.json'), { version: 1, include: ['/*'], exclude: [] });
     assert.deepEqual(readdirSync(new URL('../cloudflare/pages/public/', import.meta.url)).sort(), ['_routes.json','_worker.js']);

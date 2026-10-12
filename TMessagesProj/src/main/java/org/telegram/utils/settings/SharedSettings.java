@@ -1,6 +1,9 @@
 package org.telegram.utils.settings;
 
 import org.telegram.messenger.BuildConfig;
+import org.telegram.messenger.LunagramFeatureCatalog;
+import org.telegram.messenger.LunagramSubscriptionAccess;
+import org.telegram.messenger.UserConfig;
 import org.telegram.utils.camera.roundvideo.RoundVideoSession;
 
 public final class SharedSettings {
@@ -31,6 +34,7 @@ public final class SharedSettings {
 
     /** Migrate .82's unsupported encoded sizes, retaining lower explicit choices. */
     public static RoundVideoSession.OutputResolution getRoundVideoOutputResolution() {
+        if (!canUseRoundVideoControls()) return RoundVideoSession.OutputResolution.P640;
         RoundVideoSession.OutputResolution stored;
         try {
             stored = roundVideoOutputResolution.get();
@@ -44,6 +48,7 @@ public final class SharedSettings {
     }
 
     public static RoundVideoSession.FrameRate getRoundVideoFrameRate() {
+        if (!canUseRoundVideoControls()) return RoundVideoSession.FrameRate.FPS_30;
         RoundVideoSession.FrameRate stored;
         try {
             stored = roundVideoFrameRate.get();
@@ -54,6 +59,19 @@ public final class SharedSettings {
         RoundVideoSession.FrameRate compatible = RoundVideoSession.FrameRate.fromValue(stored.getValue());
         if (compatible != stored) roundVideoFrameRate.set(compatible);
         return compatible;
+    }
+
+    /** Effective recording defaults; denied overrides remain stored for a later renewal. */
+    public static RoundVideoSession.CameraResolution getRoundVideoCameraResolution() {
+        return canUseRoundVideoControls() ? roundVideoCameraResolution.get() : RoundVideoSession.CameraResolution.HIGH;
+    }
+
+    public static int getRoundVideoBitrate() {
+        return canUseRoundVideoControls() ? roundVideoVideoBitrate.get() : 4_000_000;
+    }
+
+    private static boolean canUseRoundVideoControls() {
+        return LunagramSubscriptionAccess.canUse(UserConfig.selectedAccount, LunagramFeatureCatalog.Feature.ROUND_VIDEO_CONTROLS);
     }
 
     private SharedSettings() {

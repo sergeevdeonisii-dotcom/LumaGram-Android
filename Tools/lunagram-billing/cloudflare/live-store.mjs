@@ -1,6 +1,8 @@
 import { Buffer } from 'node:buffer';
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from 'node:crypto';
-import { addCalendarMonth, requireBilling, telegramUserId } from '../catalog.mjs';
+import { addCalendarMonth, durationByMonths, BillingError, requireBilling, telegramUserId } from '../catalog.mjs';
+import { roundedStarsForDuration } from '../stars-tariffs.mjs';
+import { createFixedTermGrant, createFixedTermSchedule, selectFixedTerms } from '../fixed-term-policy.mjs';
 import { generateActivationCode, normalizeActivationCode } from '../security.mjs';
 import { createBotOutboxRepository } from './bot-outbox-repository.mjs';
 
@@ -13,6 +15,7 @@ export const LIVE_PLANS = Object.freeze([
 ]);
 const INVOICE_MS = 15 * 60_000;
 const RESERVATION_REPLY_MS = 10_000;
+const ACTIVATION_QUOTE_MS = 120_000;
 const KIND_KEY = 'telegram_paid_key';
 const KIND_INFO = 'telegram_info';
 const hash = text => createHash('sha256').update(text).digest('hex');
@@ -61,6 +64,16 @@ const SCHEMA = [
     `CREATE TABLE IF NOT EXISTS live_grants(code_hash TEXT PRIMARY KEY,owner_hash TEXT NOT NULL,order_id TEXT NOT NULL,
         plan_id TEXT NOT NULL,created_ms INTEGER NOT NULL)`,
     `CREATE INDEX IF NOT EXISTS live_grants_owner ON live_grants(owner_hash,created_ms,code_hash)`,
+    `CREATE TABLE IF NOT EXISTS live_order_terms(order_id TEXT PRIMARY KEY,months INTEGER NOT NULL,schema_version INTEGER NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS live_fixed_grants(grant_id TEXT PRIMARY KEY,order_id TEXT NOT NULL UNIQUE,
+        owner_hash TEXT NOT NULL,plan_id TEXT NOT NULL,months INTEGER NOT NULL,starts_ms INTEGER NOT NULL,
+        expires_ms INTEGER NOT NULL,created_ms INTEGER NOT NULL)`,
+    `CREATE INDEX IF NOT EXISTS live_fixed_grants_owner ON live_fixed_grants(owner_hash,starts_ms,grant_id)`,
+    `CREATE TABLE IF NOT EXISTS live_entitlement_versions(owner_hash TEXT PRIMARY KEY,version INTEGER NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS live_activation_quotes(id TEXT PRIMARY KEY,owner_hash TEXT NOT NULL,code_hash TEXT NOT NULL,
+        plan_id TEXT NOT NULL,months INTEGER NOT NULL,stars INTEGER NOT NULL,starts_ms INTEGER NOT NULL,
+        expires_ms INTEGER NOT NULL,valid_until_ms INTEGER NOT NULL,queue_version INTEGER NOT NULL,confirmed_ms INTEGER)`,
+    `CREATE INDEX IF NOT EXISTS live_activation_quotes_owner ON live_activation_quotes(owner_hash,code_hash,valid_until_ms)`,
     `CREATE TABLE IF NOT EXISTS live_ledger(id TEXT PRIMARY KEY,kind TEXT NOT NULL,order_id TEXT,owner_hash TEXT,
         created_ms INTEGER NOT NULL,private_json TEXT NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS live_refund_markers(charge_hash TEXT PRIMARY KEY,private_json TEXT NOT NULL,created_ms INTEGER NOT NULL)`,
@@ -84,9 +97,11 @@ const SCHEMA = [
  * Every paid primary receipt, code hash, encrypted bearer key, ledger and outbox
  * insert commits in ONE SQLite transaction. Outbox may duplicate delivery after
  * a lost ACK; it always repeats the same key, never generates a replacement.
- * Redeemed subscriptions stack calendar months; latest unrefunded redemption
- * supplies the displayed plan immediately. Features remain ungated. Refunding a
- * primary payment excludes its grant and recomputes from the append-only history.
+ * Legacy v1 redemptions retain their original pooled-month behavior. Schema2
+ * purchases activate only through owner-bound preview/confirmation, with immutable
+ * per-order intervals. Refunding a fixed grant never moves any other interval.
+ * Active legacy pools must expire before fixed-term activation; no silent migration.
+ * Features remain ungated and production sales are separately disabled by control.
  *
  * Stable encryptionKey/keyPepper required across restarts. This initial key-v1
  * store does not support dropping/rotating keys: retain secrets securely until a
@@ -128,9 +143,17 @@ export function createLiveStore(storage, { encryptionKey, keyPepper, termsVersio
     }
     const privateJson = (value, id, kind) => JSON.stringify(encrypt(value, id, kind));
     const getOrderRow = id => rows('SELECT * FROM live_orders WHERE id=?', text(id, 128))[0];
+    const orderTerms = id => {
+        const value = rows('SELECT months,schema_version FROM live_order_terms WHERE order_id=?', id)[0];
+        if (!value) return { months: 1, schemaVersion: 1 };
+        // An unknown future/corrupt schema must never fall through into the
+        // permissive legacy monthly claim path.
+        requireBilling(value.schema_version === 2, 'UPGRADE_REQUIRED');
+        return { months: durationByMonths(value.months).months, schemaVersion: 2 };
+    };
     const orderView = row => row ? ({ id: row.id, planId: row.plan_id, starsAmount: row.stars,
         status: row.status, termsVersion: row.terms_version, createdAtMs: row.created_ms, expiresAtMs: row.expires_ms,
-        outboxId: hash(`invoice:${row.id}`) }) : null;
+        outboxId: hash(`invoice:${row.id}`), ...(orderTerms(row.id).schemaVersion === 2 ? orderTerms(row.id) : {}) }) : null;
     function ledger(id, kind, orderId, userHash, value, at) {
         rows('INSERT INTO live_ledger(id,kind,order_id,owner_hash,created_ms,private_json) VALUES (?,?,?,?,?,?)',
             id, kind, orderId, userHash, at, privateJson(value, id, 'ledger'));
@@ -161,7 +184,7 @@ export function createLiveStore(storage, { encryptionKey, keyPepper, termsVersio
         });
         requireBilling(allowed, 'RATE_LIMITED');
     }
-    function subscription(uid, at = now()) {
+    function legacySubscription(uid, at = now()) {
         timestamp(at);
         const userHash = ownerHash(uid);
         const grants = rows(`SELECT g.* FROM live_grants g JOIN live_orders o ON o.id=g.order_id
@@ -174,6 +197,60 @@ export function createLiveStore(storage, { encryptionKey, keyPepper, termsVersio
         }
         return { active: expiresAtMs > at, planId: expiresAtMs > at ? planId : null, expiresAtMs, featuresGated: false };
     }
+    const hasFixed = userHash => !!rows('SELECT grant_id FROM live_fixed_grants WHERE owner_hash=? LIMIT 1', userHash).length;
+    const version = userHash => rows('SELECT version FROM live_entitlement_versions WHERE owner_hash=?', userHash)[0]?.version ?? 0;
+    function bumpVersion(userHash) {
+        const next = version(userHash) + 1;
+        requireBilling(Number.isSafeInteger(next), 'INVALID_VERSION');
+        rows(`INSERT INTO live_entitlement_versions(owner_hash,version) VALUES (?,?)
+            ON CONFLICT(owner_hash) DO UPDATE SET version=excluded.version`, userHash, next);
+    }
+    const publicTerm = term => ({ orderId: term.orderId, planId: term.planId, months: term.months,
+        startsAtMs: term.startsAtMs, expiresAtMs: term.expiresAtMs });
+    function fixedSchedule(userHash) {
+        const saved = rows(`SELECT g.*,o.status FROM live_fixed_grants g JOIN live_orders o ON o.id=g.order_id
+            WHERE g.owner_hash=? ORDER BY g.starts_ms,g.grant_id`, userHash);
+        return createFixedTermSchedule(userHash, saved.map(g => ({ grantId: g.grant_id, orderId: g.order_id,
+            ownerHash: g.owner_hash, planId: g.plan_id, months: g.months, startsAtMs: g.starts_ms, expiresAtMs: g.expires_ms })),
+            saved.filter(g => ['refund_pending', 'refunded'].includes(g.status)).map(g => ({ orderId: g.order_id, status: g.status })));
+    }
+    function subscriptionV2(uid, at = now()) {
+        timestamp(at);
+        const userHash = ownerHash(uid), revision = version(userHash);
+        const base = { schemaVersion: 2, serverNowMs: at, entitlementVersion: revision, queueVersion: revision, featuresGated: true };
+        const legacy = legacySubscription(uid, at);
+        if (!hasFixed(userHash) && legacy.active) return { ...base, ...legacy, featuresGated: true, paidUntilMs: legacy.expiresAtMs,
+            legacy: true, legacyExpiresAtMs: legacy.expiresAtMs, current: null, queued: [] };
+        const selected = selectFixedTerms(fixedSchedule(userHash), at);
+        requireBilling(selected.queued.length <= 100, 'QUEUE_FULL');
+        const current = selected.activeTerm ? publicTerm(selected.activeTerm) : null;
+        const queued = selected.queued.map(publicTerm);
+        return { ...base, active: current !== null, planId: current?.planId ?? null, expiresAtMs: current?.expiresAtMs ?? 0,
+            paidUntilMs: Math.max(current?.expiresAtMs ?? 0, ...queued.map(t => t.expiresAtMs)), current, queued };
+    }
+    function subscription(uid, at = now()) {
+        if (!hasFixed(ownerHash(uid))) return legacySubscription(uid, at);
+        const value = subscriptionV2(uid, at);
+        return { active: value.active, planId: value.planId, expiresAtMs: value.expiresAtMs, featuresGated: false };
+    }
+    function rejectActiveLegacy(uid, at) {
+        const legacy = legacySubscription(uid, at);
+        if (legacy.active) {
+            const error = new BillingError('LEGACY_TERM_ACTIVE');
+            error.legacyExpiresAtMs = legacy.expiresAtMs;
+            throw error;
+        }
+    }
+    function availableCode(codeHash, userHash, allowClaimed = false) {
+        const code = rows('SELECT * FROM live_codes WHERE code_hash=?', codeHash)[0];
+        requireBilling(code, 'INVALID_CODE');
+        const order = getOrderRow(code.order_id);
+        requireBilling(!code.revoked && order?.status === 'paid', 'CODE_UNAVAILABLE');
+        if (code.redeemed_hash) requireBilling(allowClaimed && code.redeemed_hash === userHash, 'CODE_ALREADY_USED');
+        return { code, order };
+    }
+    const quoteView = quote => ({ quoteId: quote.id, planId: quote.plan_id, months: quote.months, starsAmount: quote.stars,
+        startsAtMs: quote.starts_ms, expiresAtMs: quote.expires_ms, validUntilMs: quote.valid_until_ms, queueVersion: quote.queue_version });
     function keyRows(uid, max = 50) {
         return rows(`SELECT c.*,o.plan_id,o.status AS order_status,o.created_ms FROM live_codes c
             JOIN live_orders o ON o.id=c.order_id WHERE o.owner_hash=? ORDER BY o.created_ms DESC,o.id LIMIT ?`, ownerHash(uid), max);
@@ -188,6 +265,9 @@ export function createLiveStore(storage, { encryptionKey, keyPepper, termsVersio
         if (order?.primary_charge === payment.charge_hash) {
             rows("UPDATE live_orders SET status='refunded' WHERE id=?", order.id);
             rows('UPDATE live_codes SET revoked=1 WHERE order_id=?', order.id);
+            const grant = rows('SELECT owner_hash FROM live_fixed_grants WHERE order_id=?', order.id)[0]
+                ?? rows('SELECT owner_hash FROM live_grants WHERE order_id=?', order.id)[0];
+            if (grant) bumpVersion(grant.owner_hash);
         }
         ledger(`refund:${payment.charge_hash}`, 'refund', payment.order_id, ownerHash(details.userId), {}, at);
         return { status: 'refunded', orderId: payment.order_id };
@@ -214,23 +294,33 @@ export function createLiveStore(storage, { encryptionKey, keyPepper, termsVersio
             const row = rows('SELECT * FROM live_consents WHERE owner_hash=?', ownerHash(userId))[0];
             return { accepted: row?.version === termsVersion, termsVersion: row?.version ?? null, acceptedAtMs: row?.accepted_ms ?? null };
         },
-        createOrder(userId, planId, requestKey) {
+        createOrder(userId, planId, requestKey, months) {
             const userHash = ownerHash(userId); const plan = LIVE_PLANS.find(p => p.id === planId);
             requireBilling(plan, 'INVALID_PLAN'); text(requestKey, 128); limit(userId, 'purchase', 10);
+            const schemaVersion = months === undefined ? 1 : 2;
+            const duration = schemaVersion === 1 ? 1 : durationByMonths(months).months;
+            const starsAmount = roundedStarsForDuration(plan.starsAmount, duration);
             const requestHash = mac('purchase', `${userHash}:${requestKey}`);
             return atomic(tx => {
                 requireBilling(rows('SELECT version FROM live_consents WHERE owner_hash=?', userHash)[0]?.version === termsVersion, 'TERMS_REQUIRED');
                 const existing = rows('SELECT * FROM live_orders WHERE request_hash=?', requestHash)[0];
-                if (existing) { requireBilling(existing.plan_id === planId, 'IDEMPOTENCY_CONFLICT'); return orderView(existing); }
+                if (existing) {
+                    const term = orderTerms(existing.id);
+                    requireBilling(existing.plan_id === planId && term.months === duration && term.schemaVersion === schemaVersion, 'IDEMPOTENCY_CONFLICT');
+                    return orderView(existing);
+                }
                 const id = opaque(); const at = now();
                 rows(`INSERT INTO live_orders(id,request_hash,owner_hash,plan_id,stars,terms_version,status,
                     created_ms,expires_ms,private_json) VALUES (?,?,?,?,?,?,'pending',?,?,?)`, id, requestHash, userHash,
-                plan.id, plan.starsAmount, termsVersion, at, at + INVOICE_MS, privateJson({ userId }, id, 'order'));
+                plan.id, starsAmount, termsVersion, at, at + INVOICE_MS, privateJson({ userId }, id, 'order'));
+                if (schemaVersion === 2) rows('INSERT INTO live_order_terms(order_id,months,schema_version) VALUES (?,?,2)', id, duration);
                 queue(tx, hash(`invoice:${id}`), 'telegram_invoice', { method: 'sendInvoice', chat_id: userId,
-                    title: `Lunagram ${plan.title}`, description: `Один месяц ${plan.title}. Ручное продление. Все функции пока доступны без подписки.`,
-                    payload: id, provider_token: '', currency: 'XTR', start_parameter: `buy_${plan.id}`,
-                    prices: [{ label: plan.title, amount: plan.starsAmount }] }, at);
-                ledger(`order:${id}`, 'order_created', id, userHash, { termsVersion }, at);
+                    title: `Lunagram ${plan.title}`, description: schemaVersion === 1
+                        ? `Один месяц ${plan.title}. Ручное продление. Все функции пока доступны без подписки.`
+                        : `Ключ ${plan.title}: ${duration} мес. Для общей версии с подписками. Без автосписаний. Даты покажем до подтверждения активации; новый срок после очереди. Платные функции отключаются по окончании срока.`,
+                    payload: id, provider_token: '', currency: 'XTR', start_parameter: `buy_${plan.id}${schemaVersion === 2 ? '_' + duration : ''}`,
+                    prices: [{ label: `${plan.title}${schemaVersion === 2 ? ' · ' + duration + ' мес.' : ''}`, amount: starsAmount }] }, at);
+                ledger(`order:${id}`, 'order_created', id, userHash, { termsVersion, schemaVersion, months: duration }, at);
                 return orderView(getOrderRow(id));
             });
         },
@@ -297,7 +387,7 @@ export function createLiveStore(storage, { encryptionKey, keyPepper, termsVersio
                 rows('INSERT INTO live_codes(code_hash,order_id,private_json) VALUES (?,?,?)', codeHash, orderId,
                     privateJson({ code }, codeHash, 'code'));
                 const outboxId = queue(tx, hash(`key:${orderId}`), KIND_KEY,
-                    sendText(userId, `Lunagram ${order.plan_id}\nЗаказ: ${orderId}\nКлюч на один месяц:\n${code}\n\nАктивируйте его в Lunagram. Ключ одноразовый: не публикуйте его. Повторная выдача: /keys. Для поддержки укажите номер заказа, не ключ.`), at);
+                    sendText(userId, `Lunagram ${order.plan_id}\nЗаказ: ${orderId}\nКлюч на ${orderTerms(orderId).months} мес.:\n${code}\n\nАктивируйте его в Lunagram. Перед подтверждением проверьте даты срока. Ключ одноразовый: не публикуйте его. Повторная выдача: /keys. Для поддержки укажите номер заказа, не ключ.`), at);
                 return { status: 'paid', orderId, outboxId };
             });
         },
@@ -307,7 +397,7 @@ export function createLiveStore(storage, { encryptionKey, keyPepper, termsVersio
             return atomic(tx => {
                 const at = now(); const keys = keyRows(userId, 20);
                 const lines = keys.map(row => `Заказ: ${row.order_id}\n` + (keyView(row).status === 'available'
-                    ? `${row.plan_id}: ${decrypt(row.private_json, row.code_hash, 'code').code}`
+                    ? `${row.plan_id} · ${orderTerms(row.order_id).months} мес.: ${decrypt(row.private_json, row.code_hash, 'code').code}`
                     : `${row.plan_id}: ${keyView(row).status}`));
                 const outboxId = queue(tx, mac('keys-delivery', `${userHash}:${requestKey}`), KIND_KEY,
                     sendText(userId, lines.length ? `Ваши ключи Lunagram (до 20 последних):\n${lines.join('\n')}\n\nНе передавайте неиспользованные ключи посторонним.` : 'Покупок с ключами пока нет.'), at);
@@ -322,6 +412,7 @@ export function createLiveStore(storage, { encryptionKey, keyPepper, termsVersio
                 requireBilling(row, 'INVALID_CODE');
                 const order = getOrderRow(row.order_id);
                 requireBilling(!row.revoked && order?.status === 'paid', 'CODE_UNAVAILABLE');
+                requireBilling(orderTerms(order.id).schemaVersion === 1 && !hasFixed(userHash), 'UPGRADE_REQUIRED');
                 if (row.redeemed_hash) {
                     requireBilling(row.redeemed_hash === userHash, 'CODE_ALREADY_USED');
                     return subscription(userId);
@@ -330,10 +421,75 @@ export function createLiveStore(storage, { encryptionKey, keyPepper, termsVersio
                 rows('UPDATE live_codes SET redeemed_hash=?,redeemed_ms=? WHERE code_hash=?', userHash, at, codeHash);
                 rows('INSERT INTO live_grants(code_hash,owner_hash,order_id,plan_id,created_ms) VALUES (?,?,?,?,?)', codeHash, userHash, order.id, order.plan_id, at);
                 ledger(`redeem:${codeHash}`, 'redeem', order.id, userHash, {}, at);
+                bumpVersion(userHash);
                 return subscription(userId, at);
             });
         },
         getSubscription: subscription,
+        getSubscriptionV2: subscriptionV2,
+        previewRedeemV2(userId, value) {
+            const userHash = ownerHash(userId); limit(userId, 'redeem-preview', 5);
+            const codeHash = mac('code', normalizeActivationCode(value));
+            return atomic(() => {
+                const at = now(); const { order } = availableCode(codeHash, userHash);
+                rejectActiveLegacy(userId, at);
+                const status = subscriptionV2(userId, at);
+                requireBilling(status.queued.length < 100, 'QUEUE_FULL');
+                const previous = rows(`SELECT * FROM live_activation_quotes WHERE owner_hash=? AND code_hash=?
+                    AND confirmed_ms IS NULL AND valid_until_ms>? AND queue_version=? ORDER BY valid_until_ms DESC LIMIT 1`,
+                    userHash, codeHash, at, status.queueVersion)[0];
+                // A queued start can be reused. An immediate start from an earlier
+                // preview is already in the past: show a fresh, explicit promise.
+                if (previous && previous.starts_ms >= at) return { ...status, quote: quoteView(previous) };
+                // Cleanup only expired unconfirmed previews. Confirmed quotes are
+                // retained for lost-response idempotency and never expire into a second claim.
+                rows(`DELETE FROM live_activation_quotes WHERE id IN (SELECT id FROM live_activation_quotes
+                    WHERE confirmed_ms IS NULL AND valid_until_ms<=? LIMIT 100)`, at);
+                const saved = fixedSchedule(userHash);
+                const startsAtMs = Math.max(at, ...saved.grants.map(g => g.expiresAtMs));
+                const term = createFixedTermGrant({ grantId: codeHash, orderId: order.id, ownerHash: userHash,
+                    planId: order.plan_id, months: orderTerms(order.id).months, startsAtMs });
+                createFixedTermSchedule(userHash, [...saved.grants, term], saved.refunds);
+                const id = opaque(), validUntil = timestamp(at + ACTIVATION_QUOTE_MS);
+                rows(`INSERT INTO live_activation_quotes(id,owner_hash,code_hash,plan_id,months,stars,starts_ms,expires_ms,
+                    valid_until_ms,queue_version) VALUES (?,?,?,?,?,?,?,?,?,?)`, id, userHash, codeHash, term.planId, term.months,
+                    order.stars, term.startsAtMs, term.expiresAtMs, validUntil, status.queueVersion);
+                return { ...status, quote: quoteView(rows('SELECT * FROM live_activation_quotes WHERE id=?', id)[0]) };
+            });
+        },
+        confirmRedeemV2(userId, quoteId) {
+            const userHash = ownerHash(userId); limit(userId, 'redeem-confirm', 10);
+            requireBilling(typeof quoteId === 'string' && quoteId.length === 48 && !/[^0-9a-f]/.test(quoteId), 'QUOTE_EXPIRED');
+            return atomic(() => {
+                const at = now();
+                const quote = rows('SELECT * FROM live_activation_quotes WHERE id=? AND owner_hash=?', quoteId, userHash)[0];
+                requireBilling(quote, 'QUOTE_EXPIRED');
+                const { code, order } = availableCode(quote.code_hash, userHash, true);
+                if (quote.confirmed_ms !== null) {
+                    const saved = fixedSchedule(userHash).grants.find(g => g.grantId === quote.code_hash);
+                    requireBilling(saved && code.redeemed_hash === userHash, 'CODE_UNAVAILABLE');
+                    return { ...subscriptionV2(userId, at), activation: publicTerm(saved) };
+                }
+                requireBilling(!code.redeemed_hash, 'CODE_ALREADY_USED');
+                requireBilling(at >= quote.valid_until_ms - ACTIVATION_QUOTE_MS && at < quote.valid_until_ms, 'QUOTE_EXPIRED');
+                rejectActiveLegacy(userId, at);
+                requireBilling(quote.queue_version === version(userHash), 'QUOTE_STALE');
+                const term = createFixedTermGrant({ grantId: quote.code_hash, orderId: order.id, ownerHash: userHash,
+                    planId: order.plan_id, months: orderTerms(order.id).months, startsAtMs: quote.starts_ms });
+                requireBilling(term.planId === quote.plan_id && term.months === quote.months
+                    && term.expiresAtMs === quote.expires_ms && order.stars === quote.stars, 'QUOTE_STALE');
+                const saved = fixedSchedule(userHash);
+                createFixedTermSchedule(userHash, [...saved.grants, term], saved.refunds);
+                rows('UPDATE live_codes SET redeemed_hash=?,redeemed_ms=? WHERE code_hash=? AND redeemed_hash IS NULL', userHash, at, quote.code_hash);
+                rows(`INSERT INTO live_fixed_grants(grant_id,order_id,owner_hash,plan_id,months,starts_ms,expires_ms,created_ms)
+                    VALUES (?,?,?,?,?,?,?,?)`, term.grantId, term.orderId, userHash, term.planId, term.months, term.startsAtMs, term.expiresAtMs, at);
+                rows('UPDATE live_activation_quotes SET confirmed_ms=? WHERE id=?', at, quoteId);
+                ledger(`redeem:${quote.code_hash}`, 'redeem', order.id, userHash,
+                    { schemaVersion: 2, months: term.months, startsAtMs: term.startsAtMs, expiresAtMs: term.expiresAtMs, quoteId }, at);
+                bumpVersion(userHash);
+                return { ...subscriptionV2(userId, at), activation: publicTerm(term) };
+            });
+        },
         hasReply(userId, requestKey) {
             const userHash = ownerHash(userId); text(requestKey, 128);
             const key = `${userHash}:${requestKey}`;
