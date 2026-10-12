@@ -17,8 +17,17 @@ foreach ($forbidden in @('import android.', 'BuildConfig', 'UserConfig', 'Shared
         'LunagramSubscriptionClient', 'NotificationCenter', 'System.currentTimeMillis', 'LumaGhostMode', 'BlackHoleVault')) {
     if ($text.Contains($forbidden)) { throw "Catalog must remain pure and disconnected: $forbidden" }
 }
-$references = @(& rg -l -F 'LunagramFeatureCatalog' (Join-Path $repo 'TMessagesProj/src/main/java') --glob '*.java')
-if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) { throw 'Catalog reference guard failed.' }
+$javaRoot = Join-Path $repo 'TMessagesProj/src/main/java'
+if (Get-Command rg -ErrorAction SilentlyContinue) {
+    $references = @(& rg -l -F 'LunagramFeatureCatalog' $javaRoot --glob '*.java')
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) { throw 'Catalog reference guard failed.' }
+} else {
+    # Hosted runners need not install ripgrep. Keep the same case-sensitive,
+    # literal Java-source inventory and the unchanged reviewed allowlist below.
+    $references = @(Get-ChildItem -LiteralPath $javaRoot -Recurse -File -Filter '*.java' | Where-Object {
+        [IO.File]::ReadAllText($_.FullName).Contains('LunagramFeatureCatalog')
+    } | ForEach-Object FullName)
+}
 $allowed = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'feature-catalog150/runtime-call-sites.txt'))
 $prefix = (Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/').Replace('\','/').TrimEnd('/') + '/'
 foreach ($reference in $references) {
