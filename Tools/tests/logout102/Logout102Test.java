@@ -172,7 +172,14 @@ public final class Logout102Test {
         LunagramSubscriptionClient old = new LunagramSubscriptionClient(0);
         LunagramSubscriptionClient other = new LunagramSubscriptionClient(1);
         old.persistForTest("old A session"); other.persistForTest("other B session");
+        Field observationField = LunagramSubscriptionClient.class.getDeclaredField("OBSERVATIONS");
+        observationField.setAccessible(true);
+        Object[] observations = (Object[])observationField.get(null);
+        observations[0] = new Object(); observations[1] = new Object();
+        Object otherObservation = observations[1];
         UserConfig.getInstance(0).clearConfig();
+        check(observations[0] == null,"actual logout clears outgoing identity's process observation watermark");
+        check(observations[1] == otherObservation,"other account's observation watermark remains isolated");
         check(preferences(1001).getString(key,null)==null,"subscription persistent token cleared on real logout");
         check("other B session".equals(BlackHolePrivateData.read(1,key,null)),"other account's encrypted subscription stays intact");
         user(0,1001);

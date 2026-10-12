@@ -5,6 +5,9 @@ package org.telegram.messenger;
 public final class LunagramSubscriptionClient {
     private static final String SESSION_KEY = "lunagram_subscription_session_v1_prod";
     private static final long[] ACCOUNT_EPOCHS = new long[UserConfig.MAX_ACCOUNT_COUNT];
+    // Only the holder is modeled here; its production clearing method is extracted.
+    // Actual typed observation/restore/admission behavior runs in access150.
+    private static final Object[] OBSERVATIONS = new Object[UserConfig.MAX_ACCOUNT_COUNT];
     private final int account;
     private final long owner;
     private final long accountEpoch;

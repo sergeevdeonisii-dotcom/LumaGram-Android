@@ -57,7 +57,7 @@ $generatedPrivate = Join-Path $run 'BlackHolePrivateData.java'
 $subscription = [IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/messenger/LunagramSubscriptionClient.java'))
 $template = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'logout102/LunagramSubscriptionClient.java.template'))
 $replacements = [ordered]@{
-    '@@EPOCH@@' = 'private static synchronized long accountEpoch(int account)';
+    '@@EPOCH@@' = 'static synchronized long accountEpoch(int account)';
     '@@LOGOUT@@' = 'public static synchronized void onAccountLogout(int account)';
     '@@PERSIST@@' = 'private void persistSession(long ticket, String value)'
 }
@@ -117,7 +117,28 @@ foreach ($guard in @('synchronized (LunagramSubscriptionClient.class)', 'if (!cu
 foreach ($guard in @('this.accountEpoch = accountEpoch(account);', 'accountEpoch == accountEpoch(account)', 'persistSession(ticket, new JSONObject()')) {
     if (!$subscription.Contains($guard)) { throw "Missing subscription epoch/write wiring: $guard" }
 }
-if (($subscription | Select-String -Pattern 'BlackHolePrivateData\.write\(' -AllMatches).Matches.Count -ne 1) { throw 'Subscription writes must remain inside the reviewed persistence method.' }
+$snapshot = ProductionMethod $subscription 'private void persistSnapshot(long ticket, Subscription state, long receivedElapsed)'
+$snapshotBarrier = ProductionMethod $snapshot 'synchronized (LunagramSubscriptionClient.class)'
+foreach ($guard in @('if (!current(ticket))', 'requireCurrentObservation(state);',
+    'Subscription stored = readStoredSnapshot();', 'requireNotOlder(state, stored);',
+    'BlackHolePrivateData.write(account, owner, SNAPSHOT_KEY, json.toString());',
+    'OBSERVATIONS[account] = new Observation(owner, accountEpoch, state);')) {
+    if (!$snapshotBarrier.Contains($guard)) { throw "Missing snapshot owner/monotonic/write barrier: $guard" }
+}
+if ($snapshotBarrier.IndexOf('requireNotOlder(state, stored);') -gt $snapshotBarrier.IndexOf('BlackHolePrivateData.write(')) {
+    throw 'Snapshot monotonic admission must precede encrypted persistence.'
+}
+foreach ($method in @($persist,$snapshot)) {
+    if (($method | Select-String -Pattern 'BlackHolePrivateData\.write\(' -AllMatches).Matches.Count -ne 1) {
+        throw 'Each reviewed subscription persistence method must contain exactly one encrypted write.'
+    }
+}
+$outsidePersistence = $subscription.Replace($persist,'').Replace($snapshot,'')
+if ($outsidePersistence.Contains('BlackHolePrivateData.write(')) { throw 'Subscription encrypted write added outside the two reviewed persistence methods.' }
+$logout = ProductionMethod $subscription 'public static synchronized void onAccountLogout(int account)'
+if (!$logout.Contains('ACCOUNT_EPOCHS[account]++;') -or !$logout.Contains('OBSERVATIONS[account] = null;')) {
+    throw 'Logout must invalidate both the identity epoch and shared subscription observation.'
+}
 Write-Output 'PASS: all current encrypted write sites inventoried; identity-first/sequential drain/one cleanup/save wiring checked.'
 Write-Output 'Scope: real extracted UserConfig identity/reset and subscription persist/epoch methods, real local gift/note/journal/data helpers and AES-GCM; platform preferences/keys/JSON/save notifications are deterministic JVM models, not real Android lifecycle.'
 Write-Output "Test artifacts: $run"
