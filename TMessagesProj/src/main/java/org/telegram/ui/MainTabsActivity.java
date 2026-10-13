@@ -44,6 +44,7 @@ import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.Emoji;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LunagramExperienceSettings;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
@@ -89,20 +90,29 @@ import me.vkryl.android.animator.FactorAnimator;
 
 public class MainTabsActivity extends ViewPagerActivity implements NotificationCenter.NotificationCenterDelegate, FactorAnimator.Target {
 
-    public static final int TABS_COUNT = 4;
+    public static final int TABS_COUNT = 5;
     private static final int POSITION_CHATS = 0;
-    private static final int POSITION_CONTACTS = 1;
-    private static final int POSITION_CALLS_OR_SETTINGS = 2;
-    private static final int POSITION_PROFILE = 3;
+    private static final int POSITION_FEED = 1;
+    private static final int POSITION_CONTACTS = 2;
+    private static final int POSITION_CALLS_OR_SETTINGS = 3;
+    private static final int POSITION_PROFILE = 4;
 
     private static final int INDEX_CHATS = 0;
-    private static final int INDEX_CONTACTS = 1;
-    private static final int INDEX_SETTINGS = 2;
-    private static final int INDEX_CALLS = 3;
-    private static final int INDEX_PROFILE = 4;
+    private static final int INDEX_FEED = 1;
+    private static final int INDEX_CONTACTS = 2;
+    private static final int INDEX_SETTINGS = 3;
+    private static final int INDEX_CALLS = 4;
+    private static final int INDEX_PROFILE = 5;
 
-    private static int indexToPosition(int index) {
-        return index > 2 ? index - 1 : index;
+    private boolean feedTabVisible = true;
+    private boolean dialogsTabsVisible = true;
+    private int logicalToPosition(int logical) {
+        if (!feedTabVisible && logical == POSITION_FEED) return -1;
+        return logical - (!feedTabVisible && logical > POSITION_FEED ? 1 : 0);
+    }
+    private int positionToLogical(int position) { return position + (!feedTabVisible && position >= POSITION_FEED ? 1 : 0); }
+    private int indexToPosition(int index) {
+        return logicalToPosition(index > INDEX_SETTINGS ? index - 1 : index);
     }
 
     private static final int ANIMATOR_ID_TABS_VISIBLE = 0;
@@ -271,6 +281,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     @Override
     public void onResume() {
         super.onResume();
+        syncFeedVisibility();
+        updateTabsVisibility(false);
         blur3_updateColors();
         checkContactsTabBadge();
         checkUnreadCount(true);
@@ -308,20 +320,23 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         tabsView = new MainTabsLayout(context, resourceProvider);
         tabsView.setClipChildren(false);
         tabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4));
-        tabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));
+        tabsView.setMaxWidth(dp(400 + DialogsActivity.MAIN_TABS_MARGIN * 2));
 
-        tabs = new GlassTabView[5];
+        tabs = new GlassTabView[6];
         tabs[INDEX_CHATS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CHATS, R.string.MainTabsChats);
+        tabs[INDEX_FEED] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.ARTICLE, R.string.LunagramFeed);
         tabs[INDEX_CONTACTS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CONTACTS, R.string.MainTabsContacts);
         tabs[INDEX_SETTINGS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.SETTINGS, R.string.Settings);
         tabs[INDEX_CALLS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CALLS, R.string.MainTabsCalls);
         tabs[INDEX_PROFILE] = GlassTabView.createAvatar(context, resourceProvider, currentAccount, R.string.MainTabsProfile);
         tabs[INDEX_CHATS].setOnLongClickListener(this::openFoldersSelector);
+        tabs[INDEX_FEED].setOnLongClickListener(this::openFeedSelector);
         tabs[INDEX_CONTACTS].setOnLongClickListener(this::openContactsSelector);
         tabs[INDEX_CALLS].setOnLongClickListener(this::openCallsSelector);
         tabs[INDEX_PROFILE].setOnLongClickListener(this::openAccountSelector);
 
         tabsView.addTabToIgnoreClick(tabs[INDEX_CHATS]);
+        tabsView.addTabToIgnoreClick(tabs[INDEX_FEED]);
         tabsView.addTabToIgnoreClick(tabs[INDEX_CONTACTS]);
         tabsView.addTabToIgnoreClick(tabs[INDEX_PROFILE]);
         tabsView.addTabToIgnoreClick(tabs[INDEX_CALLS]);
@@ -329,8 +344,10 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         for (int index = 0; index < tabs.length; index++) {
             final GlassTabView view = tabs[index];
 
-            final int position = indexToPosition(index);
+            final int tabIndex = index;
             tabs[index].setOnClickListener(v -> {
+                final int position = indexToPosition(tabIndex);
+                if (position < 0) return;
                 if (viewPager.isManualScrolling() || viewPager.isTouch()) {
                     return;
                 }
@@ -351,6 +368,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             tabsView.setViewVisible(view, true, false);
         }
         checkUi_callTabVisible(getUserConfig().showCallsTab, false);
+        tabsView.setViewVisible(tabs[INDEX_FEED], feedTabVisible, false);
 
         selectTab(viewPager.getCurrentPosition(), false);
 
@@ -431,6 +449,38 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         o.setScrimViewBackground(bg);
         o.show();
         return true;
+    }
+
+    public boolean openFeedSelector(View anchor) {
+        if (getContext() == null || getParentActivity() == null) return false;
+        ItemOptions.makeOptions(this, anchor)
+                .add(R.drawable.msg_archive_hide, getString(R.string.LunagramFeedHideTab),
+                        () -> LunagramExperienceSettings.setFeedVisible(currentAccount, false))
+                .setBlur(true).show();
+        return true;
+    }
+
+    private void syncFeedVisibility() {
+        boolean visible = LunagramExperienceSettings.feedVisible(currentAccount);
+        if (visible == feedTabVisible) return;
+        int logical = viewPager == null ? POSITION_CHATS : positionToLogical(viewPager.getCurrentPosition());
+        for (int position = fragmentsArr.size() - 1; position >= 0; position--) {
+            int key = fragmentsArr.keyAt(position);
+            if (key != POSITION_CHATS) dropFragmentAtPosition(key);
+        }
+        feedTabVisible = visible;
+        if (tabsView != null) tabsView.setViewVisible(tabs[INDEX_FEED], visible, false);
+        if (viewPager != null) {
+            int target = logical == POSITION_FEED && !visible ? POSITION_CHATS : logicalToPosition(logical);
+            viewPager.setPosition(Math.max(0, target));
+            viewPager.rebuild(false);
+            selectTab(viewPager.getCurrentPosition(), false);
+        }
+        updateTabsVisibility(false);
+    }
+
+    private void updateTabsVisibility(boolean animated) {
+        animatorTabsVisible.setValue(viewPager == null || viewPager.getCurrentPosition() != POSITION_CHATS || dialogsTabsVisible, animated);
     }
 
     public boolean openCallsSelector(View anchor) {
@@ -726,6 +776,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     @Override
     protected void onViewPagerScrollEnd() {
+        updateTabsVisibility(true);
         if (tabsView != null) {
             selectTab(viewPager.getCurrentPosition(), true);
             setGestureSelectedOverride(0, false);
@@ -734,12 +785,12 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
         if (viewPager != null) {
             final int currentPosition = viewPager.getCurrentPosition();
-            if (currentPosition != POSITION_CALLS_OR_SETTINGS && dropCallsFragmentAfterPageScroll) {
-                dropFragmentAtPosition(POSITION_CALLS_OR_SETTINGS);
+            if (currentPosition != logicalToPosition(POSITION_CALLS_OR_SETTINGS) && dropCallsFragmentAfterPageScroll) {
+                dropFragmentAtPosition(logicalToPosition(POSITION_CALLS_OR_SETTINGS));
                 dropCallsFragmentAfterPageScroll = false;
             }
-            if (currentPosition != POSITION_PROFILE) {
-                dropFragmentAtPosition(POSITION_PROFILE);
+            if (currentPosition != logicalToPosition(POSITION_PROFILE)) {
+                dropFragmentAtPosition(logicalToPosition(POSITION_PROFILE));
             }
             if (pendingFolderId != null && currentPosition == POSITION_CHATS && dialogsActivity != null) {
                 dialogsActivity.scrollToFolder(pendingFolderId);
@@ -769,7 +820,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     @Override
     protected int getFragmentsCount() {
-        return TABS_COUNT;
+        return feedTabVisible ? TABS_COUNT : TABS_COUNT - 1;
     }
 
     @Override
@@ -808,7 +859,10 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     @Override
     protected BaseFragment createBaseFragmentAt(int position) {
-        if (position == POSITION_CONTACTS) {
+        position = positionToLogical(position);
+        if (position == POSITION_FEED) {
+            return new LunagramFeedActivity(currentAccount);
+        } else if (position == POSITION_CONTACTS) {
             Bundle args = new Bundle();
             args.putBoolean("needPhonebook", true);
             args.putBoolean("needFinishFragment", false);
@@ -960,6 +1014,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.notificationsCountUpdated || id == NotificationCenter.updateInterfaces) {
+            if (id == NotificationCenter.updateInterfaces) syncFeedVisibility();
             checkUnreadCount(fragmentView != null && fragmentView.isAttachedToWindow());
         } else if (id == NotificationCenter.appUpdateLoading) {
             if (updateLayout != null) {
@@ -995,12 +1050,12 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         } else if (id == NotificationCenter.callTabsVisibleToggled) {
             final boolean callTabsVisible = getUserConfig().showCallsTab;
             checkUi_callTabVisible(callTabsVisible, true);
-            if (viewPager != null && viewPager.getCurrentPosition() == POSITION_CALLS_OR_SETTINGS) {
+            if (viewPager != null && viewPager.getCurrentPosition() == logicalToPosition(POSITION_CALLS_OR_SETTINGS)) {
                 viewPager.scrollToPosition(POSITION_CHATS);
                 selectTab(POSITION_CHATS, true);
                 dropCallsFragmentAfterPageScroll = true;
             } else {
-                dropFragmentAtPosition(POSITION_CALLS_OR_SETTINGS);
+                dropFragmentAtPosition(logicalToPosition(POSITION_CALLS_OR_SETTINGS));
             }
         } else if (id == NotificationCenter.mainUserInfoChanged) {
             if (tabs != null && tabs[INDEX_PROFILE] != null) {
@@ -1015,6 +1070,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     @Override
     public boolean onFragmentCreate() {
+        feedTabVisible = LunagramExperienceSettings.feedVisible(currentAccount);
         observersGroup = NotificationCenter.getInstance(currentAccount)
             .createObserversGroup(this)
             .add(NotificationCenter.fileLoaded)
@@ -1059,7 +1115,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         }
 
         final float animatedPosition = viewPager.getPositionAnimated();
-        final float isProfile = 1f - MathUtils.clamp(Math.abs(POSITION_PROFILE - animatedPosition), 0, 1);
+        final float isProfile = 1f - MathUtils.clamp(Math.abs(logicalToPosition(POSITION_PROFILE) - animatedPosition), 0, 1);
         final float hide = 1f - AndroidUtilities.getNavigationBarThirdButtonsFactor(0, 1f, navigationBarHeight);
         float alpha = (1f - isProfile * hide) * animatorTabsVisible.getFloatValue();
         if (tabletLayout) {
@@ -1081,8 +1137,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         final float scale = lerp(0.85f, 1f, factor);
 
         tabsViewWrapper.setTranslationY(lerp(hiddenY, normalY, factor));
-        tabsView.setClickable(factor > 1);
-        tabsView.setEnabled(factor > 1);
+        tabsView.setClickable(factor > .99f);
+        tabsView.setEnabled(factor > .99f);
         tabsView.setAlpha(factor);
         tabsView.setVisibility(factor > 0 ? View.VISIBLE : View.GONE);
     }
@@ -1110,7 +1166,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     private class MainTabsActivityControllerImpl implements MainTabsActivityController {
         @Override
         public void setTabsVisible(boolean visible) {
-            animatorTabsVisible.setValue(visible, true);
+            dialogsTabsVisible = visible;
+            updateTabsVisibility(true);
         }
     }
 

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-13",
+  "scope": "Own Android export/account code plus read-only sampled billing/auth/CI baseline. No production pentest or device security certification.",
+  "findings": [
+    {
+      "id": "EXPORT-PRIVATE-STORAGE",
+      "severity": "medium",
+      "status": "fixed-in-source",
+      "location": "TMessagesProj/src/main/java/org/telegram/messenger/LumaChatExportManager.java:285; LumaAccountExportManager.java:165",
+      "scenario": "Plaintext intermediate exports in external cache could be read by another storage-authorized app on older supported Android, before the user-facing save/share.",
+      "fix": "Only internal cache for intermediate ZIP/PDF and two narrowly scoped FileProvider cache paths. Existing user-owned Downloads copies are preserved."
+    },
+    {
+      "id": "EXPORT-LOGIN-GENERATION",
+      "severity": "medium",
+      "status": "fixed-in-source",
+      "location": "TMessagesProj/src/main/java/org/telegram/messenger/LumaExportSession.java:16; ui/Components/LumaChatExportSheet.java:129; ui/LumaAccountExportActivity.java:89",
+      "scenario": "Owner-ID-only checks allowed old work and completed UI actions after logout and a new login as the same owner. Account dialog scan replies also lacked an identity boundary before cache mutation.",
+      "fix": "Owner plus login epoch; completed Save/Share identity checks before and after asynchronous work; immutable screen identity and scan generation; destroy cancels scans/work. Completed exports stay readable after paid entitlement expiry."
+    },
+    {
+      "id": "CALL-SOUND-PROVIDER",
+      "severity": "low",
+      "status": "reported-not-changed",
+      "location": "TMessagesProj/src/main/AndroidManifest.xml:717; java/org/telegram/messenger/voip/CallNotificationSoundProvider.java:60",
+      "scenario": "An exported provider invokes startRingtoneAndVibration on read while VoIPService exists without validating the requested URI/caller. A local app could trigger an unintended call sound side effect. No demonstrated data theft or universal DND bypass.",
+      "nextStep": "Review exact URI and eligible incoming-call state while preserving Android system ringtone-provider access; add caller/state fixtures before altering the platform contract."
+    }
+  ],
+  "verification": {
+    "exportHost": "69 checks PASS: actual session/account exporter, private ZIP output, controlled queued callbacks, expiry/logout/new-owner/same-owner relogin",
+    "legacySession": "PASS concurrent one-shot, enqueue/terminal guard, unique session paths and source wiring",
+    "negativeControls": "4 compiled security mutants and 4 UI source-contract mutants rejected",
+    "hostArtifacts": "Tools/tests/.runs/export-security/7c0ca315ea9a469bab35be743e188909",
+    "androidApi": "6 real Java sources compile against cached app classes plus Android 36; only a deprecation note",
+    "apiArtifacts": "Tools/tests/.runs/export-security-api/a9d623fa61174a89942da0611621a282",
+    "diffCheck": "PASS",
+    "billingCiBaseline": "104 Node checks PASS; one actual-shell CI check was not run successfully because bash was absent from this PowerShell process PATH (spawnSync bash ENOENT), not recorded as a product failure"
+  },
+  "limitations": [
+    "No emulator, hardware, MediaStore lifecycle, or end-to-end APK verification.",
+    "A user-authorized Downloads copy already in progress is not cancelled or deleted after logout; stale callbacks cannot initiate another save/share.",
+    "UI security guards have source-contract checks and real Android API compilation, not synthesized Android UI interaction.",
+    "The baseline audit is sampled and incomplete; no claim of absence of all vulnerabilities."
+  ]
+}

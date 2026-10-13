@@ -222,6 +222,7 @@ public final class LunagramSubscriptionAccess {
             }
         }
         if (changed) {
+            Utilities.globalQueue.postRunnable(() -> LunagramMessageReminders.onAccessChanged(entry.account));
             MessagesController.getInstance(entry.account).setLumaGhostModeEnabled(LumaGhostMode.shouldSuppressActivity(entry.account));
             DownloadController.getInstance(entry.account).checkAutodownloadSettings();
             NotificationCenter.getInstance(entry.account).postNotificationName(NotificationCenter.lunagramSubscriptionChanged);

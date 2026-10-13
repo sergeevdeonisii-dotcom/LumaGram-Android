@@ -30,6 +30,7 @@ import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
@@ -39,6 +40,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaRoundVideoCamera;
+import org.telegram.messenger.LunagramVideoEffectsSettings;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -130,6 +132,8 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
     private long lastPreviewUiFrameRealtimeNs;
     private boolean recordingUiFallbackRegistered;
     private boolean handlingPreviewTextureInvalidate;
+    private RoundVideoSession.CameraFacing lastBokehNoticeFacing;
+    private boolean warmSourceNoticeShown;
 
     private final Runnable recordingUiFallback = () -> {
         if (!isRecordingState()) return;
@@ -302,6 +306,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         drawable.setPadding(dp(6));
         drawable.setRadius(dp(21));
         buttonsLayout.setBackground(drawable);
+        updateCameraControlsCapsule(buttonsLayout);
     }
 
     @Override
@@ -392,8 +397,9 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         showInitialPlaceholder();
         upload = new TelegramRoundVideoUpload(currentAccount, secretChat);
         activeOutputResolution = SharedSettings.getRoundVideoOutputResolution();
-        requestedRecordingFps = LumaRoundVideoQuality.getPreferredFrameRate(SharedSettings.getRoundVideoFrameRate().getValue());
+        requestedRecordingFps = InstantCameraViewBase.getRequestedRecordingFrameRate();
         session = new RoundVideoSession.Builder(getContext(), textureView)
+                .setCurrentAccount(currentAccount)
                 .setOutputDirectory(new File(ApplicationLoader.getFilesDirFixed(), "cache"))
                 .setInitialFacing(getInitialCameraFacing(fromPaused))
                 .setOutputResolution(activeOutputResolution)
@@ -651,6 +657,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        updateCameraControlsCapsule(buttonsLayout);
         int newSize = MeasureSpec.getSize(heightMeasureSpec) - getPaddingBottom()
                 > MeasureSpec.getSize(widthMeasureSpec) * 1.3f
                 ? AndroidUtilities.roundPlayingMessageSize
@@ -763,8 +770,28 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
             capabilities = cameraCapabilities;
             if (cameraCapabilities.getActiveFacing() != null) {
                 SharedSettings.roundVideoLastCamera.set(cameraCapabilities.getActiveFacing());
+                if (!warmSourceNoticeShown && session != null && session.isFastSwitchActive()
+                        && cameraCapabilities.getActiveResolution() != cameraCapabilities.getRequestedResolution()) {
+                    warmSourceNoticeShown = true;
+                    Toast.makeText(getContext(), LocaleController.formatString(R.string.LunagramVideoWarmSourceFallback,
+                            activeOutputResolution == null ? 640 : activeOutputResolution.getSize()), Toast.LENGTH_LONG).show();
+                }
+                if (LunagramVideoEffectsSettings.isBokehEnabled(currentAccount) && session != null
+                        && !session.isBokehActive() && lastBokehNoticeFacing != cameraCapabilities.getActiveFacing()) {
+                    lastBokehNoticeFacing = cameraCapabilities.getActiveFacing();
+                    Toast.makeText(getContext(), LocaleController.getString(R.string.LunagramVideoBokehUnavailable), Toast.LENGTH_LONG).show();
+                }
             }
             updateButtons();
+        }
+
+        @Override
+        public void onCameraPreviewFirstFrame() {
+            if (session == null || stateInfo == null || !isShown() || getWindowVisibility() != VISIBLE) return;
+            RoundVideoSession.State state = stateInfo.getState();
+            if (state != RoundVideoSession.State.STARTING && state != RoundVideoSession.State.RESUMING
+                    && state != RoundVideoSession.State.RECORDING) return;
+            hideInitialPlaceholder();
         }
 
         @Override
@@ -773,18 +800,14 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
                 cameraFlip.cancel();
                 return;
             }
+            previewContainer.animate().cancel();
             cameraFlip.begin();
             showCameraSwitchPlaceholder();
-            previewContainer.animate().cancel();
-            // A HAL reopen can take seconds. Keep a full-sized last frame instead
-            // of parking the round preview edge-on until the new device opens.
-            previewContainer.setRotationY(0f);
         }
 
         @Override
         public void onCameraSwitchCompleted(@NonNull RoundVideoSession.CameraFacing facing) {
-            // HAL configuration is not a displayed frame and may arrive during the turn.
-            // Only the first-frame hook starts it; this notification must not cancel it.
+            // Configuration is not a displayed frame. Only the real-frame hook uncovers it.
         }
 
         @Override
@@ -793,7 +816,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
                 cameraFlip.cancel();
                 return;
             }
-            cameraFlip.firstFrame(LumaRoundCameraFlip.animationsEnabled());
+            cameraFlip.firstFrame();
         }
 
         @Override
@@ -1189,6 +1212,12 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
     }
 
     private void showCameraSwitchPlaceholder() {
+        if (session != null && session.isFastSwitchActive()) {
+            // Both GL inputs are already live. A bitmap readback would block
+            // the UI and cover live frames for a switch that needs no reopen.
+            hideCameraSwitchPlaceholder();
+            return;
+        }
         saveLastCameraBitmap(false);
         if (lastBitmap != null) {
             textureOverlayView.setImageBitmap(lastBitmap);

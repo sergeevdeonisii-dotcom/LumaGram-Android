@@ -29,7 +29,12 @@ public final class LunagramSubscriptionClient {
     private static final String ORIGIN = "https://lunagram-billing.pages.dev";
     private static final String BOT = "https://t.me/LunagramAppPayBot?start=";
     private static final String SESSION_KEY = "lunagram_subscription_session_v1_prod";
+    private static final String PAIR_KEY = "lunagram_subscription_pair_v1_prod";
     private static final String SNAPSHOT_KEY = "lunagram_subscription_snapshot_v2_prod";
+    public static final String CRYPTO_TERMS_VERSION = "2026-10-12-crypto-v1";
+    // Wire compatibility only: declaring this capability never authenticates or grants access.
+    private static final String BILLING_CATALOG_HEADER = "X-Lunagram-Billing-Catalog";
+    private static final String BILLING_CATALOG_VERSION = "ultra-20261013";
     private static final int BODY_LIMIT = 32 * 1024;
     private static final long MAX_TIME = 8_000_000_000_000_000L;
     private static final long FRESH_MS = 15 * 60 * 1000L;
@@ -77,7 +82,8 @@ public final class LunagramSubscriptionClient {
 
     public enum Error { NONE, NETWORK, SERVER, BAD_RESPONSE, ACCOUNT_CHANGED, AUTH_REQUIRED,
         EXPIRED, STORAGE, INVALID_CODE, RATE_LIMITED, NOT_CONFIGURED, UPGRADE_REQUIRED,
-        LEGACY_TERM_ACTIVE, QUOTE_EXPIRED, QUOTE_STALE, QUEUE_FULL }
+        LEGACY_TERM_ACTIVE, QUOTE_EXPIRED, QUOTE_STALE, QUEUE_FULL, CHECKOUT_PENDING, PAYMENT_PENDING, PAYMENT_REVIEW, PLAN_RETIRED,
+        CLIENT_UPDATE_REQUIRED }
     public interface Listener { void onChanged(); }
     interface Transport {
         Response post(String path, String token, JSONObject body) throws Exception;
@@ -124,7 +130,29 @@ public final class LunagramSubscriptionClient {
             this.featuresGated = featuresGated;
         }
     }
-    private enum Operation { RESTORE, START, EXCHANGE, STATUS, PREVIEW, CONFIRM, REVOKE }
+    public static final class CryptoOrder {
+        public final String orderId, planId, status, checkoutUrl;
+        public final int months, usdCents;
+        public final long createdAtMs, expiresAtMs, paidAtMs;
+        public final boolean activated;
+        CryptoOrder(String orderId, String planId, int months, int usdCents, String status,
+                long createdAtMs, long expiresAtMs, long paidAtMs, String checkoutUrl, boolean activated) {
+            this.orderId = orderId; this.planId = planId; this.months = months; this.usdCents = usdCents;
+            this.status = status; this.createdAtMs = createdAtMs; this.expiresAtMs = expiresAtMs;
+            this.paidAtMs = paidAtMs; this.checkoutUrl = checkoutUrl; this.activated = activated;
+        }
+        public boolean outstanding() { return !"expired".equals(status) && !("paid".equals(status) && activated); }
+    }
+    public static final class CryptoState {
+        public final boolean available;
+        public final long serverNowMs;
+        public final CryptoOrder order;
+        CryptoState(boolean available, long serverNowMs, CryptoOrder order) {
+            this.available = available; this.serverNowMs = serverNowMs; this.order = order;
+        }
+    }
+    private enum Operation { RESTORE, START, EXCHANGE, STATUS, PREVIEW, CONFIRM, REVOKE,
+        CRYPTO_CURRENT, CRYPTO_CREATE, CRYPTO_ORDER, CRYPTO_PREVIEW }
     private final Object lock = new Object();
     private final int account;
     private final long owner;
@@ -141,6 +169,9 @@ public final class LunagramSubscriptionClient {
     private byte[] verifier;
     private Subscription subscription;
     private Quote quote;
+    private CryptoState cryptoState;
+    private String pendingCryptoRequest;
+    private boolean cryptoRecoveryRequired;
     private boolean freshSnapshot, hasServerAnchor, confirmationSubmitted;
     private long snapshotReceivedElapsed;
     private boolean accessRevoked;
@@ -166,6 +197,8 @@ public final class LunagramSubscriptionClient {
     public Error error() { synchronized (lock) { return error; } }
     public Subscription subscription() { synchronized (lock) { return currentOwner() ? subscription : null; } }
     public Quote quote() { synchronized (lock) { return currentOwner() ? quote : null; } }
+    public CryptoState cryptoState() { synchronized (lock) { return currentOwner() && isAuthenticated() ? cryptoState : null; } }
+    public boolean isCryptoRecoveryRequired() { synchronized (lock) { return currentOwner() && cryptoRecoveryRequired; } }
     public boolean subscriptionIsFresh() {
         synchronized (lock) {
             return currentOwner() && freshSnapshot && subscription != null && isAuthenticated()
@@ -182,7 +215,7 @@ public final class LunagramSubscriptionClient {
         boolean cancel;
         synchronized (lock) {
             quote = null; confirmationSubmitted = false;
-            cancel = busy && (activeOperation == Operation.PREVIEW || activeOperation == Operation.CONFIRM);
+            cancel = busy && (activeOperation == Operation.PREVIEW || activeOperation == Operation.CRYPTO_PREVIEW || activeOperation == Operation.CONFIRM);
             if (cancel) { generation++; busy = false; }
         }
         if (cancel) { transport.cancel(); notifyChanged(); }
@@ -194,15 +227,62 @@ public final class LunagramSubscriptionClient {
         synchronized (lock) { return isPairing() ? BOT + "pair_" + pairId : null; }
     }
     public static String purchaseUrl(LunagramSubscriptionCatalog.Plan plan) {
-        return plan == null ? null : BOT + "buy_" + plan.id;
+        return !LunagramSubscriptionCatalog.isPurchasable(plan) ? null : BOT + "buy_" + plan.id;
     }
     public static String purchaseUrl(LunagramSubscriptionCatalog.Plan plan, LunagramSubscriptionCatalog.Period period) {
-        return plan == null || period == null ? null : BOT + "buy_" + plan.id + "_" + period.months;
+        return !LunagramSubscriptionCatalog.isPurchasable(plan) || period == null ? null : BOT + "buy_" + plan.id + "_" + period.months;
     }
     public void restore() { submit(Operation.RESTORE, null); }
     public void startAuthentication() { submit(Operation.START, null); }
     public void checkAuthentication() { submit(Operation.EXCHANGE, null); }
     public void refresh() { submit(Operation.STATUS, null); }
+    public void refreshCrypto() { submit(Operation.CRYPTO_CURRENT, null); }
+    public void createCryptoOrder(LunagramSubscriptionCatalog.Plan plan, LunagramSubscriptionCatalog.Period period) {
+        synchronized (lock) {
+            if (disposed || busy || !LunagramSubscriptionCatalog.isPurchasable(plan) || period == null) return;
+            if (cryptoRecoveryRequired) { error = Error.CHECKOUT_PENDING; notifyChanged(); return; }
+            if (cryptoState == null || !cryptoState.available) { error = Error.NOT_CONFIGURED; notifyChanged(); return; }
+            if (cryptoState.order != null && cryptoState.order.outstanding()) {
+                error = Error.CHECKOUT_PENDING; notifyChanged(); return;
+            }
+            try {
+                // Preserve the same idempotency key after a lost create reply. The server
+                // also allows only one outstanding checkout per authenticated owner.
+                if (pendingCryptoRequest == null) {
+                    byte[] bytes = new byte[24]; new SecureRandom().nextBytes(bytes);
+                    StringBuilder key = new StringBuilder(48);
+                    for (byte value : bytes) key.append(String.format(java.util.Locale.US, "%02x", value & 255));
+                    Arrays.fill(bytes, (byte) 0);
+                    pendingCryptoRequest = new JSONObject().put("planId", plan.id).put("months", period.months)
+                            .put("requestKey", key.toString()).put("termsVersion", CRYPTO_TERMS_VERSION).toString();
+                } else {
+                    JSONObject previous = new JSONObject(pendingCryptoRequest);
+                    if (!plan.id.equals(text(previous, "planId")) || period.months != integer(previous, "months")) {
+                        error = Error.CHECKOUT_PENDING; notifyChanged(); return;
+                    }
+                }
+                cryptoRecoveryRequired = true;
+                submit(Operation.CRYPTO_CREATE, pendingCryptoRequest);
+            } catch (Exception failure) { error = Error.BAD_RESPONSE; notifyChanged(); }
+        }
+    }
+    public void checkCryptoOrder() {
+        synchronized (lock) {
+            if (cryptoRecoveryRequired || cryptoState == null || cryptoState.order == null) { refreshCrypto(); return; }
+            submit(Operation.CRYPTO_ORDER, cryptoState.order.orderId);
+        }
+    }
+    public void previewCryptoOrder() {
+        synchronized (lock) {
+            if (disposed || busy) return;
+            CryptoOrder order = cryptoState == null ? null : cryptoState.order;
+            if (order == null || !"paid".equals(order.status) || order.activated) {
+                error = Error.PAYMENT_PENDING; notifyChanged(); return;
+            }
+            quote = null; confirmationSubmitted = false;
+            submit(Operation.CRYPTO_PREVIEW, order.orderId);
+        }
+    }
     public void previewCode(CharSequence input) {
         synchronized (lock) {
             // Do not destroy the recovery token of an in-flight confirmation.
@@ -236,13 +316,17 @@ public final class LunagramSubscriptionClient {
     }
     public void cancelAuthentication() {
         pause();
-        synchronized (lock) { clearPair(); error = Error.NONE; }
+        synchronized (lock) {
+            try { removeStoredPair(pairId); clearPair(); error = Error.NONE; }
+            catch (Exception failure) { error = Error.STORAGE; }
+        }
         notifyChanged();
     }
     public void dispose() {
         pause();
         synchronized (lock) {
-            disposed = true; clearPair(); token = null; subscription = null; quote = null; freshSnapshot = false; listener = null;
+            disposed = true; clearPair(); token = null; subscription = null; quote = null; cryptoState = null;
+            pendingCryptoRequest = null; cryptoRecoveryRequired = false; freshSnapshot = false; listener = null;
         }
     }
     private boolean currentOwner() {
@@ -279,10 +363,11 @@ public final class LunagramSubscriptionClient {
             synchronized (lock) {
                 if (!current(ticket)) return;
                 if (operation == Operation.RESTORE) {
-                    restoreSnapshot(ticket); restoreSession(); busy = false; notifyChanged(); return;
+                    restoreSnapshot(ticket); restoreSession(); restorePair(ticket); busy = false; notifyChanged(); return;
                 }
                 session = token;
                 if (operation == Operation.START) {
+                    removeStoredPair(pairId);
                     clearPair();
                     byte[] entropy = new byte[32];
                     new SecureRandom().nextBytes(entropy);
@@ -301,10 +386,16 @@ public final class LunagramSubscriptionClient {
                 } else {
                     if (session == null || tokenExpiresAt <= System.currentTimeMillis()) throw new Failure(Error.AUTH_REQUIRED);
                     path = operation == Operation.PREVIEW ? "/v2/redeem/preview"
+                            : operation == Operation.CRYPTO_PREVIEW ? "/v2/crypto/preview"
+                            : operation == Operation.CRYPTO_CURRENT ? "/v3/crypto/current"
+                            : operation == Operation.CRYPTO_ORDER ? "/v3/crypto/order"
+                            : operation == Operation.CRYPTO_CREATE ? "/v3/crypto/create"
                             : operation == Operation.CONFIRM ? "/v2/redeem/confirm"
                             : operation == Operation.REVOKE ? "/v1/auth/revoke" : "/v2/subscription";
                     if (operation == Operation.PREVIEW) body.put("code", code);
                     if (operation == Operation.CONFIRM) body.put("quoteId", code);
+                    if (operation == Operation.CRYPTO_ORDER || operation == Operation.CRYPTO_PREVIEW) body.put("orderId", code);
+                    if (operation == Operation.CRYPTO_CREATE) body = new JSONObject(code);
                 }
             }
             Response response = transport.post(path,
@@ -320,6 +411,11 @@ public final class LunagramSubscriptionClient {
                     if (!id.matches("[A-Za-z0-9_-]{16,64}")) throw new Failure(Error.BAD_RESPONSE);
                     long expiry = expiry(response.body, PAIR_TTL);
                     if (!(BOT + "pair_" + id).equals(text(response.body, "botUrl"))) throw new Failure(Error.BAD_RESPONSE);
+                    if (BlackHolePrivateData.isAvailable()) {
+                        try {
+                            persistPair(ticket, id, expiry);
+                        } catch (Exception failure) { throw new Failure(Error.STORAGE); }
+                    }
                     pairId = id; pairExpiresAt = expiry;
                 } else if (operation == Operation.EXCHANGE) {
                     if (response.status == 202) {
@@ -339,6 +435,9 @@ public final class LunagramSubscriptionClient {
                             } catch (Exception failure) { throw new Failure(Error.STORAGE); }
                         }
                         if (!current(ticket)) throw new Failure(Error.ACCOUNT_CHANGED);
+                        // A recoverable verifier is no longer needed once its session
+                        // was saved. Do not let another fragment revive this pairing.
+                        try { removeStoredPair(pairId); } catch (Exception failure) { throw new Failure(Error.STORAGE); }
                         token = authenticatedToken; tokenExpiresAt = expiry; clearPair(); freshSnapshot = false;
                         synchronized (LunagramSubscriptionClient.class) {
                             authRevision = ++AUTH_REVISIONS[account];
@@ -350,11 +449,30 @@ public final class LunagramSubscriptionClient {
                 } else if (operation == Operation.REVOKE) {
                     explicitDisconnect = true;
                     clearSession();
+                } else if (operation == Operation.CRYPTO_CURRENT || operation == Operation.CRYPTO_ORDER || operation == Operation.CRYPTO_CREATE) {
+                    CryptoState parsed = parseCryptoState(response.body);
+                    if (cryptoState != null && parsed.serverNowMs < cryptoState.serverNowMs) throw new Failure(Error.BAD_RESPONSE);
+                    if (operation == Operation.CRYPTO_ORDER) require(parsed.order != null && code.equals(parsed.order.orderId));
+                    if (operation == Operation.CRYPTO_CREATE) {
+                        JSONObject request = new JSONObject(code);
+                        require(parsed.order != null && text(request, "planId").equals(parsed.order.planId)
+                                && integer(request, "months") == parsed.order.months
+                                && parsed.order.usdCents == LunagramSubscriptionCatalog.Plan.ULTRA.totalUsdCents(
+                                        LunagramSubscriptionCatalog.Period.fromMonths(parsed.order.months)));
+                    }
+                    cryptoState = parsed;
+                    cryptoRecoveryRequired = false;
+                    if (parsed.order != null) pendingCryptoRequest = null;
                 } else {
                     Subscription parsed = parseSubscription(response.body);
                     if (subscription != null && (parsed.entitlementVersion < subscription.entitlementVersion
                             || parsed.serverNowMs < subscription.serverNowMs)) throw new Failure(Error.BAD_RESPONSE);
-                    Quote parsedQuote = operation == Operation.PREVIEW ? parseQuote(response.body, parsed) : null;
+                    Quote parsedQuote = operation == Operation.PREVIEW || operation == Operation.CRYPTO_PREVIEW ? parseQuote(response.body, parsed) : null;
+                    if (operation == Operation.CRYPTO_PREVIEW) {
+                        CryptoOrder order = cryptoState == null ? null : cryptoState.order;
+                        require(order != null && code.equals(order.orderId) && order.planId.equals(parsedQuote.planId)
+                                && order.months == parsedQuote.months);
+                    }
                     if (operation == Operation.CONFIRM) validateActivation(response.body, parsed, code);
                     long receivedElapsed = SystemClock.elapsedRealtime();
                     persistSnapshot(ticket, parsed, receivedElapsed);
@@ -369,7 +487,8 @@ public final class LunagramSubscriptionClient {
         } catch (Failure failure) {
             fail(ticket, failure.error);
         } catch (java.io.IOException failure) {
-            fail(ticket, Error.NETWORK);
+            // RESTORE reads only local encrypted storage; it performs no HTTP request.
+            fail(ticket, operation == Operation.RESTORE ? Error.STORAGE : Error.NETWORK);
         } catch (Exception failure) {
             fail(ticket, operation == Operation.RESTORE || operation == Operation.EXCHANGE ? Error.STORAGE : Error.BAD_RESPONSE);
         } finally {
@@ -388,7 +507,10 @@ public final class LunagramSubscriptionClient {
                 try { clearSession(); } catch (Exception ignored) { token = null; }
                 if (failure == Error.ACCOUNT_CHANGED) subscription = null;
             }
-            if (failure == Error.EXPIRED || (failure != Error.NETWORK && pairId == null)) clearPair();
+            if (failure == Error.EXPIRED) {
+                try { removeStoredPair(pairId); } catch (Exception ignored) { error = Error.STORAGE; }
+                clearPair();
+            } else if (failure != Error.NETWORK && pairId == null) clearPair();
         }
     }
     private void restoreSession() throws Exception {
@@ -401,9 +523,59 @@ public final class LunagramSubscriptionClient {
         String value = text(json, "token");
         if (!value.matches("[A-Za-z0-9_-]{43}")) throw new Failure(Error.STORAGE);
         long expiry = integer(json, "expiresAtMs");
-        if (expiry <= System.currentTimeMillis()) { clearSession(); return; }
+        if (expiry <= System.currentTimeMillis()) {
+            // A passive/background restore holds no live credential. Expiring
+            // this disk record must not invalidate a new UI pairing client via
+            // AUTH_REVISIONS (401/revoke of a live session still do that).
+            synchronized (LunagramSubscriptionClient.class) {
+                if (!currentOwner()) throw new Failure(Error.ACCOUNT_CHANGED);
+                BlackHolePrivateData.remove(account, owner, SESSION_KEY);
+            }
+            accessRevoked = true;
+            return;
+        }
         if (expiry > System.currentTimeMillis() + SESSION_TTL + 30_000) throw new Failure(Error.STORAGE);
         token = value; tokenExpiresAt = expiry;
+    }
+    private void persistPair(long ticket, String id, long expiresAt) throws Exception {
+        synchronized (LunagramSubscriptionClient.class) {
+            if (!current(ticket)) throw new Failure(Error.ACCOUNT_CHANGED);
+            BlackHolePrivateData.write(account, owner, PAIR_KEY, new JSONObject()
+                    .put("telegramUserId", Long.toString(owner)).put("pairId", id)
+                    .put("verifier", new String(verifier, StandardCharsets.US_ASCII))
+                    .put("expiresAtMs", expiresAt).toString());
+        }
+    }
+    private void restorePair(long ticket) throws Exception {
+        if (!BlackHolePrivateData.isAvailable() || token != null || pairId != null) return;
+        synchronized (LunagramSubscriptionClient.class) {
+            if (!current(ticket)) throw new Failure(Error.ACCOUNT_CHANGED);
+            String stored = BlackHolePrivateData.read(account, PAIR_KEY, null);
+            if (stored == null) return;
+            if (stored.length() > 2048) throw new Failure(Error.STORAGE);
+            JSONObject json = new JSONObject(stored);
+            exactKeys(json, "telegramUserId", "pairId", "verifier", "expiresAtMs");
+            requireUser(json);
+            String id = text(json, "pairId"), secret = text(json, "verifier");
+            if (!id.matches("[A-Za-z0-9_-]{16,64}") || !secret.matches("[A-Za-z0-9_-]{43}")) throw new Failure(Error.STORAGE);
+            long expiry = integer(json, "expiresAtMs"), now = System.currentTimeMillis();
+            if (expiry <= now) { BlackHolePrivateData.remove(account, owner, PAIR_KEY); return; }
+            if (expiry > now + PAIR_TTL + 30_000) throw new Failure(Error.STORAGE);
+            pairId = id; pairExpiresAt = expiry; verifier = secret.getBytes(StandardCharsets.US_ASCII);
+        }
+    }
+    private void removeStoredPair(String expectedId) throws Exception {
+        if (expectedId == null || !BlackHolePrivateData.isAvailable()) return;
+        synchronized (LunagramSubscriptionClient.class) {
+            if (!currentOwner()) throw new Failure(Error.ACCOUNT_CHANGED);
+            String stored = BlackHolePrivateData.read(account, PAIR_KEY, null);
+            if (stored == null) return;
+            if (stored.length() > 2048) throw new Failure(Error.STORAGE);
+            JSONObject json = new JSONObject(stored);
+            requireUser(json);
+            // An older fragment may only remove its own recovery record.
+            if (expectedId.equals(text(json, "pairId"))) BlackHolePrivateData.remove(account, owner, PAIR_KEY);
+        }
     }
     private void persistSession(long ticket, String value) throws Exception {
         synchronized (LunagramSubscriptionClient.class) {
@@ -413,9 +585,16 @@ public final class LunagramSubscriptionClient {
     }
     private void clearSession() throws Exception {
         accessRevoked = true;
-        token = null; tokenExpiresAt = 0; quote = null; freshSnapshot = false; clearPair();
+        token = null; tokenExpiresAt = 0; quote = null; cryptoState = null; pendingCryptoRequest = null;
+        cryptoRecoveryRequired = false;
+        freshSnapshot = false; clearPair();
         synchronized (LunagramSubscriptionClient.class) {
             if (currentOwner()) {
+                // Revocation ends every pending recovery for this owner, not
+                // just this instance's in-memory pair. Otherwise a fresh
+                // fragment could restore a second client's approved pairing
+                // after the user explicitly disconnected the account.
+                if (BlackHolePrivateData.isAvailable()) BlackHolePrivateData.remove(account, owner, PAIR_KEY);
                 // Invalidate every old in-flight client before deleting this session.
                 authRevision = ++AUTH_REVISIONS[account];
                 if (BlackHolePrivateData.isAvailable()) BlackHolePrivateData.remove(account, owner, SESSION_KEY);
@@ -460,6 +639,40 @@ public final class LunagramSubscriptionClient {
         return new Subscription(plan, end, active, serverNow, paidUntil, version, current, queued, legacy,
                 (Boolean) json.get("featuresGated"));
     }
+    private CryptoState parseCryptoState(JSONObject json) throws Exception {
+        exactKeys(json, "schemaVersion", "telegramUserId", "serverNowMs", "cryptoAvailable", "termsVersion", "order");
+        requireUser(json);
+        require(integer(json, "schemaVersion") == 1 && json.get("cryptoAvailable") instanceof Boolean
+                && CRYPTO_TERMS_VERSION.equals(text(json, "termsVersion")));
+        long now = boundedTime(json, "serverNowMs");
+        require(now > 0);
+        CryptoOrder order = null;
+        if (json.get("order") != JSONObject.NULL) {
+            require(json.get("order") instanceof JSONObject);
+            JSONObject value = (JSONObject) json.get("order");
+            exactKeys(value, "orderId", "planId", "months", "usdCents", "status", "createdAtMs", "expiresAtMs", "paidAtMs", "checkoutUrl", "activated");
+            String id = text(value, "orderId"), plan = knownPlan(value, "planId"), status = text(value, "status");
+            require(id.matches("[a-f0-9]{48}") && Arrays.asList("creating", "pending", "review_required", "paid", "expired").contains(status));
+            int months = period(value);
+            long cents = integer(value, "usdCents"), created = boundedTime(value, "createdAtMs"), expires = boundedTime(value, "expiresAtMs");
+            require(cents > 0 && cents <= Integer.MAX_VALUE && created > 0 && created <= now + 30_000 && expires > created);
+            require(LunagramSubscriptionCatalog.isKnownReceiptUsdPrice(plan,
+                    LunagramSubscriptionCatalog.Period.fromMonths(months), cents));
+            boolean paid = "paid".equals(status);
+            long paidAt = value.get("paidAtMs") == JSONObject.NULL ? 0 : boundedTime(value, "paidAtMs");
+            require(paid == (paidAt > 0) && (!paid || (paidAt >= created - 31_000 && paidAt <= now + 30_000 && paidAt <= expires)));
+            require(value.get("activated") instanceof Boolean);
+            boolean activated = (Boolean) value.get("activated");
+            require(!activated || paid);
+            String url = value.get("checkoutUrl") == JSONObject.NULL ? null : text(value, "checkoutUrl");
+            require(url == null || (Boolean.TRUE.equals(json.get("cryptoAvailable")) && "pending".equals(status) && isCryptoCheckoutUrl(url)));
+            order = new CryptoOrder(id, plan, months, (int) cents, status, created, expires, paidAt, url, activated);
+        }
+        return new CryptoState((Boolean) json.get("cryptoAvailable"), now, order);
+    }
+    public static boolean isCryptoCheckoutUrl(String value) {
+        return value != null && value.matches("https://t\\.me/CryptoBot\\?start=IV[A-Za-z0-9_-]{1,62}");
+    }
     private static Term parseTerm(Object value) throws Exception {
         require(value instanceof JSONObject);
         JSONObject json = (JSONObject) value;
@@ -483,9 +696,8 @@ public final class LunagramSubscriptionClient {
         require(stars > 0 && stars <= Integer.MAX_VALUE && start >= status.serverNowMs && start < end
                 && validUntil > status.serverNowMs && validUntil - status.serverNowMs <= 130_000
                 && version == status.entitlementVersion);
-        for (LunagramSubscriptionCatalog.Plan entry : LunagramSubscriptionCatalog.PLANS) {
-            if (entry.id.equals(plan)) require(stars == entry.totalStars(LunagramSubscriptionCatalog.Period.fromMonths(months)));
-        }
+        require(LunagramSubscriptionCatalog.isKnownReceiptStarsPrice(plan,
+                LunagramSubscriptionCatalog.Period.fromMonths(months), stars));
         // The queue may begin months after the quote expires; only the confirmation
         // deadline is short. Never reinterpret a queued start as an immediate upgrade.
         require(status.paidUntilMs == 0 || start >= status.paidUntilMs);
@@ -493,7 +705,7 @@ public final class LunagramSubscriptionClient {
     }
     private void validateActivation(JSONObject body, Subscription status, String quoteId) throws Exception {
         Term activation = parseTerm(body.get("activation"));
-        require(quote != null && quote.quoteId.equals(quoteId) && activation.planId.equals(quote.planId)
+        require(quote != null && quote.quoteId.equals(quoteId) && sameEffectivePlan(activation.planId, quote.planId)
                 && activation.months == quote.months && activation.startsAtMs == quote.startsAtMs
                 && activation.expiresAtMs == quote.expiresAtMs && !status.legacy);
     }
@@ -504,8 +716,15 @@ public final class LunagramSubscriptionClient {
     }
     private static String knownPlan(JSONObject json, String key) throws Exception {
         String value = text(json, key);
-        for (LunagramSubscriptionCatalog.Plan entry : LunagramSubscriptionCatalog.PLANS) if (entry.id.equals(value)) return value;
+        if (LunagramSubscriptionCatalog.planFromId(value) != null) return value;
         throw new Failure(Error.BAD_RESPONSE);
+    }
+
+    private static boolean sameEffectivePlan(String first, String second) {
+        // Both values were separately parsed against the exact known receipt-ID allowlist.
+        // A legacy paid receipt activates Ultra without changing its order or paid interval.
+        return LunagramSubscriptionCatalog.planFromId(first) != null
+                && LunagramSubscriptionCatalog.planFromId(second) != null;
     }
     private static void require(boolean valid) throws Failure { if (!valid) throw new Failure(Error.BAD_RESPONSE); }
     private static void exactKeys(JSONObject json, String... expected) throws Exception {
@@ -613,10 +832,17 @@ public final class LunagramSubscriptionClient {
             if ("NOT_CONFIGURED".equals(code) || "NOT_READY".equals(code)) return Error.NOT_CONFIGURED;
             if ("PAIR_EXPIRED".equals(code) || "PAIRING_NOT_AVAILABLE".equals(code)) return Error.EXPIRED;
             if ("UPGRADE_REQUIRED".equals(code)) return Error.UPGRADE_REQUIRED;
+            if ("CLIENT_UPDATE_REQUIRED".equals(code)) return Error.CLIENT_UPDATE_REQUIRED;
+            if ("PLAN_RETIRED".equals(code)) return Error.PLAN_RETIRED;
             if ("LEGACY_TERM_ACTIVE".equals(code)) return Error.LEGACY_TERM_ACTIVE;
             if ("QUOTE_EXPIRED".equals(code)) return Error.QUOTE_EXPIRED;
             if ("QUOTE_STALE".equals(code)) return Error.QUOTE_STALE;
             if ("QUEUE_FULL".equals(code)) return Error.QUEUE_FULL;
+            if ("CHECKOUT_PENDING".equals(code)) return Error.CHECKOUT_PENDING;
+            if ("ORDER_NOT_FOUND".equals(code) || "PAYMENT_PENDING".equals(code)) return Error.PAYMENT_PENDING;
+            if ("PAYMENT_MISMATCH".equals(code)) return Error.PAYMENT_REVIEW;
+            if ("CRYPTOPAY_UNAVAILABLE".equals(code)) return Error.NOT_CONFIGURED;
+            if ("TERMS_VERSION_MISMATCH".equals(code)) return Error.UPGRADE_REQUIRED;
         } catch (Exception ignored) {}
         return Error.SERVER;
     }
@@ -690,6 +916,7 @@ public final class LunagramSubscriptionClient {
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
                 connection.setRequestProperty("Accept", "application/json");
                 connection.setRequestProperty("Accept-Encoding", "identity");
+                connection.setRequestProperty(BILLING_CATALOG_HEADER, BILLING_CATALOG_VERSION);
                 if (token != null) connection.setRequestProperty("Authorization", "Bearer " + token);
                 byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
                 if (payload.length > BODY_LIMIT) throw new Failure(Error.BAD_RESPONSE);

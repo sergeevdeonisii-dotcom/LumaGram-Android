@@ -1,0 +1,73 @@
+name: Lunagram 2.1.0 public test APK
+
+on:
+  push:
+    branches: ["agent/lunagram-210-test"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lunagram-210-test-apk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Test branch only. No production signing material or publication permissions.
+    if: github.repository == 'sergeevdeonisii-dotcom/LumaGram-Android' && github.ref == 'refs/heads/agent/lunagram-210-test'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: "2"
+    steps:
+      - name: Check out exact source and pinned submodules
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 1
+          submodules: recursive
+          persist-credentials: false
+      - name: Set up JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Check test-build and artifact guards without credentials
+        shell: bash
+        run: |
+          bash -n Tools/ci/build-lunagram210.sh
+          node --test Tools/ci/collect-lunagram-apk.test.mjs Tools/ci/lunagram206-workflow.test.mjs Tools/ci/lunagram210-workflow.test.mjs
+      - name: Prepare pinned SDK without API or signing credentials
+        shell: bash
+        run: bash Tools/ci/build-lunagram210.sh --prepare-sdk
+      - name: Run focused access, local tools and gesture regressions without credentials
+        shell: pwsh
+        run: |
+          ./Tools/tests/run-lunagram210-surface-contracts.ps1 -Aapt2 (Join-Path $env:ANDROID_HOME 'build-tools/36.0.0/aapt2') -OutputRoot (Join-Path $env:RUNNER_TEMP 'surface210')
+          ./Tools/tests/run-feature-catalog150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'feature-catalog210')
+          ./Tools/tests/run-subscription-screen150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'subscription-screen210')
+          ./Tools/tests/run-subscription-layout204-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'subscription-layout210')
+          ./Tools/tests/run-lunagram20-swipe-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'swipe210')
+          ./Tools/tests/run-lunagram-media-access-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'media-access210')
+          ./Tools/tests/run-round-startup-latency-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-startup210')
+          ./Tools/tests/run-round-concurrent102-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'round-concurrent210')
+          ./Tools/tests/run-productivity-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'productivity210')
+          ./Tools/tests/run-media-tools-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'media-tools210')
+          ./Tools/tests/run-local-labels-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'local-labels210')
+      - name: Build public test APK with a disposable signing key
+        shell: bash
+        env:
+          LUMA_API_ID: ${{ secrets.LUMA_API_ID }}
+          LUMA_API_HASH: ${{ secrets.LUMA_API_HASH }}
+        run: bash Tools/ci/build-lunagram210.sh --build
+      - name: Upload temporary test APK and non-secret provenance
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: lunagram-210-public-test-temporary-signed
+          path: |
+            ${{ runner.temp }}/lunagram210-artifacts/Lunagram-2.1.0-public-temporary.apk
+            ${{ runner.temp }}/lunagram210-artifacts/build-metadata.json
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+          include-hidden-files: false

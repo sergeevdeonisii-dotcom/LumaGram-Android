@@ -1,0 +1,62 @@
+package org.telegram.messenger;
+import android.text.SpannedString;
+import android.text.Spanned;
+import org.telegram.ui.Components.LunagramTextToolsSheet;
+import org.telegram.ui.Components.QuoteSpan;
+
+/** Actual extracted composer methods with explicit, modeled Android edit/span boundaries. */
+public class ComposerProbe {
+    @@METHODS@@
+    final LunagramTextHistory<SpannedString> lunagramTextHistory=new LunagramTextHistory<>();
+    LunagramMediaAccess.Session lunagramTextOwner;int lunagramTextAccount=-1,currentAccount;
+    long lunagramTextDialog,lunagramTextTopic,lunagramDraftRevision,dialog_id=55;
+    boolean lunagramHistoryReplay,destroyed,editingCaption,richDraftActive,recordingAudioVideo,ignoreTextChange;
+    Object editingMessageObject;Parent parentFragment=new Parent();Edit messageEditText=new Edit();Delegate delegate=new Delegate();int sendCount;
+    static class Parent {long topic;boolean secret,protectedChat;int mode;long getTopicId(){return topic;}boolean isSecretChat(){return secret;}boolean isPeerNoForwards(){return protectedChat;}int getChatMode(){return mode;}}
+    static class DialogObject {static boolean isEncryptedDialog(long id){return id==999;}}
+    static class Delegate {void onTextChanged(CharSequence value,boolean a,boolean b){}}
+    final class Edit {
+        SpannedString text=new SpannedString("");int start,end;
+        SpannedString getText(){return text;}int getSelectionStart(){return start;}int getSelectionEnd(){return end;}
+        void setSelection(int value){start=end=value;}void setSelection(int a,int b){start=a;end=b;}void invalidateQuotes(boolean value){}
+        void setText(CharSequence value){
+            lunagramDraftRevision++;if(!lunagramHistoryReplay&&ensureLunagramTextHistory())recordLunagramTextSnapshot(text);
+            text=new SpannedString(value);start=end=text.length();
+            if(!ignoreTextChange&&text.toString().contains("\n"))sendCount++;
+            if(!lunagramHistoryReplay&&ensureLunagramTextHistory())recordLunagramTextSnapshot(text);
+        }
+    }
+    static int checks;static void check(boolean ok,String label){checks++;if(!ok)throw new AssertionError(label);}
+    static ComposerProbe fresh(){UserConfig.selectedAccount=0;UserConfig.owners[0]=100;LunagramSubscriptionAccess.paid=true;SharedConfig.appLocked=SharedConfig.isWaitingForPasscodeEnter=BlackHoleVault.blocked=false;return new ComposerProbe();}
+    public static void main(String[] args){
+        ComposerProbe p=fresh();p.messageEditText.setText("old");LunagramTextToolsSheet.Apply apply=p.createLunagramDraftApply();
+        check(apply.apply("new\ntext"),"Current draft accepts explicit apply");check(p.sendCount==0,"Applying newline never invokes send-by-enter");check(!apply.apply("twice"),"Apply token commits once");
+        p=fresh();p.messageEditText.setText("old");apply=p.createLunagramDraftApply();p.messageEditText.setText("newer");check(!apply.apply("overwrite")&&p.messageEditText.text.toString().equals("newer"),"New draft rejects stale preview");
+        p=fresh();p.messageEditText.setText("same");apply=p.createLunagramDraftApply();p.messageEditText.setText("other");p.messageEditText.setText("same");check(!apply.apply("overwrite"),"Revision rejects edit-and-revert while preview open");
+        p=fresh();p.messageEditText.setText("same");apply=p.createLunagramDraftApply();p.onLunagramTextSpansChanged();check(!apply.apply("overwrite"),"Format-only edit invalidates preview even for mutable span identity");
+        p=fresh();QuoteSpan quote=new QuoteSpan();p.messageEditText.setText(new SpannedString("quoted",quote));apply=p.createLunagramDraftApply();quote.isCollapsing=true;check(!apply.apply("overwrite"),"Mutable quote toggle invalidates Apply without span callback");
+        p.showLunagramTextTools();quote.isCollapsing=false;check(!LunagramTextToolsSheet.lastHistory.undo(),"Mutable quote toggle invalidates open Undo menu");
+        for(int change=0;change<15;change++){
+            p=fresh();p.messageEditText.setText("private");apply=p.createLunagramDraftApply();
+            switch(change){case 0:UserConfig.selectedAccount=1;break;case 1:UserConfig.owners[0]++;break;case 2:LunagramSubscriptionClient.epochs[0]++;break;case 3:p.dialog_id++;break;case 4:p.parentFragment.topic++;break;case 5:p.destroyed=true;break;case 6:p.editingMessageObject=new Object();break;case 7:p.richDraftActive=true;break;case 8:p.parentFragment.secret=true;break;case 9:p.recordingAudioVideo=true;break;case 10:LunagramSubscriptionAccess.paid=false;break;case 11:SharedConfig.appLocked=true;break;case 12:SharedConfig.isWaitingForPasscodeEnter=true;break;case 13:BlackHoleVault.blocked=true;break;case 14:p.parentFragment.protectedChat=true;break;}
+            check(!apply.apply("wrong"),"Stale scope/access cannot apply "+change);
+        }
+        p=fresh();p.messageEditText.setText("first");p.messageEditText.setText("second");p.showLunagramTextTools();
+        check(LunagramTextToolsSheet.lastHistory.canUndo()&&LunagramTextToolsSheet.lastHistory.undo(),"Current session exposes working Undo");check(p.messageEditText.text.toString().equals("first"),"Undo restores previous text");
+        p.showLunagramTextTools();check(LunagramTextToolsSheet.lastHistory.canRedo()&&LunagramTextToolsSheet.lastHistory.redo(),"Reopened tools keep Redo after snapshot deduplication");check(p.messageEditText.text.toString().equals("second"),"Redo restores next text");
+        p.showLunagramTextTools();LunagramTextToolsSheet.History history=LunagramTextToolsSheet.lastHistory;p.parentFragment.topic++;check(!history.undo(),"Old-topic Undo denied");p.ensureLunagramTextHistory();check(p.lunagramTextHistory.size()==0,"New topic clears old snapshots");
+        p=fresh();p.messageEditText.setText("owner1");p.messageEditText.setText("owner1b");p.showLunagramTextTools();history=LunagramTextToolsSheet.lastHistory;LunagramSubscriptionClient.epochs[0]++;check(!history.undo(),"Old-epoch Undo denied");p.ensureLunagramTextHistory();check(p.lunagramTextHistory.size()==0,"New epoch clears old snapshots");
+        p=fresh();Object spans=new Object();p.messageEditText.setText(new SpannedString("rich",spans));apply=p.createLunagramDraftApply();check(apply.apply("plain"),"Transformation applies only after confirmation");p.showLunagramTextTools();check(LunagramTextToolsSheet.lastHistory.undo()&&p.messageEditText.text.spans==spans,"Undo preserves opaque span snapshot rather than String flattening");
+        p=fresh();p.messageEditText.setText("old");p.setFieldText("loaded",true,true);check(!p.lunagramTextHistory.canUndo(),"Loaded draft does not retain preceding composer text");
+        p.messageEditText.setText("changed");p.clearLunagramTextHistory();check(p.lunagramTextHistory.size()==0&&p.lunagramTextOwner==null,"Destroy/context clear drops snapshots and owner");
+        p=fresh();p.dialog_id=999;p.messageEditText.setText("secret");check(p.lunagramTextHistory.size()==0&&!p.createLunagramDraftApply().apply("changed"),"Secret chat never enters history or tools");
+        p=fresh();p.messageEditText.setText("a");p.messageEditText.setText("b");LunagramSubscriptionAccess.paid=false;p.ensureLunagramTextHistory();check(p.lunagramTextHistory.size()==0,"Revocation clears history");
+        p=fresh();p.messageEditText.setText("a");p.showLunagramTextTools();check(LunagramTextToolsSheet.lastContext.getAsBoolean(),"Composer context supplied to sheet");SharedConfig.appLocked=true;check(!LunagramTextToolsSheet.lastContext.getAsBoolean(),"Open composer tool native copy blocks app lock");
+        System.out.println("PASS extracted composer "+checks+" lifecycle/access/history checks (Android event/span storage modeled, not device proof)");
+    }
+}
+class UserConfig {static final int MAX_ACCOUNT_COUNT=4;static int selectedAccount;static long[] owners={100,200,300,400};int account;static UserConfig getInstance(int account){UserConfig u=new UserConfig();u.account=account;return u;}long getClientUserId(){return owners[account];}}
+class LunagramSubscriptionClient {static long[] epochs=new long[4];static long accountEpoch(int account){return epochs[account];}}
+class LunagramSubscriptionAccess {static boolean paid=true;static boolean canUse(int account,LunagramFeatureCatalog.Feature feature){return paid;}}
+class SharedConfig {static boolean appLocked,isWaitingForPasscodeEnter;}
+class BlackHoleVault {static boolean blocked;public static boolean blocks(int account,long dialog){return blocked;}}

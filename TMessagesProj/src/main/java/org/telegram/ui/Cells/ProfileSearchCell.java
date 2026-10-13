@@ -45,6 +45,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
+import org.telegram.messenger.LunagramStreamerMode;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.utils.DrawableUtils;
 import org.telegram.tgnet.ConnectionsManager;
@@ -335,6 +336,7 @@ public class ProfileSearchCell extends BaseCell implements NotificationCenter.No
         super.onDetachedFromWindow();
         avatarImage.onDetachedFromWindow();
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);
+        NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.updateInterfaces);
         if (showPremiumBlocked) {
             NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.userIsPremiumBlockedUpadted);
         }
@@ -347,6 +349,8 @@ public class ProfileSearchCell extends BaseCell implements NotificationCenter.No
         super.onAttachedToWindow();
         avatarImage.onAttachedToWindow();
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.emojiLoaded);
+        NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.updateInterfaces);
+        if (user != null || chat != null || contact != null || currentName != null) update(0);
         if (showPremiumBlocked) {
             NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.userIsPremiumBlockedUpadted);
         }
@@ -358,6 +362,10 @@ public class ProfileSearchCell extends BaseCell implements NotificationCenter.No
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.emojiLoaded) {
             invalidate();
+        } else if (id == NotificationCenter.updateInterfaces && account == currentAccount
+                && (Integer) args[0] == MessagesController.UPDATE_MASK_ALL
+                && (user != null || chat != null || contact != null || currentName != null)) {
+            update(0);
         } else if (id == NotificationCenter.userIsPremiumBlockedUpadted) {
             final TL_account.RequirementToContact r;
             if (user != null) {
@@ -527,6 +535,7 @@ public class ProfileSearchCell extends BaseCell implements NotificationCenter.No
         } else if (nameString == null && user != null) {
             nameString = AndroidUtilities.removeRTL(AndroidUtilities.removeDiacritics(UserObject.getUserName(user)));
         }
+        nameString = LunagramStreamerMode.displayName(currentAccount, nameString, chat != null);
         nameString = AndroidUtilities.replaceNewLines(nameString);
         if (TextUtils.isEmpty(nameString)) {
             if (user != null && !TextUtils.isEmpty(user.phone)) {
@@ -641,7 +650,7 @@ public class ProfileSearchCell extends BaseCell implements NotificationCenter.No
         TextPaint currentStatusPaint = Theme.dialogs_offlinePaint;
         if (chat == null || subLabel != null) {
             if (subLabel != null) {
-                statusString = subLabel;
+                statusString = LunagramStreamerMode.isEnabled(currentAccount) ? "" : subLabel;
             } else if (user != null) {
                 if (MessagesController.isSupportUser(user)) {
                     statusString = getString(R.string.SupportStatus);
@@ -823,6 +832,7 @@ public class ProfileSearchCell extends BaseCell implements NotificationCenter.No
     }
 
     public void update(int mask) {
+        if (mask == MessagesController.UPDATE_MASK_ALL) mask = 0;
         TLRPC.FileLocation photo = null;
         if (user != null) {
             avatarDrawable.setInfo(currentAccount, user);

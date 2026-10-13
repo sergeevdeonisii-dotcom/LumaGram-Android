@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="LunagramMediaToolsTitle">Инструменты медиа</string>
+    <string name="LunagramMediaInspect">Информация о файле</string>
+    <string name="LunagramMediaRemoveCache">Удалить скачанную копию</string>
+    <string name="LunagramMediaRemoveInfo">Удалить только этот скачанный файл из кэша приложения? Сообщение останется в чате. Для просмотра файл нужно будет скачать заново. Отправленные оригиналы и занятые файлы не удаляются.</string>
+    <string name="LunagramMediaRemoved">Скачанная копия удалена. Сообщение осталось.</string>
+    <string name="LunagramMediaDeleteUnavailable">Файл занят, находится вне кэша приложения или является оригиналом. Останови воспроизведение и попробуй ещё раз.</string>
+    <string name="LunagramMediaCopyPhoto">Скопировать фото в буфер</string>
+    <string name="LunagramMediaClipboardInfo">Скопировать фото в системный буфер? Приложение, куда ты его вставишь, сможет прочитать фото. Копия очищается через час при работающем Lunagram или при следующем копировании. До 20 МиБ; защищённые и исчезающие медиа исключены.</string>
+    <string name="LunagramMediaPhoto">Фото</string>
+    <string name="LunagramMediaPhotoCopied">Фото скопировано в системный буфер</string>
+    <string name="LunagramMediaBookmarks">Сохранённые таймкоды</string>
+    <string name="LunagramMediaAddBookmark">Сохранить текущий таймкод</string>
+    <string name="LunagramMediaBookmarksEmpty">Таймкодов пока нет. Запусти это голосовое, музыку или кружок и выбери «Сохранить текущий таймкод». Автоматически ничего не воспроизводится.</string>
+    <string name="LunagramMediaBookmarkSaved">Таймкод сохранён на устройстве</string>
+    <string name="LunagramMediaBookmarkRemoved">Таймкод удалён</string>
+    <string name="LunagramMediaBookmarkFailed">Не удалось сохранить или прочитать таймкоды: сменился аккаунт, недоступно защищённое хранилище или достигнут лимит в 64 записи.</string>
+    <string name="LunagramMediaSeek">Перейти к таймкоду</string>
+    <string name="LunagramMediaSeekInfo">Перемотает текущий проигрыватель без запуска воспроизведения. Сохранённые таймкоды доступны и после окончания Ultra.</string>
+    <string name="LunagramMediaStartFirst">Сначала открой это голосовое, музыку или кружок в проигрывателе. Автоматически ничего не запускается.</string>
+    <string name="LunagramMediaLoop">Повтор A–B</string>
+    <string name="LunagramMediaLoopInfo">Повтор участка текущего голосового, музыки или кружка. Формат: мм:сс или ч:мм:сс. Смена медиа или аккаунта отключает повтор.</string>
+    <string name="LunagramMediaLoopStart">Начало A · мм:сс</string>
+    <string name="LunagramMediaLoopEnd">Конец B · мм:сс</string>
+    <string name="LunagramMediaLoopInvalid">Укажи время в пределах записи. Между точками нужна хотя бы секунда.</string>
+    <string name="LunagramMediaLoopStarted">Повтор A–B включён для этой записи</string>
+    <string name="LunagramMediaStopLoop">Выключить повтор A–B</string>
+    <string name="LunagramMediaLoopStopped">Повтор A–B выключен</string>
+    <string name="LunagramMediaSleep">Таймер воспроизведения</string>
+    <string name="LunagramMediaSleepMinutes">Через %1$d мин</string>
+    <string name="LunagramMediaSleepEnd">В конце этой записи</string>
+    <string name="LunagramMediaSleepStarted">Таймер включён для этой записи. Смена медиа или аккаунта его отменяет.</string>
+    <string name="LunagramMediaStopSleep">Отменить таймер</string>
+    <string name="LunagramMediaSleepStopped">Таймер отменён</string>
+    <string name="LunagramMediaHash">SHA-256</string>
+    <string name="LunagramMediaHashInfo">Рассчитать контрольную сумму скачанного файла на устройстве. До 128 МиБ. Можно отменить; содержимое никуда не отправляется.</string>
+    <string name="LunagramMediaCalculate">Рассчитать</string>
+    <string name="LunagramMediaWorking">Обработка скачанной копии…</string>
+    <string name="LunagramMediaUnavailable">Инструменты медиа недоступны. Проверь аккаунт и статус Ultra или дождись завершения текущей операции.</string>
+    <string name="LunagramMediaFileUnavailable">Не удалось прочитать скачанную копию. Сначала скачай файл, дождись окончания передачи и проверь лимит размера. Оригиналы и защищённые медиа исключены.</string>
+    <string name="LunagramMediaBytes">Размер: %1$d байт</string>
+    <string name="LunagramMediaChannels">Аудиоканалов: %1$d</string>
+    <string name="LunagramMediaApply">Применить</string>
+</resources>

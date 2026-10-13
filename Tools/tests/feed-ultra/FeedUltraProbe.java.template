@@ -1,0 +1,184 @@
+import java.util.*;
+import org.telegram.messenger.LunagramFeedMerger;
+
+/** Complete production controller; deterministic transport/storage/authority fixtures only. */
+public final class FeedUltraProbe {
+    static int checks;
+    static void check(boolean value, String message) { checks++; if (!value) throw new AssertionError(message); }
+    static class UserConfig {
+        static final int MAX_ACCOUNT_COUNT=2;
+        static int selectedAccount; static final UserConfig[] users = {new UserConfig(),new UserConfig()};
+        long owner=100; static UserConfig getInstance(int a){return users[a];} long getClientUserId(){return owner;}
+    }
+    static class LunagramSubscriptionClient { static long[] epochs={1,1}; static long accountEpoch(int a){return epochs[a];} }
+    static class LunagramFeatureCatalog { enum Feature {CHANNEL_FEED} }
+    static class LunagramSubscriptionAccess { static boolean allowed=true; static boolean canUse(int a,LunagramFeatureCatalog.Feature f){return allowed;} }
+    static class Prefs {
+        final Map<String,Set<String>> data=new HashMap<>(); int writes;
+        Set<String> getStringSet(String k,Set<String> fallback){return new HashSet<>(data.getOrDefault(k,fallback));}
+        Prefs edit(){return this;} Prefs putStringSet(String k,Set<String> v){data.put(k,new HashSet<>(v));return this;} void apply(){writes++;}
+    }
+    static class LumaAccountData { static Prefs prefs=new Prefs(); static Prefs preferences(int a){return prefs;} }
+    static class NotificationCenter {
+        interface NotificationCenterDelegate {void didReceivedNotification(int event,int account,Object... args);}
+        static final int didReceiveNewMessages=1,replaceMessagesObjects=2,messagesDeleted=3,didUpdateReactions=4,lunagramSubscriptionChanged=5;
+        static final NotificationCenter instance=new NotificationCenter();
+        final Map<Integer,Set<NotificationCenterDelegate>> observers=new HashMap<>();
+        static NotificationCenter getInstance(int a){return instance;}
+        void addObserver(NotificationCenterDelegate d,int event){observers.computeIfAbsent(event,k->new HashSet<>()).add(d);}
+        void removeObserver(NotificationCenterDelegate d,int event){observers.getOrDefault(event,new HashSet<>()).remove(d);}
+        void post(int account,int event,Object... args){for(NotificationCenterDelegate d:new ArrayList<>(observers.getOrDefault(event,new HashSet<>())))d.didReceivedNotification(event,account,args);}
+    }
+    static class AndroidUtilities { static final Queue<Runnable> queue=new ArrayDeque<>(); static void runOnUIThread(Runnable r){queue.add(r);} static void drain(){while(!queue.isEmpty())queue.remove().run();} }
+    static class TLRPC {
+        static class Chat {long id; boolean left,kicked; Chat(long id){this.id=id;}}
+        static class ChatFull { }
+        static class Message {int id,date;long dialog;}
+        static class TL_message extends Message { }
+        static class Reaction { }
+        static class TL_reactionPaid extends Reaction { }
+        static class TL_messageReactions { }
+        static class TL_messages_getHistory {Object peer;int offset_id,limit;}
+        static class TL_channels_getFullChannel {Object channel;}
+        static class TL_messages_chatFull {ArrayList<Object> users=new ArrayList<>();ArrayList<Chat> chats=new ArrayList<>();ChatFull full_chat=new ChatFull();}
+        static class messages_Messages {ArrayList<Object> users=new ArrayList<>();ArrayList<Chat> chats=new ArrayList<>();ArrayList<Message> messages=new ArrayList<>();}
+        static class TL_messages_sendReaction {Object peer;int msg_id,flags;ArrayList<Reaction> reaction=new ArrayList<>();}
+        static class TL_channels_getMessages {Object channel;ArrayList<Integer> id=new ArrayList<>();}
+        static class Updates { }
+    }
+    static class ChatObject {static boolean isChannelAndNotMegaGroup(TLRPC.Chat c){return true;} }
+    static class ReactionsLayoutInBubble {
+        static class VisibleReaction {boolean isStar; static VisibleReaction fromTL(TLRPC.Reaction r){return new VisibleReaction();} TLRPC.Reaction toTLReaction(){return new TLRPC.Reaction();} }
+    }
+    static class MessageObject {
+        TLRPC.Message messageOwner; boolean forceUpdate,reactionsChanged; int selected,currentAccount;
+        MessageObject(int a,TLRPC.Message m,boolean x,boolean y){messageOwner=m;currentAccount=a;}
+        static long getDialogId(TLRPC.Message m){return m.dialog;} long getDialogId(){return messageOwner.dialog;} int getId(){return messageOwner.id;}
+        boolean hasChosenReaction(ReactionsLayoutInBubble.VisibleReaction r){return false;}
+        ArrayList<ReactionsLayoutInBubble.VisibleReaction> getChoosenReactions(){return new ArrayList<>();}
+        void selectReaction(ReactionsLayoutInBubble.VisibleReaction r,boolean a,boolean b){selected++;}
+        static void updateReactions(TLRPC.Message m,TLRPC.TL_messageReactions r){ }
+    }
+    static class ConnectionsManager {
+        interface Callback {void run(Object result,Object error);}
+        static final ConnectionsManager instance=new ConnectionsManager();
+        static class Request {Object body; Callback callback; boolean cancelled;Request(Object b,Callback c){body=b;callback=c;} }
+        final ArrayList<Request> requests=new ArrayList<>();int cancels;
+        static ConnectionsManager getInstance(int a){return instance;}
+        int sendRequest(Object req,Callback callback){requests.add(new Request(req,callback));return requests.size();}
+        void cancelRequest(int id,boolean force){requests.get(id-1).cancelled=true;cancels++;}
+        void reply(int index,Object response){requests.get(index).callback.run(response,null);AndroidUtilities.drain();}
+    }
+    static class MessagesController {
+        static final MessagesController instance=new MessagesController();final Map<Long,TLRPC.Chat> chats=new HashMap<>();int peerWrites,updates;
+        static MessagesController getInstance(int a){return instance;} TLRPC.Chat getChat(long id){return chats.get(id);}void putChat(TLRPC.Chat c,boolean cached){peerWrites++;chats.put(c.id,c);}
+        Object getInputPeer(long id){return id;}Object getInputChannel(long id){return id;}void putUsers(ArrayList<Object> x,boolean cache){peerWrites++;}
+        void putChats(ArrayList<TLRPC.Chat> x,boolean cache){peerWrites++;}void putChatFull(TLRPC.ChatFull full){peerWrites++;}
+        int getMaxUserReactionsCount(){return 3;}void processUpdates(TLRPC.Updates u,boolean x){updates++;}
+    }
+    static class MessagesStorage {
+        static final MessagesStorage instance=new MessagesStorage();static final Queue<Runnable> queue=new ArrayDeque<>();int writes;
+        static MessagesStorage getInstance(int a){return instance;}MessagesStorage getStorageQueue(){return this;}void postRunnable(Runnable r){queue.add(r);}
+        TLRPC.Chat getChat(long id){return new TLRPC.Chat(id);}void putUsersAndChats(ArrayList<Object> u,ArrayList<TLRPC.Chat> c,boolean a,boolean b){writes++;}
+        static void drain(){while(!queue.isEmpty())queue.remove().run();AndroidUtilities.drain();}
+    }
+
+    /* ACTUAL_CONTROLLER */
+
+    static int changes;
+    static LunagramFeedController create() {return new LunagramFeedController(0,()->changes++);}
+    static void reset() {
+        UserConfig.selectedAccount=0;UserConfig.users[0].owner=100;UserConfig.users[1].owner=200;
+        LunagramSubscriptionClient.epochs=new long[]{1,1};LunagramSubscriptionAccess.allowed=true;
+        LumaAccountData.prefs=new Prefs();NotificationCenter.instance.observers.clear();
+        ConnectionsManager.instance.requests.clear();ConnectionsManager.instance.cancels=0;AndroidUtilities.queue.clear();MessagesStorage.queue.clear();
+        MessagesStorage.instance.writes=0;MessagesController.instance.chats.clear();MessagesController.instance.peerWrites=MessagesController.instance.updates=changes=0;
+        LunagramFeedController.saveSelection(new LunagramFeedController.AccessSession(0),Arrays.asList(7L));
+        MessagesController.instance.chats.put(7L,new TLRPC.Chat(7));
+    }
+    static TLRPC.messages_Messages history() {
+        TLRPC.messages_Messages result=new TLRPC.messages_Messages();
+        for(int i=40;i>0;i--){TLRPC.Message m=new TLRPC.TL_message();m.id=i;m.date=i;m.dialog=-7;result.messages.add(m);}
+        return result;
+    }
+    static MessageObject post(){return new MessageObject(0,history().messages.get(0),true,true);}
+    static void identityAndPreferences() {
+        reset();LunagramFeedController.AccessSession session=new LunagramFeedController.AccessSession(0);
+        check(session.isAvailable(),"active owner allowed");
+        check(!new LunagramFeedController.AccessSession(-1).isAvailable()&&!new LunagramFeedController.AccessSession(2).isAvailable(),"invalid session account safe");
+        LunagramSubscriptionAccess.allowed=false;
+        check(!session.isAvailable(),"free denied");check(!LunagramFeedController.saveSelection(session,Arrays.asList(9L)),"free cannot save source");
+        check(LunagramFeedController.selected(0).equals(new LinkedHashSet<>(Arrays.asList(7L))),"source choices preserved on expiry");
+        check(LumaAccountData.prefs.writes==1,"denial not a write");
+        LunagramSubscriptionAccess.allowed=true;UserConfig.users[0].owner=200;
+        check(!session.isCurrent(),"owner changed");check(!LunagramFeedController.saveSelection(session,Arrays.asList(9L)),"stale owner cannot commit");
+        UserConfig.users[0].owner=100;LunagramSubscriptionClient.epochs[0]++;
+        check(!session.isCurrent(),"same owner re-login not same session");check(!LunagramFeedController.saveSelection(session,Arrays.asList(9L)),"old epoch cannot commit");
+        session=new LunagramFeedController.AccessSession(0);UserConfig.selectedAccount=1;
+        check(!session.isCurrent(),"other selected account denied");check(!LunagramFeedController.saveSelection(session,Arrays.asList(9L)),"background source commit denied");
+        check(LunagramFeedController.selected(0).contains(7L),"identity failure preserves sources");
+    }
+    static void loadAndRevoke() {
+        reset();LunagramFeedController feed=create();feed.refresh();
+        check(ConnectionsManager.instance.requests.size()==1&&feed.loading(),"authorized history starts");
+        ConnectionsManager.instance.reply(0,history());check(feed.posts().size()==24,"authorized history rendered");
+        boolean readOnly=false;try{feed.posts().clear();}catch(UnsupportedOperationException expected){readOnly=true;}
+        check(readOnly,"consumer cannot inject/clear controller posts");
+        feed.next();check(feed.posts().size()==40,"pagination drains buffered entries");
+        int writes=MessagesStorage.instance.writes, peerWrites=MessagesController.instance.peerWrites;
+        feed.loadReactions(7,full->{throw new AssertionError("revoked picker callback");});
+        MessageObject p=post();feed.react(p,new TLRPC.Reaction(),ok->{throw new AssertionError("revoked react callback");});
+        int count=ConnectionsManager.instance.requests.size();
+        LunagramSubscriptionAccess.allowed=false;NotificationCenter.instance.post(0,NotificationCenter.lunagramSubscriptionChanged);
+        check(feed.posts().isEmpty()&&!feed.loading()&&!feed.hasError()&&!feed.hasNewPosts(),"live expiry clears presentation and spinner");
+        check(ConnectionsManager.instance.cancels==count,"all transport work cancelled");
+        check(LunagramFeedController.selected(0).contains(7L)&&MessagesStorage.instance.writes==writes,"expiry preserves saved sources and cache");
+        for(int i=0;i<count;i++){Object body=ConnectionsManager.instance.requests.get(i).body;ConnectionsManager.instance.reply(i,body instanceof TLRPC.TL_messages_sendReaction?new TLRPC.Updates():body instanceof TLRPC.TL_channels_getFullChannel?new TLRPC.TL_messages_chatFull():history());}
+        check(feed.posts().isEmpty()&&p.selected==0&&MessagesController.instance.peerWrites==peerWrites&&MessagesStorage.instance.writes==writes&&MessagesController.instance.updates==0,"late responses cannot render/cache/react");
+        feed.refresh();feed.next();feed.retry();feed.loadReactions(7,x->{ });feed.react(p,new TLRPC.Reaction(),x->{ });
+        check(ConnectionsManager.instance.requests.size()==count,"all public network entries denied");
+        LunagramSubscriptionAccess.allowed=true;NotificationCenter.instance.post(0,NotificationCenter.lunagramSubscriptionChanged);
+        check(ConnectionsManager.instance.requests.size()==count+1,"renewal reloads existing selection");
+        ConnectionsManager.instance.reply(count,history());check(feed.posts().size()==24,"renewal usable");
+        feed.close();int after=changes;NotificationCenter.instance.post(0,NotificationCenter.lunagramSubscriptionChanged);feed.posts();
+        check(changes==after&&feed.posts().isEmpty(),"destroy removes observer without reentrant display");
+    }
+    static void responseBoundaries() {
+        for(int boundary=0;boundary<4;boundary++) {
+            reset();LunagramFeedController feed=create();feed.refresh();
+            if(boundary==0)LunagramSubscriptionAccess.allowed=false;
+            if(boundary==1)UserConfig.users[0].owner=200;
+            if(boundary==2)LunagramSubscriptionClient.epochs[0]++;
+            if(boundary==3)UserConfig.selectedAccount=1;
+            ConnectionsManager.instance.reply(0,history());
+            check(feed.posts().isEmpty()&&MessagesStorage.instance.writes==0&&MessagesController.instance.peerWrites==0,"history boundary "+boundary);
+            check(!feed.loading(),"invalid callback clears load "+boundary);
+        }
+        reset();LunagramFeedController feed=create();feed.refresh();feed.refresh();int changesBefore=changes;
+        ConnectionsManager.instance.reply(0,history());check(feed.posts().isEmpty()&&changes==changesBefore,"old generation cannot accept after refresh");
+        ConnectionsManager.instance.reply(1,history());check(feed.posts().size()==24,"current generation accepts");feed.close();
+        reset();MessagesController.instance.chats.clear();feed=create();feed.refresh();LunagramSubscriptionClient.epochs[0]++;
+        MessagesStorage.drain();check(ConnectionsManager.instance.requests.isEmpty()&&MessagesController.instance.peerWrites==0,"queued storage cannot restart an old login");
+        for(int kind=0;kind<3;kind++) {
+            reset();feed=create();MessageObject p=post();int[] results={0};
+            if(kind==0)feed.loadReactions(7,x->results[0]++);
+            if(kind==1)feed.react(p,new TLRPC.Reaction(),x->results[0]++);
+            if(kind==2)feed.reloadPost(p,feed.generation);
+            LunagramSubscriptionClient.epochs[0]++;
+            ConnectionsManager.instance.reply(0,kind==0?new TLRPC.TL_messages_chatFull():kind==1?new TLRPC.Updates():history());
+            check(results[0]==0&&p.selected==0&&MessagesController.instance.peerWrites==0&&MessagesController.instance.updates==0,"reaction/reload epoch boundary "+kind);
+        }
+    }
+    static void notificationsAndUnpaid() {
+        reset();LunagramFeedController feed=create();feed.refresh();ConnectionsManager.instance.reply(0,history());
+        NotificationCenter.instance.post(0,NotificationCenter.didReceiveNewMessages,-7L,new ArrayList<>(),false);check(feed.hasNewPosts(),"new post indicator active");
+        int before=ConnectionsManager.instance.requests.size();feed.react(post(),new TLRPC.TL_reactionPaid(),x->{throw new AssertionError("paid reaction");});check(ConnectionsManager.instance.requests.size()==before,"no paid reactions");
+        MessageObject wrong=post();wrong.currentAccount=1;feed.react(wrong,new TLRPC.Reaction(),x->{throw new AssertionError("wrong account reaction");});
+        check(ConnectionsManager.instance.requests.size()==before,"cross-account post cannot react");
+        LunagramSubscriptionAccess.allowed=false;NotificationCenter.instance.post(0,NotificationCenter.didReceiveNewMessages,-7L,new ArrayList<>(),false);
+        check(feed.posts().isEmpty()&&!feed.hasNewPosts(),"message event cannot retain stale feed");
+        reset();LunagramSubscriptionAccess.allowed=false;feed=create();feed.refresh();
+        check(ConnectionsManager.instance.requests.isEmpty()&&feed.posts().isEmpty(),"free startup no network");
+    }
+    public static void main(String[] args) {identityAndPreferences();loadAndRevoke();responseBoundaries();notificationsAndUnpaid();System.out.println("PASS full production feed controller: "+checks+" checks");}
+}

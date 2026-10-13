@@ -1,0 +1,200 @@
+import org.telegram.ui.Components.LumaComposerGeometry;
+
+/** Actual composer preview layout methods, with window/view boundaries modeled off-device. */
+public final class ReplyPreview150Probe {
+    /* ACTUAL_BACKGROUND */
+    /* ACTUAL_CONTROL_VISIBLE */
+    /* ACTUAL_CONTROL_RIGHT */
+    /* ACTUAL_REPLY_PANEL */
+
+    final int[] liquidInputControlLocation = new int[2], liquidInputContainerLocation = new int[2];
+    final InputContainer chatInputViewsContainer = new InputContainer();
+    final EnterView chatActivityEnterView = new EnterView();
+    final View chatActivityEnterTopView = new View();
+    final ReplyContainer replyLayout = new ReplyContainer();
+    final View replyCloseImageView = new View();
+    static int assertions;
+    static void check(boolean valid, String message) {
+        assertions++;
+        if (!valid) throw new AssertionError(message);
+    }
+    static int dp(float value) { return (int) Math.ceil(value * AndroidUtilities.density); }
+    static final class AndroidUtilities { static float density = 1f; }
+    static final class LiteMode {
+        static final int FLAG_LIQUID_GLASS = 1;
+        static boolean enabled;
+        static boolean isEnabled(int value) { return enabled; }
+    }
+    static final class FrameLayout {
+        static final class LayoutParams { int width = -1, height = 48, leftMargin, rightMargin, topMargin; }
+    }
+    static class View {
+        static final int VISIBLE = 0, INVISIBLE = 4, GONE = 8;
+        final FrameLayout.LayoutParams params = new FrameLayout.LayoutParams();
+        int windowX, width, visibility = VISIBLE, layoutCalls;
+        boolean attached = true;
+        float alpha = 1f, scaleX = 1f;
+        int getVisibility() { return visibility; }
+        float getAlpha() { return alpha; }
+        float getScaleX() { return scaleX; }
+        int getMeasuredWidth() { return width; }
+        boolean isAttachedToWindow() { return attached; }
+        void getLocationInWindow(int[] destination) { destination[0] = windowX; destination[1] = 0; }
+        FrameLayout.LayoutParams getLayoutParams() { return params; }
+        void setLayoutParams(FrameLayout.LayoutParams value) { check(value == params, "layout identity retained"); layoutCalls++; }
+    }
+    static final class InputContainer extends View {
+        int centerLeft, centerRight; boolean drawLeft;
+        void setSplitInputLayout(int left, int right, boolean drawLeft, boolean drawRight) {
+            centerLeft = left; centerRight = right; this.drawLeft = drawLeft;
+        }
+    }
+    static final class EnterView extends View {
+        final View bot = new View(), sender = new View(), attach = new View();
+        boolean recording;
+        EnterView() { bot.visibility = sender.visibility = GONE; attach.width = dp(44); }
+        View getBotCommandsMenuButton() { return bot; }
+        View getSenderSelectView() { return sender; }
+        View getAttachButton() { return attach; }
+        boolean isRecordingUiVisible() { return recording; }
+    }
+    static final class ReplyContainer extends View {
+        private int liquidGlassContentInsetPx = dp(64);
+        final Layout[] layouts = {new Layout(), new Layout()};
+        /* ACTUAL_CONTENT_SETTER */
+        /* ACTUAL_OUTER_MODE */
+        Layout current() { return layouts[0]; }
+        final class Layout extends View {
+            boolean liquidGlassMode;
+            final View icon = new View(), name = new View(), obj = new View(), objHint = new View(), image = new View();
+            Layout() { image.visibility = INVISIBLE; }
+            /* ACTUAL_LAYOUT_MODE */
+            /* ACTUAL_GET_PX */
+            /* ACTUAL_GET_DP */
+            /* ACTUAL_LEFT_MARGIN */
+            /* ACTUAL_RIGHT_MARGIN */
+        }
+    }
+    private static int totalLayoutCalls(ReplyPreview150Probe owner) {
+        int result = owner.replyLayout.layoutCalls + owner.replyCloseImageView.layoutCalls;
+        for (ReplyContainer.Layout row : owner.replyLayout.layouts) {
+            result += row.icon.layoutCalls + row.name.layoutCalls + row.obj.layoutCalls + row.objHint.layoutCalls + row.image.layoutCalls;
+        }
+        return result;
+    }
+    private static void verify() {
+        for (float density : new float[]{1f, 1.5f, 2f, 2.625f, 3f, 4f}) {
+            AndroidUtilities.density = density;
+            for (int width : new int[]{220, 240, 320, 360, 411, 600, 1024}) {
+                for (int menuWidth : new int[]{0, 44, 68, 120, 180}) {
+                    for (int rowOrigin : new int[]{7, 17}) {
+                        ReplyPreview150Probe owner = new ReplyPreview150Probe();
+                        owner.chatInputViewsContainer.width = dp(width);
+                        owner.chatInputViewsContainer.windowX = dp(100);
+                        owner.chatActivityEnterTopView.windowX = dp(100) + dp(rowOrigin);
+                        owner.chatActivityEnterTopView.width = dp(width) - 2 * dp(rowOrigin);
+                        owner.chatActivityEnterView.bot.width = dp(menuWidth);
+                        owner.chatActivityEnterView.bot.windowX = dp(100) + dp(15);
+                        owner.chatActivityEnterView.bot.visibility = menuWidth == 0 ? View.GONE : View.VISIBLE;
+                        LiteMode.enabled = true;
+                        owner.updateLiquidInputBackgroundGeometry();
+                        int centerLeft = menuWidth == 0 ? dp(52) : Math.max(dp(52), dp(15) + dp(menuWidth) + dp(6));
+                        int visibleBubbleLeft = Math.min(centerLeft, dp(width) - dp(52) - dp(24)) + dp(7);
+                        int expectedInset = Math.max(dp(64), visibleBubbleLeft + dp(12) - dp(rowOrigin));
+                        for (ReplyContainer.Layout row : owner.replyLayout.layouts) {
+                            check(row.icon.params.leftMargin == dp(8), "header pencil aligns with the editing emoji, not the old left edge");
+                            check(row.icon.params.leftMargin + dp(52) <= row.name.params.leftMargin,
+                                    "inset pencil stays in its own column before title/thumbnail");
+                            check(row.getTextInsetPx(false) == expectedInset, "preview follows actual bot bubble origin, not static64");
+                            check(row.name.params.leftMargin == expectedInset && row.obj.params.leftMargin == expectedInset
+                                            && row.objHint.params.leftMargin == expectedInset && row.image.params.leftMargin == expectedInset,
+                                    "all title/site/hint/thumbnail origins update on both recycled rows");
+                            check(row.getTextInsetPx(true) == expectedInset + dp(44), "thumbnail reserve is added once in pixels");
+                            check(row.name.params.rightMargin == 0 && row.obj.params.rightMargin == 0,
+                                    "right close reservation has one owner, no doubled child inset");
+                        }
+                        int rowRight = owner.replyLayout.params.rightMargin;
+                        int closeRight = owner.replyCloseImageView.params.rightMargin;
+                        int closeWidth = owner.replyCloseImageView.params.width;
+                        check(closeWidth >= 48 * density && owner.replyCloseImageView.params.height >= 48 * density,
+                                "close native hit target is48x48");
+                        check(rowRight - closeRight - closeWidth == dp(8), "text ends8dp before native close hit region");
+                        int rowWidth = Math.max(0, owner.chatActivityEnterTopView.width - rowRight);
+                        int textWidth = Math.max(0, rowWidth - expectedInset);
+                        for (float fontScale : new float[]{1f, 1.3f, 2f}) {
+                            for (String text : new String[]{"YouTube", "https://youtube.com/watch?v=long-long-long-localized-url",
+                                    "Очень длинное название видео на YouTube — 日本語の動画タイトル", ""}) {
+                                // Android SimpleTextView ellipsizes to measured width; simulate only bounds,
+                                // never assert glyph shape or claim a rendered font-scale screenshot.
+                                float measuredGlyphWidth = text.length() * 14 * density * fontScale;
+                                float visibleTextWidth = Math.min(textWidth, measuredGlyphWidth);
+                                check(textWidth == 0 || expectedInset + visibleTextWidth <= rowWidth,
+                                        "long/localized/large-font preview is bounded before the close region");
+                            }
+                        }
+                        int layoutCalls = totalLayoutCalls(owner);
+                        owner.updateLiquidInputBackgroundGeometry();
+                        owner.updateLiquidInputBackgroundGeometry();
+                        check(totalLayoutCalls(owner) == layoutCalls, "unchanged preDraw geometry cannot requestLayout repeatedly");
+
+                        // Menu hide/localization resize, a reused row with thumbnail, then glass-off.
+                        owner.chatActivityEnterView.bot.visibility = View.GONE;
+                        owner.updateLiquidInputBackgroundGeometry();
+                        int ordinaryInset = Math.max(dp(64), dp(52) + dp(7) + dp(12) - dp(rowOrigin));
+                        check(owner.replyLayout.current().getTextInsetPx(false) == ordinaryInset, "bot hide restores actual ordinary bubble inset");
+                        owner.replyLayout.current().image.visibility = View.VISIBLE;
+                        owner.updateLiquidGlassReplyPanelLayout(true);
+                        check(owner.replyLayout.current().name.params.leftMargin == ordinaryInset + dp(44),
+                                "recycled thumbnail row uses current dynamic content origin");
+                        LiteMode.enabled = false;
+                        owner.updateLiquidInputBackgroundGeometry();
+                        for (ReplyContainer.Layout row : owner.replyLayout.layouts) {
+                            check(row.icon.params.leftMargin == 0, "glass-off restores the stock pencil origin on both rows");
+                        }
+                        check(owner.replyLayout.current().getTextInsetPx(false) == dp(52)
+                                        && owner.replyLayout.current().getTextInsetPx(true) == dp(96),
+                                "no-liquid stock52/96 insets are independent of menu/window state");
+                        check(owner.replyLayout.params.rightMargin == dp(52)
+                                        && owner.replyCloseImageView.params.width == dp(52)
+                                        && owner.replyCloseImageView.params.height == dp(46)
+                                        && owner.replyCloseImageView.params.rightMargin == 0,
+                                "no-liquid original close52x46 and parent reservation remain unchanged");
+                    }
+                }
+            }
+            ReplyPreview150Probe detached = new ReplyPreview150Probe();
+            detached.chatInputViewsContainer.width = dp(360);
+            detached.chatActivityEnterTopView.attached = false;
+            LiteMode.enabled = true;
+            detached.updateLiquidInputBackgroundGeometry();
+            check(detached.replyLayout.current().getTextInsetPx(false) == dp(52) + dp(12),
+                    "before attach, ordinary content uses original64 fallback without absolute window origin");
+            detached.chatActivityEnterView.attach.visibility = View.GONE;
+            detached.updateLiquidInputBackgroundGeometry();
+            check(detached.replyLayout.current().getTextInsetPx(false) == dp(64),
+                    "edit/no-attachment label starts after the pencil icon and aligns with editor text");
+            detached.chatActivityEnterView.recording = true;
+            detached.updateLiquidInputBackgroundGeometry();
+            check(detached.replyLayout.current().getTextInsetPx(false) == dp(52) + dp(12),
+                    "recording indicator restores left-island content origin");
+            int before = totalLayoutCalls(detached);
+            detached.replyLayout.setLiquidGlassContentInset(-50);
+            check(detached.replyLayout.current().getTextInsetPx(false) == dp(64), "invalid negative inset cannot overlap header icon");
+            int after = totalLayoutCalls(detached);
+            detached.replyLayout.setLiquidGlassContentInset(-1);
+            check(totalLayoutCalls(detached) == after && after >= before, "equivalent invalid insets do not churn layout");
+        }
+        System.out.println("PASS: " + assertions + " extracted actual composer preview layout checks; modeled window/native bounds, no device text rendering.");
+    }
+    public static void main(String[] args) {
+        boolean expectFailure = args.length > 0 && "--expect-failure".equals(args[0]);
+        try {
+            verify();
+        } catch (AssertionError failure) {
+            if (!expectFailure) throw failure;
+            System.out.println("PASS: negative mutation rejected: " + failure.getMessage());
+            return;
+        }
+        if (expectFailure) throw new IllegalStateException("Negative mutation was not detected");
+    }
+}

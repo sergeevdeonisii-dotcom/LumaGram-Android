@@ -25,6 +25,8 @@ import android.os.Build;
 import android.text.Layout;
 import android.text.Spannable;
 import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.ReplacementSpan;
 import android.text.StaticLayout;
 import android.text.TextPaint;
 import android.text.TextUtils;
@@ -39,6 +41,10 @@ import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.Emoji;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.SharedConfig;
+import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LunagramExperienceSettings;
+import org.telegram.messenger.LunagramSendEffectGeometry;
+import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.MessageDrawable;
@@ -54,6 +60,7 @@ import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.ReplyMessageLine;
 import org.telegram.ui.Components.chat.ViewPositionWatcher;
 import org.telegram.ui.Components.spoilers.SpoilerEffect;
+import java.util.IdentityHashMap;
 
 public class TextMessageEnterTransition implements MessageEnterTransitionContainer.Transition {
     float fromRadius;
@@ -121,11 +128,20 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
     private final Theme.ResourcesProvider resourcesProvider;
 
     private final PointF tmpPointF = new PointF();
+    private int sendEffect;
+    private final Path revealPath = new Path();
+    private final IdentityHashMap<CharSequence, int[]> revealBoundaries = new IdentityHashMap<>();
+    private Drawable flightPlane;
 
     @SuppressLint("WrongConstant")
     public TextMessageEnterTransition(ChatMessageCell messageView, ChatActivity chatActivity, RecyclerListView listView, MessageEnterTransitionContainer container, Theme.ResourcesProvider resourcesProvider) {
         this.resourcesProvider = resourcesProvider;
-        currentAccount = UserConfig.selectedAccount;
+        currentAccount = chatActivity.getCurrentAccount();
+        // A disabled system/app animator must never hide the live cell for a custom effect.
+        if (!SharedConfig.animationsEnabled() || Build.VERSION.SDK_INT >= 26 && !ValueAnimator.areAnimatorsEnabled()) return;
+        if (!LiteMode.isPowerSaverApplied() && SharedConfig.getDevicePerformanceClass() != SharedConfig.PERFORMANCE_CLASS_LOW) {
+            sendEffect = LunagramExperienceSettings.sendEffect(currentAccount);
+        }
         if (messageView.getMessageObject().textLayoutBlocks == null || messageView.getMessageObject().textLayoutBlocks.size() > 1 || messageView.getMessageObject().textLayoutBlocks.isEmpty() || messageView.getMessageObject().textLayoutBlocks.get(0).textLayout.getLineCount() > 10) {
             return;
         }
@@ -387,7 +403,7 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
 
 
         animator.setInterpolator(new LinearInterpolator());
-        animator.setDuration(ChatListItemAnimator.DEFAULT_DURATION);
+        animator.setDuration(sendEffect == 1 ? 460 : sendEffect == 2 ? 420 : sendEffect == 3 ? 540 : ChatListItemAnimator.DEFAULT_DURATION);
 
         container.addTransition(this);
         notificationsLocker.lock();
@@ -435,6 +451,99 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
     private float listViewTargetBottomPadding;
 
     public void onDraw(Canvas canvas) {
+        if (sendEffect != 0 && LunagramExperienceSettings.sendEffect(currentAccount) == 0) sendEffect = 0;
+        if (messageView == null || messageView.getMessageObject() == null || messageView.getMessageObject().stableId != messageId) return;
+        final int save = canvas.save();
+        final float originalProgress = progress;
+        try {
+            float p = LunagramSendEffectGeometry.clamp(progress);
+            if (sendEffect == 2) {
+                float x = messageView.getX() + listView.getX() - container.getX();
+                float y = messageView.getTop() + messageView.getPaddingTop() + listView.getTop() - container.getY()
+                    - (listViewTargetBottomPadding - listView.getPaddingBottom());
+                float centerX = x + (messageView.getBackgroundDrawableLeft() + messageView.getBackgroundDrawableRight()) / 2f;
+                float centerY = y + messageView.getBackgroundDrawableTop();
+                canvas.translate(0, AndroidUtilities.dpf2(LunagramSendEffectGeometry.dropY(p)));
+                float scale = LunagramSendEffectGeometry.dropScale(p);
+                canvas.scale(scale, scale, centerX, centerY);
+                canvas.saveLayerAlpha(0, 0, container.getWidth(), container.getHeight(), (int) (255 * Math.min(1, p / .16f)));
+                progress = 1f;
+            } else if (sendEffect == 3) {
+                drawFlightPlane(canvas, p);
+                float arrival = LunagramSendEffectGeometry.arrival(p);
+                if (arrival == 0) return;
+                // Arrival changes the actual transition, not a decoration over a completed message.
+                canvas.saveLayerAlpha(0, 0, container.getWidth(), container.getHeight(), (int) (255 * Math.min(1, arrival * 3)));
+                float x = messageView.getX() + listView.getX() - container.getX()
+                    + (messageView.getBackgroundDrawableLeft() + messageView.getBackgroundDrawableRight()) / 2f;
+                float y = messageView.getTop() + messageView.getPaddingTop() + listView.getTop() - container.getY()
+                    - (listViewTargetBottomPadding - listView.getPaddingBottom()) + messageView.getBackgroundDrawableTop();
+                float scale = .86f + .14f * CubicBezierInterpolator.EASE_OUT_QUINT.getInterpolation(arrival);
+                canvas.scale(scale, scale, x, y);
+                progress = 1f;
+            }
+            drawTransition(canvas);
+        } finally {
+            progress = originalProgress;
+            // The old draw path has conditional nested layers. Never leak clip/translation to another message.
+            canvas.restoreToCount(save);
+        }
+    }
+
+    private void drawFlightPlane(Canvas canvas, float p) {
+        if (p >= .60f) return;
+        if (flightPlane == null) {
+            flightPlane = messageView.getContext().getResources().getDrawable(R.drawable.msg_send).mutate();
+            flightPlane.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_chat_messagePanelSend), PorterDuff.Mode.SRC_IN));
+        }
+        float t = Math.min(1, p / .46f);
+        float fromX = fromStartX + layout.getWidth() * scaleFrom - container.getX();
+        float fromY = fromStartY - container.getY();
+        View sendButton = enterView.getSendButton();
+        if (sendButton != null && sendButton.getMeasuredWidth() > 0) {
+            ViewPositionWatcher.computeCoordinatesInParent(sendButton, chatActivity.contentView, tmpPointF);
+            fromX = tmpPointF.x + sendButton.getMeasuredWidth() / 2f - container.getX();
+            fromY = tmpPointF.y + sendButton.getMeasuredHeight() / 2f - container.getY();
+        }
+        float toX = messageView.getX() + listView.getX() - container.getX() + messageView.getBackgroundDrawableRight() - dp(24);
+        float toY = messageView.getTop() + messageView.getPaddingTop() + listView.getTop() - container.getY()
+            - (listViewTargetBottomPadding - listView.getPaddingBottom()) + messageView.getBackgroundDrawableTop() + dp(22);
+        float controlX = Math.min(container.getWidth() - dp(20), Math.max(fromX, toX) + dp(48));
+        float controlY = Math.min(fromY, toY) - dp(52);
+        float x = (1-t)*(1-t)*fromX + 2*(1-t)*t*controlX + t*t*toX;
+        float y = (1-t)*(1-t)*fromY + 2*(1-t)*t*controlY + t*t*toY;
+        final int save = canvas.save();
+        canvas.translate(x, y);
+        canvas.rotate(-18 * (float) Math.sin(t * Math.PI));
+        int size = dp(24);
+        flightPlane.setBounds(-size/2, -size/2, size/2, size/2);
+        flightPlane.setAlpha((int) (255 * Math.min(1, p / .08f) * (1 - LunagramSendEffectGeometry.clamp((p - .46f) / .14f))));
+        flightPlane.draw(canvas);
+        canvas.restoreToCount(save);
+    }
+
+    private void clipRevealedText(Canvas canvas, StaticLayout target, float offsetX, float offsetY) {
+        if (sendEffect != 1 || progress >= 1 || target == null) return;
+        CharSequence text = target.getText();
+        int[] boundaries = revealBoundaries.get(text);
+        if (boundaries == null) {
+            boundaries = LunagramSendEffectGeometry.boundaries(text);
+            revealBoundaries.put(text, boundaries);
+        }
+        int end = LunagramSendEffectGeometry.revealEnd(boundaries, Math.min(1, progress / .90f));
+        if (end > 0 && end < text.length() && text instanceof Spanned) {
+            Spanned spanned = (Spanned) text;
+            for (ReplacementSpan span : spanned.getSpans(end - 1, end, ReplacementSpan.class)) {
+                if (spanned.getSpanEnd(span) > end) end = spanned.getSpanEnd(span);
+            }
+        }
+        revealPath.reset();
+        if (end > 0) target.getSelectionPath(0, Math.min(text.length(), end), revealPath);
+        revealPath.offset(offsetX, offsetY);
+        canvas.clipPath(revealPath);
+    }
+
+    private void drawTransition(Canvas canvas) {
         if (drawBitmaps && !initBitmaps && crossfadeTextBitmap != null && messageView.getTransitionParams().wasDraw) {
             initBitmaps = true;
             Canvas bitmapCanvas = new Canvas(crossfadeTextBitmap);
@@ -773,6 +882,8 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
         canvas.translate(fromX * (1f - progressX) + (toX - toXOffset) * progressX, fromY * (1f - progress) + (toY + textLayoutBlock.textYOffset(messageView.getMessageObject().textLayoutBlocks, messageView.transitionParams)) * progress);
         canvas.scale(scale, scale * scale2, 0, 0);
 
+        clipRevealedText(canvas, layout, 0, 0);
+
         if (drawBitmaps) {
             if (crossfade) {
                 bitmapPaint.setAlpha((int) (255 * (1f - alphaProgress)));
@@ -803,6 +914,7 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
             canvas.save();
             canvas.translate(fromX * (1f - progressX) + (toX - toXOffsetRtl) * progressX, fromY * (1f - progress) + (toY + textLayoutBlock.textYOffset(messageView.getMessageObject().textLayoutBlocks, messageView.transitionParams)) * progress);
             canvas.scale(scale, scale * scale2, 0, 0);
+            clipRevealedText(canvas, rtlLayout, 0, 0);
             if (drawBitmaps) {
                 if (crossfade) {
                     bitmapPaint.setAlpha((int) (255 * (1f - alphaProgress)));
@@ -832,6 +944,10 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
             canvas.translate(messageView.getLeft() + listView.getX() - container.getX() + (fromX - toX) * (1f - progressX), messageViewY + (fromY - toY) * (1f - progress));
             canvas.scale(scale, scale * scale2, messageView.getTextX(), messageView.getTextY());
             canvas.translate(0, -crossfadeTextOffset);
+
+            float blockRtl = textLayoutBlock.isRtl() ? currentMessageObject.textXOffset - (textLayoutBlock.quote ? dp(10) : 0) : 0;
+            clipRevealedText(canvas, textLayoutBlock.textLayout, messageView.getTextX() - blockRtl,
+                messageView.getTextY() + textLayoutBlock.textYOffset(currentMessageObject.textLayoutBlocks, messageView.transitionParams) + textLayoutBlock.padTop);
 
             if (crossfadeTextBitmap != null) {
                 bitmapPaint.setAlpha((int) (255 * alphaProgress));

@@ -8,5 +8,8 @@ function Add-FeatureAccessFixtures([string[]]$Sources, [string]$Repo) {
     if ('LunagramSubscriptionAccess.java' -notin $names) {
         $result += Join-Path $PSScriptRoot 'LunagramSubscriptionAccess.java'
     }
+    if ('LumaExportSession.java' -in $names -and 'LunagramSubscriptionClient.java' -notin $names) {
+        $result += Join-Path $PSScriptRoot 'LunagramSubscriptionClient.java'
+    }
     return $result
 }

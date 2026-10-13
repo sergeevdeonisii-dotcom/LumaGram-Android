@@ -1,0 +1,40 @@
+{
+  "status": "source-and-host-verified-not-device-verified",
+  "surface": "LunagramWorkspaceActivity",
+  "direction": {
+    "intent": "Explicit private per-chat workspace with six clearly separated categories",
+    "system": "Existing Telegram native action bar, UniversalRecyclerView rounded sections, full-page scrollable forms and previews",
+    "avoid": ["large overflowing action menus", "automatic message-content capture", "automatic draft restoration", "new visual theme"],
+    "privacy": "No secret/TTL/noforwards or locked contexts; owner/epoch/selected-account session; encrypted local data only",
+    "expiry": "Creating and modifying require Ultra; viewing, copying, exporting, deleting and navigating existing references remain available"
+  },
+  "features": ["text templates", "named bookmark collections", "private checklists with optional message reference", "manual draft versions with compare and confirmed restore", "named literal chat search presets", "manual continue-reading marker"],
+  "checks": {
+    "hostModelStoreEncryptionAndSourceContracts": 126,
+    "actualExtractedNavigation": 12,
+    "compiledNegativeControls": 7,
+    "hostHeapMiB": 128,
+    "actualAndroid36JavaSources": 8,
+    "apiHeapMiB": 384,
+    "localeKeysEach": 45,
+    "englishRussianAapt2Compile": "pass",
+    "diffCheck": "pass"
+  },
+  "artifacts": {
+    "host": "Tools/tests/.runs/workspace/31049e1b16cf4a8d8f9c29b613461db0",
+    "api": "Tools/tests/.runs/workspace-api/9a7b4afbb429484594bd7db0c566436e",
+    "resources": "Tools/tests/.runs/workspace-resources-e50e7ff27f454fc09f27c5e67a13a0df"
+  },
+  "independentReview": {
+    "reviewer": "round_startup_fix_now",
+    "closedFindings": ["guard native editor Copy/Cut/Share callbacks against revoked context", "capture immutable composer draft revision and formatting token before preview, not during Apply"],
+    "additionalHardening": ["reject malformed Unicode instead of silently replacing during UTF-8 persistence", "never refresh a stale draft token on activity resume", "close only contiguous same-session workspace frames before navigation"]
+  },
+  "limits": [
+    "Host tests use Android/account/storage seams and real JSON parser plus real AES-GCM envelope; Android Keystore itself is not exercised",
+    "API probe uses real cached Android 36 and app classes but generated resource identifiers; aapt2 compile is not a full resource link",
+    "No Android runtime rendering, font-scale/RTL geometry, keyboard, clipboard recipient, fragment animation or physical-device tests performed",
+    "No APK built, signed, deployed or delivered by this module task",
+    "Export is explicit JSON to clipboard with disclosure, not automatic file sharing"
+  ]
+}

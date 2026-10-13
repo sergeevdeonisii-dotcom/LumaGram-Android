@@ -1,0 +1,199 @@
+/** Runs actual oval rail and pet host placement with simulated native window boundaries. */
+public final class PetMount150Probe {
+    /* ACTUAL_PET_HOST */
+    /* ACTUAL_PET_VISIBLE */
+    /* ACTUAL_PET_ON_RAIL */
+    /* ACTUAL_PET_PLACEMENT */
+
+    static int assertions;
+    static float density = 1;
+    static int dp(float value) { return (int) Math.ceil(value * density); }
+    static void check(boolean valid, String message) { assertions++; if (!valid) throw new AssertionError(message); }
+    static boolean same(float a, float b) { return Math.abs(a - b) < .01f; }
+    final EnterView chatActivityEnterView = new EnterView();
+    final View contentView = new View(), actionBar = new View();
+    final InputContainer chatInputViewsContainer = new InputContainer();
+    final Priorities bottomViewsVisibilityController = new Priorities();
+    final int[] lunagramInputLocation = new int[2], lunagramContentLocation = new int[2];
+    final RectF lunagramPetRailBounds = new RectF();
+    boolean lunagramPetOnRail, paused, preview; int paddingCalls; float extraPetSpace;
+    float lunagramPetRailLeft = Float.NaN, lunagramPetRailRight = Float.NaN;
+    int currentAccount;
+    static final int MESSAGE_INPUT_CONTAINER = 1;
+    boolean isPaused() { return paused; }
+    boolean isInPreviewMode() { return preview; }
+    void checkUi_chatListViewPaddings() { paddingCalls++; extraPetSpace = isLunagramPetVisible() ? dp(50) : 0; }
+    static final class Priorities { int priority = 1; int getCurrentPriorityContainerId() { return priority; } }
+    static final class LunagramExperienceSettings { static final int[] pets = {1, 0}; static int pet(int account) { return pets[account]; } }
+    static final class LiteMode { static int configuredHeight = 44; static int getLiquidGlassInputHeightDp() { return configuredHeight; } }
+    static class View {
+        static final int VISIBLE = 0, GONE = 8;
+        int width, height, top, windowX, windowY, visibility = VISIBLE;
+        float alpha = 1, translationX, translationY;
+        boolean attached = true;
+        int getMeasuredWidth() { return width; } int getMeasuredHeight() { return height; }
+        int getWidth() { return width; } int getHeight() { return height; }
+        int getTop() { return top; } int getBottom() { return top + height; }
+        int getVisibility() { return visibility; }
+        boolean isAttachedToWindow() { return attached; }
+        void getLocationInWindow(int[] result) { result[0] = windowX; result[1] = windowY; }
+        void setAlpha(float value) { alpha = value; }
+        void setTranslationX(float value) { translationX = value; }
+        void setTranslationY(float value) { translationY = value; }
+    }
+    static final class PetView extends View {
+        boolean paused; int railCalls, setterActivity; float left, right;
+        static int getFloorOffsetDp() { return 22; }
+        void setPaused(boolean value) { if (paused == value) return; paused = value; setterActivity++; }
+        @Override void setAlpha(float value) { if (alpha == value) return; alpha = value; setterActivity++; }
+        void setRailBounds(float l, float r) { if (railCalls > 0 && left == l && right == r) return; left = l; right = r; railCalls++; setterActivity++; }
+    }
+    static final class EnterView extends View {
+        final PetView lunagramPetView = new PetView();
+        boolean recording, recordedPreview;
+        boolean isRecordingUiVisible() { return recording; }
+        boolean hasAudioToSend() { return recordedPreview; }
+    }
+    static final class RectF {
+        float left, top, right, bottom;
+        void setEmpty() { left = top = right = bottom = 0; }
+        void set(float l, float t, float r, float b) { left = l; top = t; right = r; bottom = b; }
+    }
+    static final class Drawable { int alpha = 255; int getAlpha() { return alpha; } }
+    static final class InputContainer extends View {
+        static final int INPUT_BUBBLE_RADIUS = 22;
+        boolean drawInputBackground = true, splitInputEnabled = true;
+        final Drawable blurredBackgroundDrawable = new Drawable();
+        Drawable leftButtonBackgroundDrawable = new Drawable(), rightButtonBackgroundDrawable = new Drawable();
+        float inputBubbleHeight, bubbleInputTranlationY, inputBubbleOffsetLeft, inputBubbleOffsetRight;
+        int inputBubbleHeightRound, currentBlurredHeight, splitInputCenterInsetLeft, splitInputCenterInsetRight;
+        /* ACTUAL_PET_RAIL */
+    }
+    private static PetMount150Probe setup(int width, int height, int keyboard, int inputHeight, int inset, float translation) {
+        PetMount150Probe owner = new PetMount150Probe();
+        owner.contentView.width = dp(width) + dp(20); owner.contentView.height = dp(height) + dp(25);
+        owner.contentView.windowX = dp(100); owner.contentView.windowY = dp(43);
+        owner.actionBar.height = dp(56);
+        InputContainer input = owner.chatInputViewsContainer;
+        input.width = dp(width); input.height = dp(height);
+        input.windowX = owner.contentView.windowX + dp(5); input.windowY = owner.contentView.windowY + dp(25);
+        input.inputBubbleHeight = input.inputBubbleHeightRound = dp(inputHeight);
+        input.currentBlurredHeight = dp(inputHeight) + dp(9) + dp(keyboard);
+        input.splitInputCenterInsetLeft = dp(inset); input.splitInputCenterInsetRight = dp(52);
+        input.bubbleInputTranlationY = translation * density;
+        owner.chatActivityEnterView.lunagramPetView.height = dp(80);
+        owner.chatActivityEnterView.lunagramPetView.width = owner.contentView.width;
+        owner.chatActivityEnterView.lunagramPetView.top = dp(7);
+        return owner;
+    }
+    private static void verify() {
+        for (float testedDensity : new float[]{1f, 1.5f, 2f, 2.625f, 3f, 4f}) {
+            density = testedDensity;
+            for (int width : new int[]{240, 411, 800}) for (int height : new int[]{360, 640})
+            for (int keyboard : new int[]{0, 96, 240}) for (int inputHeight : new int[]{44, 92})
+            for (int inset : new int[]{52, 120, 220}) for (int configured : new int[]{40, 42, 44})
+            for (float translation : new float[]{-9.75f, 0f, 12.75f}) {
+                LiteMode.configuredHeight = configured;
+                PetMount150Probe owner = setup(width, height, keyboard, inputHeight, inset, translation);
+                InputContainer input = owner.chatInputViewsContainer;
+                RectF output = new RectF(); output.set(1, 2, 3, 4);
+                int originalHeight = Math.min(dp(inputHeight), dp(44));
+                int actualDiameter = Math.min(originalHeight, dp(configured));
+                int compactInset = Math.max(0, (originalHeight - actualDiameter) / 2);
+                int centerRight = dp(width) - dp(52), centerLeft = Math.min(dp(inset), centerRight - dp(24));
+                float expectedLeft = centerLeft + dp(7) + actualDiameter / 2f;
+                float expectedRight = centerRight - dp(7) - actualDiameter / 2f;
+                float expectedTop = input.height - input.currentBlurredHeight + (int) input.bubbleInputTranlationY + compactInset;
+                boolean hasRail = expectedRight - expectedLeft >= dp(56);
+                check(input.getPetRailBounds(output) == hasRail, "rail validity follows full body/tail footprint, not merely a point");
+                if (hasRail) {
+                    check(same(output.left, expectedLeft) && same(output.right, expectedRight),
+                            "flat rail stays beyond both rounded corners and drawable padding");
+                    check(same(output.top, expectedTop), "floor follows literal compact oval top, keyboard and integer drawable translation");
+                    check(same(output.bottom - output.top, Math.max(compactInset + 1, dp(inputHeight) - compactInset) - compactInset),
+                            "single/multiline visible oval height matches background without changing its layout");
+                } else check(output.left == 0 && output.top == 0 && output.right == 0 && output.bottom == 0,
+                        "invalid narrow rail clears reused output instead of retaining stale coordinates");
+                owner.updateLunagramPetPlacement();
+                PetView pet = owner.chatActivityEnterView.lunagramPetView;
+                float expectedY = expectedTop + dp(25) - dp(80) + dp(22);
+                boolean visible = hasRail && expectedY >= dp(56) && expectedY + dp(80) <= owner.contentView.height;
+                check(owner.isLunagramPetVisible() == visible, "host offscreen/keyboard guard agrees with available actionbar-to-window region");
+                check(pet.alpha == (visible ? 1 : 0) && pet.paused != visible,
+                        "visible rail runs; hidden/out-of-bounds rail pauses without visibility mutation");
+                check(pet.visibility == View.VISIBLE, "host hiding never sets GONE and cannot trap later resume");
+                check(owner.paddingCalls == 0 && owner.extraPetSpace == 0,
+                        "pet overlays messages without changing their padding or scroll position");
+                if (visible) {
+                    check(same(pet.top + pet.translationY + pet.height - dp(22), expectedTop + dp(25)),
+                            "pet feet/floor sit on actual oval edge, not composer top plus guessed offset");
+                    check(same(pet.left, expectedLeft + dp(5)) && same(pet.right, expectedRight + dp(5)),
+                            "container/window origins convert rail into full-width content overlay coordinates");
+                    check(pet.translationX == 0, "full-width overlay does not translate its origin into the input hitbox");
+                    int calls = pet.railCalls, activity = pet.setterActivity, padding = owner.paddingCalls;
+                    owner.updateLunagramPetPlacement(); owner.updateLunagramPetPlacement();
+                    check(pet.railCalls == calls, "identical draw geometry does not reset rail or its motion repeatedly");
+                    check(pet.setterActivity == activity && owner.paddingCalls == padding,
+                            "same placement produces no callback/redraw reset or additional padding update");
+                    pet.alpha = 0; pet.paused = true;
+                    owner.updateLunagramPetPlacement();
+                    check(owner.isLunagramPetVisible() && pet.alpha == 1 && !pet.paused,
+                            "placement recovers after host alpha/pause hiding, without self-visibility feedback");
+                }
+            }
+            LiteMode.configuredHeight = 40;
+            PetMount150Probe owner = setup(411, 640, 0, 44, 52, 0);
+            owner.updateLunagramPetPlacement();
+            PetView pet = owner.chatActivityEnterView.lunagramPetView;
+            for (int reason = 0; reason < 8; reason++) {
+                owner.paused = reason == 0; owner.preview = reason == 1;
+                owner.chatActivityEnterView.recording = reason == 2; owner.chatActivityEnterView.recordedPreview = reason == 3;
+                owner.bottomViewsVisibilityController.priority = reason == 4 ? 99 : 1;
+                owner.chatActivityEnterView.visibility = reason == 5 ? View.GONE : View.VISIBLE;
+                owner.currentAccount = reason == 6 ? 1 : 0;
+                owner.contentView.attached = reason != 7;
+                owner.updateLunagramPetPlacement();
+                check(!owner.isLunagramPetVisible() && pet.alpha == 0 && pet.paused,
+                        "paused/preview/recording/priority/hidden-input/disabled-account/detached host suppresses pet");
+            }
+            owner.currentAccount = 0; owner.contentView.attached = true;
+            owner.updateLunagramPetPlacement();
+            check(owner.isLunagramPetVisible(), "valid host resumes from all suppression states");
+            owner.chatInputViewsContainer.bubbleInputTranlationY = -dp(640);
+            int beforeHide = owner.paddingCalls;
+            owner.updateLunagramPetPlacement();
+            check(!owner.isLunagramPetVisible() && pet.paused && pet.alpha == 0, "oval moved above actionbar is paused and hidden");
+            check(owner.paddingCalls == beforeHide && owner.extraPetSpace == 0, "geometry-only disappearance leaves scroll space untouched");
+            owner.updateLunagramPetPlacement();
+            check(owner.paddingCalls == beforeHide, "same hidden state does not repeatedly lay out chat list");
+            owner.chatInputViewsContainer.bubbleInputTranlationY = 0;
+            owner.updateLunagramPetPlacement();
+            check(owner.isLunagramPetVisible() && !pet.paused, "offscreen geometry recovers without visibility loop");
+            check(owner.paddingCalls == beforeHide && owner.extraPetSpace == 0, "geometry-only recovery does not lift messages");
+            InputContainer input = owner.chatInputViewsContainer; RectF result = new RectF();
+            input.splitInputEnabled = false; input.inputBubbleOffsetLeft = dp(23); input.inputBubbleOffsetRight = dp(19);
+            check(input.getPetRailBounds(result) && same(result.left, dp(23) + dp(7) + dp(22))
+                            && same(result.right, dp(411) - dp(19) - dp(7) - dp(22)),
+                    "stock unsplit oval also exposes its own flat top edge, not split margins");
+            input.inputBubbleOffsetLeft = Float.NaN;
+            check(!input.getPetRailBounds(result) && result.top == 0, "invalid floating geometry clears rail safely");
+            input.inputBubbleOffsetLeft = 0; input.blurredBackgroundDrawable.alpha = 0;
+            check(!input.getPetRailBounds(result), "invisible drawable cannot host a floating pet");
+            input.blurredBackgroundDrawable.alpha = 255; input.drawInputBackground = false;
+            check(!input.getPetRailBounds(result), "disabled input oval has no pet rail");
+            input.drawInputBackground = true; input.inputBubbleHeight = Float.POSITIVE_INFINITY;
+            check(!input.getPetRailBounds(result), "nonfinite height has no rail");
+            check(!input.getPetRailBounds(null), "null output is safe");
+        }
+        System.out.println("PASS: " + assertions + " extracted pet rail/host/window/floor assertions; modeled views, no device rendering.");
+    }
+    public static void main(String[] args) {
+        boolean expectFailure = args.length > 0 && "--expect-failure".equals(args[0]);
+        try { verify(); }
+        catch (AssertionError failure) {
+            if (!expectFailure) throw failure;
+            System.out.println("PASS: negative pet mutation rejected: " + failure.getMessage()); return;
+        }
+        if (expectFailure) throw new IllegalStateException("Negative pet mutation not detected");
+    }
+}

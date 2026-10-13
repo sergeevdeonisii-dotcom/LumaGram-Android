@@ -1,0 +1,205 @@
+import java.util.*;
+import java.util.function.Consumer;
+
+/** Production feed picker + native emoji attach/detach methods; modeled Android measurement, not pixels. */
+public final class FeedReactionPickerProbe {
+    static int checks;
+    static void check(boolean ok,String why){checks++;if(!ok)throw new AssertionError(why);}
+    static class Context {}
+    static class Canvas {}
+    static class View {
+        static final int VISIBLE=0,GONE=8,IMPORTANT_FOR_ACCESSIBILITY_NO=2;
+        int width,height,visibility,paddingLeft,paddingRight,paddingTop,paddingBottom;boolean focusable;CharSequence description;
+        interface Listener{void click(View view);}Listener listener;
+        View(Context context){}Context getContext(){return new Context();}
+        Object params;void setLayoutParams(Object params){this.params=params;}void setBackground(Object background){}void setFocusable(boolean value){focusable=value;}
+        void setImportantForAccessibility(int value){}void setVisibility(int value){visibility=value;}
+        void setContentDescription(CharSequence value){description=value;}void setOnClickListener(Listener value){listener=value;}
+        void click(){if(listener!=null)listener.click(this);}void invalidate(){}
+        int getWidth(){return width;}int getHeight(){return height;}
+        protected void onAttachedToWindow(){}protected void onDetachedFromWindow(){}protected void onDraw(Canvas canvas){}
+        protected void onMeasure(int widthSpec,int heightSpec){width=MeasureSpec.getSize(widthSpec);height=MeasureSpec.getSize(heightSpec);}
+        static class MeasureSpec {
+            static final int UNSPECIFIED=0,EXACTLY=0x40000000,AT_MOST=0x80000000;
+            static int getSize(int value){return value&0x3fffffff;}static int getMode(int value){return value&0xc0000000;}
+            static int makeMeasureSpec(int size,int mode){return size|mode;}
+        }
+    }
+    static class ViewGroup extends View {static class LayoutParams {static final int MATCH_PARENT=-1;}ViewGroup(Context context){super(context);}}
+    static class FrameLayout extends ViewGroup {
+        final ArrayList<View> children=new ArrayList<>();FrameLayout(Context context){super(context);}
+        void addView(View view,Object params){view.params=params;children.add(view);}
+    }
+    static class TextView extends View {
+        CharSequence text;float textSizePx;TextView(Context context){super(context);}void setText(CharSequence value){text=value;}
+        void setGravity(int gravity){}void setTextSize(int value){textSizePx=value*AndroidUtilities.density*AndroidUtilities.fontScale;}
+        void setTextSize(int unit,int value){textSizePx=value*AndroidUtilities.density*(unit==TypedValue.COMPLEX_UNIT_DIP?1:AndroidUtilities.fontScale);}
+        void setTextColor(int color){}Paint getPaint(){return new Paint();}
+    }
+    static class Paint {Object getFontMetricsInt(){return null;}}
+    static class Emoji {static CharSequence replaceEmoji(CharSequence value,Object metrics,boolean create){return value;}}
+    static class RecyclerView extends ViewGroup {
+        Adapter adapter;RecyclerView(Context context){super(context);}
+        static class ViewHolder {View itemView;ViewHolder(View view){itemView=view;}}
+        static class LayoutParams {int width,height;LayoutParams(int width,int height){this.width=width;this.height=height;}}
+        abstract static class Adapter {
+            abstract boolean isEnabled(ViewHolder holder);abstract int getItemCount();abstract ViewHolder onCreateViewHolder(ViewGroup parent,int type);
+            abstract void onBindViewHolder(ViewHolder holder,int position);void onViewRecycled(ViewHolder holder){}
+        }
+        void setAdapter(Adapter value){adapter=value;}
+    }
+    static class RecyclerListView extends RecyclerView {
+        RecyclerListView(Context context){super(context);}abstract static class SelectionAdapter extends Adapter{}
+        static class Holder extends ViewHolder {Holder(View view){super(view);}}
+        void setLayoutManager(GridLayoutManager value){}void setClipToPadding(boolean value){}void setItemAnimator(Object value){}
+        void setNestedScrollingEnabled(boolean value){}
+        void setPadding(int l,int t,int r,int b){paddingLeft=l;paddingTop=t;paddingRight=r;paddingBottom=b;}
+        int getPaddingLeft(){return paddingLeft;}int getPaddingRight(){return paddingRight;}int getPaddingTop(){return paddingTop;}int getPaddingBottom(){return paddingBottom;}
+    }
+    static class GridLayoutManager {int spans;GridLayoutManager(Context context,int value){spans=value;}int getSpanCount(){return spans;}void setSpanCount(int value){spans=value;}}
+    static class LayoutHelper {
+        static final int MATCH_PARENT=-1;
+        static class FrameParams {int width,height,gravity;FrameParams(int w,int h,int gravity){width=w<0?w:AndroidUtilities.dp(w);height=h<0?h:AndroidUtilities.dp(h);this.gravity=gravity;}}
+        static Object createFrame(int w,int h,int...remaining){return new FrameParams(w,h,remaining.length==0?0:remaining[0]);}
+    }
+    static class Gravity {static final int TOP=1,CENTER=2;}
+    static class TypedValue {static final int COMPLEX_UNIT_DIP=1;}
+    static class AndroidUtilities {static float density=1,fontScale=1;static int dp(int value){return (int)Math.ceil(value*density);}}
+    static class Theme {static final int key_listSelector=1,key_dialogTextBlack=2;static Object createSelectorDrawable(int color,int type){return null;}}
+    static class R {static class string {static final int LunagramFeedReact=1,LunagramFeedReactionsDisabled=2,OK=3,Cancel=4;}}
+    static class LocaleController {static String getString(int value){return "String "+value;}}
+    static class AnimatedEmojiDrawable {
+        static final int CACHE_TYPE_ALERT_PREVIEW=3;final int account,cache;final long id;int callbacks;ImageReceiver receiver=new ImageReceiver();
+        AnimatedEmojiDrawable(int account,int cache,long id){this.account=account;this.cache=cache;this.id=id;}
+        static AnimatedEmojiDrawable make(int account,int cache,long id){return new AnimatedEmojiDrawable(account,cache,id);}
+        void addView(View view){callbacks++;}void removeView(View view){callbacks--;}ImageReceiver getImageReceiver(){return receiver;}
+        void setColorFilter(Object value){}
+    }
+    static class ImageReceiver {
+        int draws;void onAttachedToWindow(){}void onDetachedFromWindow(){}void setImageCoords(int x,int y,int w,int h){}void draw(Canvas canvas){draws++;}
+    }
+    static class BackupImageView extends View {
+        boolean attached,applyAttach=true,blurAllowed,drawFromStart;int width=-1,height=-1;
+        AnimatedEmojiDrawable animatedEmojiDrawable;Object animatedEmojiDrawableColorFilter;
+        ImageReceiver imageReceiver=new ImageReceiver(),blurImageReceiver=new ImageReceiver();
+        BackupImageView(Context context){super(context);}void setSize(int w,int h){width=w;height=h;}
+        /* NATIVE_BACKUP_METHODS */
+    }
+    static class TLRPC {
+        static class Reaction {}static class TL_reactionEmoji extends Reaction {String emoticon;}
+        static class TL_reactionCustomEmoji extends Reaction {long document_id;}static class TL_reactionPaid extends Reaction{}
+        static class TL_chatReactionsSome {ArrayList<Reaction> reactions=new ArrayList<>();}static class TL_chatReactionsAll{}
+        static class ChatFull {Object available_reactions;}
+        static class TL_availableReaction {String reaction;boolean inactive,premium;TL_availableReaction(String value,boolean inactive,boolean premium){reaction=value;this.inactive=inactive;this.premium=premium;}}
+    }
+    static class MessageObject {long getDialogId(){return -123;}}
+    static class UserConfig {long owner=42;boolean premium;long getClientUserId(){return owner;}boolean isPremium(){return premium;}}
+    static class MediaDataController {
+        static final MediaDataController instance=new MediaDataController();ArrayList<TLRPC.TL_availableReaction> reactions=new ArrayList<>();
+        static MediaDataController getInstance(int account){return instance;}ArrayList<TLRPC.TL_availableReaction> getEnabledReactionsList(){return reactions;}
+    }
+    static class Feed {
+        boolean checkAccess(){return true;}
+        Consumer<TLRPC.ChatFull> pending;int loads,sends,closes;TLRPC.Reaction sent;
+        void loadReactions(long chat,Consumer<TLRPC.ChatFull> callback){loads++;pending=callback;}
+        void react(MessageObject post,TLRPC.Reaction reaction,Consumer<Boolean> callback){sends++;sent=reaction;callback.accept(true);}
+        void close(){closes++;}
+    }
+    static class AlertDialog {
+        View customView;int dismisses;boolean shown;void dismiss(){if(!shown)return;dismisses++;shown=false;if(customView instanceof LunagramFeedActivity.ReactionGrid){LunagramFeedActivity.ReactionGrid grid=(LunagramFeedActivity.ReactionGrid)customView;for(View view:grid.holders){((LunagramFeedActivity.ReactionOption)view).custom.onDetachedFromWindow();}}}
+        static class Builder {
+            AlertDialog dialog=new AlertDialog();Builder(Context context){}Builder(Context context,Object provider){}
+            Builder setTitle(String text){return this;}Builder setMessage(String text){return this;}Builder setView(View view){dialog.customView=view;return this;}
+            Builder setNegativeButton(String text,Object click){return this;}Builder setPositiveButton(String text,Object click){return this;}
+            AlertDialog create(){return dialog;}
+        }
+    }
+    static class Base {void onPause(){}void onFragmentDestroy(){}}
+    static class LunagramFeedActivity extends Base {
+        int currentAccount=2,failures,opens;long owner=42;boolean visible=true,reactionPickerLoading,activity=true;Object resourceProvider;
+        UserConfig config=new UserConfig();Feed feed=new Feed();AlertDialog reactionDialog,lastDialog;
+        UserConfig getUserConfig(){return config;}Context getParentActivity(){return activity?new Context():null;}
+        int getThemedColor(int value){return value;}void failedReaction(){failures++;}void openPost(MessageObject post){opens++;}
+        void showDialog(AlertDialog dialog){lastDialog=dialog;dialog.shown=true;}
+        /* ACTUAL_REACT */
+        /* ACTUAL_CHOOSE */
+        /* ACTUAL_GRID */
+        /* ACTUAL_OPTION */
+        /* ACTUAL_PAUSE */
+        /* ACTUAL_DESTROY */
+    }
+    static TLRPC.TL_reactionEmoji plain(String value){TLRPC.TL_reactionEmoji reaction=new TLRPC.TL_reactionEmoji();reaction.emoticon=value;return reaction;}
+    static TLRPC.TL_reactionCustomEmoji custom(long id){TLRPC.TL_reactionCustomEmoji reaction=new TLRPC.TL_reactionCustomEmoji();reaction.document_id=id;return reaction;}
+    static TLRPC.ChatFull allowed(TLRPC.Reaction...choices){TLRPC.ChatFull full=new TLRPC.ChatFull();TLRPC.TL_chatReactionsSome some=new TLRPC.TL_chatReactionsSome();some.reactions.addAll(Arrays.asList(choices));full.available_reactions=some;return full;}
+    public static void main(String[] args){
+        Context context=new Context();MessageObject post=new MessageObject();
+        for(float density:new float[]{1f,1.2f,1.33f,1.51f,1.75f,2f,2.625f,3.5f,4f})for(float fontScale:new float[]{1f,1.3f,2f})for(int widthDp:new int[]{160,240,280,320,360,440,640,800})for(int count:new int[]{1,3,6,20,100,1000}){
+            AndroidUtilities.density=density;AndroidUtilities.fontScale=fontScale;int width=AndroidUtilities.dp(widthDp);
+            LunagramFeedActivity screen=new LunagramFeedActivity();ArrayList<TLRPC.Reaction> choices=new ArrayList<>();for(int i=0;i<count;i++)choices.add(plain("♥"));
+            LunagramFeedActivity.ReactionGrid grid=screen.new ReactionGrid(context,post,choices);
+            grid.onMeasure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
+            int slot=AndroidUtilities.dp(48)+AndroidUtilities.dp(8);
+            int columns=Math.max(1,Math.min(8,(width-2*AndroidUtilities.dp(16))/slot));
+            check(grid.manager.getSpanCount()==columns,"columns adapt to actual dialog width");
+            check((width-2*AndroidUtilities.dp(16))/columns>=slot,"slot keeps48dp target plus8dp gap even with fractional-density ceil");
+            check(grid.height==Math.min(AndroidUtilities.dp(280),((count+columns-1)/columns)*slot+2*AndroidUtilities.dp(8)),"content-driven height, bounded many-choice scroll");
+            if(count==3&&widthDp>=240)check(grid.height==slot+2*AndroidUtilities.dp(8),"three choices stay one compact row");
+            RecyclerView.ViewHolder targetHolder=grid.adapter.onCreateViewHolder(grid,0);
+            LunagramFeedActivity.ReactionOption targetOption=(LunagramFeedActivity.ReactionOption)targetHolder.itemView;
+            LayoutHelper.FrameParams targetParams=(LayoutHelper.FrameParams)targetOption.target.params;
+            RecyclerView.LayoutParams outerParams=(RecyclerView.LayoutParams)targetOption.params;
+            check(targetParams.width==AndroidUtilities.dp(48)&&targetParams.height==AndroidUtilities.dp(48),"explicit48x48dp native target, never margin-subtracted undersize");
+            check(targetParams.gravity==Gravity.CENTER&&outerParams.height>=targetParams.height+AndroidUtilities.dp(8),"centered target has bounded clear spacing");
+            check(targetOption.emoji.textSizePx==28*density&&targetOption.emoji.textSizePx<targetParams.height,"emoji is28dp pictogram, not56dp sp glyph clipped at200percent font");
+            grid.onMeasure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(100),View.MeasureSpec.AT_MOST));
+            check(grid.height<=AndroidUtilities.dp(100),"small/landscape height constrained by dialog");
+            int resized=AndroidUtilities.dp(320);grid.onMeasure(View.MeasureSpec.makeMeasureSpec(resized,View.MeasureSpec.EXACTLY),0);
+            check(grid.manager.getSpanCount()==(resized-2*AndroidUtilities.dp(16))/slot,"same object adapts after resize");
+        }
+        AndroidUtilities.density=1;AndroidUtilities.fontScale=1;
+        LunagramFeedActivity screen=new LunagramFeedActivity();TLRPC.Reaction first=plain("🔥"),second=custom(9001),third=plain("👍");
+        screen.chooseReaction(post);screen.chooseReaction(post);check(screen.feed.loads==1,"pending load deduped");
+        screen.feed.pending.accept(allowed(first,second,third,new TLRPC.TL_reactionPaid()));
+        LunagramFeedActivity.ReactionGrid grid=(LunagramFeedActivity.ReactionGrid)screen.lastDialog.customView;
+        check(grid.adapter.getItemCount()==3,"only server-allowed free emoji choices, no fabricated/paid entries");
+        RecyclerView.ViewHolder holder=grid.adapter.onCreateViewHolder(grid,0);grid.adapter.onBindViewHolder(holder,1);
+        LunagramFeedActivity.ReactionOption option=(LunagramFeedActivity.ReactionOption)holder.itemView;grid.holders.add(option);
+        AnimatedEmojiDrawable drawable=option.custom.animatedEmojiDrawable;
+        check(drawable.account==2&&drawable.id==9001,"custom emoji uses fragment account and exact server document");
+        check(option.custom.visibility==View.VISIBLE&&option.emoji.visibility==View.GONE,"custom emoji has real image renderer, not undrawn text span");
+        option.custom.onAttachedToWindow();check(drawable.callbacks==1,"native attach registers renderer callback");
+        option.custom.onDraw(new Canvas());check(drawable.receiver.draws==1,"actual native renderer paints custom receiver");
+        option.custom.onDetachedFromWindow();check(drawable.callbacks==0,"native detach releases renderer callback");
+        option.custom.onAttachedToWindow();grid.adapter.onBindViewHolder(holder,0);
+        check(drawable.callbacks==0&&option.custom.animatedEmojiDrawable==null,"custom-to-plain recycling releases old drawable");
+        check(option.emoji.visibility==View.VISIBLE&&option.custom.visibility==View.GONE&&"🔥".contentEquals(option.emoji.text),"plain emoji rebound correctly");
+        grid.adapter.onBindViewHolder(holder,1);drawable=option.custom.animatedEmojiDrawable;
+        check(drawable.callbacks==1,"attached rebind registers new renderer once");
+        grid.adapter.onViewRecycled(holder);check(drawable.callbacks==0,"view recycling releases renderer");
+        grid.adapter.onBindViewHolder(holder,0);option.target.click();
+        check(screen.feed.sends==1&&screen.feed.sent==first&&!screen.reactionDialog.shown,"one click sends exact allowed reaction through existing feed guard and dismisses");
+        screen.react(post,new TLRPC.TL_reactionPaid());check(screen.opens==1&&screen.feed.sends==1,"paid entry never spends from feed");
+        screen.visible=false;option.target.click();check(screen.feed.sends==1,"paused click cannot send");
+        screen.visible=true;screen.config.owner=43;option.target.click();check(screen.feed.sends==1,"owner change cannot send stale picker choice");
+        for(int mode=0;mode<4;mode++){
+            LunagramFeedActivity stale=new LunagramFeedActivity();stale.chooseReaction(post);
+            if(mode==0)stale.visible=false;if(mode==1)stale.config.owner++;if(mode==2)stale.activity=false;
+            stale.feed.pending.accept(mode==3?null:allowed(first));
+            check(stale.lastDialog==null,"late callback after pause/owner/activity loss or error cannot open picker");
+        }
+        LunagramFeedActivity disabled=new LunagramFeedActivity();disabled.chooseReaction(post);disabled.feed.pending.accept(allowed());
+        check(disabled.lastDialog.customView==null&&disabled.feed.sends==0,"empty server choices retain disabled message");
+        MediaDataController.instance.reactions.clear();MediaDataController.instance.reactions.add(new TLRPC.TL_availableReaction("♥",false,false));
+        MediaDataController.instance.reactions.add(new TLRPC.TL_availableReaction("inactive",true,false));MediaDataController.instance.reactions.add(new TLRPC.TL_availableReaction("premium",false,true));
+        for(boolean premium:new boolean[]{false,true}){
+            LunagramFeedActivity all=new LunagramFeedActivity();all.config.premium=premium;all.chooseReaction(post);TLRPC.ChatFull full=new TLRPC.ChatFull();full.available_reactions=new TLRPC.TL_chatReactionsAll();all.feed.pending.accept(full);
+            check(((LunagramFeedActivity.ReactionGrid)all.lastDialog.customView).adapter.getItemCount()==(premium?2:1),"all-mode preserves inactive/premium entitlement filter");
+        }
+        LunagramFeedActivity paused=new LunagramFeedActivity();paused.chooseReaction(post);paused.feed.pending.accept(allowed(second));
+        grid=(LunagramFeedActivity.ReactionGrid)paused.lastDialog.customView;holder=grid.adapter.onCreateViewHolder(grid,0);grid.adapter.onBindViewHolder(holder,0);option=(LunagramFeedActivity.ReactionOption)holder.itemView;grid.holders.add(option);
+        option.custom.onAttachedToWindow();drawable=option.custom.animatedEmojiDrawable;paused.onPause();
+        check(!paused.visible&&!paused.reactionDialog.shown&&drawable.callbacks==0,"pause closes picker and releases attached custom emoji");
+        paused.onFragmentDestroy();check(paused.feed.closes==1,"destroy preserves feed cancellation");
+        System.out.println("PASS actual feed reaction picker/native emoji lifecycle: "+checks+" modeled host checks");
+    }
+}

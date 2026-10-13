@@ -1,0 +1,247 @@
+import java.util.*;
+
+/** Actual production class bodies, modeled Android scheduler/canvas/audio only; not pixel/device QA. */
+public class Experience200Probe {
+    static int checks;
+    static void check(boolean value, String label) { checks++; if (!value) throw new AssertionError(label); }
+    static void finite(float... values) { for (float v : values) check(Float.isFinite(v), "finite canvas coordinate"); }
+    public static void main(String[] args) {
+        settings(); sounds(); pet(); atmosphere(); entitlement();
+        System.out.println("PASS " + checks + " production-body experience assertions (modeled Android, no device render)");
+    }
+    static void settings() {
+        UserConfig.configs[0].id=101; UserConfig.configs[1].id=202; UserConfig.selectedAccount=0;
+        check(LunagramExperienceSettings.swipeEnabled(0), "swipe default");
+        check(LunagramExperienceSettings.pet(0)==0 && LunagramExperienceSettings.soundPack(0)==0 && LunagramExperienceSettings.sendEffect(0)==0, "opt-in defaults");
+        check(LunagramExperienceSettings.atmosphere(0,51)==0 && LunagramExperienceSettings.atmosphereIntensity(0,51)==1, "atmosphere defaults");
+        int[] values={Integer.MIN_VALUE,-100,-1,0,1,2,3,4,5,100,Integer.MAX_VALUE};
+        for(int v:values) {
+            LunagramExperienceSettings.setPet(0,v); check(LunagramExperienceSettings.pet(0)==Math.max(0,Math.min(1,v)),"pet setter clamp");
+            LunagramExperienceSettings.setSoundPack(0,v); check(LunagramExperienceSettings.soundPack(0)==Math.max(0,Math.min(4,v)),"sound setter clamp");
+            LunagramExperienceSettings.setSendEffect(0,v); check(LunagramExperienceSettings.sendEffect(0)==Math.max(0,Math.min(3,v)),"effect setter clamp");
+            LunagramExperienceSettings.setAtmosphere(0,-51,v); check(LunagramExperienceSettings.atmosphere(0,-51)==Math.max(0,Math.min(4,v)),"atmosphere setter clamp");
+            LunagramExperienceSettings.setAtmosphereIntensity(0,-51,v); check(LunagramExperienceSettings.atmosphereIntensity(0,-51)==Math.max(0,Math.min(2,v)),"intensity setter clamp");
+            SharedPreferences.Editor e=LumaAccountData.preferences(0).edit();
+            e.putInt("experience.pet",v).putInt("experience.sounds",v).putInt("experience.sendEffect",v).putInt("experience.atmosphere.91",v).putInt("experience.intensity.91",v).apply();
+            check(LunagramExperienceSettings.pet(0)==Math.max(0,Math.min(1,v)),"pet corrupt storage clamp");
+            check(LunagramExperienceSettings.soundPack(0)==Math.max(0,Math.min(4,v)),"sound corrupt storage clamp");
+            check(LunagramExperienceSettings.sendEffect(0)==Math.max(0,Math.min(3,v)),"effect corrupt storage clamp");
+            check(LunagramExperienceSettings.atmosphere(0,91)==Math.max(0,Math.min(4,v)),"atmosphere corrupt storage clamp");
+            check(LunagramExperienceSettings.atmosphereIntensity(0,91)==Math.max(0,Math.min(2,v)),"intensity corrupt storage clamp");
+        }
+        int permutations=0;
+        for(int a=1;a<=4;a++)for(int b=1;b<=4;b++)for(int c=1;c<=4;c++)for(int d=1;d<=4;d++) {
+            int[] order={a,b,c,d}; if(!LunagramSwipeGesture.validOrder(order)) continue;
+            LunagramExperienceSettings.setSwipeOrder(0,order);check(Arrays.equals(order,LunagramExperienceSettings.swipeOrder(0)),"swipe permutation persists");permutations++;
+        }
+        check(permutations==24,"all swipe permutations");
+        for(int[] invalid:new int[][]{null,{}, {1,2,3}, {1,1,3,4}, {0,2,3,4}, {1,2,3,5}}) {
+            boolean threw=false;try{LunagramExperienceSettings.setSwipeOrder(0,invalid);}catch(IllegalArgumentException expected){threw=true;}check(threw,"invalid swipe rejected");
+        }
+        for(String invalid:new String[]{"","1,2,3,3","-1,2,3,4","1,2,3,4,5","x,2,3,4","999999999999999999999"}) {
+            LumaAccountData.preferences(0).edit().putString("experience.swipeOrder",invalid).apply();check(Arrays.equals(new int[]{1,2,3,4},LunagramExperienceSettings.swipeOrder(0)),"corrupt order default");
+        }
+        LunagramExperienceSettings.setPet(0,2); LunagramExperienceSettings.setSoundPack(0,3); LunagramExperienceSettings.setSwipeEnabled(0,false);
+        LunagramExperienceSettings.setAtmosphere(0,111,4);check(LunagramExperienceSettings.atmosphere(0,112)==0,"dialog isolation");
+        check(LunagramExperienceSettings.pet(1)==0 && LunagramExperienceSettings.soundPack(1)==0 && LunagramExperienceSettings.swipeEnabled(1),"account isolation");
+        UserConfig.configs[0].id=303;check(LunagramExperienceSettings.pet(0)==0,"slot reuse isolates identity");
+        UserConfig.configs[0].id=101;check(LunagramExperienceSettings.pet(0)==1,"identity restores own preference");
+        UserConfig.configs[1].id=101;check(LunagramExperienceSettings.pet(1)==1,"identity follows slot move");
+        LumaAccountData.clearOnLogout(0,101);check(LunagramExperienceSettings.pet(1)==0,"logout clears identity");
+        UserConfig.configs[0].id=0;LunagramExperienceSettings.setPet(0,3);UserConfig.configs[0].id=404;check(LunagramExperienceSettings.pet(0)==0,"loggedout never leaks to login");
+        UserConfig.configs[1].id=202;
+    }
+    static void sounds() {
+        Set<String> patterns=new HashSet<>();
+        for(int pack=1;pack<=4;pack++)for(int event=1;event<=3;event++) {
+            short[] pcm=LunagramInterfaceSounds.synthesize(pack,event);
+            check(pcm.length==(event==2?1764:3969),"bounded sound duration");
+            check(pcm[0]==0 && Math.abs(pcm[pcm.length-1])<20,"bounded sound envelope endpoints");
+            boolean audible=false;for(short value:pcm){check(Math.abs((int)value)<=20000,"PCM clipping bound");audible|=Math.abs(value)>200;}
+            check(audible,"nonempty waveform");check(Arrays.equals(pcm,LunagramInterfaceSounds.synthesize(pack,event)),"deterministic waveform");
+            check(patterns.add(pcm.length+":"+Arrays.hashCode(pcm)),"distinct pack/event pattern");
+        }
+        Context context=ApplicationLoader.applicationContext;AudioManager manager=context.audio;UserConfig.selectedAccount=0;UserConfig.configs[0].id=404;
+        clearSound();LunagramExperienceSettings.setSoundPack(0,0);playAndRun(1);check(AudioTrack.created==0,"sound opt in");
+        LunagramExperienceSettings.setSoundPack(0,1);clearSound();playAndRun(0);playAndRun(4);check(AudioTrack.created==0,"sound event enum");
+        clearSound();SystemClock.now+=100;LunagramInterfaceSounds.play(0,1);UserConfig.configs[0].id=405;LunagramExperienceSettings.setSoundPack(0,1);DispatchQueue.drain();check(AudioTrack.created==0,"queued owner guard");UserConfig.configs[0].id=404;
+        clearSound();SystemClock.now+=100;LunagramInterfaceSounds.play(0,1);UserConfig.selectedAccount=1;DispatchQueue.drain();check(AudioTrack.created==0,"queued selected account guard");UserConfig.selectedAccount=0;
+        clearSound();SystemClock.now+=100;LunagramInterfaceSounds.play(0,1);LunagramSubscriptionClient.epochs[0]++;DispatchQueue.drain();check(AudioTrack.created==0,"queued same-owner epoch guard");
+        clearSound();SystemClock.now+=100;LunagramInterfaceSounds.play(0,1);LunagramExperienceSettings.setSoundPack(0,0);DispatchQueue.drain();check(AudioTrack.created==0,"queued optout guard");LunagramExperienceSettings.setSoundPack(0,1);
+        clearSound();SystemClock.now+=100;LunagramInterfaceSounds.play(0,1);ApplicationLoader.mainInterfacePaused=true;DispatchQueue.drain();check(AudioTrack.created==0,"queued foreground guard");ApplicationLoader.mainInterfacePaused=false;
+        for(int mode:new int[]{0,1}) { clearSound();manager.ringer=mode;playAndRun(1);check(AudioTrack.created==0,"ringer mode guard"); }manager.ringer=2;
+        clearSound();manager.volume=0;playAndRun(1);check(AudioTrack.created==0,"muted volume guard");manager.volume=5;
+        clearSound();playAndRun(1);check(AudioTrack.created==1 && AudioTrack.played==1 && AudioTrack.released==1,"sound bounded release");check(AudioTrack.maxVolume<=0.12f,"sound quiet volume");
+        clearSound();SystemClock.now+=100;LunagramInterfaceSounds.play(0,1);LunagramInterfaceSounds.play(0,1);DispatchQueue.drain();check(AudioTrack.created==1,"sound rate limit");
+        clearSound();AudioTrack.throwOnWrite=true;playAndRun(1);check(AudioTrack.created==1 && AudioTrack.released==1 && AudioTrack.played==0,"failed write releases sound track");
+        clearSound();AudioTrack.negativeWrite=true;playAndRun(1);check(AudioTrack.created==1 && AudioTrack.released==1 && AudioTrack.played==0,"negative write cannot play sound track");
+    }
+    static void clearSound(){DispatchQueue.jobs.clear();AudioTrack.created=AudioTrack.played=AudioTrack.released=0;AudioTrack.maxVolume=0;AudioTrack.throwOnWrite=AudioTrack.negativeWrite=false;LunagramInterfaceSounds.track=null;}
+    static void playAndRun(int event){SystemClock.now+=100;LunagramInterfaceSounds.play(0,event);DispatchQueue.drain();}
+    static void pet() {
+        LunagramExperienceSettings.setPet(0,1);SystemClock.now=20000;SharedConfig.animations=true;AndroidUtilities.animatorScale=1;
+        Context context=new Context();LunagramPetView pet=new LunagramPetView(context,0);EditText first=new EditText();EditText second=new EditText();
+        pet.resize(400,80);pet.setRailBounds(60,320);
+        check(!pet.clickable && !pet.focusable && pet.accessibility==View.IMPORTANT_FOR_ACCESSIBILITY_NO,"pet noninteractive accessibility");
+        check(!pet.onTouchEvent(new MotionEvent()),"pet touch passes through");
+        check(LunagramPetView.getFloorOffsetDp()==22,"pet floor matches composer rail");
+        check(pet.jobs.size()==1 && nextPetDelay(pet)>=800,"idle uses slow single callback");
+        int steadyInvalidations=pet.invalidations;Map<Runnable,Long> steadyJobs=new HashMap<>(pet.jobs);
+        for(int i=0;i<1000;i++){pet.setAlpha(1);pet.setPaused(false);pet.setRailBounds(60,320);}
+        check(steadyInvalidations==pet.invalidations && steadyJobs.equals(pet.jobs),"unchanged compositor setters do not restart scheduler or invalidate");
+        pet.bindComposer(first);check(first.watchers.size()==1,"composer watcher bound");pet.bindComposer(first);check(first.watchers.size()==1,"watcher idempotent");
+        pet.bindComposer(second);check(first.watchers.isEmpty() && second.watchers.size()==1,"watcher rebind removes previous");
+        second.type("hello");check(pet.jobs.size()==1 && nextPetDelay(pet)<=16,"typing has one bounded frame timer");second.type("hello2");check(pet.jobs.size()==1,"typing replaces timer");
+        long frameDeadline=pet.jobs.values().iterator().next();SystemClock.now+=16;pet.setAlpha(1);pet.setPaused(false);pet.setRailBounds(60,320);check(pet.jobs.values().iterator().next()==frameDeadline,"compositor frames cannot starve pet tick");
+        Canvas canvas=new Canvas();int animationPosts=pet.animationPosts;Map<Runnable,Long> pending=new HashMap<>(pet.jobs);pet.onDraw(canvas);
+        check(pet.animationPosts==animationPosts && pending.equals(pet.jobs),"drawing never starts its own animation loop");check(canvas.depth==0,"pet canvas balanced");
+        pet.onMessageSent();check(nextPetDelay(pet)<=16,"happy animation runs");
+        SystemClock.now+=1001;pet.runDue();check(nextPetDelay(pet)>=800,"happy animation returns to slow idle");
+        AndroidUtilities.animatorScale=0;pet.onMessageSent();check(nextPetDelay(pet)>=1000,"system reduced motion pet");
+        Canvas staticCanvas=new Canvas();pet.onDraw(staticCanvas);SystemClock.now+=500;Canvas staticLater=new Canvas();pet.onDraw(staticLater);check(staticCanvas.signature.equals(staticLater.signature),"reduced happy geometry static");
+        int before=pet.invalidations;SystemClock.now+=500;pet.runDue();check(pet.invalidations>before && pet.jobs.isEmpty(),"static happy gets final redraw");
+        second.type("static typing");Canvas typingOne=new Canvas();pet.onDraw(typingOne);SystemClock.now+=300;Canvas typingTwo=new Canvas();pet.onDraw(typingTwo);check(typingOne.signature.equals(typingTwo.signature),"reduced typing geometry static");
+        AndroidUtilities.animatorScale=1;SharedConfig.animations=false;pet.onMessageSent();check(nextPetDelay(pet)>0&&nextPetDelay(pet)<=1000&&!pet.motion.sample(SystemClock.now).moving,"app reduced motion pet");SharedConfig.animations=true;
+        ValueAnimator.enabled=false;pet.onMessageSent();check(nextPetDelay(pet)>0&&nextPetDelay(pet)<=1000&&!pet.motion.sample(SystemClock.now).moving,"platform animator disabled pet");ValueAnimator.enabled=true;
+        context.power.saving=true;pet.onMessageSent();check(nextPetDelay(pet)>0&&nextPetDelay(pet)<=1000&&!pet.motion.sample(SystemClock.now).moving,"battery saver pet static");context.power.saving=false;
+        pet.setPaused(true);second.type("paused");pet.onMessageSent();check(pet.jobs.isEmpty(),"paused pet cannot schedule work");pet.setPaused(false);
+        pet.setAlpha(0);second.type("transparent");pet.onMessageSent();check(pet.jobs.isEmpty(),"transparent pet cannot schedule work");pet.setAlpha(1);
+        ApplicationLoader.mainInterfacePaused=true;pet.refresh();second.type("background");pet.onMessageSent();check(pet.jobs.isEmpty(),"background pet cannot schedule work");ApplicationLoader.mainInterfacePaused=false;pet.refresh();
+        pet.windowVisibility=View.GONE;pet.onWindowVisibilityChanged(View.GONE);check(pet.jobs.isEmpty(),"hidden window cancels pet work");pet.windowVisibility=View.VISIBLE;pet.onWindowVisibilityChanged(View.VISIBLE);
+        pet.setRecording(true);check(pet.getVisibility()==View.GONE && pet.jobs.isEmpty(),"recording cancels pet work");
+        second.type("hidden");pet.onMessageSent();check(pet.jobs.isEmpty(),"hidden pet cannot schedule work");
+        pet.setRecording(false);second.type("visible");pet.onMessageSent();LunagramExperienceSettings.setPet(0,0);pet.refresh();check(pet.jobs.isEmpty() && pet.getVisibility()==View.GONE,"disable cancels pet work");
+        LunagramExperienceSettings.setPet(0,2);pet.refresh();second.type("visible");pet.onMessageSent();pet.onDetachedFromWindow();check(pet.jobs.isEmpty(),"detach cancels pet work");
+        second.type("detached");pet.onMessageSent();check(pet.jobs.isEmpty(),"detached watcher cannot resume work");pet.onAttachedToWindow();check(pet.jobs.size()==1,"reattach resumes single idle callback");
+        pet.dispose();check(second.watchers.isEmpty() && pet.jobs.isEmpty(),"dispose removes watcher and work");
+        pet.bindComposer(first);pet.refresh();pet.onAttachedToWindow();pet.onMessageSent();check(first.watchers.isEmpty() && pet.jobs.isEmpty(),"dispose terminal");
+        for(int type=1;type<=3;type++){LunagramExperienceSettings.setPet(0,type);LunagramPetView drawing=new LunagramPetView(context,0);for(int size:new int[]{0,1,44,100,2000}){drawing.resize(size,size);drawing.setRailBounds(0,size);Canvas c=new Canvas();drawing.onDraw(c);check(c.depth==0,"pet bounded canvas restores");if(size>12)check(c.primitives>0,"live pet really drawn");}drawing.dispose();}
+        LunagramExperienceSettings.setPet(0,1);SystemClock.now=90000;LunagramPetView performance=new LunagramPetView(context,0);performance.resize(400,80);performance.onMessageSent();
+        int policyQueries=context.power.queries;for(int i=0;i<30;i++){SystemClock.now+=16;performance.runDue();}
+        check(context.power.queries-policyQueries<=1,"display callbacks do not query power Binder on every frame");performance.dispose();
+    }
+    static long nextPetDelay(View pet){check(pet.jobs.size()<=1,"one scheduler only");return pet.jobs.isEmpty()?Long.MAX_VALUE:pet.jobs.values().iterator().next()-SystemClock.now;}
+    static void atmosphere() {
+        View owner=new View(new Context());SystemClock.now=42000;SharedConfig.animations=true;AndroidUtilities.animatorScale=1;
+        for(int mode=1;mode<=4;mode++)for(int intensity=0;intensity<=2;intensity++) {
+            LunagramExperienceSettings.setAtmosphere(0,51,mode);LunagramExperienceSettings.setAtmosphereIntensity(0,51,intensity);
+            LunagramChatAtmosphere a=new LunagramChatAtmosphere(0,51);Canvas c=new Canvas();owner.delayedInvalidations=0;
+            a.draw(c,owner,400,800,50,60,null);int count=intensity==0?10:intensity==1?20:32;
+            check(c.primitives==(mode==3?count*2:mode==4?count+(count+4)/5:count),"atmosphere bounded density");
+            check(c.depth==0 && Arrays.equals(c.clip,new float[]{0,50,400,740}),"atmosphere clip and canvas balance");
+            check(owner.delayedInvalidations==1 && owner.lastDelay==40,"atmosphere frame budget");
+            a.setPaused(true);c=new Canvas();owner.delayedInvalidations=0;a.draw(c,owner,400,800,50,60,null);check(c.primitives==0 && owner.delayedInvalidations==0,"atmosphere paused no work");a.setPaused(false);
+            owner.shown=false;a.draw(c,owner,400,800,50,60,null);check(c.primitives==0 && owner.delayedInvalidations==0,"hidden atmosphere no work");owner.shown=true;
+            owner.attached=false;owner.delayedInvalidations=0;a.draw(new Canvas(),owner,400,800,50,60,null);check(owner.delayedInvalidations==0,"detached atmosphere no new frames");owner.attached=true;
+            for(boolean appMotion:new boolean[]{false,true}) {
+                SharedConfig.animations=appMotion;AndroidUtilities.animatorScale=appMotion?0:1;owner.delayedInvalidations=0;
+                Canvas one=new Canvas(),two=new Canvas();a.draw(one,owner,400,800,50,60,null);SystemClock.now+=19000;a.draw(two,owner,400,800,50,60,null);
+                check(one.signature.equals(two.signature) && owner.delayedInvalidations==0,"reduced atmosphere static and no timer");
+            }
+            SharedConfig.animations=true;AndroidUtilities.animatorScale=1;
+            for(int[] size:new int[][]{{0,800},{400,0},{-1,800},{400,-1}}){c=new Canvas();a.draw(c,owner,size[0],size[1],50,60,null);check(c.primitives==0,"invalid atmosphere dimensions no work");}
+            for(long time:new long[]{0,119999,120000,Long.MAX_VALUE}){SystemClock.now=time;c=new Canvas();a.draw(c,owner,1,1,50,60,null);check(c.depth==0,"time and tiny viewport remain finite");}
+        }
+        LunagramExperienceSettings.setAtmosphere(0,51,0);LunagramChatAtmosphere a=new LunagramChatAtmosphere(0,51);Canvas c=new Canvas();owner.delayedInvalidations=0;a.draw(c,owner,400,800,0,0,null);check(c.primitives==0 && owner.delayedInvalidations==0,"atmosphere opt in");
+    }
+
+    static void entitlement() {
+        UserConfig.selectedAccount=0;UserConfig.configs[0].id=404;
+        LunagramExperienceSettings.setSwipeEnabled(0,true);LunagramExperienceSettings.setFeedVisible(0,true);
+        LunagramExperienceSettings.setPet(0,1);LunagramExperienceSettings.setSoundPack(0,2);
+        LunagramExperienceSettings.setSendEffect(0,3);LunagramExperienceSettings.setAtmosphere(0,51,4);
+        LunagramExperienceSettings.setAtmosphereIntensity(0,51,2);LunagramExperienceSettings.setSwipeOrder(0,new int[]{4,3,2,1});
+        Map<String,?> saved=LumaAccountData.preferences(0).getAll();
+        Context context=new Context();LunagramPetView pet=new LunagramPetView(context,0);pet.resize(400,80);pet.onMessageSent();
+        LunagramChatAtmosphere atmosphere=new LunagramChatAtmosphere(0,51);View view=new View(context);
+        clearSound();SystemClock.now+=100;LunagramInterfaceSounds.play(0,1);
+        LunagramSubscriptionAccess.allowed=false;
+        check(!LunagramExperienceSettings.swipeEnabled(0)&&!LunagramExperienceSettings.feedVisible(0),"expiry disables swipe/feed");
+        check(LunagramExperienceSettings.pet(0)==0&&LunagramExperienceSettings.soundPack(0)==0&&LunagramExperienceSettings.sendEffect(0)==0&&LunagramExperienceSettings.atmosphere(0,51)==0,"expiry disables opt-in effects");
+        LunagramExperienceSettings.setSwipeEnabled(0,true);LunagramExperienceSettings.setFeedVisible(0,true);
+        LunagramExperienceSettings.setPet(0,1);LunagramExperienceSettings.setSoundPack(0,4);LunagramExperienceSettings.setSendEffect(0,1);
+        LunagramExperienceSettings.setAtmosphere(0,51,1);LunagramExperienceSettings.setAtmosphereIntensity(0,51,0);LunagramExperienceSettings.setSwipeOrder(0,new int[]{1,2,3,4});
+        check(saved.equals(LumaAccountData.preferences(0).getAll()),"denied setters preserve paid preferences");
+        DispatchQueue.drain();check(AudioTrack.created==0,"queued sound respects expiry");
+        Canvas canvas=new Canvas();atmosphere.draw(canvas,view,400,800,0,0,null);
+        check(canvas.primitives==0&&view.delayedInvalidations==0,"already-open atmosphere respects expiry without refresh");
+        pet.refresh();pet.onMessageSent();check(pet.jobs.isEmpty()&&pet.getVisibility()==View.GONE,"live pet stops after expiry");pet.dispose();
+        LunagramSubscriptionAccess.allowed=true;
+        check(LunagramExperienceSettings.swipeEnabled(0)&&LunagramExperienceSettings.feedVisible(0)&&LunagramExperienceSettings.pet(0)==1&&LunagramExperienceSettings.soundPack(0)==2&&LunagramExperienceSettings.sendEffect(0)==3&&LunagramExperienceSettings.atmosphere(0,51)==4,"renewal restores saved choices");
+        LunagramSubscriptionAccess.allowed=false;
+        LunagramExperienceSettings.setSwipeEnabled(0,false);LunagramExperienceSettings.setFeedVisible(0,false);
+        LunagramExperienceSettings.setPet(0,0);LunagramExperienceSettings.setSoundPack(0,0);LunagramExperienceSettings.setSendEffect(0,0);LunagramExperienceSettings.setAtmosphere(0,51,0);
+        LunagramSubscriptionAccess.allowed=true;
+        check(!LunagramExperienceSettings.swipeEnabled(0)&&!LunagramExperienceSettings.feedVisible(0)&&LunagramExperienceSettings.pet(0)==0&&LunagramExperienceSettings.soundPack(0)==0&&LunagramExperienceSettings.sendEffect(0)==0&&LunagramExperienceSettings.atmosphere(0,51)==0,"free users can turn saved effects off");
+    }
+
+    static class LunagramFeatureCatalog {enum Feature {SWIPE_ACTIONS,CHANNEL_FEED,LUNA_PET,INTERFACE_SOUNDS,SEND_ANIMATIONS,CHAT_ATMOSPHERE}}
+    static class LunagramSubscriptionAccess {static boolean allowed=true;static boolean canUse(int account,LunagramFeatureCatalog.Feature feature){return allowed;}}
+    static class LunagramSubscriptionClient {static long[] epochs={1,1,1};static long accountEpoch(int account){return epochs[account];}}
+    @@SETTINGS@@
+    @@ACCOUNT_DATA@@
+    @@SWIPE@@
+    @@SOUNDS@@
+    @@PET_MOTION@@
+    @@PET@@
+    @@ATMOSPHERE@@
+
+    interface SharedPreferences {
+        Map<String,?> getAll();boolean getBoolean(String key,boolean fallback);int getInt(String key,int fallback);String getString(String key,String fallback);Editor edit();
+        interface Editor {Editor putBoolean(String k,boolean v);Editor putInt(String k,int v);Editor putString(String k,String v);Editor remove(String k);Editor clear();void apply();}
+    }
+    static class Memory implements SharedPreferences {
+        Map<String,Object> values=new HashMap<>();public Map<String,?> getAll(){return new HashMap<>(values);}
+        public boolean getBoolean(String k,boolean f){return (boolean)values.getOrDefault(k,f);}public int getInt(String k,int f){return (int)values.getOrDefault(k,f);}public String getString(String k,String f){return (String)values.getOrDefault(k,f);}
+        public Editor edit(){return new Editor(){Map<String,Object> changes=new HashMap<>();boolean clear;
+            public Editor putBoolean(String k,boolean v){changes.put(k,v);return this;}public Editor putInt(String k,int v){changes.put(k,v);return this;}public Editor putString(String k,String v){changes.put(k,v);return this;}public Editor remove(String k){changes.put(k,null);return this;}public Editor clear(){clear=true;return this;}
+            public void apply(){if(clear)values.clear();changes.forEach((k,v)->{if(v==null)values.remove(k);else values.put(k,v);});}};}
+    }
+    static class Context {static final int MODE_PRIVATE=0;static final String AUDIO_SERVICE="audio",POWER_SERVICE="power";Map<String,SharedPreferences> stores=new HashMap<>();AudioManager audio=new AudioManager();PowerManager power=new PowerManager();SharedPreferences getSharedPreferences(String name,int mode){return stores.computeIfAbsent(name,k->new Memory());}Object getSystemService(String service){return service.equals(POWER_SERVICE)?power:audio;}}
+    static class PowerManager {boolean saving;int queries;boolean isPowerSaveMode(){queries++;return saving;}}
+    static class Build {static class VERSION {static int SDK_INT=36;}}
+    static class ValueAnimator {static boolean enabled=true;static boolean areAnimatorsEnabled(){return enabled;}}
+    static class MotionEvent {}
+    static class ApplicationLoader {static Context applicationContext=new Context();static boolean mainInterfacePaused;}
+    static class UserConfig {static int selectedAccount;static UserConfig[] configs={new UserConfig(),new UserConfig(),new UserConfig()};long id;long getClientUserId(){return id;}static UserConfig getInstance(int account){return configs[account];}}
+    static class NotificationCenter {static final int updateInterfaces=1;static final NotificationCenter shared=new NotificationCenter();static NotificationCenter getInstance(int account){return shared;}void postNotificationName(int id,Object... args){}}
+    static class MessagesController {static final int UPDATE_MASK_ALL=-1;}
+    static class BlackHoleVault {static void lockAll(){}}
+    static class FileLog {static int errors;static void e(Throwable error){errors++;}}
+    static class SystemClock {static long now=10000;static long elapsedRealtime(){return now;}}
+    static class DispatchQueue {static List<Runnable> jobs=new ArrayList<>();DispatchQueue(String name){}void postRunnable(Runnable r){jobs.add(r);}void postRunnable(Runnable r,long delay){check(delay>0 && delay<=300,"audio release bounded");jobs.add(r);}static void drain(){int n=0;while(!jobs.isEmpty()){check(++n<20,"queue terminates");jobs.remove(0).run();}}}
+    static class AudioManager {static final int RINGER_MODE_NORMAL=2,STREAM_MUSIC=3;int ringer=2,volume=5;int getRingerMode(){return ringer;}int getStreamVolume(int stream){return volume;}}
+    static class AudioAttributes {static final int USAGE_ASSISTANCE_SONIFICATION=1,CONTENT_TYPE_SONIFICATION=2;static class Builder {Builder setUsage(int v){return this;}Builder setContentType(int v){return this;}AudioAttributes build(){return new AudioAttributes();}}}
+    static class AudioFormat {static final int ENCODING_PCM_16BIT=2,CHANNEL_OUT_MONO=4;static class Builder {Builder setSampleRate(int v){check(v==22050,"sound samplerate");return this;}Builder setEncoding(int v){return this;}Builder setChannelMask(int v){return this;}AudioFormat build(){return new AudioFormat();}}}
+    static class AudioTrack {static final int MODE_STATIC=0,STATE_INITIALIZED=1;static int created,played,released;static float maxVolume;static boolean throwOnWrite,negativeWrite;boolean closed;int getState(){return 1;}void setVolume(float v){maxVolume=Math.max(maxVolume,v);}int write(short[] data,int offset,int count){if(throwOnWrite)throw new IllegalStateException("modeled dead audio service");return negativeWrite?-6:count;}void play(){check(!closed,"play live track");played++;}void release(){check(!closed,"release exactly once");closed=true;released++;}static class Builder {Builder setAudioAttributes(AudioAttributes a){return this;}Builder setAudioFormat(AudioFormat f){return this;}Builder setTransferMode(int m){return this;}Builder setBufferSizeInBytes(int bytes){check(bytes>0 && bytes<=7938,"sound buffer bounded");return this;}AudioTrack build(){created++;return new AudioTrack();}}}
+    interface Editable extends CharSequence {}
+    interface TextWatcher {void beforeTextChanged(CharSequence s,int start,int count,int after);void onTextChanged(CharSequence s,int start,int before,int count);void afterTextChanged(Editable value);}
+    static class View {
+        static final int VISIBLE=0,GONE=8,IMPORTANT_FOR_ACCESSIBILITY_NO=2;int visibility=VISIBLE,windowVisibility=VISIBLE,width=48,height=44,accessibility;float alpha=1;Context context;boolean clickable=true,focusable=true,shown=true,attached=true;int invalidations,animationPosts,delayedInvalidations;long lastDelay;Map<Runnable,Long> jobs=new HashMap<>();
+        View(Context c){context=c;}Context getContext(){return context;}float getAlpha(){return alpha;}public void setAlpha(float value){alpha=value;}int getWindowVisibility(){return windowVisibility;}void setClickable(boolean b){clickable=b;}void setFocusable(boolean b){focusable=b;}void setImportantForAccessibility(int v){accessibility=v;}void setVisibility(int v){if(visibility!=v){visibility=v;onVisibilityChanged(this,v);}}int getVisibility(){return visibility;}boolean isShown(){return shown && attached && visibility==VISIBLE;}boolean isAttachedToWindow(){return attached;}int getWidth(){return width;}int getHeight(){return height;}
+        void invalidate(){invalidations++;}void removeCallbacks(Runnable r){jobs.remove(r);}void postDelayed(Runnable r,long delay){check(delay>0 && delay<=8000,"pet callback bounded");jobs.put(r,SystemClock.now+delay);}void postInvalidateOnAnimation(){animationPosts++;}void postOnAnimation(Runnable r){animationPosts++;jobs.put(r,SystemClock.now+16);}void postInvalidateDelayed(long delay){delayedInvalidations++;lastDelay=delay;}
+        protected void onAttachedToWindow(){attached=true;}protected void onDetachedFromWindow(){attached=false;}protected void onVisibilityChanged(View v,int visibility){}protected void onWindowVisibilityChanged(int visibility){}protected void onSizeChanged(int w,int h,int oldw,int oldh){}public boolean onTouchEvent(MotionEvent e){return true;}void resize(int w,int h){int oldw=width,oldh=height;width=w;height=h;onSizeChanged(w,h,oldw,oldh);}protected void onDraw(Canvas c){}void runDue(){List<Runnable> due=new ArrayList<>();jobs.forEach((r,time)->{if(time<=SystemClock.now)due.add(r);});for(Runnable r:due){jobs.remove(r);r.run();}}
+    }
+    static class EditText {String text="";List<TextWatcher> watchers=new ArrayList<>();void addTextChangedListener(TextWatcher w){watchers.add(w);}void removeTextChangedListener(TextWatcher w){watchers.remove(w);}int length(){return text.length();}void type(String value){text=value;for(TextWatcher w:new ArrayList<>(watchers))w.onTextChanged(value,0,0,value.length());}}
+    static class SharedConfig {static boolean animations=true;static boolean animationsEnabled(){return animations;}}
+    static class AndroidUtilities {static float animatorScale=1;static float getAnimatorDurationScale(){return animatorScale;}static int dp(float v){return (int)v;}static float dpf2(float v){return v;}}
+    static class Theme {static final int key_windowBackgroundWhiteBlueText=1,key_chat_messageTextOut=2;interface ResourcesProvider{}static int getColor(int key){return 0xff445566;}static int getColor(int key,ResourcesProvider p){return getColor(key);}}
+    static class Paint {static final int ANTI_ALIAS_FLAG=1,FILTER_BITMAP_FLAG=2;enum Style {FILL,STROKE}enum Cap{ROUND}Paint(int flags){}void setStyle(Style s){}void setColor(int c){}void setAlpha(int a){check(a>=0 && a<=255,"paint alpha bounds");}void setStrokeWidth(float v){finite(v);}void setStrokeCap(Cap c){}}
+    /** Bitmap decoding is covered by the native compile/asset check, not this modeled renderer. */
+    static class LunagramPetAtlas {
+        static final int MESH_SEGMENTS=12;
+        static final LunagramPetAtlas shared=new LunagramPetAtlas();
+        static LunagramPetAtlas request(LunagramPetView view){return shared;}static void cancel(LunagramPetView view){}
+        float fittedSize(float desired,float width,float above,float below){return Math.max(0,Math.min(desired,Math.min(width,above)));}
+        float footprint(float size){return size;}
+        void draw(Canvas canvas,int frame,float size,Paint paint,RectF destination,float tail,float[]mesh){canvas.draw(frame,size,tail);}
+    }
+    static class RectF {float left,top,right,bottom;void set(float l,float t,float r,float b){left=l;top=t;right=r;bottom=b;}float width(){return right-left;}float height(){return bottom-top;}}
+    static class Path {void rewind(){}void moveTo(float... v){finite(v);}void lineTo(float... v){finite(v);}void cubicTo(float... v){finite(v);}void close(){}}
+    static class Canvas {
+        int depth,primitives,translations;float[] clip;String signature="";int save(){return ++depth;}void restore(){check(depth>0,"canvas restore matched");depth--;}void restoreToCount(int save){check(save>0 && save<=depth,"canvas restoreToCount matched");depth=save-1;}
+        void translate(float x,float y){finite(x,y);translations++;signature+="translate"+Arrays.toString(new float[]{x,y});}void scale(float x,float y){finite(x,y);signature+="scale"+Arrays.toString(new float[]{x,y});}void rotate(float degrees){finite(degrees);signature+="rotate"+degrees;}void clipRect(float l,float t,float r,float b){finite(l,t,r,b);clip=new float[]{l,t,r,b};}
+        void drawCircle(float x,float y,float r,Paint p){draw(x,y,r);}void drawLine(float x,float y,float x2,float y2,Paint p){draw(x,y,x2,y2);}void drawOval(float l,float t,float r,float b,Paint p){draw(l,t,r,b);}void drawOval(RectF r,Paint p){draw(r.left,r.top,r.right,r.bottom);}void drawPath(Path path,Paint paint){primitives++;signature+="path;";}
+        void draw(float... values){finite(values);primitives++;signature+=Arrays.toString(values)+";";}
+    }
+}

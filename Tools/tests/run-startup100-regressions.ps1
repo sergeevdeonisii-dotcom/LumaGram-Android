@@ -110,7 +110,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Extracted owner focus/touch behavior failed.' 
 
 $expectedKeys = @('LumaUpdateWelcomeName', 'LumaUpdateWelcomeVersion', 'LumaUpdateWelcomeChanges',
     'LumaUpdateWelcomeContinue', 'LumaUpdateWelcomeRoundCamera', 'LumaUpdateWelcomeRoundSettings',
-    'LumaUpdateWelcomeVerification', 'LumaUpdateWelcomeNumberValue', 'LumaUpdateWelcomePersonalGifts', 'LumaUpdateWelcomeFuture')
+    'LumaUpdateWelcomeVerification', 'LumaUpdateWelcomeNumberValue', 'LumaUpdateWelcomePersonalGifts', 'LumaUpdateWelcomeFuture',
+    'LunagramWelcome20Feed', 'LunagramWelcome20Swipe', 'LunagramWelcome20Audio', 'LunagramWelcome20Video',
+    'LunagramWelcome20Atmosphere', 'LunagramWelcome20Tools', 'LunagramWelcome20Fixes')
 foreach ($locale in @('values', 'values-ru')) {
     # Telegram's localization generator only includes strings.xml. Merely having
     # R.string entries in another XML file is insufficient for LocaleController.
@@ -126,7 +128,20 @@ foreach ($locale in @('values', 'values-ru')) {
     $numberCopy = (@($strings | Where-Object { $_.name -eq 'LumaUpdateWelcomeNumberValue' })[0].InnerText)
     Check ($numberCopy.Contains('TON') -and $numberCopy.Contains('USD') -and $numberCopy -match 'date|дат') 'Number-value notes must include TON, USD conversion and the date.'
     Check (!(Test-Path -LiteralPath (Join-Path $repo ('TMessagesProj/src/main/res/' + $locale + '/luma_startup_notes.xml')))) 'Do not reintroduce duplicate standalone startup strings.'
+    Check (!(Test-Path -LiteralPath (Join-Path $repo ('TMessagesProj/src/main/res/' + $locale + '/lunagram_welcome20.xml')))) 'Release20 strings must stay in generator inputs.'
 }
+
+$notesStart=$reveal.IndexOf('if (LumaStartupRevealPolicy.hasRelease20Notes(BuildConfig.BUILD_VERSION_STRING))')
+$notesEnd=$reveal.IndexOf('ScrollView scroll =', $notesStart)
+Check ($notesStart -ge 0 -and $notesEnd -gt $notesStart) 'Authored2.0 notes must precede native scroll construction.'
+$notesBranch=$reveal.Substring($notesStart,$notesEnd-$notesStart)
+$notesTemplate=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'startup100/StartupNotes20Probe.java.template'))
+$notesProbe=Join-Path $run 'StartupNotes20Probe.java'
+[IO.File]::WriteAllText($notesProbe,$notesTemplate.Replace('/* ACTUAL_NOTES_BRANCH */',$notesBranch),[Text.UTF8Encoding]::new($false))
+& $javac -J-Xmx128m -encoding UTF-8 -cp $classes -d $classes $notesProbe
+if($LASTEXITCODE -ne 0){throw 'Actual release20 routing branch failed compilation.'}
+& $java -Xmx128m -cp $classes org.telegram.messenger.StartupNotes20Probe
+if($LASTEXITCODE -ne 0){throw 'Actual release20 routing branch failed behavior checks.'}
 
 $plugin = [IO.File]::ReadAllText($production[6])
 Check ($plugin -match '(?s)stringsXml\.from\(\s*telegramModule\.fileTree\("src/main/res/values"\)\s*\{\s*include\("strings.xml"\)' -and

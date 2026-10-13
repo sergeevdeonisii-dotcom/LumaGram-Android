@@ -251,7 +251,17 @@ int size_segments;
 int last_segments;
 int serialno;
 
+int writeFrame(uint8_t *framePcmBytes, uint32_t frameByteCount, int end);
+
 void cleanupRecorder() {
+
+    // Flush the encoder lookahead without adding silence to the declared duration.
+    if (_encoder && total_samples > 0 && !op.e_o_s) {
+        int padding = MIN(frame_size, (header.preskip * rate + 47999) / 48000);
+        int16_t silence[960 * 2] = {0};
+        total_samples -= padding;
+        writeFrame((uint8_t *)silence, padding * 2 * inopt.channels, 1);
+    }
 
     if (_fileOs) {
         while (ogg_stream_flush(&os, &og)) {
@@ -297,8 +307,10 @@ void cleanupRecorder() {
     memset(&og, 0, sizeof(ogg_page));
 }
 
-int initRecorder(const char *path, opus_int32 sampleRate) {
+int initRecorderChannels(const char *path, opus_int32 sampleRate, int channels) {
     cleanupRecorder();
+
+    if (channels != 1 && channels != 2) return 0;
 
     coding_rate = sampleRate;
     rate = sampleRate;
@@ -325,7 +337,7 @@ int initRecorder(const char *path, opus_int32 sampleRate) {
     inopt.rawmode = 0;
     inopt.ignorelength = 0;
     inopt.samplesize = 16;
-    inopt.channels = 1;
+    inopt.channels = channels;
     inopt.skip = 0;
     
     comment_init(&inopt.comments, &inopt.comments_length, opus_get_version_string());
@@ -335,14 +347,14 @@ int initRecorder(const char *path, opus_int32 sampleRate) {
         return 0;
     }
     
-    header.channels = 1;
+    header.channels = channels;
     header.channel_mapping = 0;
     header.input_sample_rate = rate;
     header.gain = inopt.gain;
     header.nb_streams = 1;
     
     int result = OPUS_OK;
-    _encoder = opus_encoder_create(coding_rate, 1, OPUS_APPLICATION_VOIP, &result);
+    _encoder = opus_encoder_create(coding_rate, channels, OPUS_APPLICATION_VOIP, &result);
     if (result != OPUS_OK) {
         LOGE("Error cannot create encoder: %s", opus_strerror(result));
         return 0;
@@ -434,11 +446,18 @@ int initRecorder(const char *path, opus_int32 sampleRate) {
     return 1;
 }
 
+int initRecorder(const char *path, opus_int32 sampleRate) {
+    return initRecorderChannels(path, sampleRate, 1);
+}
+
 int writeFrame(uint8_t *framePcmBytes, uint32_t frameByteCount, int end) {
     size_t cur_frame_size = frame_size;
     _packetId++;
     
-    opus_int32 nb_samples = frameByteCount / 2;
+    if (!_encoder || !framePcmBytes || inopt.channels < 1 ||
+        frameByteCount % (2 * inopt.channels) != 0 ||
+        frameByteCount > frame_size * 2 * inopt.channels) return 0;
+    opus_int32 nb_samples = frameByteCount / (2 * inopt.channels);
     total_samples += nb_samples;
     op.e_o_s = end;
     
@@ -449,10 +468,11 @@ int writeFrame(uint8_t *framePcmBytes, uint32_t frameByteCount, int end) {
         int freePaddedFrameBytes = 0;
 
         if (nb_samples < cur_frame_size) {
-            paddedFrameBytes = malloc(cur_frame_size * 2);
+            paddedFrameBytes = malloc(cur_frame_size * 2 * inopt.channels);
+            if (!paddedFrameBytes) return 0;
             freePaddedFrameBytes = 1;
             memcpy(paddedFrameBytes, framePcmBytes, frameByteCount);
-            memset(paddedFrameBytes + nb_samples * 2, 0, cur_frame_size * 2 - nb_samples * 2);
+            memset(paddedFrameBytes + frameByteCount, 0, cur_frame_size * 2 * inopt.channels - frameByteCount);
         }
         
         nbBytes = opus_encode(_encoder, (opus_int16 *)paddedFrameBytes, cur_frame_size, _packet, max_frame_bytes / 10);
@@ -527,7 +547,14 @@ JNIEXPORT jint Java_org_telegram_messenger_MediaController_startRecord(JNIEnv *e
 
 JNIEXPORT jint Java_org_telegram_messenger_MediaController_writeFrame(JNIEnv *env, jclass class, jobject frame, jint len) {
     jbyte *frameBytes = (*env)->GetDirectBufferAddress(env, frame);
-    return writeFrame((uint8_t *) frameBytes, (uint32_t) len, len / 2 < frame_size);
+    return writeFrame((uint8_t *) frameBytes, (uint32_t) len, 0);
+}
+
+JNIEXPORT jint Java_org_telegram_messenger_MediaController_startRecordWithChannels(JNIEnv *env, jclass class, jstring path, jint sampleRate, jint channels) {
+    const char *pathStr = (*env)->GetStringUTFChars(env, path, 0);
+    int result = initRecorderChannels(pathStr, sampleRate, channels);
+    if (pathStr) (*env)->ReleaseStringUTFChars(env, path, pathStr);
+    return result;
 }
 
 JNIEXPORT void Java_org_telegram_messenger_MediaController_stopRecord(JNIEnv *env, jclass class) {
@@ -967,7 +994,7 @@ int cropOpusAudio(const char *inputPath, const char *outputPath, float startTime
         return 0;
     }
 
-    if (!initRecorder(outputPath, rate)) {
+    if (channels < 1 || channels > 2 || !initRecorderChannels(outputPath, rate, channels)) {
         LOGE("Failed to init recorder");
         op_free(opusFile);
         return 0;
@@ -984,7 +1011,7 @@ int cropOpusAudio(const char *inputPath, const char *outputPath, float startTime
     int success = 1;
     opus_int64 remaining_samples = crop_length;
     while (remaining_samples > 0) {
-        int max_samples = (int) MIN(960, remaining_samples / channels);
+        int max_samples = (int) MIN(frame_size, remaining_samples);
         if (max_samples <= 0) {
             break;
         }
@@ -1001,8 +1028,8 @@ int cropOpusAudio(const char *inputPath, const char *outputPath, float startTime
 
         int end = remaining_samples <= 0;
 
-        size_t byte_count = samples_read * sizeof(int16_t);
-        if (!writeFrame((uint8_t *)buffer, byte_count, end)) {
+        size_t byte_count = samples_read * channels * sizeof(int16_t);
+        if (!writeFrame((uint8_t *)buffer, byte_count, 0)) {
             LOGE("Failed to write frame");
             success = 0;
             break;
@@ -1024,7 +1051,7 @@ int append_stream(OggOpusFile *of, int16_t* buffer, int channels, int is_last) {
     }
 
     while (total_source_samples > 0) {
-        int samples_read = op_read(of, buffer, frame_size, NULL);
+        int samples_read = op_read(of, buffer, frame_size * channels, NULL);
         if (samples_read < 0) {
             LOGE("Decoding error from op_read(): %d", samples_read);
             return 0;
@@ -1034,7 +1061,7 @@ int append_stream(OggOpusFile *of, int16_t* buffer, int channels, int is_last) {
         }
         total_source_samples -= samples_read;
         size_t byte_count = (size_t) samples_read * channels * sizeof(int16_t);
-        if (!writeFrame((uint8_t*) buffer, byte_count, is_last && total_source_samples <= 0)) {
+        if (!writeFrame((uint8_t*) buffer, byte_count, 0)) {
             LOGE("Failed to write encoded frame");
             return 0;
         }
@@ -1074,10 +1101,10 @@ int joinOpusAudios(const char* file1, const char* file2, const char* dest) {
         return 0;
     }
 
-    int channels = MIN(head1->channel_count, head2->channel_count);
+    int channels = head1->channel_count;
     opus_int32 rate = 48000;
 
-    if (!initRecorder(dest, rate)) {
+    if (channels != head2->channel_count || channels < 1 || channels > 2 || !initRecorderChannels(dest, rate, channels)) {
         LOGE("Failed to init recorder");
         op_free(opusFile1);
         op_free(opusFile2);

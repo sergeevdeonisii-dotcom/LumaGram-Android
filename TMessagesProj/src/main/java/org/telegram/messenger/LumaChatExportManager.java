@@ -271,16 +271,18 @@ public final class LumaChatExportManager implements NotificationCenter.Notificat
         return cancelled.get();
     }
 
+    /** Completed user data remains readable on expiry, but never by a later login. */
+    public boolean canReadCompletedExport() {
+        return session.isCurrent();
+    }
+
     private void createSessionDirectories() throws Exception {
         File privateCache = ApplicationLoader.applicationContext.getCacheDir();
-        File exportCache = ApplicationLoader.applicationContext.getExternalCacheDir();
-        if (exportCache == null) {
-            exportCache = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE);
-        }
-        if (privateCache == null || exportCache == null) {
+        if (privateCache == null) {
             throw new IllegalStateException("No cache directory");
         }
-        outputDir = new File(exportCache, "luma_chat_exports");
+        // External cache is readable by other storage-authorized apps on older Android.
+        outputDir = new File(privateCache, "luma_chat_exports");
         if (!outputDir.exists() && !outputDir.mkdirs() && !outputDir.isDirectory()) {
             throw new IllegalStateException("Could not create output directory");
         }

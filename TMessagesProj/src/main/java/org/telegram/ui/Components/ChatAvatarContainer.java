@@ -53,6 +53,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
+import org.telegram.messenger.LunagramStreamerMode;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -1042,6 +1043,8 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
     }
 
     public void setTitle(CharSequence value, boolean scam, boolean fake, boolean verified, boolean premium, TLRPC.EmojiStatus emojiStatus, boolean animated) {
+        value = LunagramStreamerMode.displayName(currentAccount, value,
+                parentFragment != null && parentFragment.getCurrentChat() != null);
         if (value != null) {
             value = Emoji.replaceEmoji(value, titleTextView.getPaint().getFontMetricsInt(), false);
         }
@@ -1383,7 +1386,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                 if (count > 0) {
                     newSubtitle = LocaleController.formatPluralString("messages", count, count);
                 } else {
-                    newSubtitle = LocaleController.formatString(R.string.TopicProfileStatus, chat.title);
+                    newSubtitle = LocaleController.formatString(R.string.TopicProfileStatus, LunagramStreamerMode.displayName(currentAccount, chat));
                 }
             } else if (chat != null) {
                 TLRPC.ChatFull info = parentFragment.getCurrentChatInfo();
@@ -1462,6 +1465,12 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             // A network/connection label temporarily owns the subtitle. Keep
             // updating the cached text, but do not prepend its recording icon.
             setTypingAnimation(lastSubtitle == null);
+        }
+        // A local alias never conceals the actual peer name. Streamer mode is
+        // deliberately excluded by getLunagramChatAlias, so this cannot unmask it.
+        if (chat != null && !TextUtils.isEmpty(parentFragment.getLunagramChatAlias())) {
+            CharSequence realName = AndroidUtilities.removeRTL(AndroidUtilities.removeDiacritics(chat.title));
+            newSubtitle = TextUtils.isEmpty(newSubtitle) ? realName : TextUtils.concat(realName, " · ", newSubtitle);
         }
         lastSubtitleColorKey = useOnlineColor ? Theme.key_chat_status : Theme.key_actionBarDefaultSubtitle;
         if (lastSubtitle == null) {

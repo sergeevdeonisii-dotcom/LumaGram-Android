@@ -1,0 +1,162 @@
+import java.util.ArrayList;
+import java.util.Random;
+import org.telegram.messenger.LunagramSubscriptionCatalog.Plan;
+
+/** Runs actual screen methods, with only native widgets/client state modeled. */
+public final class SubscriptionColors201Probe extends SubscriptionColorBase {
+    private static int checks;
+    private static void check(boolean condition, String message) {
+        checks++;
+        if (!condition) throw new AssertionError(message);
+    }
+    static final class TextView {
+        int color;
+        void setTextColor(int color) { this.color = color; }
+    }
+    static final class Theme {
+        static final int key_windowBackgroundWhite = 1, key_windowBackgroundWhiteGrayText = 2, key_windowBackgroundGray = 3, key_windowBackgroundWhiteBlackText = 4;
+        static int background = 0xfff0f0f0, neutral = 0xff707070, canvas = 0xff000000;
+        static int getColor(int key, Object provider) { return key == 1 ? background : key == 2 ? neutral : canvas; }
+    }
+    static final class ThemeDescription {
+        static final int FLAG_BACKGROUND = 1;
+        interface ThemeDescriptionDelegate { void didSetColor(); }
+        final ThemeDescriptionDelegate delegate;
+        final int key;
+        ThemeDescription(Object view, int flags, Object classes, Object paint, Object drawables,
+                ThemeDescriptionDelegate delegate, int key) { this.delegate = delegate; this.key = key; }
+    }
+    static final class LunagramSubscriptionClient {
+        static final class Term {
+            String planId = "ultra";
+            long startsAtMs = 1000, expiresAtMs = 3000;
+        }
+        static final class Subscription {
+            Term current = new Term();
+            final ArrayList<Term> queued = new ArrayList<>();
+            boolean legacy;
+            long legacyExpiresAtMs = 3000;
+        }
+        Subscription snapshot = new Subscription();
+        boolean authenticated = true, fresh = true, owner = true, busy, test;
+        long now = 2000;
+        Subscription subscription() { return owner ? snapshot : null; }
+        boolean isAuthenticated() { return authenticated; }
+        boolean isBusy() { return busy; }
+        boolean isAccountCurrent() { return owner; }
+        boolean isTestAccount() { return test; }
+        boolean subscriptionIsFresh() { return fresh; }
+        long estimatedServerNowMs() { return now; }
+    }
+    static final class R {
+        static final class string {
+            static final int LunagramSubscriptionPersonalTier = 1, LunagramSubscriptionStatusUnknown = 2,
+                    LunagramSubscriptionLastConfirmed = 3, LunagramSubscriptionLegacyTier = 4,
+                    LunagramSubscriptionCurrentPlan = 5, LunagramSubscriptionFreeTier = 6, LunagramSubscriptionUltraActive = 7,
+                    LunagramSubscriptionCheckingStatus = 8;
+        }
+    }
+    static final class LumaBuildPolicy { static boolean isPersonalEdition() { return false; } }
+    static final class LocaleController { static String formatString(int id, String value) { return "current:" + value; } }
+    private static String getString(int id) { return "status:" + id; }
+    private String planTitle(String planId) { return planId; }
+    Object resourceProvider, fragmentView = new Object(), listView = new Object();
+    TextView currentPlanLabel = new TextView();
+    TextView subscriptionTitle = new TextView(), subscriptionIntro = new TextView();
+    LunagramSubscriptionClient client = new LunagramSubscriptionClient();
+    boolean statusLoading, isPaused, isFinished;
+    // Deliberately different purchase choice: it must have no influence on the active label.
+    String selectedPlan = "based";
+
+    /* ACTUAL_METHODS */
+
+    private void expectNeutral(String reason) {
+        check(currentPlanId() == null, reason + ": no active identity");
+        updateCurrentPlanLabelColor();
+        check(currentPlanLabel.color == currentPlanLabelColor(null, Theme.canvas, Theme.neutral), reason + ": neutral");
+        check(!currentPlanText().equals(getString(R.string.LunagramSubscriptionUltraActive)), reason + ": text agrees");
+    }
+
+    public static void main(String[] args) {
+        SubscriptionColors201Probe screen = new SubscriptionColors201Probe();
+        String[] ids = {"based", "standard", "plus", "pro", "ultra"};
+        int[] day = {0xff7541b4, 0xff7541b4, 0xff7541b4, 0xff7541b4, 0xff7541b4};
+        int[] night = {0xffc4a2ff, 0xffc4a2ff, 0xffc4a2ff, 0xffc4a2ff, 0xffc4a2ff};
+        for (int i = 0; i < ids.length; i++) {
+            screen.client.snapshot.current.planId = ids[i];
+            for (String purchase : ids) {
+                screen.selectedPlan = purchase;
+                for (boolean dark : new boolean[]{false, true}) {
+                    Theme.canvas = dark ? 0xff18222d : 0xfff0f0f0;
+                    Theme.neutral = dark ? 0xffa0a0a0 : 0xff707070;
+                    screen.updateCurrentPlanLabelColor();
+                    check(screen.currentPlanLabel.color == (dark ? night[i] : day[i]), ids[i] + ": exact theme palette");
+                    check(screen.currentPlanId().equals("ultra"), "trusted legacy paid identity normalizes to Ultra, not selected purchase");
+                    check(screen.currentPlanText().equals(getString(R.string.LunagramSubscriptionUltraActive)), "same active identity for text/color");
+                    check(screen.selectedPlan.equals(purchase), "purchase choice not mutated");
+                }
+            }
+        }
+        screen.client.now = 1000;
+        check(screen.currentPlanId().equals("ultra"), "inclusive start boundary");
+        screen.client.now = 3000; screen.expectNeutral("exclusive expiry boundary");
+        screen.client.now = 999; screen.expectNeutral("future term");
+        screen.client.now = 2000;
+        screen.client.authenticated = false; screen.expectNeutral("unauthenticated"); screen.client.authenticated = true;
+        screen.client.fresh = false; screen.expectNeutral("stale snapshot"); screen.client.fresh = true;
+        screen.client.owner = false; screen.expectNeutral("other account"); screen.client.owner = true;
+        screen.client.snapshot.legacy = true;
+        check(screen.currentPlanId().equals("ultra"), "trusted unexpired legacy paid pool becomes Ultra");
+        screen.client.now=3000;screen.expectNeutral("legacy expiry is exclusive");
+        screen.client.now=2000;screen.client.snapshot.legacy = false;
+        LunagramSubscriptionClient.Term current = screen.client.snapshot.current;
+        screen.client.snapshot.current = null;
+        screen.client.snapshot.queued.add(current);
+        screen.expectNeutral("queued tier is not current");
+        screen.client.snapshot.current = current;
+        LunagramSubscriptionClient.Subscription snapshot = screen.client.snapshot;
+        screen.client.snapshot = null; screen.expectNeutral("no subscription"); screen.client.snapshot = snapshot;
+        LunagramSubscriptionClient client = screen.client;
+        screen.client = null; screen.expectNeutral("no client"); screen.client = client;
+        int unknown = currentPlanLabelColor("unknown", 0xfff0f0f0, 0xff707070);
+        check(unknown == currentPlanLabelColor(null, 0xfff0f0f0, 0xff707070), "unknown tier fallback");
+        check(((unknown >> 16) & 255) == ((unknown >> 8) & 255) && ((unknown >> 8) & 255) == (unknown & 255), "fallback remains neutral gray after contrast adjustment");
+
+        ArrayList<ThemeDescription> hooks = screen.getThemeDescriptions();
+        Theme.background = 0xffffffff; Theme.canvas = 0xff000000;
+        screen.updateCurrentPlanLabelColor();
+        check(screen.currentPlanLabel.color == night[4], "transparent hero contrast uses black outer canvas, not white section");
+        Theme.background = 0xff181818; Theme.canvas = 0xffffffff;
+        screen.updateCurrentPlanLabelColor();
+        check(screen.currentPlanLabel.color == day[4], "transparent hero contrast uses white outer canvas, not dark section");
+        Theme.canvas = 0xfff0f0f0; screen.updateCurrentPlanLabelColor();
+        int before = screen.currentPlanLabel.color;
+        Theme.canvas = 0xff18222d;
+        for (ThemeDescription hook : hooks) if (hook.key == Theme.key_windowBackgroundGray && hook.delegate != null) hook.delegate.didSetColor();
+        check(before == day[4] && screen.currentPlanLabel.color == night[4], "live theme callback recomputes active color");
+        screen.client.now = 3000;
+        for (ThemeDescription hook : hooks) if (hook.delegate != null) hook.delegate.didSetColor();
+        screen.expectNeutral("theme callback cannot retain expired tier");
+        screen.currentPlanLabel = null;
+        screen.updateCurrentPlanLabelColor();
+        for (ThemeDescription hook : hooks) if (hook.delegate != null) hook.delegate.didSetColor();
+
+        double minContrast = Double.POSITIVE_INFINITY;
+        Random random = new Random(201);
+        for (int b = 0; b < 1280; b++) {
+            int background = b < 256 ? 0xff000000 | b * 0x010101 : 0xff000000 | random.nextInt(0x1000000);
+            for (String id : new String[]{null, "based", "standard", "plus", "pro", "ultra", "unknown"}) {
+                int result = currentPlanLabelColor(id, background, 0xff808080);
+                double ratio = ColorUtils.calculateContrast(result, background);
+                minContrast = Math.min(minContrast, ratio);
+                check(ratio >= 4.5, "AA contrast on custom theme " + Integer.toHexString(background));
+                check((result >>> 24) == 255, "opaque text avoids underlay-dependent contrast");
+            }
+        }
+        System.out.printf(java.util.Locale.ROOT, "PASS: %d checks; Ultra + legacy identity normalization, lifecycle guards, theme callbacks, 1280 backgrounds; minimum contrast %.4f:1%n", checks, minContrast);
+        System.out.println("Scope: actual extracted display methods with modeled native widgets/client and AndroidX color math; no APK/device/network test.");
+    }
+}
+class SubscriptionColorBase {
+    public ArrayList<SubscriptionColors201Probe.ThemeDescription> getThemeDescriptions() { return new ArrayList<>(); }
+}

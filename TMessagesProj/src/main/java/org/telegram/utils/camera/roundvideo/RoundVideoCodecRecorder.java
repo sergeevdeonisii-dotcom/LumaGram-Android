@@ -113,6 +113,9 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
             createVideoEncoder();
             createAudioEncoder();
             videoCodec.start();
+            // Starting the codec does not open the microphone. Prepare both
+            // encoders before the camera starts delivering recordable frames.
+            audioCodec.start();
             prepared = true;
             diagnostics.log("codecs prepared: video=" + videoCodec.getName()
                     + ", audio=" + audioCodec.getName()
@@ -131,7 +134,6 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
         if (started) return;
         if (!prepared) throw new IllegalStateException("Recorder is not prepared");
         try {
-            audioCodec.start();
             audioRecord.startRecording();
             if (audioRecord.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) {
                 throw new IllegalStateException("Unable to start AudioRecord");

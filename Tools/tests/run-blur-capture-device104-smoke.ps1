@@ -76,11 +76,19 @@ try {
     $start.FileName = $adb; $start.UseShellExecute = $false; $start.CreateNoWindow = $true
     $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true
     foreach ($argument in @('-s',$Serial,'shell',$command)) { $start.ArgumentList.Add($argument) }
+    $elapsed = [Diagnostics.Stopwatch]::StartNew()
     $child = [Diagnostics.Process]::Start($start)
     try {
+        # Drain both streams while the process runs: framework/verifier output
+        # must not fill a pipe and turn WaitForExit into a false timeout.
+        $stdout = $child.StandardOutput.ReadToEndAsync()
+        $stderr = $child.StandardError.ReadToEndAsync()
         if (!$child.WaitForExit(30000)) { $child.Kill($true); throw 'Bounded Android probe timed out.' }
-        $output = $child.StandardOutput.ReadToEnd() + $child.StandardError.ReadToEnd()
-        if ($child.ExitCode -ne 0 -or !$output.Contains("PASS: actual APK $ExpectedOutcome Android Canvas")) { throw "Actual APK Canvas probe failed: $output" }
+        $output = $stdout.GetAwaiter().GetResult() + $stderr.GetAwaiter().GetResult()
+        $elapsed.Stop()
+        if ($child.ExitCode -ne 0 -or !$output.Contains("PASS: actual APK $ExpectedOutcome Android Canvas")) {
+            throw "Actual APK Canvas probe failed (exit=$($child.ExitCode), elapsedMs=$($elapsed.ElapsedMilliseconds)): $output"
+        }
         Write-Output $output.Trim()
     } finally { $child.Dispose() }
 } finally {

@@ -415,6 +415,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         drawable.setPadding(dp(6));
         drawable.setRadius(dp(21));
         buttonsLayout.setBackground(drawable);
+        updateCameraControlsCapsule(buttonsLayout);
     }
 
     private Boolean wasFlashing;
@@ -486,6 +487,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        updateCameraControlsCapsule(buttonsLayout);
         if (updateTextureViewSize) {
             int newSize;
             if ((MeasureSpec.getSize(heightMeasureSpec) - getPaddingBottom()) > MeasureSpec.getSize(widthMeasureSpec) * 1.3f) {

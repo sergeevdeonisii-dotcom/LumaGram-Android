@@ -283,6 +283,51 @@ public class ChatInputViewsContainer extends FrameLayout {
         return getMeasuredHeight() - maxBottomInset - dp(INPUT_BUBBLE_BOTTOM);
     }
 
+    /** Read-only visible oval geometry: left/right are its flat top rail, top/bottom its body. */
+    public boolean getPetRailBounds(RectF out) {
+        if (out == null) return false;
+        out.setEmpty();
+        if (!drawInputBackground || blurredBackgroundDrawable == null || blurredBackgroundDrawable.getAlpha() <= 0
+                || getMeasuredWidth() <= 0 || getMeasuredHeight() <= 0 || inputBubbleHeightRound <= 0
+                || Float.isNaN(inputBubbleHeight) || Float.isInfinite(inputBubbleHeight)
+                || Float.isNaN(bubbleInputTranlationY) || Float.isInfinite(bubbleInputTranlationY)
+                || Float.isNaN(inputBubbleOffsetLeft) || Float.isInfinite(inputBubbleOffsetLeft)
+                || Float.isNaN(inputBubbleOffsetRight) || Float.isInfinite(inputBubbleOffsetRight)) return false;
+        final boolean splitInput = splitInputEnabled && leftButtonBackgroundDrawable != null && rightButtonBackgroundDrawable != null
+                && inputBubbleOffsetLeft < 1 && inputBubbleOffsetRight < 1;
+        final int blurTop = getMeasuredHeight() - currentBlurredHeight;
+        final int translatedTop = blurTop + (int) bubbleInputTranlationY;
+        final int visibleLeft, visibleRight, visibleTop, visibleHeight;
+        final float radius;
+        if (splitInput) {
+            final int originalSingleLineHeight = Math.min(inputBubbleHeightRound, dp(44));
+            final int configuredHeight = Math.min(originalSingleLineHeight, dp(LiteMode.getLiquidGlassInputHeightDp()));
+            if (configuredHeight <= 0) return false;
+            final int compactInset = Math.max(0, (originalSingleLineHeight - configuredHeight) / 2);
+            final int centerBottom = Math.max(compactInset + 1, inputBubbleHeightRound - compactInset);
+            final int centerRight = getMeasuredWidth() - splitInputCenterInsetRight;
+            final int centerLeft = Math.min(splitInputCenterInsetLeft, centerRight - dp(24));
+            // dispatchDraw expands bounds by7 vertically, while the drawable consumes
+            // the same padding on every edge: the literal visible top remains this value.
+            visibleLeft = centerLeft + dp(7);
+            visibleRight = centerRight - dp(7);
+            visibleTop = translatedTop + compactInset;
+            visibleHeight = centerBottom - compactInset;
+            radius = configuredHeight / 2f;
+        } else {
+            visibleLeft = Math.round(inputBubbleOffsetLeft) + dp(7);
+            visibleRight = getMeasuredWidth() - Math.round(inputBubbleOffsetRight) - dp(7);
+            visibleTop = translatedTop;
+            visibleHeight = inputBubbleHeightRound;
+            radius = Math.min(dp(INPUT_BUBBLE_RADIUS), visibleHeight / 2f);
+        }
+        final float railLeft = visibleLeft + radius, railRight = visibleRight - radius;
+        // Includes the moving body's/tail's full footprint, not merely its center.
+        if (visibleHeight <= 0 || railLeft < 0 || railRight > getMeasuredWidth() || railRight - railLeft < dp(56)) return false;
+        out.set(railLeft, visibleTop, railRight, visibleTop + visibleHeight);
+        return true;
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);

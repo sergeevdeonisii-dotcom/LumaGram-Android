@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="LutTextToolsTitle">Инструменты текста</string>
+    <string name="LutReadingTitle">Режим чтения</string>
+    <string name="LutUndo">Отменить ввод</string>
+    <string name="LutRedo">Повторить ввод</string>
+    <string name="LutLayoutRu">Исправить раскладку → русская</string>
+    <string name="LutLayoutEn">Исправить раскладку → английская</string>
+    <string name="LutReplace">Найти и заменить</string>
+    <string name="LutWhitespace">Убрать лишние пробелы</string>
+    <string name="LutStatistics">Статистика текста</string>
+    <string name="LutCompare">Сравнить два текста</string>
+    <string name="LutPreview">Предпросмотр</string>
+    <string name="LutPlainTextHint">Проверь и отредактируй перед применением. Результат — обычный текст. Ничего не отправляется автоматически.</string>
+    <string name="LutApplyDraft">Применить к черновику</string>
+    <string name="LutFind">Найти</string>
+    <string name="LutReplaceWith">Заменить на</string>
+    <string name="LutLiteralHint">Заменяются все точные совпадения с учётом регистра. Без регулярных выражений.</string>
+    <string name="LutFindRequired">Введи текст для поиска</string>
+    <string name="LutNoMatches">Совпадений нет</string>
+    <string name="LutTooLong">Лимит инструмента — 65 536 единиц UTF-16 корректного Unicode-текста. Сократи текст и попробуй снова.</string>
+    <string name="LutDraftChanged">Черновик или чат изменился, пока инструмент был открыт. Текущий черновик сохранён. Открой инструмент заново.</string>
+    <string name="LutStatisticsBody">Кодовые точки Unicode: %1$d\nСлова: %2$d\nСтроки: %3$d\nЕдиницы UTF-16: %4$d\nБайты UTF-8: %5$d\n\nСоставной эмодзи может содержать несколько кодовых точек.</string>
+    <string name="LutSecondText">Второй текст</string>
+    <string name="LutCompareHint">Первый текст — сообщение или черновик, из которого открыт инструмент. Введи второй текст ниже.</string>
+    <string name="LutCompareLegend">Удалённое зачёркнуто, добавленное подчёркнуто. Показан изменённый фрагмент между общими началом и концом.</string>
+    <string name="LutIdentical">Тексты совпадают.</string>
+    <string name="LutPrevious">Назад</string>
+    <string name="LutNext">Далее</string>
+    <string name="LutEmpty">Текст пуст</string>
+    <string name="LutMatchPosition">Совпадение %1$d из %2$d</string>
+    <string name="LutParagraphPosition">Абзац %1$d из %2$d</string>
+    <string name="LutCombine">Объединить в черновик</string>
+</resources>

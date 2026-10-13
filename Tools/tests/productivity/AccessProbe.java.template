@@ -1,0 +1,44 @@
+package org.telegram.messenger;
+import java.util.function.BooleanSupplier;
+import org.telegram.ui.Components.LunagramTextSelectionGuard;
+
+/** Actual extracted UI predicates plus actual native selection callback; no Android rendering claim. */
+public final class AccessProbe {
+    static int checks;
+    static void check(boolean ok,String label){checks++;if(!ok)throw new AssertionError(label);}
+    static final class Activity {boolean finishing;boolean isFinishing(){return finishing;}}
+    static final class Host {Activity activity=new Activity();int account;Activity getParentActivity(){return activity;}int getCurrentAccount(){return account;}}
+    static final class Sheet {
+        Host host=new Host();int account;BooleanSupplier contextValid;LunagramMediaAccess.Session access=LunagramMediaAccess.forAccount(0);
+        @@SHEET_VALID@@
+    }
+    static final class Reader {
+        int currentAccount,ownerAccount;BooleanSupplier contextValid;LunagramMediaAccess.Session access=LunagramMediaAccess.forAccount(0);
+        @@READER_ALLOWED@@
+    }
+    static final class Mode extends android.view.ActionMode {int finishes;public void finish(){finishes++;}}
+    static void reset(){UserConfig.selectedAccount=0;UserConfig.owners[0]=100;LunagramSubscriptionClient.epochs[0]=0;LunagramSubscriptionAccess.paid=true;}
+    public static void main(String[] args){
+        for(int change=0;change<9;change++){
+            reset();Sheet s=new Sheet();Reader r=new Reader();boolean[] context={true};s.contextValid=r.contextValid=()->context[0];
+            check(s.valid()&&r.allowed(),"Current source is allowed");
+            switch(change){case 0:context[0]=false;break;case 1:UserConfig.selectedAccount=1;break;case 2:UserConfig.owners[0]++;break;
+                case 3:LunagramSubscriptionClient.epochs[0]++;break;case 4:LunagramSubscriptionAccess.paid=false;break;
+                case 5:s.host.account=1;r.currentAccount=1;break;case 6:s.host.activity.finishing=true;break;case 7:s.host.activity=null;break;
+                case 8:s.contextValid=null;r.contextValid=null;break;}
+            if(change==8){check(s.valid()&&r.allowed(),"Composer may use its own captured guard");continue;}
+            check(!s.valid(),"Sheet rejects changed context "+change);
+            if(change<6)check(!r.allowed(),"Reader rejects changed context "+change);
+        }
+        reset();Sheet s=new Sheet();boolean[] context={true};s.contextValid=()->context[0];int[] clears={0};Mode mode=new Mode();
+        LunagramTextSelectionGuard guard=new LunagramTextSelectionGuard(s::valid,()->clears[0]++);
+        check(guard.onCreateActionMode(mode,null),"Current native selection opens");
+        check(!guard.onActionItemClicked(mode,null),"Authorized native action delegates");
+        context[0]=false;
+        check(guard.onActionItemClicked(mode,null),"Revoked native action consumed");
+        check(mode.finishes==1&&clears[0]==1,"Revoked native action clears and closes");
+        check(!guard.onCreateActionMode(mode,null),"Revoked selection cannot reopen");
+        check(!guard.onPrepareActionMode(mode,null),"Revoked preparation rejected");
+        System.out.println("PASS extracted text/reader + native selection "+checks+" checks");
+    }
+}

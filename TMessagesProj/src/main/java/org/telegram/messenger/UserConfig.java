@@ -471,6 +471,10 @@ public class UserConfig extends BaseController {
         // owner check. Do not hold sync while waiting: those helpers themselves call
         // getClientUserId, and holding it here would reverse the lock order.
         synchronized (BlackHoleNotes.class) { }
+        synchronized (LunagramWorkspaceStore.class) { }
+        synchronized (LunagramMediaTools.class) { }
+        LunagramLocalLabels.clearAccountCache(currentAccount);
+        LunagramLinkSettings.clearOnLogout(currentAccount);
         synchronized (BlackHoleNotificationJournal.class) { }
         LunagramSubscriptionClient.onAccountLogout(currentAccount);
         synchronized (LumaLocalGifts.class) {

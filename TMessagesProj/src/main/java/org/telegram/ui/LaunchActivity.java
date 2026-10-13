@@ -415,6 +415,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
         instance = this;
         ApplicationLoader.postInitApplication();
+        org.telegram.messenger.LunagramMessageReminders.restore(ApplicationLoader.applicationContext);
         AndroidUtilities.checkDisplaySize(this, getResources().getConfiguration());
         AndroidUtilities.setPreferredMaxRefreshRate(getWindow());
         currentAccount = UserConfig.selectedAccount;
@@ -1525,6 +1526,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     @SuppressLint("Range")
     private boolean handleIntent(Intent intent, boolean isNew, boolean restore, boolean fromPassword, Browser.Progress progress, boolean rebuildFragments, boolean openedTelegram) {
+        if (!org.telegram.messenger.LunagramMessageReminders.isValidOpenIntent(intent)) return false;
         if (GiftInfoBottomSheet.handleIntent(intent, progress)) {
             return true;
         }

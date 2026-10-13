@@ -16,6 +16,8 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
+import android.hardware.camera2.params.OutputConfiguration;
+import android.hardware.camera2.params.SessionConfiguration;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.os.Build;
 import android.os.Handler;
@@ -40,6 +42,9 @@ import org.telegram.messenger.LumaHorizonLock;
 import org.telegram.messenger.LumaRoundVideoCamera;
 import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.LumaRoundVideoStabilization;
+import org.telegram.messenger.LunagramVideoEffectsSettings;
+import org.telegram.messenger.LunagramMediaAccess;
+import org.telegram.messenger.LunagramFeatureCatalog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 
@@ -49,6 +54,8 @@ final class RoundVideoCameraController {
         void onConfigured(@NonNull CameraInfo info, boolean cameraSwitch);
 
         void onRecordingStarted();
+
+        void onCameraPreviewFirstFrame();
 
         void onCameraSwitchStarted(@NonNull RoundVideoSession.CameraFacing facing);
 
@@ -136,6 +143,12 @@ final class RoundVideoCameraController {
     private RoundVideoCodecRecorder commonStartRecorder;
     private CameraDevice cameraDevice;
     private CameraCaptureSession captureSession;
+    private RoundVideoBokeh bokehSession;
+    private final boolean bokehRequested;
+    private final int currentAccount;
+    private final LunagramMediaAccess.Session mediaAccess;
+    private boolean bokehRejected;
+    private volatile boolean bokehActive;
     private CaptureRequest.Builder repeatingBuilder;
     private RoundVideoMp4Writer writer;
     private volatile RoundVideoSession.CameraFacing requestedFacing;
@@ -160,6 +173,8 @@ final class RoundVideoCameraController {
     private boolean reopenAfterCameraClose;
     private boolean notifySwitchCompletion;
     private volatile boolean awaitingSwitchPreviewFrame;
+    private boolean awaitingInitialPreviewFrame;
+    private volatile boolean cameraPreviewInputSeen;
     private volatile boolean stopping;
     private volatile boolean previewTransformEnabled;
     private boolean frontConfigurationLogged;
@@ -212,6 +227,7 @@ final class RoundVideoCameraController {
     };
 
     RoundVideoCameraController(
+            int currentAccount,
             @NonNull Context context,
             @NonNull TextureView previewView,
             @NonNull RoundVideoSession.OutputResolution outputResolution,
@@ -222,6 +238,9 @@ final class RoundVideoCameraController {
             @NonNull RoundVideoDiagnostics diagnostics,
             @NonNull Callback callback
     ) {
+        this.currentAccount = currentAccount;
+        this.mediaAccess = LunagramMediaAccess.forAccount(currentAccount);
+        bokehRequested = LunagramVideoEffectsSettings.isBokehEnabled(currentAccount);
         this.context = context.getApplicationContext();
         this.cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
         this.previewView = previewView;
@@ -233,7 +252,8 @@ final class RoundVideoCameraController {
         maximumFrameRate = frameRate.getValue();
         // A constrained high-speed session cannot target two preview surfaces.
         // Render both the preview and the encoder from one camera SurfaceTexture.
-        processedPreview = frameRate.getValue() > 60 || stabilizationMode == LumaRoundVideoStabilization.ENHANCED;
+        processedPreview = frameRate.getValue() > 60 || stabilizationMode == LumaRoundVideoStabilization.ENHANCED
+                || LunagramVideoEffectsSettings.needsProcessedPreview(currentAccount);
         horizonLock = stabilizationMode == LumaRoundVideoStabilization.ENHANCED ? new LumaHorizonLock(context) : null;
         this.compositionEnabled = compositionEnabled;
         this.diagnostics = diagnostics;
@@ -252,6 +272,8 @@ final class RoundVideoCameraController {
         requestedFacing = facing;
         active = true;
         concurrentAttempted = false;
+        awaitingInitialPreviewFrame = true;
+        cameraPreviewInputSeen = false;
         if (horizonLock != null && !horizonLock.start()) {
             android.widget.Toast.makeText(context, LocaleController.getString(R.string.LumaRoundVideoHorizonUnavailable), android.widget.Toast.LENGTH_LONG).show();
         }
@@ -399,6 +421,11 @@ final class RoundVideoCameraController {
 
                 @Override
                 public void onSurfaceTextureUpdated(@NonNull SurfaceTexture surfaceTexture) {
+                    if (active && !stopping && awaitingInitialPreviewFrame && cameraPreviewInputSeen
+                            && surfaceTexture.getTimestamp() > 0L) {
+                        awaitingInitialPreviewFrame = false;
+                        callback.onCameraPreviewFirstFrame();
+                    }
                     if (awaitingSwitchPreviewFrame) {
                         awaitingSwitchPreviewFrame = false;
                         diagnostics.log("camera switch first preview frame");
@@ -537,9 +564,11 @@ final class RoundVideoCameraController {
         );
         glProcessor.setCameraPolicy(selectedFacing == RoundVideoSession.CameraFacing.FRONT,
                 activeFrameRate.getValue(), sourceFrameRate());
+        glProcessor.setMediaAccess(currentAccount, mediaAccess);
         glProcessor.setFirstFrameListener(() -> {
+            cameraPreviewInputSeen = true;
             Handler handler = cameraHandler;
-            if (handler != null) handler.post(this::startRecordingAfterFirstFrame);
+            if (handler != null) handler.post(this::startRecordingWhenSessionReady);
         });
         recordingSurface = glProcessor.start();
     }
@@ -551,6 +580,7 @@ final class RoundVideoCameraController {
                 || concurrentCamera != null && !concurrentCamera.isReady() || facing == activeFacing) return;
         switchingCamera = true;
         notifySwitchCompletion = true;
+        final boolean cameraControlsNeedReset = torchEnabled || zoomProgress != 0f;
         torchEnabled = false;
         torchVerificationPending = false;
         zoomProgress = 0f;
@@ -559,7 +589,7 @@ final class RoundVideoCameraController {
         RoundVideoConcurrentCamera concurrent = concurrentCamera;
         if (concurrent != null && concurrent.isReady()) {
             diagnostics.log("warm camera switch requested: from=" + activeFacing + ", to=" + facing);
-            if (!concurrent.select(facing)) return; // Failure callback closes both before sequential recovery.
+            if (!concurrent.select(facing, cameraControlsNeedReset)) return; // No HAL request churn for an ordinary warm switch.
             RoundVideoGlProcessor processor = glProcessor;
             if (processor == null) { recoverConcurrentCamera(new IllegalStateException("Concurrent GL unavailable")); return; }
             processor.selectConcurrentInput(concurrentPrimary.facing != facing,
@@ -648,6 +678,11 @@ final class RoundVideoCameraController {
     private void createCaptureSession() {
         CameraDevice device = cameraDevice;
         if (device == null || previewSurface == null || recordingSurface == null) return;
+        if (bokehRequested && !bokehRejected && Build.VERSION.SDK_INT >= 31 && !highSpeed
+                && RoundVideoBokeh.supports(cameraManager, device.getId(), recordingSize)) {
+            createBokehSession(device);
+            return;
+        }
         try {
             captureSessionRequestedNs = SystemClock.elapsedRealtimeNanos();
             diagnostics.log("capture session requested: preview=" + previewSize
@@ -656,6 +691,14 @@ final class RoundVideoCameraController {
             CameraCaptureSession.StateCallback callback = createSessionCallback(device, ++captureGeneration);
             if (highSpeed && Build.VERSION.SDK_INT >= 23) {
                 device.createConstrainedHighSpeedCaptureSession(Collections.singletonList(recordingSurface), callback, cameraHandler);
+            } else if (Build.VERSION.SDK_INT >= 28) {
+                ArrayList<OutputConfiguration> outputs = new ArrayList<>();
+                if (!processedPreview) outputs.add(new OutputConfiguration(previewSurface));
+                outputs.add(new OutputConfiguration(recordingSurface));
+                SessionConfiguration configuration = new SessionConfiguration(SessionConfiguration.SESSION_REGULAR,
+                        outputs, cameraHandler::post, callback);
+                RoundVideoConcurrentCamera.setSessionFrameRate(configuration, device, activeFpsRange);
+                device.createCaptureSession(configuration);
             } else {
                 device.createCaptureSession(processedPreview ? Collections.singletonList(recordingSurface)
                         : Arrays.asList(previewSurface, recordingSurface), callback, cameraHandler);
@@ -707,10 +750,10 @@ final class RoundVideoCameraController {
                                 ),
                                 wasSwitch
                         );
-                        // A concurrent trial may already have reported its first
-                        // GL frame before being rejected. Its fallback must start
-                        // the existing recorder once the single session is ready.
-                        if (glProcessor != null && glProcessor.hasFirstFrame()) startRecordingAfterFirstFrame();
+                        // Start audio while the HAL delivers its first frame,
+                        // not after showing an unrecorded preview frame. GL is
+                        // still armed only after actual microphone input arrives.
+                        startRecordingWhenSessionReady();
                         if (requestedFacing != activeFacing) switchCameraIfNeeded(requestedFacing);
                     } catch (Exception e) {
                         if (activeFrameRate.getValue() > 30) {
@@ -752,8 +795,69 @@ final class RoundVideoCameraController {
             };
     }
 
-    private void startRecordingAfterFirstFrame() {
-        if (!active || stopping || captureSession == null || recorder == null || recorder.isStarted()) return;
+    boolean isBokehActive() { return bokehActive; }
+    boolean isFastSwitchActive() { return concurrentCamera != null && concurrentCamera.isReady(); }
+
+    private boolean hasCaptureSession() { return captureSession != null || bokehActive; }
+
+    private void createBokehSession(CameraDevice device) {
+        if (!mediaAccess.canUse(LunagramFeatureCatalog.Feature.ROUND_VIDEO_PORTRAIT)) {
+            bokehRejected = true;
+            createCaptureSession();
+            return;
+        }
+        final int generation = ++captureGeneration;
+        final RoundVideoGlProcessor processor = glProcessor;
+        final long firstFrameSequence = processor == null ? 0 : processor.getCameraFrameSequence();
+        RoundVideoBokeh candidate = new RoundVideoBokeh(device, recordingSurface, cameraHandler, mediaAccess, new RoundVideoBokeh.Listener() {
+            @Override public void onReady() {
+                if (!active || stopping || cameraDevice != device || generation != captureGeneration) return;
+                bokehActive = true;
+                activeFacing = selectedFacing;
+                boolean wasSwitch = notifySwitchCompletion;
+                notifySwitchCompletion = false;
+                awaitingSwitchPreviewFrame = wasSwitch;
+                if (glProcessor != null) glProcessor.onCameraSessionConfigured();
+                callback.onConfigured(new CameraInfo(activeFacing, activeCameraResolution, activeFrameRate,
+                        previewSize, recordingSize, 1f, false), wasSwitch);
+                // The vendor extension has a separate no-frame fallback.
+                // Do not spend the common A/V deadline while it is still
+                // proving it can deliver any image at all.
+                if (glProcessor != null && glProcessor.hasFirstFrame()) startRecordingWhenSessionReady();
+                diagnostics.log("vendor BOKEH repeating preview feeds GL encoder: camera=" + device.getId());
+                if (requestedFacing != activeFacing) switchCameraIfNeeded(requestedFacing);
+            }
+            @Override public void onUnavailable() {
+                if (!active || stopping || cameraDevice != device || generation != captureGeneration) return;
+                bokehRejected = true;
+                bokehActive = false;
+                bokehSession = null;
+                diagnostics.log("BOKEH unavailable; continue with ordinary camera output");
+                createCaptureSession();
+            }
+        });
+        bokehSession = candidate;
+        try {
+            candidate.open();
+            cameraHandler.postDelayed(() -> {
+                if (!active || stopping || cameraDevice != device || generation != captureGeneration
+                        || bokehSession != candidate || glProcessor != processor) return;
+                if (processor == null || processor.getCameraFrameSequence() == firstFrameSequence) {
+                    candidate.close(); bokehSession = null; bokehActive = false; bokehRejected = true;
+                    diagnostics.log("BOKEH produced no first frame within 3 seconds; use ordinary camera output");
+                    createCaptureSession();
+                }
+            }, 3_000L);
+        }
+        catch (CameraAccessException | RuntimeException error) {
+            candidate.close(); bokehSession = null; bokehRejected = true; bokehActive = false;
+            diagnostics.log("BOKEH session rejected: " + error);
+            createCaptureSession();
+        }
+    }
+
+    private void startRecordingWhenSessionReady() {
+        if (!active || stopping || !hasCaptureSession() || recorder == null || recorder.isStarted()) return;
         try {
             RoundVideoCodecRecorder currentRecorder = recorder;
             commonStartRecorder = currentRecorder;
@@ -770,7 +874,7 @@ final class RoundVideoCameraController {
                             () -> announceRecordingStarted(currentRecorder)
                     )
             );
-            diagnostics.log("first camera frame received; audio startup requested: segmentElapsedMs="
+            diagnostics.log("capture session ready; audio startup requested: segmentElapsedMs="
                     + elapsedMs(segmentStartedNs));
         } catch (RuntimeException e) {
             cancelCommonStartWait();
@@ -780,7 +884,7 @@ final class RoundVideoCameraController {
 
     private void startVideoAfterAudioReady(@NonNull RoundVideoCodecRecorder expectedRecorder) {
         if (!active || stopping || recorder != expectedRecorder
-                || captureSession == null || glProcessor == null) {
+                || !hasCaptureSession() || glProcessor == null) {
             return;
         }
         try {
@@ -813,6 +917,7 @@ final class RoundVideoCameraController {
     }
 
     private void applyRepeatingRequest() {
+        if (bokehActive) return; // Vendor extension controls its own repeating request.
         if (concurrentCamera != null) {
             concurrentCamera.updateRequests();
             return;
@@ -1235,6 +1340,13 @@ final class RoundVideoCameraController {
         activeFrameRate = frameRatePlan.frameRate;
         activeFpsRange = frameRatePlan.fpsRange;
         highSpeed = frameRatePlan.highSpeed;
+        bokehRejected = false;
+        if (bokehRequested && Build.VERSION.SDK_INT >= 31 && !highSpeed
+                && RoundVideoBokeh.supports(cameraManager, selectedId, pair.recording)) {
+            // Extension preview frame rate is vendor-owned; use a 30 FPS encoder policy.
+            activeFrameRate = RoundVideoSession.FrameRate.FPS_30;
+            activeFpsRange = new Range<>(15, 30);
+        }
         stabilizationRejected = false;
         regularFallbackPair = regularPair;
         resetCaptureFpsMeasurement();
@@ -1686,6 +1798,8 @@ final class RoundVideoCameraController {
 
     private void closeCaptureSession() {
         captureGeneration++;
+        bokehActive = false;
+        if (bokehSession != null) { bokehSession.close(); bokehSession = null; }
         if (captureSession != null) {
             captureSession.close();
             captureSession = null;
@@ -1725,13 +1839,16 @@ final class RoundVideoCameraController {
     }
 
     private boolean tryStartConcurrentCameras() {
-        // Concurrent support and advertised AE ranges alone do not establish
-        // FPS support. Even adaptive ranges ending at 60 must pass bounded
-        // sensor cadence qualification on BOTH cameras before recording.
+        // Never put the optional dual-camera 60 FPS qualification on the
+        // recording critical path. It can show seconds of unrecorded low-FPS
+        // preview before reopening a single camera. Preserve the requested
+        // high FPS on one camera; keep warm switching for 30 FPS recordings.
         int targetFps = requestedFrameRate.getValue();
-        if (Build.VERSION.SDK_INT < 30 || !LumaRoundVideoCamera.isFastSwitchEnabled()
-                || targetFps != 30 && targetFps != 60 || activeFrameRate.getValue() != targetFps || highSpeed) return false;
+        if (bokehRequested || Build.VERSION.SDK_INT < 30 || !LumaRoundVideoCamera.isFastSwitchEnabled()
+                || !RoundVideoConcurrentCamera.supportsLowLatencyStartup(targetFps)
+                || activeFrameRate.getValue() != targetFps || highSpeed) return false;
         RoundVideoConcurrentCamera.Spec first = snapshotCamera();
+        final RoundVideoConcurrentCamera.Spec preferredFirst = first;
         RoundVideoConcurrentCamera.Spec second;
         OutputPair initialFallback = regularFallbackPair;
         boolean originalProcessedPreview = processedPreview;
@@ -1748,11 +1865,22 @@ final class RoundVideoCameraController {
             regularFallbackPair = initialFallback;
         }
         try {
+            final String firstId = first.id;
+            final String secondId = second.id;
             boolean advertised = cameraManager.getConcurrentCameraIds().stream()
-                    .anyMatch(ids -> ids.contains(first.id) && ids.contains(second.id));
+                    .anyMatch(ids -> ids.contains(firstId) && ids.contains(secondId));
             if (!advertised || first.fps == null || second.fps == null) return false;
             if (first.fps.getLower() <= 0 || second.fps.getLower() <= 0
                     || first.fps.getUpper() != targetFps || second.fps.getUpper() != targetFps) return false;
+            if (!RoundVideoConcurrentCamera.supportsSizes(cameraManager, cameraHandler, first, second)) {
+                RoundVideoConcurrentCamera.Spec[] compatible = findConcurrentSizePair(first, second);
+                if (compatible == null) return false;
+                first = compatible[0];
+                second = compatible[1];
+                restoreCamera(first);
+                diagnostics.log("concurrent source-size fallback: front/back=" + first.size + "/" + second.size
+                        + ", square MP4=" + outputSize + ", unchanged FPS=" + targetFps);
+            }
             processedPreview = true;
             SurfaceTexture texture = previewView.getSurfaceTexture();
             if (texture == null) return false;
@@ -1773,7 +1901,7 @@ final class RoundVideoCameraController {
                             opening = false;
                             adoptConcurrentCamera(spec, device, session);
                             callback.onConfigured(currentCameraInfo(), false);
-                            if (glProcessor != null && glProcessor.hasFirstFrame()) startRecordingAfterFirstFrame();
+                            startRecordingWhenSessionReady();
                             diagnostics.log("concurrent front/back recording ready: fps=" + spec.frameRate
                                     + "; standby frames are not encoded");
                             if (requestedFacing != activeFacing) switchCameraIfNeeded(requestedFacing);
@@ -1783,12 +1911,15 @@ final class RoundVideoCameraController {
             if (!candidate.isSupported()) {
                 diagnostics.log("concurrent stream configuration rejected; use single camera at unchanged FPS");
                 glProcessor.resetToPrimaryInput();
+                restoreCamera(preferredFirst);
+                glProcessor.updateInputConfiguration(recordingSize, sourceCropSize, isCameraTimestampRealtime());
                 return false;
             }
             concurrentPrimary = first; concurrentCamera = candidate; opening = true;
             candidate.start();
             return true;
         } catch (Exception error) {
+            restoreCamera(preferredFirst);
             diagnostics.log("concurrent setup rejected; use single camera: " + error);
             // No devices have opened yet. A failed GL start can still leave a
             // prepared encoder and non-null, stopped GL object: discard both.
@@ -1804,6 +1935,51 @@ final class RoundVideoCameraController {
             processedPreview = originalProcessedPreview;
             return false;
         }
+    }
+
+    private RoundVideoConcurrentCamera.Spec[] findConcurrentSizePair(RoundVideoConcurrentCamera.Spec first,
+            RoundVideoConcurrentCamera.Spec second) throws CameraAccessException {
+        ArrayList<RoundVideoConcurrentCamera.Spec> firstCandidates = compactConcurrentSpecs(first);
+        ArrayList<RoundVideoConcurrentCamera.Spec> secondCandidates = compactConcurrentSpecs(second);
+        // Vendor concurrency limits concern the pair, not each camera alone.
+        // Try asymmetric combinations too, retaining the requested FPS and MP4 edge.
+        for (RoundVideoConcurrentCamera.Spec a : firstCandidates) {
+            for (RoundVideoConcurrentCamera.Spec b : secondCandidates) {
+                if (a == first && b == second) continue; // Already queried above.
+                if (RoundVideoConcurrentCamera.supportsSizes(cameraManager, cameraHandler, a, b)) {
+                    return new RoundVideoConcurrentCamera.Spec[]{a, b};
+                }
+            }
+        }
+        return null;
+    }
+
+    private ArrayList<RoundVideoConcurrentCamera.Spec> compactConcurrentSpecs(RoundVideoConcurrentCamera.Spec original) {
+        ArrayList<RoundVideoConcurrentCamera.Spec> candidates = new ArrayList<>();
+        candidates.add(original);
+        StreamConfigurationMap map = original.characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+        if (map == null) return candidates;
+        Size[] outputs = map.getOutputSizes(SurfaceTexture.class);
+        if (outputs == null) return candidates;
+        ArrayList<Size> sizes = new ArrayList<>();
+        for (Size size : outputs) {
+            // Never upscale a smaller source to the selected square MP4 edge.
+            if (shortSide(size) < outputSize || shortSide(size) > 720 || Math.max(size.getWidth(), size.getHeight()) > 1280
+                    || area(size) > area(original.size) || size.equals(original.size)
+                    || !supportsFrameDuration(map, size, original.frameRate) || sizes.contains(size)) continue;
+            sizes.add(size);
+        }
+        sizes.sort((a, b) -> Long.compare(area(b), area(a)));
+        // Bound HAL queries even if a vendor advertises hundreds of duplicate-ish sizes.
+        for (int index = 0; index < Math.min(7, sizes.size()); index++) {
+            Size size = sizes.get(index);
+            int crop = Math.min(shortSide(size), original.crop);
+            candidates.add(new RoundVideoConcurrentCamera.Spec(original.id, original.characteristics, original.facing,
+                    crop >= outputSize * 2 ? RoundVideoSession.CameraResolution.HIGH
+                            : crop > outputSize ? RoundVideoSession.CameraResolution.MEDIUM : RoundVideoSession.CameraResolution.LOW,
+                    size, size, crop, original.frameRate, original.fps));
+        }
+        return candidates;
     }
 
     private CaptureRequest createConcurrentRequest(CameraDevice device, RoundVideoConcurrentCamera.Spec spec,

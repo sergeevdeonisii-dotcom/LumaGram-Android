@@ -31,6 +31,19 @@ public final class RoundConcurrentGl102Test {
         void select(boolean rear) { gl.selectConcurrentInput(rear, () -> selections++, () -> failures++); }
     }
     public static void main(String[] args) {
+        Scenario armed = new Scenario();
+        armed.gl.startRecording(1L);
+        armed.second.texture.frame(100L);
+        check(armed.firstFrames == 0 && armed.encoder.swaps == 0,
+                "Audio-ready before first image does not encode standby frames");
+        armed.first.texture.frame(200L);
+        check(armed.firstFrames == 1 && armed.gl.hasFirstFrame() && armed.encoder.swaps == 1,
+                "Already-armed recording reports and encodes its first real selected frame");
+        armed.first.texture.callback();
+        check(armed.firstFrames == 1 && armed.encoder.swaps == 1,
+                "Already-armed first frame is never reported or encoded twice");
+        armed.gl.stop();
+        EGLExt.times.clear(); // Each recording has its own independent PTS origin.
         Scenario s = new Scenario();
         check(s.first.texture.id != s.second.texture.id, "Each camera owns a distinct OES texture");
         check(s.second.texture.width == 1080 && s.second.texture.height == 1920, "Standby has its own negotiated camera size");

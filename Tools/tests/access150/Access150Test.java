@@ -54,6 +54,7 @@ public final class Access150Test {
             LunagramSubscriptionClient c=(LunagramSubscriptionClient)field(e,"client"); if(c!=null)c.dispose();
         }
         Arrays.fill(entries(),null); AndroidUtilities.clear(); DispatchQueue.clear();
+        Utilities.globalQueue.clear();
         // True cold process semantics for the anti-rollback cache: retain encrypted
         // storage but drop the process-local observation watermark.
         try {
@@ -66,6 +67,7 @@ public final class Access150Test {
         ApplicationLoader.mainInterfacePaused=true; SystemClock.now=1_000_000L; LunagramSubscriptionClock.boot=7;
         MessagesController.values.clear(); Arrays.fill(MessagesController.ghost,false); Arrays.fill(MessagesController.ghostChanges,0);
         Arrays.fill(NotificationCenter.changes,0); Arrays.fill(NotificationCenter.interfaces,0); Arrays.fill(DownloadController.changes,0); Toast.shown=0;
+        Arrays.fill(LunagramMessageReminders.changes,0);
         MessagesController.toastAtGhostDisable=-1; AccessUiTrace.toastShown=0;
         LumaAccountData.preferences(0).edit().putBoolean("luma_ghost_mode_enabled_",true).apply();
     }
@@ -112,7 +114,23 @@ public final class Access150Test {
                 check(LunagramSubscriptionAccess.canUse(0,f)==LunagramFeatureCatalog.includes(tier,f),"Actual authority tier membership "+tier+"/"+f);
             check(!LunagramSubscriptionAccess.canUse(0,null),"Null feature is never granted");
             check(LunagramSubscriptionAccess.canUse(0,LunagramFeatureCatalog.Feature.EXISTING_LOCAL_DATA_ACCESS),"Existing local data remains free");
+            if(tier!=LunagramFeatureCatalog.Tier.FREE) {
+                LunagramEntitlementLease mapped=new LunagramEntitlementLease(c.subscription(),SystemClock.now);
+                check(mapped.tier(SystemClock.now)==LunagramFeatureCatalog.Tier.ULTRA,"Every authenticated active former paid tier maps to Ultra: "+tier);
+                advance(10_000,0);
+                for(LunagramFeatureCatalog.Feature f:LunagramFeatureCatalog.Feature.values())
+                    check(LunagramSubscriptionAccess.canUse(0,f)==LunagramFeatureCatalog.isBaselineFree(f),"Every former tier expires at original end: "+tier+"/"+f);
+            }
         }
+        reset();
+        MessagesController.getMainSettings(0).edit().putString("selected_plan","ultra").putString("subscription_tier","ultra").apply();
+        for(LunagramSubscriptionCatalog.Period p:LunagramSubscriptionCatalog.PERIODS) {
+            LunagramSubscriptionCatalog.Plan.ULTRA.totalUsdCents(p);
+            LunagramSubscriptionCatalog.Plan.ULTRA.totalStars(p);
+            LunagramSubscriptionClient.purchaseUrl(LunagramSubscriptionCatalog.Plan.ULTRA,p);
+        }
+        for(LunagramFeatureCatalog.Feature f:LunagramFeatureCatalog.Feature.values())
+            check(LunagramSubscriptionAccess.canUse(0,f)==LunagramFeatureCatalog.isBaselineFree(f),"UI selections, preferences and displayed prices cannot create paid authority: "+f);
         reset(); LumaBuildPolicy.personal=true;
         for(LunagramFeatureCatalog.Feature f:LunagramFeatureCatalog.Feature.values()) check(LunagramSubscriptionAccess.canUse(0,f),"Personal bypass "+f);
         check(DispatchQueue.pending()==0 && AndroidUtilities.pending()==0,"Personal bypass does not schedule billing");
@@ -120,16 +138,20 @@ public final class Access150Test {
         UserConfig.ids[0]=0; check(!LunagramSubscriptionAccess.canUse(0,GHOST),"Signed out account fails closed");
 
         reset(); Wire w=new Wire(); LunagramSubscriptionClient c=client(0,w);
-        JSONObject s=state(0,"based",SERVER,SERVER+1000,3).put("queued",new JSONArray().put(term(B,"ultra",SERVER+1000,SERVER+2000))).put("paidUntilMs",SERVER+2000);
-        fetch(c,w,s); check(!LunagramSubscriptionAccess.canUse(0,GHOST),"Future higher tier not granted early");
+        JSONObject s=state(0,"based",SERVER,SERVER+1000,3).put("queued",new JSONArray().put(term(B,"ultra",SERVER+2000,SERVER+3000))).put("paidUntilMs",SERVER+3000);
+        fetch(c,w,s); check(LunagramSubscriptionAccess.canUse(0,GHOST),"Active former Based includes Ultra without consuming future term");
         LunagramEntitlementLease lease=new LunagramEntitlementLease(c.subscription(),SystemClock.now);
         check(lease.nextBoundary(SystemClock.now)==SystemClock.now+1000,"Exact current/next boundary scheduled");
-        advance(999,0); check(!LunagramSubscriptionAccess.canUse(0,GHOST),"Preboundary stays current tier");
-        advance(1,0); check(LunagramSubscriptionAccess.canUse(0,GHOST),"Queued immutable term becomes active exactly at boundary");
-        check(MessagesController.ghost[0]&&DownloadController.changes[0]==2,"Effective tier changes update privacy and downloads");
+        advance(999,0); check(LunagramSubscriptionAccess.canUse(0,GHOST),"Former tier remains active before exact expiry");
+        advance(1,0); check(!LunagramSubscriptionAccess.canUse(0,GHOST),"Catalog migration never fills a gap before queued term");
+        advance(1000,0); check(LunagramSubscriptionAccess.canUse(0,GHOST),"Queued immutable term becomes active exactly at original boundary");
+        check(MessagesController.ghost[0]&&DownloadController.changes[0]==3,"Effective access changes update privacy and downloads");
         advance(1000,0); check(!LunagramSubscriptionAccess.canUse(0,GHOST),"End-exclusive expiry disables paid tier");
-        check(!MessagesController.ghost[0]&&NotificationCenter.changes[0]==3,"Expiry dispatches runtime transition once");
-        tick(0); check(NotificationCenter.changes[0]==3,"Repeated ticks do not flood transition notifications");
+        check(!MessagesController.ghost[0]&&NotificationCenter.changes[0]==4,"Expiry dispatches runtime transition once");
+        tick(0); check(NotificationCenter.changes[0]==4,"Repeated ticks do not flood transition notifications");
+        check(LunagramMessageReminders.changes[0]==0&&Utilities.globalQueue.pending()==4,"Reminder transitions are queued off the UI thread exactly once per tier change");
+        Utilities.globalQueue.drain();
+        check(LunagramMessageReminders.changes[0]==4&&LunagramMessageReminders.changes[1]==0,"Reminder transition worker is account scoped");
 
         reset(); w=new Wire(); c=client(0,w);
         s=state(0,null,SERVER,0,1).put("queued",new JSONArray().put(term(B,"ultra",SERVER+2000,SERVER+4000))).put("paidUntilMs",SERVER+4000);
@@ -144,10 +166,12 @@ public final class Access150Test {
         check(lease.nextBoundary(SystemClock.now)==1_000_000L+3*86_400_000L,"Expired offline cap does not hide the future paid expiry timer");
         reset(); w=new Wire(); c=client(0,w); fetch(c,w,state(0,"ultra",SERVER,SERVER+10_000,1).put("featuresGated",false));
         check(!LunagramSubscriptionAccess.canUse(0,GHOST),"Old non-authoritative ungated API response does not unlock paid effects");
-        reset(); w=new Wire(); c=client(0,w);
-        fetch(c,w,state(0,"ultra",SERVER,SERVER+1000,1).put("legacy",true).put("legacyExpiresAtMs",SERVER+1000).put("current",null));
-        check(LunagramSubscriptionAccess.canUse(0,GHOST),"Authenticated legacy expiry remains backward-compatible");
-        advance(1000,0); check(!LunagramSubscriptionAccess.canUse(0,GHOST)&&!LumaGhostMode.shouldSuppressActivity(0),"Legacy interval expires without extending or converting into a new term");
+        for(LunagramSubscriptionCatalog.Plan plan:LunagramSubscriptionCatalog.Plan.values()) {
+            reset(); w=new Wire(); c=client(0,w);
+            fetch(c,w,state(0,plan.id,SERVER,SERVER+1000,1).put("legacy",true).put("legacyExpiresAtMs",SERVER+1000).put("current",null));
+            check(LunagramSubscriptionAccess.canUse(0,GHOST),"Authenticated legacy expiry maps to Ultra: "+plan);
+            advance(1000,0); check(!LunagramSubscriptionAccess.canUse(0,GHOST)&&!LumaGhostMode.shouldSuppressActivity(0),"Legacy interval expires without extending or converting into a new term: "+plan);
+        }
     }
     private static void validationAndFailures() throws Exception {
         reset(); Wire w=new Wire(); LunagramSubscriptionClient c=client(0,w);
@@ -300,7 +324,8 @@ public final class Access150Test {
         advance(2*86_400_000L,0);
         check(!LumaGhostMode.isEnabled(0)&&!LumaGhostMode.shouldSuppressActivity(0),"Known final expiry removes paid effects AND privacy fallback");
         reset(); w=new Wire(); c=client(0,w); fetch(c,w,state(0,"based",SERVER,SERVER+3*86_400_000L,1));
-        advance(86_400_000L,0); check(!LumaGhostMode.shouldSuppressActivity(0),"Stale known lower tier does not revive historical ghost preference");
+        advance(86_400_000L,0); check(!LumaGhostMode.isEnabled(0)&&LumaGhostMode.shouldSuppressActivity(0),"Migrated former tier loses paid access at offline cap but retains the same existing privacy barrier as Ultra");
+        advance(2*86_400_000L,0); check(!LumaGhostMode.shouldSuppressActivity(0),"Migrated former tier privacy barrier ends at original paid expiry");
         reset(); w=new Wire(); c=client(0,w); fetch(c,w,state(0,"ultra",SERVER,SERVER+10_000,1));
         w.response=new LunagramSubscriptionClient.Response(401,new JSONObject().put("error","UNAUTHENTICATED"));c.refresh();workers();
         check(!LumaGhostMode.isEnabled(0)&&LumaGhostMode.shouldSuppressActivity(0),"401 revokes paid access but is not proof that a paid Ultra interval ended");

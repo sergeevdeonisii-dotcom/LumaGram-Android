@@ -28,6 +28,7 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
     private static final int ROW_UPDATES = 3;
     private static final int ROW_SEARCH = 4;
     private static final int ROW_ROUND_CAMERA = 5;
+    private static final int ROW_EXPERIENCE = 6;
 
     @Override
     public View createView(Context context) {
@@ -66,6 +67,7 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
         items.add(UItem.asButton(103, R.drawable.msg_notifications, getString(R.string.BHGJournal)));
         items.add(UItem.asButton(104, R.drawable.msg_saved, getString(R.string.BHGTransfer)));
         items.add(UItem.asButton(105, R.drawable.msg_secret, getString(R.string.BHGVault)));
+        items.add(UItem.asButton(106, R.drawable.msg_copy, getString(R.string.LulStickerList)));
         items.add(UItem.asShadow(getString(R.string.BHGToolsInfo)));
         if (LumaBuildPolicy.allowsBuiltInUpdates()) {
             items.add(UItem.asButton(ROW_UPDATES, R.drawable.settings_features, getString(R.string.LumaUpdatesTitle)));
@@ -85,6 +87,10 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
             openSettings(new BlackHoleSearchActivity());
         } else if (item.id == ROW_ROUND_CAMERA) {
             openSettings(new RoundVideoSettingsActivity());
+        } else if (item.id == ROW_EXPERIENCE) {
+            openSettings(new LunagramExperienceSettingsActivity());
+        } else if (item.id == 106) {
+            if (LunagramFeatureGate.require(this, Feature.LINK_TOOLS)) openSettings(new LunagramStickerListActivity(currentAccount));
         } else if (item.id >= 101 && item.id <= 105) {
             if (item.id == 101 && !LunagramFeatureGate.require(this, Feature.SETTINGS_PROFILES)) return;
             if (item.id == 104 && !LunagramFeatureGate.require(this, Feature.SETTINGS_TRANSFER)) return;

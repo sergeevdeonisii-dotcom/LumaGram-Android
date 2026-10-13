@@ -16,6 +16,8 @@ import androidx.annotation.Nullable;
 
 import org.telegram.messenger.LumaHorizonLock;
 import org.telegram.messenger.LumaRoundVideoQuality;
+import org.telegram.messenger.LunagramVideoEffectsSettings;
+import org.telegram.messenger.LunagramMediaAccess;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -107,6 +109,10 @@ final class RoundVideoGlProcessor {
     private final int[] eglSurfaceValue = new int[1];
     private final float[] textureMatrix = new float[16];
     private RoundVideoOverlayRenderer overlayRenderer;
+    private RoundVideoRetroRenderer retroRenderer;
+    private int retroEffect = LunagramVideoEffectsSettings.NONE;
+    private boolean retroDate;
+    private LunagramMediaAccess.Session mediaAccess;
     private int gpuTimingFrame;
     private int outputSizeCheckFrame;
     private long lastFrameTime;
@@ -129,6 +135,7 @@ final class RoundVideoGlProcessor {
     private long swapTimingTotalNs;
     private long swapTimingMaxNs;
     private long inputFrames;
+    private volatile long cameraFrameSequence;
     private long preOriginFrames;
     private long submittedFrames;
     private int syntheticFrames;
@@ -282,6 +289,7 @@ final class RoundVideoGlProcessor {
     }
 
     boolean hasFirstFrame() { return firstFrameReported; }
+    long getCameraFrameSequence() { return cameraFrameSequence; }
 
     Surface addConcurrentInput(Size size, int crop, boolean realtime, boolean front) {
         Handler currentHandler = handler;
@@ -388,7 +396,10 @@ final class RoundVideoGlProcessor {
                 if (currentHandler != null) currentHandler.removeCallbacks(selectionTimeout);
                 frameGate = null; previewGate = null; // Both validated inputs run at the same requested 30/60 FPS.
             }
-            if (input == activeInput) drawFrame(timestamp);
+            if (input == activeInput) {
+                cameraFrameSequence++;
+                drawFrame(timestamp);
+            }
             // Standby was drained above; never submit its frames to MP4.
             if (selection != null) selection.run();
         } catch (RuntimeException error) { reportError(error); }
@@ -430,6 +441,13 @@ final class RoundVideoGlProcessor {
 
     public void setFirstFrameListener(@Nullable Runnable listener) {
         firstFrameListener = listener;
+    }
+
+    void setMediaAccess(int account, LunagramMediaAccess.Session access) {
+        if (started) throw new IllegalStateException("Media access must be bound before GL startup");
+        mediaAccess = access;
+        retroEffect = LunagramVideoEffectsSettings.getEffect(account);
+        retroDate = LunagramVideoEffectsSettings.isDateEnabled(account);
     }
 
     public void onCameraSessionConfigured() {
@@ -587,6 +605,9 @@ final class RoundVideoGlProcessor {
                 sourceCropSize,
                 compositionEnabled
         );
+        if (retroEffect != LunagramVideoEffectsSettings.NONE || retroDate) {
+            retroRenderer = new RoundVideoRetroRenderer(retroEffect, retroDate, outputSize, mediaAccess);
+        }
         GLES20.glViewport(0, 0, outputSize, outputSize);
     }
 
@@ -664,6 +685,7 @@ final class RoundVideoGlProcessor {
             }
             EGL14.eglSwapInterval(eglDisplay, 0);
             overlayRenderer.renderRawCameraToOutput(textureId, textureMatrix, outputSize, outputSize);
+            if (retroRenderer != null) retroRenderer.render(outputSize, outputSize);
             if (!EGL14.eglSwapBuffers(eglDisplay, eglPreviewSurface)) {
                 throw new IllegalStateException("Unable to render round-video preview");
             }
@@ -674,14 +696,14 @@ final class RoundVideoGlProcessor {
             diagnostics.log("first GL input frame: cameraTimestampNs=" + timestamp
                     + ", elapsedMs=" + elapsedMs(glStartedNs));
         }
-        if (!recordingStarted) {
-            Runnable listener = firstFrameListener;
-            if (!firstFrameReported && listener != null) {
-                firstFrameReported = true;
-                listener.run();
-            }
-            return;
+        // Audio can arm recording before the first camera image now. Report
+        // real camera input in either state, exactly once, never on a timer.
+        Runnable listener = firstFrameListener;
+        if (!firstFrameReported && listener != null) {
+            firstFrameReported = true;
+            listener.run();
         }
+        if (!recordingStarted) return;
         if (cameraTimestampRealtime && timestamp < presentationTimeOriginNs) {
             preOriginFrames++;
             if (preOriginFrames == 1) {
@@ -752,6 +774,7 @@ final class RoundVideoGlProcessor {
                 outputWidth,
                 outputHeight
         );
+        if (retroRenderer != null) retroRenderer.render(outputWidth, outputHeight);
 
         if (measureGpu) {
             GLES20.glFinish();
@@ -813,6 +836,7 @@ final class RoundVideoGlProcessor {
                     outputWidth,
                     outputHeight
             );
+            if (retroRenderer != null) retroRenderer.render(outputWidth, outputHeight);
             syntheticFrames++;
             long presentationTime = getRealtimePresentationTime();
             if (presentationTime < presentationTimeLimitNs) {
@@ -1033,6 +1057,10 @@ final class RoundVideoGlProcessor {
         if (overlayRenderer != null) {
             overlayRenderer.release();
             overlayRenderer = null;
+        }
+        if (retroRenderer != null) {
+            retroRenderer.release();
+            retroRenderer = null;
         }
         textureId = 0;
 

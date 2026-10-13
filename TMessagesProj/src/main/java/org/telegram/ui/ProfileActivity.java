@@ -170,6 +170,7 @@ import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SvgHelper;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
+import org.telegram.messenger.LunagramStreamerMode;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.browser.Browser;
 import org.telegram.tgnet.ConnectionsManager;
@@ -9111,6 +9112,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             checkCanSendStoryForPosting();
         } else if (id == NotificationCenter.updateInterfaces) {
             int mask = (Integer) args[0];
+            if (mask == MessagesController.UPDATE_MASK_ALL && listAdapter != null) listAdapter.notifyDataSetChanged();
             boolean infoChanged = (mask & MessagesController.UPDATE_MASK_AVATAR) != 0 || (mask & MessagesController.UPDATE_MASK_NAME) != 0 || (mask & MessagesController.UPDATE_MASK_STATUS) != 0 || (mask & MessagesController.UPDATE_MASK_EMOJI_STATUS) != 0;
             if (userId != 0) {
                 if (infoChanged) {
@@ -11489,7 +11491,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 getFileLoader().loadFile(imageLocation, user, null, FileLoader.PRIORITY_LOW, 1);
             }
 
-            CharSequence newString = UserObject.getUserName(user);
+            CharSequence newString = LunagramStreamerMode.displayName(currentAccount, user);
             String newString2;
             boolean hiddenStatusButton = false;
             final String ghostStatus = LumaGhostProfileStatus.format(currentAccount, user,
@@ -11551,7 +11553,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (nameTextView[a] == null) {
                     continue;
                 }
-                if (a == 0 && copyFromChatActivity) {
+                if (LunagramStreamerMode.isEnabled(currentAccount)) {
+                    nameTextView[a].setText(LunagramStreamerMode.hiddenName(false));
+                } else if (a == 0 && copyFromChatActivity) {
                     ChatActivity chatActivity = (ChatActivity) prevFragment;
                     SimpleTextView titleTextView = chatActivity.avatarContainer.getTitleTextView();
                     nameTextView[a].setText(titleTextView.getText());
@@ -11872,7 +11876,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (nameTextView[a] == null) {
                     continue;
                 }
-                if (a == 0 && copyFromChatActivity) {
+                if (LunagramStreamerMode.isEnabled(currentAccount)) {
+                    if (nameTextView[a].setText(LunagramStreamerMode.hiddenName(true))) changed = true;
+                } else if (a == 0 && copyFromChatActivity) {
                     ChatActivity chatActivity = (ChatActivity) prevFragment;
                     SimpleTextView titleTextView = chatActivity.avatarContainer.getTitleTextView();
                     if (nameTextView[a].setText(titleTextView.getText())) {
@@ -13808,6 +13814,13 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         }
                         detailCell.setTextAndValue(text, value, true);
                         detailCell.setContentDescriptionValueFirst(true);
+                    }
+                    if (LunagramStreamerMode.isEnabled(currentAccount)
+                            && (position == phoneRow || position == numberRow || position == usernameRow || position == setUsernameRow)) {
+                        boolean phone = position == phoneRow || position == numberRow;
+                        detailCell.setTextAndValue(phone ? getString(R.string.PhoneHidden) : LunagramStreamerMode.hiddenName(false),
+                                getString(phone ? R.string.PhoneMobile : R.string.Username), position == numberRow || position == setUsernameRow);
+                        containsQr = false;
                     }
                     if (containsGift) {
                         Drawable drawable = ContextCompat.getDrawable(detailCell.getContext(), R.drawable.msg_input_gift);

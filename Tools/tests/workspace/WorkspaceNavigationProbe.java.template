@@ -1,0 +1,64 @@
+package org.telegram.messenger;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+/** Actual extracted close/navigation methods; minimal host navigation seam, not Android UI. */
+public final class WorkspaceNavigationProbe {
+    static int checks;
+    static void check(boolean result, String label) { checks++; if (!result) throw new AssertionError(label); }
+    interface INavigationLayout { List<BaseFragment> getFragmentStack(); BaseFragment getLastFragment(); }
+    static class Layout implements INavigationLayout {
+        final ArrayList<BaseFragment> stack = new ArrayList<>();
+        Runnable beforeFinish;
+        public List<BaseFragment> getFragmentStack() { return stack; }
+        public BaseFragment getLastFragment() { return stack.isEmpty() ? null : stack.get(stack.size()-1); }
+        void attach(BaseFragment... fragments) { for(BaseFragment fragment:fragments){fragment.layout=this;stack.add(fragment);} }
+    }
+    static class BaseFragment {
+        Layout layout; boolean removed, finished;
+        INavigationLayout getParentLayout() { return layout; }
+        void removeSelfFromStack(boolean immediate) { removed=true; layout.stack.remove(this); }
+        boolean finishFragment(boolean animated) {
+            if(layout==null || layout.getLastFragment()!=this)return false;
+            if(layout.beforeFinish!=null)layout.beforeFinish.run();
+            finished=true;layout.stack.remove(this);return true;
+        }
+    }
+    static class LunagramWorkspaceActivity extends BaseFragment {
+        final LunagramWorkspaceStore.Session session;
+        LunagramWorkspaceActivity(LunagramWorkspaceStore.Session session){this.session=session;}
+        boolean available(){return !finished && session.isCurrent();}
+        /*METHODS*/
+    }
+    static LunagramWorkspaceStore.Session session(){return new LunagramWorkspaceStore.Session(0,23,false,()->true);}
+    public static void main(String[] args){
+        UserConfig.selectedAccount=0;UserConfig.values[0].owner=101;LunagramSubscriptionClient.epochs[0]=1;
+        LunagramWorkspaceStore.Session owner=session();
+        Layout layout=new Layout(); BaseFragment chat=new BaseFragment();
+        LunagramWorkspaceActivity root=new LunagramWorkspaceActivity(owner),category=new LunagramWorkspaceActivity(owner),preview=new LunagramWorkspaceActivity(owner);
+        layout.attach(chat,root,category,preview);
+        final boolean[] callback={false};
+        preview.navigate(()->{check(layout.getLastFragment()==chat,"chat visible before navigation callback");callback[0]=true;});
+        check(callback[0],"callback ran");check(root.removed&&category.removed&&preview.finished,"all same-session frames closed");
+        check(!chat.removed&&!chat.finished&&layout.stack.size()==1,"chat preserved");
+        Layout isolated=new Layout();BaseFragment otherChat=new BaseFragment();
+        LunagramWorkspaceActivity otherWorkspace=new LunagramWorkspaceActivity(session()),mine=new LunagramWorkspaceActivity(owner);
+        isolated.attach(otherChat,otherWorkspace,mine);
+        check(mine.closeWorkspace(),"current workspace closes");check(isolated.stack.size()==2&&!otherWorkspace.removed,"different session preserved");
+        Layout separated=new Layout();BaseFragment divider=new BaseFragment();
+        root=new LunagramWorkspaceActivity(owner);preview=new LunagramWorkspaceActivity(owner);separated.attach(chat,root,divider,preview);
+        check(preview.closeWorkspace(),"top workspace closes over unrelated frame");
+        check(separated.stack.size()==3&&!root.removed&&!divider.removed,"do not walk across unrelated fragments");
+        Layout background=new Layout();preview=new LunagramWorkspaceActivity(owner);BaseFragment top=new BaseFragment();background.attach(chat,preview,top);
+        check(!preview.closeWorkspace()&&background.stack.size()==3,"never close unrelated top");
+        Layout revoked=new Layout();preview=new LunagramWorkspaceActivity(owner);revoked.attach(chat,preview);
+        revoked.beforeFinish=()->LunagramSubscriptionClient.epochs[0]++;
+        callback[0]=false;preview.navigate(()->callback[0]=true);
+        check(!callback[0],"owner rechecked after closing navigation frames");
+        Layout expired=new Layout();preview=new LunagramWorkspaceActivity(session());expired.attach(chat,preview);LunagramSubscriptionAccess.paid=false;
+        callback[0]=false;preview.navigate(()->callback[0]=true);check(callback[0],"existing reference navigation remains available after paid expiry");
+        check(!new LunagramWorkspaceActivity(session()).closeWorkspace(),"detached safe");
+        System.out.println("PASS "+checks+" actual extracted workspace navigation checks");
+    }
+}

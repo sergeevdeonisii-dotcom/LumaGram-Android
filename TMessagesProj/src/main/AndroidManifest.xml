@@ -86,6 +86,9 @@
     <uses-sdk tools:overrideLibrary="com.google.mlkit.vision.segmentation.subject"/>
 
     <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
         <package android:name="com.google.android.apps.maps"/>
         <intent>
             <action android:name="android.intent.action.VIEW"/>
@@ -111,6 +114,7 @@
         android:enableOnBackInvokedCallback="true"
     >
         <!-- usesCleartextTraffic for browser supporting opening http:// links -->
+        <meta-data android:name="org.lunagram.edition" android:value="${lumaEdition}" />
 
         <activity-alias
             android:enabled="true"
@@ -652,6 +656,13 @@
             <intent-filter>
                 <action android:name="org.telegram.start" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name=".LunagramMessageReminderReceiver" android:enabled="true" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 

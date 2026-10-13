@@ -13,6 +13,10 @@ public final class ObjLoader {
     public float[] normals;
     public float[] textureCoordinates;
     public float[] positions;
+    public ObjLoader(LunagramLogoMesh.Data mesh) {
+        positions = mesh.positions; normals = mesh.normals; textureCoordinates = mesh.textureCoordinates;
+        numFaces = positions.length / 3;
+    }
 
     public ObjLoader(Context context, String file, float scale) {
         ArrayList<Float> vertices = new ArrayList<>();

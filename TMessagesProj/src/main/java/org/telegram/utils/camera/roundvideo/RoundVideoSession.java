@@ -160,6 +160,9 @@ public final class RoundVideoSession {
         /** Called when camera-specific controls become available or change. */
         default void onCameraCapabilitiesChanged(@NonNull CameraCapabilities capabilities) {}
 
+        /** Called when a real camera preview is visible, possibly before recording is ready. */
+        default void onCameraPreviewFirstFrame() {}
+
         /** Called before the active Camera2 device starts changing. */
         default void onCameraSwitchStarted(@NonNull CameraFacing facing) {}
 
@@ -238,6 +241,7 @@ public final class RoundVideoSession {
         private int videoBitrate;
         private long maximumDurationMs = DEFAULT_MAXIMUM_DURATION_MS;
         private boolean compositionEnabled = true;
+        private int currentAccount = org.telegram.messenger.UserConfig.selectedAccount;
         private Listener listener;
         private OutputListener outputListener;
         private ScreenFlashController screenFlashController;
@@ -246,6 +250,11 @@ public final class RoundVideoSession {
         public Builder(@NonNull Context context, @NonNull TextureView previewView) {
             this.context = context;
             this.previewView = previewView;
+        }
+
+        public @NonNull Builder setCurrentAccount(int account) {
+            currentAccount = account;
+            return this;
         }
 
         /** Sets the camera opened for the first recording segment. */
@@ -620,6 +629,7 @@ public final class RoundVideoSession {
                 + ", facing=" + requestedFacing
                 + ", maxDurationMs=" + maximumDurationMs);
         cameraController = new RoundVideoCameraController(
+                builder.currentAccount,
                 this.context,
                 previewView,
                 outputResolution,
@@ -908,6 +918,15 @@ public final class RoundVideoSession {
                 @Override
                 public void onRecordingStarted() {
                     mainHandler.post(RoundVideoSession.this::handleRecordingStarted);
+                }
+
+                @Override
+                public void onCameraPreviewFirstFrame() {
+                    mainHandler.post(() -> {
+                        if (isTerminalState() || state != State.STARTING
+                                && state != State.RECORDING && state != State.RESUMING) return;
+                        listener.onCameraPreviewFirstFrame();
+                    });
                 }
 
                 @Override
@@ -1382,6 +1401,10 @@ public final class RoundVideoSession {
                 zoomProgress
         );
     }
+
+    /** Whether the current camera actually negotiated vendor subject-aware BOKEH. */
+    public boolean isBokehActive() { return cameraController.isBokehActive(); }
+    public boolean isFastSwitchActive() { return cameraController.isFastSwitchActive(); }
 
     private void notifyCapabilities() {
         listener.onCameraCapabilitiesChanged(new CameraCapabilities(

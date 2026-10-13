@@ -42,6 +42,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.DownloadController;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LunagramLocalLabels;
+import org.telegram.messenger.LunagramLocalLabelsModel;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.ProxyRotationController;
@@ -65,6 +67,7 @@ import org.telegram.ui.Cells.TextSettingsCell;
 import org.telegram.ui.Components.CheckBox2;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.LunagramAliasSheet;
 import org.telegram.ui.Components.NumberTextView;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.SlideChooseView;
@@ -155,7 +158,19 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             checkImageView.setScaleType(ImageView.ScaleType.CENTER);
             checkImageView.setContentDescription(getString(R.string.Edit));
             addView(checkImageView, LayoutHelper.createFrame(48, 48, (LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT) | Gravity.TOP, 8, 8, 8, 0));
-            checkImageView.setOnClickListener(v -> presentFragment(new ProxySettingsActivity(currentInfo)));
+            checkImageView.setOnClickListener(v -> {
+                final SharedConfig.ProxyInfo selected = currentInfo;
+                if (selected == null || getParentActivity() == null) return;
+                showDialog(new AlertDialog.Builder(getParentActivity(), getResourceProvider())
+                        .setTitle(getString(R.string.ProxySettings))
+                        .setItems(new CharSequence[]{getString(R.string.LunagramProxyConnection), getString(R.string.LunagramProxyLabels)}, (dialog, which) -> {
+                            if (!SharedConfig.proxyList.contains(selected)) return;
+                            if (which == 0) presentFragment(new ProxySettingsActivity(selected));
+                            else if (which == 1) LunagramAliasSheet.showProxy(ProxyListActivity.this, selected.settings, () -> {
+                                if (listAdapter != null) listAdapter.notifyDataSetChanged();
+                            });
+                        }).setNegativeButton(getString(R.string.Cancel), null).create());
+            });
 
             checkBox = new CheckBox2(context, 21);
             checkBox.setColor(Theme.key_checkbox, Theme.key_radioBackground, Theme.key_checkboxCheck);
@@ -172,10 +187,23 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         }
 
         public void setProxy(SharedConfig.ProxyInfo proxyInfo) {
-            textView.setText(proxyInfo.settings.getType() == ProxySettings.Type.WEB
-                    ? proxyInfo.settings.getAddress() + " (WEB)"
-                    : proxyInfo.settings.getAddress() + ":" + proxyInfo.settings.getPort());
             currentInfo = proxyInfo;
+            updateLabel();
+        }
+
+        private String proxyAddress() {
+            return currentInfo.settings.getType() == ProxySettings.Type.WEB
+                    ? currentInfo.settings.getAddress() + " (WEB)"
+                    : currentInfo.settings.getAddress() + ":" + currentInfo.settings.getPort();
+        }
+
+        private boolean updateLabel() {
+            LunagramLocalLabelsModel.Label label = LunagramLocalLabels.proxyLabel(currentAccount, currentInfo.settings);
+            if (label.empty()) { textView.setText(proxyAddress()); return false; }
+            String title = label.name.isEmpty() ? proxyAddress() : label.name;
+            if (!label.group.isEmpty()) title += " · " + label.group;
+            textView.setText(title);
+            return true;
         }
 
         public void updateStatus() {
@@ -217,6 +245,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             if (checkDrawable != null) {
                 checkDrawable.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.MULTIPLY));
             }
+            // Always retain the real server identity; labels do not alter connection state.
+            if (updateLabel()) valueTextView.setText(proxyAddress() + " · " + valueTextView.getText());
         }
 
         public void setSelectionEnabled(boolean enabled, boolean animated) {
@@ -338,6 +368,9 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.proxyChangedByRotation);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.proxySettingsChanged);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.proxyCheckDone);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.activeAccountChanged);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didSetPasscode);
+        NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.appDidLogout);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.didUpdateConnectionState);
 
         final SharedPreferences preferences = MessagesController.getGlobalMainSettings();
@@ -354,6 +387,9 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.proxyChangedByRotation);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.proxySettingsChanged);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.proxyCheckDone);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.activeAccountChanged);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.didSetPasscode);
+        NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.appDidLogout);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.didUpdateConnectionState);
     }
 
@@ -705,7 +741,9 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
-        if (id == NotificationCenter.proxyChangedByRotation) {
+        if (id == NotificationCenter.activeAccountChanged || id == NotificationCenter.didSetPasscode || id == NotificationCenter.appDidLogout) {
+            if (listAdapter != null) listAdapter.notifyDataSetChanged();
+        } else if (id == NotificationCenter.proxyChangedByRotation) {
             listView.forAllChild(view -> {
                 RecyclerView.ViewHolder holder = listView.getChildViewHolder(view);
                 if (holder.itemView instanceof TextDetailProxyCell) {

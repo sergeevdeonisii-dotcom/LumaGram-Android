@@ -135,6 +135,9 @@ import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaDelayedSend;
 import org.telegram.messenger.LumaMessageFormatting;
+import org.telegram.messenger.LunagramVoiceSource;
+import org.telegram.messenger.LunagramVoiceProcessor;
+import org.telegram.messenger.LunagramInterfaceSounds;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
@@ -618,6 +621,11 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     @Nullable
     public EditTextCaption messageEditText;
+    private final org.telegram.messenger.LunagramTextHistory<android.text.SpannedString> lunagramTextHistory = new org.telegram.messenger.LunagramTextHistory<>();
+    private org.telegram.messenger.LunagramMediaAccess.Session lunagramTextOwner;
+    private int lunagramTextAccount = -1;
+    private long lunagramTextDialog, lunagramTextTopic, lunagramDraftRevision;
+    private boolean lunagramHistoryReplay;
     private SlowModeBtn slowModeButton;
     private int slowModeTimer;
     private Runnable updateSlowModeRunnable;
@@ -647,6 +655,10 @@ public class ChatActivityEnterView extends FrameLayout implements
     private FrameLayout recordPanel;
     @Nullable
     public FrameLayout recordedAudioPanel;
+    private ImageView lunagramVoiceFilterButton;
+    private boolean lunagramVoiceFilterBusy;
+    private int lunagramVoiceFilter;
+    public LunagramPetView lunagramPetView;
     @Nullable
     protected VideoTimelineView videoTimelineView;
     @SuppressWarnings("FieldCanBeLocal")
@@ -1409,6 +1421,8 @@ public class ChatActivityEnterView extends FrameLayout implements
 
         private final RectF rectF = new RectF();
         public final RectF onceRect = new RectF();
+        private final int[] compactControlLocation = new int[2];
+        private final int[] compactOverlayLocation = new int[2];
 
         private long lastUpdateTime;
 
@@ -1438,7 +1452,21 @@ public class ChatActivityEnterView extends FrameLayout implements
                 }
             }
 
-            final int cx = getMeasuredWidth() - AndroidUtilities.dp2(26);
+            int cx = getMeasuredWidth() - AndroidUtilities.dp2(26);
+            float compactPauseTop = 0f;
+            final boolean compactControls = LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS)
+                    && sendButtonVisible && audioVideoButtonContainer != null
+                    && audioVideoButtonContainer.isAttachedToWindow();
+            if (compactControls) {
+                audioVideoButtonContainer.getLocationInWindow(compactControlLocation);
+                getLocationInWindow(compactOverlayLocation);
+                cx = Math.round(LumaComposerGeometry.localCenter(compactControlLocation[0],
+                        audioVideoButtonContainer.getMeasuredWidth() * audioVideoButtonContainer.getScaleX(), compactOverlayLocation[0]));
+                float sendCenterY = LumaComposerGeometry.localCenter(compactControlLocation[1],
+                        audioVideoButtonContainer.getMeasuredHeight() * audioVideoButtonContainer.getScaleY(), compactOverlayLocation[1]);
+                compactPauseTop = LumaComposerGeometry.recordAuxiliaryCenterY(sendCenterY,
+                        dp(LumaComposerGeometry.recordDiameterDp(LiteMode.getLiquidGlassInputHeightDp())), dp(48), 0, 1) - dp(18);
+            }
             float moveProgress = 1.0f - yAdd / dp(57);
             final float multilinTooltipOffset = getMeasuredHeight() - dp(194);
 
@@ -1452,6 +1480,9 @@ public class ChatActivityEnterView extends FrameLayout implements
             if (sendButtonVisible) {
                 lockSize = dp(36);
                 lockY = dp(60) + multilinTooltipOffset + dpf2(30) * (1.0f - sc) - yAdd + dpf2(14f) * moveProgress;
+                if (compactControls) {
+                    lockY = lerp(lockY, compactPauseTop + dpf2(30) * (1f - sc), snapAnimationProgress);
+                }
 
                 lockMiddleY = lockY + lockSize / 2f - dpf2(8) + dpf2(2);
                 lockTopY =    lockY + lockSize / 2f - dpf2(16) + dpf2(2);
@@ -1617,6 +1648,9 @@ public class ChatActivityEnterView extends FrameLayout implements
 
             pauseRect.set(rectF);
             scale(pauseRect, s);
+            if (compactControls && s > .9f && exitProgress2 == 0f) {
+                pauseRect.inset(-dp(6), -dp(6));
+            }
             if (pauseHint != null) {
                 pauseHint.setJointPx(0, rectF.centerY());
                 pauseHint.invalidate();
@@ -1712,10 +1746,12 @@ public class ChatActivityEnterView extends FrameLayout implements
             canvas.restore();
             canvas.restore();
 
-            final float cy = lerp(lockY, getMeasuredHeight() - dp(118), Math.max(exitTransition, Math.min(progressToSeekbarStep1, slideToCancelLockProgress))) + dy + dp(38) * hidePause;
+            final float cy = lerp(lockY, compactControls ? compactPauseTop : getMeasuredHeight() - dp(118), Math.max(exitTransition, Math.min(progressToSeekbarStep1, slideToCancelLockProgress))) + dy + dp(38) * hidePause;
             rectF.set(cx - dpf2(18), cy, cx + dpf2(18), cy + lockSize);
             onceVisible = delegate != null && delegate.onceVoiceAvailable();
             if (onceVisible) {
+                //36dp discs in48dp touch regions: the visible12dp gap stays compact
+                // without overlapping the adjacent pause/once hit regions.
                 final float onceOffset = dpf2(12);
                 rectF.set(
                     rectF.left, rectF.top - dpf2(36) - onceOffset, rectF.right, rectF.top - onceOffset
@@ -1725,6 +1761,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                     onceHint.invalidate();
                 }
                 onceRect.set(rectF);
+                if (compactControls) onceRect.inset(-dp(6), -dp(6));
                 canvas.save();
                 final float s2 = controlsScale * (1f - exitTransition) * slideToCancelLockProgress * snapAnimationProgress;
                 canvas.scale(s2, s2, rectF.centerX(), rectF.centerY());
@@ -1838,6 +1875,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                         delegate.toggleVideoRecordingPause();
                     } else {
                         final Runnable resume = () -> {
+                            if (lunagramVoiceFilterBusy) return;
                             if (!MediaController.getInstance().isRecordingPaused()) {
                                 MessagesController.getGlobalMainSettings().edit().putInt("voicepausehint", 3).apply();
                             }
@@ -2789,6 +2827,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 showRestrictedHint();
                 return;
             }
+            LunagramInterfaceSounds.play(currentAccount, LunagramInterfaceSounds.TAP);
             if (!isPopupShowing() || currentPopupContentType != 0) {
                 showPopup(1, POPUP_CONTENT_EMOJI_KEYBOARD);
                 emojiView.onOpen(messageEditText != null && messageEditText.length() > 0, parentFragment != null && parentFragment.groupEmojiPackHintWasVisible());
@@ -4169,12 +4208,85 @@ public class ChatActivityEnterView extends FrameLayout implements
         sizeNotifierLayout.addView(videoTimeHintView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM, 0, 0, 0, 52));
 
         audioTimelineView = new RecordedAudioPlayerView(getContext(), resourcesProvider);
-        recordedAudioPanel.addView(audioTimelineView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 32, Gravity.CENTER_VERTICAL | Gravity.LEFT, DEFAULT_HEIGHT, 0, 4, 0));
+        recordedAudioPanel.addView(audioTimelineView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 32, Gravity.CENTER_VERTICAL | Gravity.LEFT, DEFAULT_HEIGHT, 0, 48, 0));
+
+        lunagramVoiceFilterButton = new ImageView(getContext());
+        lunagramVoiceFilterButton.setImageResource(R.drawable.msg_settings);
+        lunagramVoiceFilterButton.setScaleType(ImageView.ScaleType.CENTER);
+        lunagramVoiceFilterButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_chat_messagePanelIcons), PorterDuff.Mode.SRC_IN));
+        lunagramVoiceFilterButton.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector)));
+        lunagramVoiceFilterButton.setContentDescription(getString(R.string.LunagramVoiceFilters));
+        lunagramVoiceFilterButton.setVisibility(GONE);
+        recordedAudioPanel.addView(lunagramVoiceFilterButton, LayoutHelper.createFrame(48, 48, Gravity.RIGHT | Gravity.CENTER_VERTICAL));
+        lunagramVoiceFilterButton.setOnClickListener(v -> showLunagramVoiceFilters());
 
         updateFieldRight(lastAttachVisible);
     }
 
+    private CharSequence[] lunagramVoiceFilterNames() {
+        return new CharSequence[]{getString(R.string.LunagramVoiceOriginal), getString(R.string.LunagramVoiceRobot),
+            getString(R.string.LunagramVoiceRadio), getString(R.string.LunagramVoiceBass),
+            getString(R.string.LunagramVoiceCartoon), getString(R.string.LunagramVoiceTelephone)};
+    }
+
+    private void showLunagramVoiceFilters() {
+        if (audioToSend == null || audioToSendPath == null || lunagramVoiceFilterBusy) return;
+        if (!MediaController.getInstance().hasLunagramVoiceSource(audioToSendPath)) {
+            android.widget.Toast.makeText(getContext(), getString(R.string.LunagramVoiceOriginalUnavailable), android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+        final org.telegram.messenger.LunagramMediaAccess.Session filterSession = org.telegram.messenger.LunagramMediaAccess.forAccount(currentAccount);
+        final String originalPath = audioToSendPath;
+        final TLRPC.Document originalDocument = audioToSend;
+        CharSequence[] names = lunagramVoiceFilterNames();
+        new AlertDialog.Builder(getContext(), resourcesProvider)
+            .setTitle(getString(R.string.LunagramVoiceFilters))
+            .setItems(names, (dialog, selected) -> {
+                final String path = audioToSendPath;
+                final TLRPC.Document document = audioToSend;
+                if (!filterSession.isCurrent() || currentAccount != UserConfig.selectedAccount
+                        || !originalPath.equals(path) || originalDocument != document
+                        || path == null || document == null || lunagramVoiceFilterBusy
+                        || selected < 0 || selected >= names.length) return;
+                if (selected != 0 && !org.telegram.ui.LunagramFeatureGate.require(parentFragment, org.telegram.messenger.LunagramFeatureCatalog.Feature.VOICE_FILTERS)) return;
+                final float left = audioTimelineView.getAudioLeft(), right = audioTimelineView.getAudioRight();
+                audioTimelineView.setPlaying(false);
+                MediaController.getInstance().cleanupPlayer(true, true);
+                lunagramVoiceFilterBusy = true;
+                lunagramVoiceFilterButton.setEnabled(false);
+                lunagramVoiceFilterButton.setAlpha(0.45f);
+                lunagramVoiceFilterButton.setContentDescription(getString(R.string.LunagramVoiceProcessing));
+                recordDeleteImageView.setEnabled(false);
+                sendButton.setEnabled(false);
+                audioTimelineView.setEnabled(false);
+                MediaController.getInstance().applyLunagramVoiceEffect(currentAccount, path, selected, document, success -> {
+                    lunagramVoiceFilterBusy = false;
+                    lunagramVoiceFilterButton.setEnabled(true);
+                    lunagramVoiceFilterButton.setAlpha(1f);
+                    recordDeleteImageView.setEnabled(true);
+                    sendButton.setEnabled(true);
+                    audioTimelineView.setEnabled(true);
+                    if (!filterSession.isCurrent() || currentAccount != UserConfig.selectedAccount
+                            || !path.equals(audioToSendPath) || document != audioToSend) return;
+                    if (success) {
+                        lunagramVoiceFilter = selected;
+                        byte[] waveform = null; double duration = millisecondsRecorded / 1000.0;
+                        for (TLRPC.DocumentAttribute attribute : document.attributes) {
+                            if (attribute instanceof TLRPC.TL_documentAttributeAudio) { waveform = attribute.waveform; duration = attribute.duration; break; }
+                        }
+                        audioTimelineView.init(path, duration, waveform, left, right);
+                        lunagramVoiceFilterButton.setContentDescription(getString(R.string.LunagramVoiceFilters) + ": " + names[selected]);
+                        android.widget.Toast.makeText(getContext(), getString(R.string.LunagramVoiceFilterApplied), android.widget.Toast.LENGTH_SHORT).show();
+                    } else {
+                        lunagramVoiceFilterButton.setContentDescription(getString(R.string.LunagramVoiceFilters));
+                        android.widget.Toast.makeText(getContext(), getString(R.string.LunagramVoiceFilterFailed), android.widget.Toast.LENGTH_LONG).show();
+                    }
+                });
+            }).show();
+    }
+
     private void resetRecordedState() {
+        if (lunagramVoiceFilterBusy) return;
         if (audioTimelineView != null) {
             audioTimelineView.setPlaying(false);
         }
@@ -4189,6 +4301,7 @@ public class ChatActivityEnterView extends FrameLayout implements
             }
         }
         if (audioToSendPath != null) {
+            LunagramVoiceSource.delete(audioToSendPath);
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("delete file " + audioToSendPath);
             }
@@ -5897,6 +6010,7 @@ public class ChatActivityEnterView extends FrameLayout implements
             messageEditText.setLocalePreferredLineHeightForMinimumUsed(false);
         }
         messageEditText.setDelegate(() -> {
+            onLunagramTextSpansChanged();
             messageEditText.invalidateEffects();
             if (delegate != null) {
                 delegate.onTextSpansChanged(messageEditText.getTextToUse());
@@ -5918,6 +6032,10 @@ public class ChatActivityEnterView extends FrameLayout implements
         messageEditText.setInputType(commonInputType = (messageEditText.getInputType() | EditorInfo.TYPE_TEXT_FLAG_CAP_SENTENCES | EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE));
         updateFieldHint(false);
         messageEditText.setSingleLine(false);
+        if (isChat && lunagramPetView == null) {
+            lunagramPetView = new LunagramPetView(getContext(), currentAccount);
+            lunagramPetView.bindComposer(messageEditText);
+        }
         messageEditText.setMaxLines(6);
         messageEditText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
         messageEditText.setGravity(Gravity.BOTTOM);
@@ -6170,6 +6288,16 @@ public class ChatActivityEnterView extends FrameLayout implements
             }
         });
         messageEditText.addTextChangedListener(new EditTextSuggestionsFix());
+        messageEditText.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                lunagramDraftRevision++;
+                if (!lunagramHistoryReplay && ensureLunagramTextHistory()) recordLunagramTextSnapshot(s);
+            }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable text) {
+                if (!lunagramHistoryReplay && ensureLunagramTextHistory()) recordLunagramTextSnapshot(text);
+            }
+        });
         messageEditText.setEnabled(messageEditTextEnabled);
         if (messageEditTextWatchers != null) {
             for (TextWatcher textWatcher : messageEditTextWatchers) {
@@ -6207,10 +6335,12 @@ public class ChatActivityEnterView extends FrameLayout implements
             FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) emojiButton.getLayoutParams();
             final int gravity = Gravity.BOTTOM | (editing ? Gravity.LEFT : Gravity.RIGHT);
             final int right = editing ? 0 : dp(8);
-            if (params.gravity != gravity || params.rightMargin != right || editing && params.leftMargin != dp(3)) {
+            final int bottom = editing ? dp(4) : 0;
+            if (params.gravity != gravity || params.rightMargin != right || params.bottomMargin != bottom || editing && params.leftMargin != dp(12)) {
                 params.gravity = gravity;
                 params.rightMargin = right;
-                if (editing) params.leftMargin = dp(3);
+                params.bottomMargin = bottom;
+                if (editing) params.leftMargin = dp(12);
                 emojiButton.setLayoutParams(params);
             }
             if (changedMode) {
@@ -6265,9 +6395,9 @@ public class ChatActivityEnterView extends FrameLayout implements
                 editingAiBackgroundColor = background;
                 editingAiPressedColor = pressed;
                 editingAiIconColor = icon;
-                aiButton.setBackground(editing
-                    ? Theme.createSimpleSelectorCircleDrawable(dp(DEFAULT_HEIGHT), background, pressed)
-                    : Theme.createSelectorDrawable(pressed, Theme.RIPPLE_MASK_CIRCLE_20DP, dp(16)));
+                // Match the ordinary Ai glyph: transparent at rest, native pressed
+                // feedback only. The right column remains aligned above Done.
+                aiButton.setBackground(Theme.createSelectorDrawable(pressed, Theme.RIPPLE_MASK_CIRCLE_20DP, dp(16)));
                 aiButton.setColorFilter(new PorterDuffColorFilter(icon, PorterDuff.Mode.MULTIPLY));
             }
         }
@@ -6703,6 +6833,8 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void onDestroy() {
+        clearLunagramTextHistory();
+        if (lunagramPetView != null) lunagramPetView.dispose();
         destroyed = true;
         recordUiToken.invalidate();
         cancelRunningRecordUiAnimation();
@@ -6884,6 +7016,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void setDialogId(long id, int account) {
+        if (dialog_id != id || currentAccount != account) clearLunagramTextHistory();
         if (!pendingTextSends.isEmpty() && (dialog_id != id || currentAccount != account)) {
             detachPendingDelayedSends();
         }
@@ -7497,6 +7630,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     protected boolean sendMessageInternal(boolean notify, int scheduleDate, int scheduleRepeatPeriod, long payStars, boolean allowConfirm) {
+        if (lunagramVoiceFilterBusy) return false;
         final boolean allowConfirmFinal = allowConfirm && !animatorEphemeralMessageVisibility.getValue();
 
         final Runnable send = () -> {
@@ -7584,7 +7718,9 @@ public class ChatActivityEnterView extends FrameLayout implements
                     params.sendAnimationData = sendAnimationData;
                 }
                 applyStoryToSendMessageParams(params);
+                LunagramVoiceSource.delete(audioToSendPath);
                 SendMessagesHelper.getInstance(currentAccount).sendMessage(params);
+                notifyLunagramMessageSent();
                 if (delegate != null) {
                     delegate.onMessageSend(null, notify, scheduleDate, scheduleRepeatPeriod, payStars);
                 }
@@ -8164,6 +8300,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 );
                 lastTextSendWasDeferred = true;
             }
+            if (!delaySend) notifyLunagramMessageSent();
             return true;
         }
         return false;
@@ -8268,6 +8405,15 @@ public class ChatActivityEnterView extends FrameLayout implements
         for (int i = 0; i < pending.messages.size(); i++) {
             helper.sendMessage(pending.messages.get(i));
         }
+        if (!pending.messages.isEmpty()) {
+            LunagramInterfaceSounds.play(pending.account, LunagramInterfaceSounds.SEND);
+            if (!destroyed && pending.account == currentAccount && pending.dialogId == dialog_id && lunagramPetView != null) lunagramPetView.onMessageSent();
+        }
+    }
+
+    private void notifyLunagramMessageSent() {
+        LunagramInterfaceSounds.play(currentAccount, LunagramInterfaceSounds.SEND);
+        if (lunagramPetView != null) lunagramPetView.onMessageSent();
     }
 
     private void detachPendingDelayedSends() {
@@ -9383,6 +9529,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     protected void updateRecordInterface(int recordState, boolean animated) {
+        if (lunagramPetView != null) lunagramPetView.setRecording(recordState == RECORD_STATE_ENTER || recordState == RECORD_STATE_PREPARING);
         final boolean changesUi = recordingAudioVideo ? recordInterfaceState != 1
                 : recordInterfaceState != 0 && !(recordIsCanceled && recordState == RECORD_STATE_PREPARING);
         final long recordAnimationEpoch = changesUi ? recordUiToken.begin() : recordUiToken.current();
@@ -10503,6 +10650,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (audioToSend != null || videoToSendMessageObject != null || editingMessageObject == messageObject) {
             return;
         }
+        clearLunagramTextHistory();
         createMessageEditText();
         boolean hadEditingMessage = editingMessageObject != null;
         editingMessageObject = messageObject;
@@ -11031,14 +11179,128 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (messageEditText == null) {
             return;
         }
+        boolean previousReplay = lunagramHistoryReplay;
+        if (fromDraft) { clearLunagramTextHistory(); lunagramHistoryReplay = true; }
         ignoreTextChange = ignoreChange;
-        messageEditText.setText(text);
-        messageEditText.invalidateQuotes(true);
-        messageEditText.setSelection(messageEditText.getText().length());
-        ignoreTextChange = false;
+        try {
+            messageEditText.setText(text);
+            messageEditText.invalidateQuotes(true);
+            messageEditText.setSelection(messageEditText.getText().length());
+        } finally {
+            ignoreTextChange = false;
+            lunagramHistoryReplay = previousReplay;
+        }
+        if (fromDraft && ensureLunagramTextHistory()) recordLunagramTextSnapshot(messageEditText.getText());
         if (ignoreChange && delegate != null) {
             delegate.onTextChanged(messageEditText.getText(), true, fromDraft);
         }
+    }
+
+    private boolean isLunagramOrdinaryComposer() {
+        return !destroyed && messageEditText != null && parentFragment != null && dialog_id != 0
+                && !SharedConfig.appLocked && !SharedConfig.isWaitingForPasscodeEnter
+                && !parentFragment.isPeerNoForwards() && !org.telegram.messenger.BlackHoleVault.blocks(currentAccount, dialog_id)
+                && !DialogObject.isEncryptedDialog(dialog_id) && !parentFragment.isSecretChat()
+                && parentFragment.getChatMode() == 0 && editingMessageObject == null && !editingCaption
+                && !richDraftActive && !recordingAudioVideo && currentAccount == UserConfig.selectedAccount;
+    }
+
+    private void clearLunagramTextHistory() {
+        lunagramTextHistory.clear(); lunagramTextOwner = null; lunagramTextAccount = -1;
+        lunagramDraftRevision++;
+    }
+
+    private boolean ensureLunagramTextHistory() {
+        if (!isLunagramOrdinaryComposer()
+                || !org.telegram.messenger.LunagramSubscriptionAccess.canUse(currentAccount, org.telegram.messenger.LunagramFeatureCatalog.Feature.TEXT_TOOLS)) {
+            clearLunagramTextHistory(); return false;
+        }
+        long topic = parentFragment.getTopicId();
+        if (lunagramTextOwner == null || !lunagramTextOwner.isCurrent() || lunagramTextAccount != currentAccount
+                || lunagramTextDialog != dialog_id || lunagramTextTopic != topic) {
+            clearLunagramTextHistory();
+            lunagramTextOwner = org.telegram.messenger.LunagramMediaAccess.forAccount(currentAccount);
+            lunagramTextAccount = currentAccount; lunagramTextDialog = dialog_id; lunagramTextTopic = topic;
+        }
+        return lunagramTextOwner.isCurrent();
+    }
+
+    private void recordLunagramTextSnapshot(CharSequence value) {
+        if (value == null || value.length() > org.telegram.messenger.LunagramTextTools.MAX_INPUT) { lunagramTextHistory.clear(); return; }
+        // SpannedString preserves immutable text and every formatting span's range/flags.
+        lunagramTextHistory.record(new android.text.SpannedString(value), value.length(), messageEditText.getSelectionStart(), messageEditText.getSelectionEnd());
+    }
+
+    private void onLunagramTextSpansChanged() {
+        // A format-only edit can mutate an existing span without changing its identity or text.
+        lunagramDraftRevision++;
+        if (!lunagramHistoryReplay && ensureLunagramTextHistory()) recordLunagramTextSnapshot(messageEditText.getText());
+    }
+
+    private String lunagramQuoteState() {
+        // The native quote toggle mutates this flag without an EditTextCaption span callback.
+        // Keep a value snapshot, not a reference to the mutable QuoteSpan retained by SpannedString.
+        Spanned text = messageEditText.getText();
+        StringBuilder state = new StringBuilder();
+        for (QuoteSpan quote : text.getSpans(0, text.length(), QuoteSpan.class)) {
+            state.append(text.getSpanStart(quote)).append(':').append(text.getSpanEnd(quote))
+                    .append(':').append(quote.isCollapsing ? 1 : 0).append(';');
+        }
+        return state.toString();
+    }
+
+    /** Capture before opening any tool; a stale tool cannot overwrite a newer draft or another chat. */
+    public LunagramTextToolsSheet.Apply createLunagramDraftApply() {
+        if (!ensureLunagramTextHistory()) return text -> false;
+        final int account = currentAccount;
+        final long dialog = dialog_id, topic = parentFragment.getTopicId(), revision = lunagramDraftRevision;
+        final org.telegram.messenger.LunagramMediaAccess.Session owner = lunagramTextOwner;
+        final android.text.SpannedString original = new android.text.SpannedString(messageEditText.getText());
+        final String quoteState = lunagramQuoteState();
+        final boolean[] consumed = {false};
+        return text -> {
+            if (consumed[0] || !isLunagramOrdinaryComposer() || account != currentAccount || dialog != dialog_id
+                    || topic != parentFragment.getTopicId() || revision != lunagramDraftRevision
+                    || !owner.canUse(org.telegram.messenger.LunagramFeatureCatalog.Feature.TEXT_TOOLS)
+                    || !quoteState.equals(lunagramQuoteState())
+                    || !original.equals(new android.text.SpannedString(messageEditText.getText()))) return false;
+            org.telegram.messenger.LunagramTextTools.requireInput(text);
+            consumed[0] = true;
+            recordLunagramTextSnapshot(messageEditText.getText());
+            setFieldText(text, true, false); // ignoreTextChange suppresses the send-by-enter path.
+            return true;
+        };
+    }
+
+    public void showLunagramTextTools() {
+        if (!isLunagramOrdinaryComposer() || !org.telegram.ui.LunagramFeatureGate.require(parentFragment, org.telegram.messenger.LunagramFeatureCatalog.Feature.TEXT_TOOLS)
+                || !ensureLunagramTextHistory()) return;
+        recordLunagramTextSnapshot(messageEditText.getText());
+        final long revision = lunagramDraftRevision;
+        final org.telegram.messenger.LunagramMediaAccess.Session owner = lunagramTextOwner;
+        final long dialog = dialog_id, topic = parentFragment.getTopicId();
+        final String quoteState = lunagramQuoteState();
+        LunagramTextToolsSheet.show(parentFragment, currentAccount, messageEditText.getText(), createLunagramDraftApply(), new LunagramTextToolsSheet.History() {
+            private boolean current() {
+                return isLunagramOrdinaryComposer() && owner == lunagramTextOwner && revision == lunagramDraftRevision
+                        && dialog == dialog_id && topic == parentFragment.getTopicId()
+                        && quoteState.equals(lunagramQuoteState())
+                        && owner.canUse(org.telegram.messenger.LunagramFeatureCatalog.Feature.TEXT_TOOLS);
+            }
+            @Override public boolean canUndo() { return current() && lunagramTextHistory.canUndo(); }
+            @Override public boolean canRedo() { return current() && lunagramTextHistory.canRedo(); }
+            private boolean restore(boolean redo) {
+                if (!current()) return false;
+                org.telegram.messenger.LunagramTextHistory.Entry<android.text.SpannedString> entry = redo ? lunagramTextHistory.redo() : lunagramTextHistory.undo();
+                if (entry == null) return false;
+                lunagramHistoryReplay = true;
+                try { setFieldText(entry.value, true, false); messageEditText.setSelection(entry.start, entry.end); }
+                finally { lunagramHistoryReplay = false; }
+                return true;
+            }
+            @Override public boolean undo() { return restore(false); }
+            @Override public boolean redo() { return restore(true); }
+        }, this::isLunagramOrdinaryComposer);
     }
 
     public void setVoiceDraft(MediaDataController.DraftVoice draft) {
@@ -11343,6 +11605,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void setRichDraftPreview(TL_iv.RichMessage rich) {
+        if (rich != richDraftMessage) clearLunagramTextHistory();
         if (richDraftPreview == null) return;
         if (!MessagesController.getInstance(currentAccount).richEditorAvailable())
             rich = null;
@@ -13982,6 +14245,11 @@ public class ChatActivityEnterView extends FrameLayout implements
             }
             boolean audio = (Boolean) args[1];
             isInVideoMode = !audio;
+            if (lunagramVoiceFilterButton != null) lunagramVoiceFilterButton.setVisibility(GONE);
+            if (audio && org.telegram.messenger.LunagramAudioSettings.isStereoEnabled(currentAccount)) {
+                android.widget.Toast.makeText(getContext(), getString(MediaController.getInstance().getLunagramRecordingChannels() == 2
+                    ? R.string.LunagramVoiceStereoActive : R.string.LunagramVoiceMonoFallback), android.widget.Toast.LENGTH_SHORT).show();
+            }
             if (audioVideoSendButton != null) {
                 audioVideoSendButton.setState(audio ? ChatActivityEnterViewAnimatedIconView.State.VOICE : ChatActivityEnterViewAnimatedIconView.State.VIDEO, true);
             }
@@ -14041,6 +14309,12 @@ public class ChatActivityEnterView extends FrameLayout implements
                 float right = args.length >= 6 ? (float) args[5] : 1.0f;
                 if (audioToSend != null) {
                     createRecordAudioPanel();
+                    lunagramVoiceFilterButton.setVisibility(VISIBLE);
+                    lunagramVoiceFilter = LunagramVoiceProcessor.ORIGINAL;
+                    try (LunagramVoiceSource source = LunagramVoiceSource.open(new File(audioToSendPath))) {
+                        lunagramVoiceFilter = source.effect;
+                    } catch (java.io.IOException unavailableOriginal) { /* Legacy drafts remain playable and sendable. */ }
+                    lunagramVoiceFilterButton.setContentDescription(getString(R.string.LunagramVoiceFilters) + ": " + lunagramVoiceFilterNames()[lunagramVoiceFilter]);
                     if (recordedAudioPanel == null) {
                         return;
                     }
@@ -14108,6 +14382,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                     }
                     updateRecordInterface(RECORD_STATE_PREPARING, !fromDraft);
                 } else {
+                    notifyLunagramMessageSent();
                     if (delegate != null) {
                         delegate.onMessageSend(null, true, 0, 0, 0);
                     }
@@ -15030,7 +15305,7 @@ public class ChatActivityEnterView extends FrameLayout implements
             }
 
             float y = getMeasuredHeight() / 2;
-            float x = 0;
+            float x = dp(LumaComposerGeometry.recordTimerInsetDp(LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS)));
 
             if (replaceTransition == 0) {
                 replaceStable.clearSpans();

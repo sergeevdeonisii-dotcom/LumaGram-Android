@@ -74,7 +74,7 @@ public final class EditComposer150Probe {
     void end() { editingMessageObject=null; updateFieldRight(1); updateEditingComposerLayout(); }
     static void checkEdit(EditComposer150Probe p, int doneWidth) {
         check(p.emojiButton.params.gravity==(Gravity.BOTTOM|Gravity.LEFT), "edit emoji uses physical left gutter in both text directions");
-        check(p.emojiButton.params.leftMargin==dp(3)&&p.emojiButton.params.rightMargin==0, "emoji not displaced by send-as or bot menu");
+        check(p.emojiButton.params.leftMargin==dp(12)&&p.emojiButton.params.rightMargin==0&&p.emojiButton.params.bottomMargin==dp(4), "emoji has comfortable left/bottom gutter, not rounded-edge placement");
         check(p.messageEditText.params.leftMargin==dp(64), "left text inset excludes emoji touch target");
         check(p.messageEditText.params.rightMargin==Math.max(dp(20),Math.max(0,doneWidth-dp(44))+dp(12)), "actual width reserves bounded paid action overflow");
         check(p.aiButton.params.gravity==(Gravity.RIGHT|Gravity.BOTTOM), "Ai has separate right action column");
@@ -101,7 +101,7 @@ public final class EditComposer150Probe {
                     check(!p.shownRichButton&&p.richButton.visibility==GONE&&p.richButton.alpha==0f&&p.richButton.animation.cancels==1,"normal rich action cannot fade over editing Ai");
                     check(p.animationParamsX.isEmpty()&&oldHint.hidden&&p.aiHint==null,"old delayed X owner/hint cannot override edit layout");
                     check(p.messageEditTextContainer.minimum==(shown?dp(92):0),"two right controls fit without clipping; single line remains compact");
-                    check(p.aiButton.background instanceof int[],"editing Ai has filled themed bubble");
+                    check("normal-selector".equals(p.aiButton.background),"editing Ai stays transparent with native press feedback");
                     check(p.aiButton.colorFilter.color==Theme.key_chat_messagePanelIcons,"Ai foreground uses matching native panel token");
                     int changes=p.messageEditText.changes, cancellations=p.aiButton.animation.cancels;
                     p.updateFieldRight(2); p.updateEditingComposerLayout();
@@ -117,9 +117,9 @@ public final class EditComposer150Probe {
                         check(textRight<=dp(widthDp)-dp(7)-dp(doneWidth)-dp(12),"text ends before Done, not hidden by transformed drawing");
                     }
                     p.themeRevision=1;p.updateEditingComposerLayout();
-                    check(((int[])p.aiButton.background)[1]==101&&p.aiButton.colorFilter.color==103,"editing Ai retints for day/night change");
+                    check("normal-selector".equals(p.aiButton.background)&&p.aiButton.colorFilter.color==103,"editing Ai retints for day/night change while staying transparent");
                     p.end();
-                    check(p.emojiButton.params.gravity==(Gravity.BOTTOM|Gravity.RIGHT)&&p.emojiButton.params.rightMargin==dp(8),"normal right emoji restored");
+                    check(p.emojiButton.params.gravity==(Gravity.BOTTOM|Gravity.RIGHT)&&p.emojiButton.params.rightMargin==dp(8)&&p.emojiButton.params.bottomMargin==0,"normal right emoji restored");
                     check(p.aiButton.params.gravity==(Gravity.TOP|Gravity.LEFT)&&p.aiButton.params.topMargin==dp(1)&&p.aiButton.params.bottomMargin==0,"normal Ai position restored");
                     check("normal-selector".equals(p.aiButton.background)&&p.aiButton.colorFilter.color==104,"normal Ai styling restored");
                     check(p.messageEditTextContainer.minimum==0,"no retained tall input after edit");

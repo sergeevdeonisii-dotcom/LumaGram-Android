@@ -33,7 +33,7 @@ $personal=Body $source 'private static void showPersonal('
 $show=Body $source 'public static void show(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift, PagerSource pager)'
 foreach ($guard in @('gift.ownerUserId <= 0','gift.ownerUserId != UserConfig.getInstance(account).getClientUserId()',
     '!(gift.gift instanceof TL_stars.TL_starGiftUnique)','unique.attributes == null || unique.resell_amount != null',
-    'if (LumaBuildPolicy.isPersonalEdition())','if (account != UserConfig.selectedAccount) return;',
+    'if (account != UserConfig.selectedAccount) return;',
     'showPersonal(fragment, gift, unique, context, account, resources, pager);')) {
     if (!$show.Contains($guard)) { throw "Missing read-only native preview boundary: $guard" }
 }
@@ -41,13 +41,42 @@ foreach ($guard in @('new StarGiftSheet(context, account, gift.ownerUserId, reso
     '.setProfilePreviewPager(pager)', '.setLocalPreview(fragment, gift)', 'fragment.showDialog(sheet)')) {
     if (!$personal.Contains($guard)) { throw "Missing native NFT preview integration: $guard" }
 }
-if ($personal -match 'GiftCell|LumaLocalGiftPreviewInfo|new AlertDialog|\.set\(gift') { throw 'Personal preview must use the local binder, never a normal gift tile or generic owned gift setter.' }
+if ($personal -match 'GiftCell|LumaLocalGiftPreviewInfo|new AlertDialog|\.set\(gift') { throw 'Both editions must use the isolated native binder, never a normal gift tile or generic owned gift setter.' }
 if ($source -match 'ConnectionsManager|sendRequest\(|TL_payments|saveStarGift|transferStarGift|resellStarGift') { throw 'Preview must never acquire transaction capabilities.' }
 $header=Body $source 'public static StarGiftSheet.TopView createPreviewHeader('
 foreach($guard in @('top.setGift(unique, false, false, false, false, false)', 'modelName, null, null', 'top.optionsView.setVisibility(View.VISIBLE)')) {
     if(!$header.Contains($guard)){throw "Missing read-only native header/menu/model subtitle guard: $guard"}
 }
-if (!$source.Contains('if (!LumaBuildPolicy.isPersonalEdition())') -or !$source.Contains('local.setText(getString(R.string.LumaLocalGiftPreviewInfo))')) { throw 'Public preview must retain its local-only notice.' }
+function Assert-UniformPreview([string]$candidate) {
+    $entry=Body $candidate 'public static void show(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift, PagerSource pager)'
+    if($entry -match 'isPersonalEdition|GiftCell|new AlertDialog|LumaLocalGiftPreviewInfo|setNegativeButton') {
+        throw 'Both editions must route to native preview without a legacy dialog or direct delete button.'
+    }
+    foreach($guard in @('gift.ownerUserId <= 0','gift.ownerUserId != UserConfig.getInstance(account).getClientUserId()',
+            'if (account != UserConfig.selectedAccount) return;', 'LunagramSubscriptionAccess.canUse',
+            'showPersonal(fragment, gift, unique, context, account, resources, pager);')) {
+        if(!$entry.Contains($guard)){throw "Uniform native preview lost owner/access boundary: $guard"}
+    }
+    foreach($pair in @(@('public static String getRemoveTitle()', 'R.string.LumaPersonalGiftRemove'),
+            @('public static String getRemoveInfo()', 'R.string.LumaPersonalGiftRemoveInfo'),
+            @('public static String getRemovedMessage()', 'R.string.LumaPersonalGiftRemoved'))) {
+        $body=Body $candidate $pair[0]
+        if($body.Contains('isPersonalEdition') -or !$body.Contains($pair[1])){throw 'Removal wording must be neutral and identical in both editions.'}
+    }
+}
+Assert-UniformPreview $source
+$routingControls=@(
+    @{Name='public-legacy-route';Old='showPersonal(fragment, gift, unique, context, account, resources, pager);';New='if (LumaBuildPolicy.isPersonalEdition()) showPersonal(fragment, gift, unique, context, account, resources, pager);';Expected='Both editions must route'},
+    @{Name='missing-owner-validation';Old='|| gift.ownerUserId != UserConfig.getInstance(account).getClientUserId()';New='';Expected='lost owner/access boundary'},
+    @{Name='public-delete-wording';Old='return getString(R.string.LumaPersonalGiftRemove);';New='return getString(LumaBuildPolicy.isPersonalEdition() ? R.string.LumaPersonalGiftRemove : R.string.LumaLocalGiftRemove);';Expected='Removal wording must be neutral'}
+)
+foreach($control in $routingControls) {
+    $mutant=$source.Replace($control.Old,$control.New)
+    if($mutant -eq $source){throw "Uniform preview negative control not applied: $($control.Name)"}
+    $caught=$false
+    try {Assert-UniformPreview $mutant} catch {if(!$_.Exception.Message.Contains($control.Expected)){throw};$caught=$true}
+    if(!$caught){throw "Uniform preview negative control missed: $($control.Name)"}
+}
 
 $native=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/ui/Stars/StarGiftSheet.java'))
 $topSource=Body $native 'public static class TopView'
@@ -98,7 +127,7 @@ foreach ($control in $negatives) {
     $ErrorActionPreference=$oldPreference
     if ($code -eq 0 -or !$result.Contains($control.Expected)) { throw "Negative control missed its defect: $($control.Name)" }
 }
-Write-Output 'PASS: native-only personal routing, exact visual allowlist, no transaction callbacks, isolated main/pattern lifecycle, pre26 reduced motion and five negative controls.'
+Write-Output 'PASS: public+personal native-only routing, neutral removal text, owner/access boundaries, no transaction callbacks, isolated header/pattern lifecycle, reduced motion, five executable lifecycle and three routing negative controls.'
 
 if (!$AndroidJar) {
     $sdk=if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { $env:ANDROID_SDK_ROOT }

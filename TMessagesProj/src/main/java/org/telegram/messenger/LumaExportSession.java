@@ -10,15 +10,23 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class LumaExportSession {
     private final int account;
     private final long owner;
+    private final long epoch;
     private final AtomicBoolean started = new AtomicBoolean(false);
 
     LumaExportSession(int account) {
         this.account = account;
-        owner = UserConfig.getInstance(account).getClientUserId();
+        boolean valid = account >= 0 && account < UserConfig.MAX_ACCOUNT_COUNT;
+        owner = valid ? UserConfig.getInstance(account).getClientUserId() : 0;
+        epoch = valid ? LunagramSubscriptionClient.accountEpoch(account) : -1;
     }
 
     boolean hasOwner() { return owner > 0; }
-    boolean isCurrent() { return hasOwner() && owner == UserConfig.getInstance(account).getClientUserId(); }
+    // A same-owner login after logout is a new session, not permission to resume
+    // an old worker or a queued Save/Share callback. Expiry is deliberately absent.
+    boolean isCurrent() {
+        return hasOwner() && owner == UserConfig.getInstance(account).getClientUserId()
+                && epoch == LunagramSubscriptionClient.accountEpoch(account);
+    }
 
     boolean startOnce(AtomicBoolean cancelled, AtomicBoolean terminal) {
         return !cancelled.get() && !terminal.get() && started.compareAndSet(false, true);

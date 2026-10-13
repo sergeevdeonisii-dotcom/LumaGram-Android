@@ -26,4 +26,8 @@ public final class LumaStartupRevealPolicy {
         // A future release without authored notes must not recycle the old feature claims.
         return "1.5".equals(versionName);
     }
+
+    public static boolean hasRelease20Notes(String versionName) {
+        return "2.0".equals(versionName);
+    }
 }
