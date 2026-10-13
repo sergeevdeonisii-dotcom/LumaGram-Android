@@ -89,9 +89,20 @@ foreach($feature in @('TEXT_TOOLS','READING_TOOLS','LINK_TOOLS','LOCAL_WORKSPACE
 # synthetic source/alias copies only; never mutate production resource files.
 function Must-RejectDrawable([scriptblock]$test,[string]$reason){
     $failure=$null;try{& $test|Out-Null}catch{$failure=$_}
-    if(!$failure -or !($failure|Out-String).Contains($reason)){throw "Drawable negative control missed: $reason / $failure"}
+    # ErrorRecord display is terminal-width/ANSI dependent (especially on hosted
+    # Linux). Match the unformatted exception, never an Out-String rendering.
+    if(!$failure -or !$failure.Exception.Message.Contains($reason)){throw "Drawable negative control missed: $reason / $failure"}
 }
 Must-RejectDrawable {Require-SourceDrawables 'R.drawable.lunagram_missing_drawable_negative_210' 'negative'} 'Missing actual drawable'
+Must-RejectDrawable {
+    try{Require-SourceDrawables 'R.drawable.lunagram_missing_drawable_negative_210' 'narrow terminal original regression'}
+    catch{
+        # Preserve narrow diagnostic evidence while rethrowing the original raw
+        # exception. Neither line wrapping nor terminal styles are test authority.
+        [IO.File]::WriteAllText((Join-Path $run 'drawable-error-width20.txt'),($_|Out-String -Width 20),[Text.UTF8Encoding]::new($false))
+        throw
+    }
+} 'Missing actual drawable'
 $testFiles=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal);[void]$testFiles.Add('real')
 Require-Drawable 'alias' $testFiles @{alias=@('@drawable/real')} $resourceNames
 Must-RejectDrawable {Require-Drawable 'alias' $testFiles @{alias=@('@drawable/missing')} $resourceNames} 'Missing actual drawable'
