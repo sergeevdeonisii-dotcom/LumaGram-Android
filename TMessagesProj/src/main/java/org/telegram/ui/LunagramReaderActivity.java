@@ -53,7 +53,7 @@ public final class LunagramReaderActivity extends BaseFragment {
     @Override public View createView(Context context) {
         actionBar.setBackButtonImage(R.drawable.ic_ab_back); actionBar.setTitle(LocaleController.getString(R.string.LutReadingTitle));
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() { @Override public void onItemClick(int id) { if (id == -1) finishFragment(); } });
-        ActionBarMenuItem search = actionBar.createMenu().addItem(1, R.drawable.ic_ab_search).setIsSearchField(true)
+        ActionBarMenuItem search = actionBar.createMenu().addItem(1, R.drawable.msg_search).setIsSearchField(true)
                 .setActionBarMenuItemSearchListener(new ActionBarMenuItem.ActionBarMenuItemSearchListener() {
                     @Override public void onTextChanged(EditText edit) {
                         if (!allowed()) { closeExpired(); return; }
