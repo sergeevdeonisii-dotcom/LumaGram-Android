@@ -23,17 +23,21 @@ if ($advanced -lt 0 -or $subscription -le $advanced -or $support -le $subscripti
 if ($settings -notmatch 'case LUNAGRAM_SUBSCRIPTION_ROW:\s*\{\s*BaseFragment screen = new LunagramSubscriptionActivity\(\);\s*screen.setCurrentAccount\(currentAccount\);\s*presentSettingFragment\(screen\)') {
     throw 'Subscription navigation must retain the selected Telegram account and native settings navigation.'
 }
-foreach ($required in @('UItem.asRadio2(', '.setChecked(plan == selectedPlan)',
+foreach ($required in @('private final Plan selectedPlan = Plan.ULTRA;', 'FeatureCell.Factory.of(', 'UItem.asCustomShadow(subscriptionHeader)',
         'PaymentMethod.TELEGRAM_STARS', 'PaymentMethod.CRYPTO_BOT_USDT', 'PaymentMethod.TON',
         'LunagramSubscriptionClient.purchaseUrl(selectedPlan, selectedPeriod)', 'client.isAuthenticated()',
-        'LunagramSubscriptionAccessInfo', 'LunagramSubscriptionUnavailableInfo', 'LunagramSubscriptionConnectToActivate',
+        'LunagramSubscriptionUltraIntro', 'LunagramSubscriptionUnavailableInfo', 'LunagramSubscriptionConnectToActivate',
         'field.setSaveEnabled(false)', 'IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS',
         'IME_FLAG_NO_PERSONALIZED_LEARNING', 'field.setText("")', 'Theme.key_windowBackgroundGray')) {
     if (!$screen.Contains($required)) { throw "Missing UI safety/native/accessibility guard: $required" }
 }
-if (($screen + $catalog) -match '(?i)https?://|ton://|tg://|SharedPreferences|FileLog|System\.out|android\.util\.Log|sendRequest\(|startActivity\(|setPremium\(|\.setSubscription\(') {
+if (($screen + $catalog) -match '(?i)ton://|tg://|SharedPreferences|FileLog|System\.out|android\.util\.Log|sendRequest\(|startActivity\(|setPremium\(|\.setSubscription\(') {
     throw 'Subscription UI must delegate trusted links/private sessions to the client, never log codes or grant Telegram entitlements.'
 }
+foreach($url in [regex]::Matches($screen + $catalog,'https?://[^"\s]+')) {
+    if($url.Value -ne 'https://t.me/CryptoBot?start='){throw 'Only the fixed, allowlisted CryptoBot payload prefix may be parsed in the screen.'}
+}
+if($screen.Contains('ROW_SELECT_PLAN') -or $screen.Contains('UItem.asRadio2(')){throw 'Removed tier picker must not return.'}
 if ($screen -match 'LumaGhostMode|BlackHoleVault|LunagramSubscriptionAccess\.canUse') {
     throw 'Selecting a plan must not itself mutate runtime access or privacy settings; the authority owns access.'
 }

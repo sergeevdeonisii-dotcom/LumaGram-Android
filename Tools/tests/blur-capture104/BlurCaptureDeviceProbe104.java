@@ -166,25 +166,48 @@ public final class BlurCaptureDeviceProbe104 {
         if (!value) throw new AssertionError(message);
     }
 
+    private static void phase(String name) {
+        System.out.println("PHASE: " + name);
+        System.out.flush();
+    }
+
     private static Context systemContext() throws Exception {
         if (Looper.myLooper() == null) Looper.prepareMainLooper();
         Class<?> threadClass = Class.forName("android.app.ActivityThread");
-        Method systemMain = threadClass.getDeclaredMethod("systemMain");
-        systemMain.setAccessible(true);
-        Object thread = systemMain.invoke(null);
+        // systemMain() attaches a system Application/services. Synthetic unattached
+        // Views need framework resources only, not that process-wide system wiring.
+        Constructor<?> constructor = threadClass.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        Object thread = constructor.newInstance();
         Method getSystemContext = threadClass.getDeclaredMethod("getSystemContext");
         getSystemContext.setAccessible(true);
         return (Context) getSystemContext.invoke(thread);
     }
 
     public static void main(String[] args) throws Exception {
+        try {
+            run(args);
+        } catch (Exception | Error failure) {
+            // app_process' fatal handler may report to logcat rather than its pipes.
+            // This isolated harness has synthetic data only; surface its failure here.
+            failure.printStackTrace(System.err);
+            System.err.flush();
+            throw failure;
+        }
+    }
+
+    private static void run(String[] args) throws Exception {
+        phase("main-entered");
         if(args.length==2&&"--resolve".equals(args[0])){System.out.println("PASS: exact shrunk APK helper symbols "+new Symbols(args[1]).description());return;}
         if (args.length != 3 || (!"fixed".equals(args[2]) && !"broken".equals(args[2]))) {
             throw new IllegalArgumentException("apk, scratch and fixed/broken outcome required");
         }
         final boolean expectedFixed = "fixed".equals(args[2]);
+        phase("apk-symbols-start");
         Symbols symbols=new Symbols(args[0]);
+        phase("apk-symbols-resolved");
         ClassLoader loader = new DexClassLoader(args[0], args[1], null, ClassLoader.getSystemClassLoader());
+        phase("apk-class-loading-start");
         Class<?> rendererClass = loader.loadClass(symbols.className(symbols.group));
         Class<?> childMethodClass = loader.loadClass(symbols.className(symbols.childInterface));
         Class<?> captureClass = loader.loadClass(symbols.className(symbols.captureInterface));
@@ -194,8 +217,11 @@ public final class BlurCaptureDeviceProbe104 {
                 RectF.class, View.class, ViewGroup.class, int.class);
         groupCapture.setAccessible(true);
         relativeCapture.setAccessible(true);
+        phase("apk-methods-ready");
 
+        phase("system-context-start");
         Context context = systemContext();
+        phase("system-context-ready");
         FrameLayout root = new FrameLayout(context);
         FrameLayout list = new FrameLayout(context);
         View child = new View(context);
@@ -204,6 +230,7 @@ public final class BlurCaptureDeviceProbe104 {
         root.layout(0, 0, 320, 480);
         list.layout(24, 38, 244, 338);
         child.layout(0, 0, 120, 120);
+        phase("synthetic-views-ready");
 
         final int[] childCalls = { 0 };
         final boolean[] throwChild = { false };
@@ -220,6 +247,7 @@ public final class BlurCaptureDeviceProbe104 {
         Constructor<?> constructor = rendererClass.getDeclaredConstructor(ViewGroup.class, ViewGroup.class, childMethodClass);
         constructor.setAccessible(true);
         Object renderer = constructor.newInstance(list, root, drawChild);
+        phase("apk-renderer-ready");
 
         Bitmap bitmap = Bitmap.createBitmap(320, 480, Bitmap.Config.ARGB_8888);
         try {
@@ -227,6 +255,7 @@ public final class BlurCaptureDeviceProbe104 {
             RectF originalPosition = new RectF(position);
             Canvas groupCanvas = preparedCanvas(bitmap);
             Snapshot groupBefore = new Snapshot(groupCanvas);
+            phase("group-capture-start");
             check(call(groupCapture, renderer, groupCanvas, position) == null, "Successful group capture threw");
             boolean groupClean = groupBefore.matches(groupCanvas) && originalPosition.equals(position);
             check(childCalls[0] == 1, "Synthetic visible group child was not captured");
@@ -251,6 +280,7 @@ public final class BlurCaptureDeviceProbe104 {
             check(call(groupCapture, renderer, hiddenCanvas, position) == null, "Hidden group capture threw");
             boolean hiddenSkipped = childCalls[0] == visibleCalls && hiddenBefore.matches(hiddenCanvas);
             list.setVisibility(View.VISIBLE);
+            phase("group-captures-finished");
 
             final boolean[] throwRelative = { false };
             final ProbeFailure relativeFailure = new ProbeFailure();
@@ -264,6 +294,7 @@ public final class BlurCaptureDeviceProbe104 {
                 return null;
             };
             Object relative = Proxy.newProxyInstance(loader, new Class<?>[] { captureClass }, captureHandler);
+            phase("relative-capture-start");
             Canvas relativeCanvas = preparedCanvas(bitmap);
             Snapshot relativeBefore = new Snapshot(relativeCanvas);
             check(call(relativeCapture, null, relative, relativeCanvas, position, list, root, 77) == null,
@@ -277,6 +308,7 @@ public final class BlurCaptureDeviceProbe104 {
                     == relativeFailure, "Relative capture did not propagate original synthetic exception");
             boolean throwingRelativeClean = throwingRelativeBefore.matches(throwingRelativeCanvas)
                     && originalPosition.equals(position);
+            phase("relative-captures-finished");
 
             boolean[] results = { groupClean, throwingGroupClean, retryClean, hiddenSkipped,
                     relativeClean, throwingRelativeClean };

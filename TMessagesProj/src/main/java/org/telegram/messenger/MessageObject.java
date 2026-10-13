@@ -369,6 +369,8 @@ public class MessageObject {
     public boolean messageTrimmedToHighlightCut = true;
     public CharSequence messageTrimmedToHighlight;
     public int parentWidth;
+    // Explicit host constraint; unlike preview it does not change normal message drawing.
+    private int layoutParentWidth;
 
     public ImageLocation mediaThumb;
     public ImageLocation mediaSmallThumb;
@@ -6796,7 +6798,7 @@ public class MessageObject {
             return false;
         }
         if (layoutCreated) {
-            int newMinSize = AndroidUtilities.isTablet() ? AndroidUtilities.getMinTabletSide() : AndroidUtilities.displaySize.x;
+            int newMinSize = layoutParentWidth > 0 ? layoutParentWidth : AndroidUtilities.isTablet() ? AndroidUtilities.getMinTabletSide() : AndroidUtilities.displaySize.x;
             float newFontSize = Theme.chat_msgTextPaint != null ? Theme.chat_msgTextPaint.getTextSize() : 0;
             if (Math.abs(generatedWithMinSize - newMinSize) > dp(52) || generatedWithDensity != AndroidUtilities.density || generatedWithFontSize != newFontSize) {
                 layoutCreated = false;
@@ -8445,6 +8447,8 @@ public class MessageObject {
     }
 
     private int getParentWidth() {
+        if (layoutParentWidth > 0)
+            return layoutParentWidth;
         if (preview && parentWidth > 0)
             return parentWidth;
         if (AndroidUtilities.isTablet())
@@ -8453,6 +8457,16 @@ public class MessageObject {
             return AndroidUtilities.displaySize.x - dp(50);
         return AndroidUtilities.displaySize.x;
     }
+
+    /** Constrain only this presentation object's text layout to a measured host (0 restores native sizing). */
+    public void setLayoutParentWidth(int width) {
+        int constrained = Math.max(0, width);
+        if (layoutParentWidth == constrained) return;
+        layoutParentWidth = constrained;
+        resetLayout();
+    }
+
+    public int getLayoutParentWidth() { return layoutParentWidth; }
 
     public boolean sideMenuEnabled;
     public int getMaxMessageTextWidth() {

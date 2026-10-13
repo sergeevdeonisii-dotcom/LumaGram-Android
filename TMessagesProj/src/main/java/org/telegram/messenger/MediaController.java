@@ -140,6 +140,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 
     private native int startRecord(String path, int sampleRate);
 
+    private native int startRecordWithChannels(String path, int sampleRate, int channels);
+
     private native int writeFrame(ByteBuffer frame, int len);
 
     private native void stopRecord();
@@ -1100,6 +1102,11 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     private ByteBuffer fileBuffer;
     public int recordBufferSize = 1280;
     public int sampleRate = 48000;
+    private int lunagramRecordingChannels = 1;
+    private LunagramVoiceSource lunagramRecordingSource;
+    private LunagramMediaAccess.Session lunagramRecordingAccess;
+    private volatile boolean lunagramVoiceEffectBusy;
+    private volatile int lunagramRecordingGeneration;
     private int sendAfterDone;
     private boolean sendAfterDoneNotify;
     private int sendAfterDoneScheduleDate;
@@ -1124,10 +1131,12 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 buffer.rewind();
                 int len = audioRecorder.read(buffer, buffer.capacity());
                 if (len > 0) {
+                    len -= len % (2 * lunagramRecordingChannels);
                     buffer.limit(len);
                     double sum = 0;
                     try {
-                        long newSamplesCount = samplesCount + len / 2;
+                        int frames = len / (2 * lunagramRecordingChannels);
+                        long newSamplesCount = samplesCount + frames;
                         int currentPart = (int) (((double) samplesCount / (double) newSamplesCount) * recordSamples.length);
                         int newPart = recordSamples.length - currentPart;
                         float sampleStep;
@@ -1141,9 +1150,10 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                         }
                         int currentNum = currentPart;
                         float nextNum = 0;
-                        sampleStep = (float) len / 2 / (float) newPart;
-                        for (int i = 0; i < len / 2; i++) {
+                        sampleStep = (float) frames / (float) newPart;
+                        for (int i = 0; i < frames; i++) {
                             short peak = buffer.getShort();
+                            if (lunagramRecordingChannels == 2) peak = (short) ((peak + buffer.getShort()) / 2);
                             if (Build.VERSION.SDK_INT < 21) {
                                 if (peak > 2500) {
                                     sum += peak * peak;
@@ -1162,10 +1172,16 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                         FileLog.e(e);
                     }
                     buffer.position(0);
-                    final double amplitude = Math.sqrt(sum / len / 2);
+                    final double amplitude = Math.sqrt(sum / Math.max(1, len / (2 * lunagramRecordingChannels)));
                     final ByteBuffer finalBuffer = buffer;
-                    final boolean flush = len != buffer.capacity();
                     fileEncodingQueue.postRunnable(() -> {
+                        try {
+                            if (lunagramRecordingSource != null) lunagramRecordingSource.append(finalBuffer, finalBuffer.limit());
+                        } catch (IOException e) {
+                            FileLog.e(e);
+                            closeLunagramVoiceSource();
+                            LunagramVoiceSource.delete(recordingAudioFile == null ? null : recordingAudioFile.getPath());
+                        }
                         while (finalBuffer.hasRemaining()) {
                             int oldLimit = -1;
                             if (finalBuffer.remaining() > fileBuffer.remaining()) {
@@ -1173,10 +1189,10 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                                 finalBuffer.limit(fileBuffer.remaining() + finalBuffer.position());
                             }
                             fileBuffer.put(finalBuffer);
-                            if (fileBuffer.position() == fileBuffer.limit() || flush) {
-                                if (writeFrame(fileBuffer, !flush ? fileBuffer.limit() : finalBuffer.position()) != 0) {
+                            if (fileBuffer.position() == fileBuffer.limit()) {
+                                if (writeFrame(fileBuffer, fileBuffer.limit()) != 0) {
                                     fileBuffer.rewind();
-                                    recordTimeCount += fileBuffer.limit() / 2 / (sampleRate / 1000);
+                                    recordTimeCount += fileBuffer.limit() * 1000L / (2 * lunagramRecordingChannels * sampleRate);
                                     writtenFrame++;
                                 } else {
                                     FileLog.e("writing frame failed");
@@ -1403,6 +1419,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public MediaController() {
+        LunagramVoiceSource.setStorageDirectory(new File(ApplicationLoader.applicationContext.getFilesDir(), "lunagram_voice_originals"));
         recordQueue = new DispatchQueue("recordQueue");
         recordQueue.setPriority(Thread.MAX_PRIORITY);
         fileEncodingQueue = new DispatchQueue("fileEncodingQueue");
@@ -4467,6 +4484,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public void prepareResumedRecording(int currentAccount, MediaDataController.DraftVoice draft, long dialogId, MessageObject replyToMsg, MessageObject replyToTopMsg, TL_stories.StoryItem replyStory, int guid, SendMessageChatArguments sendMessageChatArguments, long monoForumPeerId, MessageSuggestionParams suggestionParams) {
+        final LunagramMediaAccess.Session mediaAccess = LunagramMediaAccess.forAccount(currentAccount);
         manualRecording = false;
         requestRecordAudioFocus(true);
         recordQueue.cancelRunnable(recordStartRunnable);
@@ -4494,6 +4512,11 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE).mkdirs();
             AutoDeleteMediaTask.lockFile(recordingAudioFile);
             try {
+                try (LunagramVoiceSource source = LunagramVoiceSource.open(recordingAudioFile)) {
+                    lunagramRecordingChannels = source.channels;
+                } catch (IOException legacyDraft) {
+                    lunagramRecordingChannels = 1;
+                }
                 audioRecorderPaused = true;
                 recordTimeCount = draft.recordTimeCount;
                 writtenFrame = draft.writedFrame;
@@ -4504,6 +4527,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 recordMonoForumSuggestionParams = suggestionParams;
                 recordTopicId = replyToTopMsg == null ? 0 : MessageObject.getTopicId(recordingCurrentAccount, replyToTopMsg.messageOwner, false);
                 recordingCurrentAccount = currentAccount;
+                lunagramRecordingAccess = mediaAccess;
                 recordReplyingMsg = replyToMsg;
                 recordReplyingTopMsg = replyToTopMsg;
                 recordReplyingStory = replyStory;
@@ -4557,6 +4581,188 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         return audioRecorderPaused;
     }
 
+    public int getLunagramRecordingChannels() { return lunagramRecordingChannels; }
+
+    private void closeLunagramVoiceSource() {
+        if (lunagramRecordingSource != null) {
+            try { lunagramRecordingSource.close(); } catch (IOException e) { FileLog.e(e); }
+            lunagramRecordingSource = null;
+        }
+    }
+
+    /** Runs after queued PCM writes, before closing the native encoder. */
+    private void finishLunagramRecording() {
+        if (fileBuffer.position() > 0) {
+            int bytes = fileBuffer.position();
+            if (writeFrame(fileBuffer, bytes) != 0) {
+                recordTimeCount += bytes * 1000L / (2 * lunagramRecordingChannels * sampleRate);
+                writtenFrame++;
+            }
+            fileBuffer.rewind();
+        }
+        stopRecord();
+        closeLunagramVoiceSource();
+    }
+
+    private boolean deviceHasStereoInput(AudioDeviceInfo device) {
+        if (device == null || !device.isSource()) return false;
+        for (int count : device.getChannelCounts()) if (count == 2) return true;
+        return false;
+    }
+
+    private AudioRecord createLunagramRecorder(LunagramMediaAccess.Session access, boolean preferStereo, boolean allowFallback) throws IOException {
+        if (access != null && !access.isCurrent()) throw new IOException("Recording account changed");
+        if (preferStereo && (access == null || !access.canUse(LunagramFeatureCatalog.Feature.VOICE_STEREO))) {
+            // A paused stereo draft must keep its format. Preserve the draft
+            // instead of corrupting its Opus stream by resuming in mono.
+            if (!allowFallback) throw new IOException("Stereo recording access expired");
+            preferStereo = false;
+        }
+        boolean stereoDevice = false;
+        if (preferStereo && Build.VERSION.SDK_INT >= 24) {
+            AudioManager manager = (AudioManager) ApplicationLoader.applicationContext.getSystemService(Context.AUDIO_SERVICE);
+            for (AudioDeviceInfo device : manager.getDevices(AudioManager.GET_DEVICES_INPUTS)) {
+                if (deviceHasStereoInput(device)) { stereoDevice = true; break; }
+            }
+        }
+        int requested = preferStereo && stereoDevice ? 2 : 1;
+        if (preferStereo && !stereoDevice && !allowFallback) throw new IOException("Stereo route no longer available");
+        while (true) {
+            int mask = requested == 2 ? AudioFormat.CHANNEL_IN_STEREO : AudioFormat.CHANNEL_IN_MONO;
+            int minimum = AudioRecord.getMinBufferSize(sampleRate, mask, AudioFormat.ENCODING_PCM_16BIT);
+            int frameBytes = 960 * 2 * requested;
+            int bufferSize = Math.max(frameBytes * 2, minimum > 0 ? ((minimum + frameBytes - 1) / frameBytes) * frameBytes : 0);
+            AudioRecord candidate = null;
+            try {
+                if (minimum <= 0) throw new IOException("Unsupported recording format");
+                candidate = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate, mask, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
+                if (candidate.getState() != AudioRecord.STATE_INITIALIZED || candidate.getChannelCount() != requested) throw new IOException("Recording channels unavailable");
+                candidate.startRecording();
+                if (candidate.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) throw new IOException("Microphone could not start");
+                if (access != null && !access.isCurrent()) throw new IOException("Recording account changed during microphone startup");
+                if (requested == 2 && (access == null || !access.canUse(LunagramFeatureCatalog.Feature.VOICE_STEREO))) throw new IOException("Stereo access changed during microphone startup");
+                if (requested == 2 && (Build.VERSION.SDK_INT < 24 || !deviceHasStereoInput(candidate.getRoutedDevice()))) throw new IOException("Routed input does not advertise stereo");
+                lunagramRecordingChannels = requested;
+                recordBufferSize = bufferSize;
+                recordBuffers.clear();
+                fileBuffer = ByteBuffer.allocateDirect(frameBytes).order(ByteOrder.nativeOrder());
+                return candidate;
+            } catch (Exception error) {
+                if (candidate != null) candidate.release();
+                if (access != null && !access.isCurrent()) throw new IOException("Recording account changed", error);
+                if (requested == 2 && allowFallback) { requested = 1; continue; }
+                throw new IOException("Cannot initialize microphone", error);
+            }
+        }
+    }
+
+    public interface LunagramVoiceEffectCallback { void onComplete(boolean success); }
+
+    public boolean hasLunagramVoiceSource(String path) {
+        return path != null && LunagramVoiceSource.path(new File(path)).isFile();
+    }
+
+    public void applyLunagramVoiceEffect(int currentAccount, String path, int effect, TLRPC.Document document, LunagramVoiceEffectCallback callback) {
+        final LunagramMediaAccess.Session access = LunagramMediaAccess.forAccount(currentAccount);
+        if (path == null || effect != LunagramVoiceProcessor.ORIGINAL && !access.canUse(LunagramFeatureCatalog.Feature.VOICE_FILTERS)
+                || lunagramVoiceEffectBusy || audioRecorder != null || recordStartRunnable != null) {
+            if (callback != null) callback.onComplete(false);
+            return;
+        }
+        lunagramVoiceEffectBusy = true;
+        fileEncodingQueue.postRunnable(() -> {
+            boolean success = renderLunagramVoiceEffect(new File(path), effect, access);
+            final byte[] waveform = success ? getWaveform(path) : null;
+            AndroidUtilities.runOnUIThread(() -> {
+                lunagramVoiceEffectBusy = false;
+                if (success && document != null) {
+                    document.size = new File(path).length();
+                    for (TLRPC.DocumentAttribute attribute : document.attributes) {
+                        if (attribute instanceof TLRPC.TL_documentAttributeAudio) {
+                            attribute.waveform = waveform;
+                            if (waveform != null) attribute.flags |= 4;
+                        }
+                    }
+                }
+                if (callback != null) callback.onComplete(success);
+            });
+        });
+    }
+
+    /** Always starts with original PCM; changing effects never compounds earlier effects. */
+    private boolean renderLunagramVoiceEffect(File opus, int effect, LunagramMediaAccess.Session access) {
+        if (access != null && !access.isCurrent()) return false;
+        if (effect != LunagramVoiceProcessor.ORIGINAL && (access == null || !access.canUse(LunagramFeatureCatalog.Feature.VOICE_FILTERS))) return false;
+        File output = new File(opus.getPath() + ".luna-effect");
+        File backup = new File(opus.getPath() + ".luna-backup");
+        boolean encoderOpen = false;
+        try (LunagramVoiceSource source = LunagramVoiceSource.open(opus)) {
+            if (source.pcmBytes() == 0) return false;
+            encoderOpen = true;
+            if (startRecordWithChannels(output.getPath(), source.sampleRate, source.channels) == 0) return false;
+            LunagramVoiceProcessor processor = new LunagramVoiceProcessor(effect, source.sampleRate, source.channels);
+            byte[] bytes = new byte[960 * 2 * source.channels];
+            ByteBuffer buffer = ByteBuffer.allocateDirect(bytes.length).order(ByteOrder.LITTLE_ENDIAN);
+            ByteBuffer encoded = ByteBuffer.allocateDirect(bytes.length).order(ByteOrder.LITTLE_ENDIAN);
+            int latencyBytes = processor.latencyFrames() * 2 * source.channels;
+            int skip = latencyBytes;
+            source.rewind();
+            int read;
+            while ((read = source.read(bytes)) > 0) {
+                if (access != null && !access.isCurrent()) return false;
+                if (effect != LunagramVoiceProcessor.ORIGINAL && !access.canUse(LunagramFeatureCatalog.Feature.VOICE_FILTERS)) return false;
+                buffer.clear(); buffer.put(bytes, 0, read); buffer.limit(read);
+                processor.process(buffer, read);
+                int skipped = Math.min(skip, read); skip -= skipped;
+                buffer.position(skipped);
+                encodeLunagramPcm(buffer, encoded);
+            }
+            // Compensate the pitch shifter's delay, preserving the final spoken syllable.
+            java.util.Arrays.fill(bytes, (byte) 0);
+            while (latencyBytes > 0) {
+                int count = Math.min(bytes.length, latencyBytes);
+                buffer.clear(); buffer.put(bytes, 0, count); buffer.limit(count);
+                processor.process(buffer, count);
+                int skipped = Math.min(skip, count); skip -= skipped;
+                buffer.position(skipped);
+                encodeLunagramPcm(buffer, encoded);
+                latencyBytes -= count;
+            }
+            if (encoded.position() > 0 && writeFrame(encoded, encoded.position()) == 0) throw new IOException("Voice effect final frame failed");
+            stopRecord(); encoderOpen = false;
+            // Expiry/owner replacement during queued processing never replaces
+            // the existing playable voice message with a new paid effect.
+            if (access != null && !access.isCurrent()) return false;
+            if (effect != LunagramVoiceProcessor.ORIGINAL && !access.canUse(LunagramFeatureCatalog.Feature.VOICE_FILTERS)) return false;
+            if (!opus.renameTo(backup)) throw new IOException("Cannot preserve voice preview");
+            if (!output.renameTo(opus)) {
+                backup.renameTo(opus);
+                throw new IOException("Cannot replace voice preview");
+            }
+            source.setEffect(effect);
+            backup.delete();
+            return true;
+        } catch (Exception error) {
+            FileLog.e(error);
+            return false;
+        } finally {
+            if (encoderOpen) stopRecord();
+            output.delete();
+        }
+    }
+
+    private void encodeLunagramPcm(ByteBuffer input, ByteBuffer output) throws IOException {
+        while (input.hasRemaining()) {
+            int limit = input.limit();
+            input.limit(input.position() + Math.min(input.remaining(), output.remaining()));
+            output.put(input); input.limit(limit);
+            if (!output.hasRemaining()) {
+                if (writeFrame(output, output.capacity()) == 0) throw new IOException("Voice effect encoding failed");
+                output.clear();
+            }
+        }
+    }
+
     private File joinRecord() {
         return joinRecord(recordingPrevAudioFile, recordingAudioFile, recordingAudio);
     }
@@ -4573,6 +4779,16 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 }
             };
             if (joinOpusFiles(prevFile.getAbsolutePath(), currentFile.getAbsolutePath(), newFile.getAbsolutePath())) {
+                try {
+                    LunagramVoiceSource.join(prevFile, currentFile, newFile);
+                    try (LunagramVoiceSource source = LunagramVoiceSource.open(newFile)) {
+                        if (source.effect != LunagramVoiceProcessor.ORIGINAL) renderLunagramVoiceEffect(newFile, source.effect, lunagramRecordingAccess);
+                    }
+                } catch (IOException missingOriginal) {
+                    FileLog.e(missingOriginal);
+                    LunagramVoiceSource.delete(newFile.getPath());
+                }
+                LunagramVoiceSource.delete(currentFile.getPath());
                 currentFile.delete();
                 if (currentFile == recordingAudioFile) {
                     recordingAudioFile = newFile;
@@ -4580,6 +4796,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 currentFile = newFile;
             }
             if (prevFile != null) {
+                LunagramVoiceSource.delete(prevFile.getPath());
                 prevFile.delete();
                 if (prevFile == recordingPrevAudioFile) {
                     recordingPrevAudioFile = null;
@@ -4605,9 +4822,12 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 return super.delete();
             }
         };
-        recordQueue.postRunnable(() -> {
+        fileEncodingQueue.postRunnable(() -> {
             if (cropOpusFile(recordingAudioFile.getAbsolutePath(), newFile.getAbsolutePath(), startMs, endMs)) {
                 if (recordingAudioFile != null) {
+                    try { LunagramVoiceSource.crop(recordingAudioFile, newFile, startMs, endMs); }
+                    catch (IOException missingOriginal) { FileLog.e(missingOriginal); LunagramVoiceSource.delete(newFile.getPath()); }
+                    LunagramVoiceSource.delete(recordingAudioFile.getPath());
                     recordingAudioFile.delete();
                 }
                 recordingAudioFile = newFile;
@@ -4620,6 +4840,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public void toggleRecordingPause(boolean voiceOnce) {
+        if (lunagramVoiceEffectBusy) return;
         recordQueue.postRunnable(() -> {
             if (recordingAudio == null || recordingAudioFile == null) {
                 return;
@@ -4634,8 +4855,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 audioRecorder.stop();
                 audioRecorder.release();
                 audioRecorder = null;
-                recordQueue.postRunnable(() -> {
-                    stopRecord();
+                fileEncodingQueue.postRunnable(() -> {
+                    finishLunagramRecording();
                     final TLRPC.TL_document audioToSend = recordingAudio;
                     final File recordingAudioFileToSend = joinRecord(recordingPrevAudioFile, recordingAudioFile, audioToSend);
                     if (audioToSend == null || recordingAudioFileToSend == null) {
@@ -4667,7 +4888,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 });
             } else {
                 recordQueue.cancelRunnable(recordRunnable);
-                recordQueue.postRunnable(() -> {
+                fileEncodingQueue.postRunnable(() -> {
                     recordingPrevAudioFile = recordingAudioFile;
                     recordingAudioFile = new File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_AUDIO), System.currentTimeMillis() + "_" + FileLoader.getAttachFileName(recordingAudio)) {
                         @Override
@@ -4678,7 +4899,17 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                             return super.delete();
                         }
                     };
-                    if (startRecord(recordingAudioFile.getPath(), sampleRate) == 0) {
+                    try {
+                        audioRecorder = createLunagramRecorder(lunagramRecordingAccess, lunagramRecordingChannels == 2, false);
+                        if (startRecordWithChannels(recordingAudioFile.getPath(), sampleRate, lunagramRecordingChannels) == 0) throw new IOException("Cannot resume audio encoder");
+                        lunagramRecordingSource = LunagramVoiceSource.create(recordingAudioFile, sampleRate, lunagramRecordingChannels);
+                    } catch (Exception error) {
+                        FileLog.e(error);
+                        stopRecord(); closeLunagramVoiceSource();
+                        if (audioRecorder != null) { audioRecorder.release(); audioRecorder = null; }
+                        recordingAudioFile.delete(); LunagramVoiceSource.delete(recordingAudioFile.getPath());
+                        recordingAudioFile = recordingPrevAudioFile; recordingPrevAudioFile = null;
+                        audioRecorderPaused = true;
                         AndroidUtilities.runOnUIThread(() -> {
                             recordStartRunnable = null;
                             NotificationCenter.getInstance(recordingCurrentAccount).postNotificationName(NotificationCenter.recordStartError, recordingGuid);
@@ -4693,12 +4924,10 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                         requestRecordAudioFocus(true);
 //                        MediaDataController.getInstance(recordingCurrentAccount).pushDraftVoiceMessage(recordDialogId, recordTopicId, null);
 //
-                        audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, recordBufferSize);
                         recordStartTime = System.currentTimeMillis();
                         writtenFrame = 0;
                         samplesCount = 0;
                         fileBuffer.rewind();
-                        audioRecorder.startRecording();
                         recordQueue.postRunnable(recordRunnable);
 
                         NotificationCenter.getInstance(recordingCurrentAccount).postNotificationName(NotificationCenter.recordResumed);
@@ -4709,6 +4938,10 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public void startRecording(int currentAccount, long dialogId, MessageObject replyToMsg, MessageObject replyToTopMsg, TL_stories.StoryItem replyStory, int guid, boolean manual, SendMessageChatArguments sendMessageChatArguments, long monoForumPeerId, MessageSuggestionParams suggestionParams) {
+        if (lunagramVoiceEffectBusy) {
+            NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.recordStartError, guid);
+            return;
+        }
         boolean paused = false;
         if (playingMessageObject != null && isPlayingMessage(playingMessageObject) && !isMessagePaused()) {
             paused = true;
@@ -4720,9 +4953,13 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             feedbackView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
         } catch (Exception ignore) {}
 
-        recordQueue.postRunnable(recordStartRunnable = () -> {
+        final int lunagramGeneration = ++lunagramRecordingGeneration;
+        final LunagramMediaAccess.Session mediaAccess = LunagramMediaAccess.forAccount(currentAccount);
+        recordQueue.postRunnable(recordStartRunnable = () -> fileEncodingQueue.postRunnable(() -> {
+            if (lunagramGeneration != lunagramRecordingGeneration) return;
             if (audioRecorder != null) {
                 AndroidUtilities.runOnUIThread(() -> {
+                    if (lunagramGeneration != lunagramRecordingGeneration) return;
                     recordStartRunnable = null;
                     NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.recordStartError, guid);
                 });
@@ -4758,19 +4995,23 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             }
             AutoDeleteMediaTask.lockFile(recordingAudioFile);
             try {
-                if (startRecord(recordingAudioFile.getPath(), sampleRate) == 0) {
-                    AndroidUtilities.runOnUIThread(() -> {
-                        recordStartRunnable = null;
-                        NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.recordStartError, guid);
-                    });
-                    if (BuildVars.LOGS_ENABLED) {
-                        FileLog.d("cant init encoder");
-                    }
+                lunagramRecordingAccess = mediaAccess;
+                audioRecorder = createLunagramRecorder(mediaAccess, LunagramAudioSettings.isStereoEnabled(currentAccount), true);
+                if (startRecordWithChannels(recordingAudioFile.getPath(), sampleRate, lunagramRecordingChannels) == 0) throw new IOException("Cannot initialize audio encoder");
+                lunagramRecordingSource = LunagramVoiceSource.create(recordingAudioFile, sampleRate, lunagramRecordingChannels);
+
+                if (lunagramGeneration != lunagramRecordingGeneration) {
+                    stopRecord(); closeLunagramVoiceSource();
+                    audioRecorder.release(); audioRecorder = null;
+                    AutoDeleteMediaTask.unlockFile(recordingAudioFile);
+                    recordingAudioFile.delete(); LunagramVoiceSource.delete(recordingAudioFile.getPath());
+                    recordingAudioFile = null; recordingAudio = null;
+                    setBluetoothScoOn(false);
+                    requestRecordAudioFocus(false);
                     return;
                 }
 
                 audioRecorderPaused = false;
-                audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, recordBufferSize);
                 recordStartTime = System.currentTimeMillis();
                 recordTimeCount = 0;
                 writtenFrame = 0;
@@ -4786,11 +5027,12 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 recordSendMessageChatArguments = sendMessageChatArguments;
                 fileBuffer.rewind();
 
-                audioRecorder.startRecording();
             } catch (Exception e) {
                 FileLog.e(e);
                 recordingAudio = null;
                 stopRecord();
+                closeLunagramVoiceSource();
+                LunagramVoiceSource.delete(recordingAudioFile == null ? null : recordingAudioFile.getPath());
                 AutoDeleteMediaTask.unlockFile(recordingAudioFile);
                 recordingAudioFile.delete();
                 recordingAudioFile = null;
@@ -4807,6 +5049,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 setBluetoothScoOn(false);
 
                 AndroidUtilities.runOnUIThread(() -> {
+                    if (lunagramGeneration != lunagramRecordingGeneration) return;
                     recordStartRunnable = null;
                     NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.recordStartError, guid);
                 });
@@ -4815,10 +5058,11 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 
             recordQueue.postRunnable(recordRunnable);
             AndroidUtilities.runOnUIThread(() -> {
+                if (lunagramGeneration != lunagramRecordingGeneration) return;
                 recordStartRunnable = null;
                 NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.recordStarted, guid, true);
             });
-        }, paused ? 500 : 50);
+        }), paused ? 500 : 50);
     }
 
     public void generateWaveform(MessageObject messageObject) {
@@ -4864,6 +5108,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     public void cleanRecording(boolean delete) {
         recordingAudio = null;
         AutoDeleteMediaTask.unlockFile(recordingAudioFile);
+        LunagramVoiceSource.delete(recordingAudioFile == null ? null : recordingAudioFile.getPath());
         if (delete && recordingAudioFile != null) {
             try {
                 recordingAudioFile.delete();
@@ -4873,6 +5118,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         }
         recordingAudioFile = null;
         if (delete && recordingPrevAudioFile != null) {
+            LunagramVoiceSource.delete(recordingPrevAudioFile.getPath());
             recordingPrevAudioFile.delete();
         }
         recordingPrevAudioFile = null;
@@ -4890,7 +5136,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 FileLog.d("stop recording internal filename " + (recordingAudioFile.getPath()));
             }
             fileEncodingQueue.postRunnable(() -> {
-                stopRecord();
+                finishLunagramRecording();
                 final File recordingAudioFileToSend = joinRecord(recordingPrevAudioFileToSend_, recordingAudioFileToSend_, audioToSend);
                 if (recordingAudioFileToSend == null) {
                     if (BuildVars.LOGS_ENABLED) {
@@ -4924,6 +5170,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     audioToSend.attributes.add(attributeAudio);
                     if (duration > 700) {
                         if (send == 1) {
+                            LunagramVoiceSource.delete(recordingAudioFileToSend.getAbsolutePath());
                             SendMessagesHelper.SendMessageParams params = SendMessagesHelper.SendMessageParams.of(audioToSend, null, recordingAudioFileToSend.getAbsolutePath(), recordDialogId, recordReplyingMsg, recordReplyingTopMsg, null, null, null, null, notify, scheduleDate, 0, once ? 0x7FFFFFFF : 0, null, null, false);
                             params.monoForumPeer = recordMonoForumPeerId;
                             params.suggestionParams = recordMonoForumSuggestionParams;
@@ -4938,16 +5185,21 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                         if (recordingAudioFileToSend != null) {
                             AutoDeleteMediaTask.unlockFile(recordingAudioFileToSend);
                             recordingAudioFileToSend.delete();
+                            LunagramVoiceSource.delete(recordingAudioFileToSend.getAbsolutePath());
                         }
                     }
                     requestRecordAudioFocus(false);
                 });
             });
         } else {
-            AutoDeleteMediaTask.unlockFile(recordingAudioFile);
-            if (recordingAudioFile != null) {
-                recordingAudioFile.delete();
-            }
+            final File discardedRecording = recordingAudioFile;
+            final File discardedPrevious = recordingPrevAudioFile;
+            fileEncodingQueue.postRunnable(() -> {
+                finishLunagramRecording();
+                AutoDeleteMediaTask.unlockFile(discardedRecording);
+                if (discardedRecording != null) { discardedRecording.delete(); LunagramVoiceSource.delete(discardedRecording.getPath()); }
+                if (discardedPrevious != null) { discardedPrevious.delete(); LunagramVoiceSource.delete(discardedPrevious.getPath()); }
+            });
             requestRecordAudioFocus(false);
         }
         try {
@@ -4967,9 +5219,20 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public void stopRecording(final int send, boolean notify, int scheduleDate, boolean once, long payStars) {
+        final int lunagramGeneration = ++lunagramRecordingGeneration;
         if (recordStartRunnable != null) {
             recordQueue.cancelRunnable(recordStartRunnable);
             recordStartRunnable = null;
+            // Initialization owns its fields until the encoder queue has drained.
+            // An immediate release must not null/release the recorder mid-initialization.
+            fileEncodingQueue.postRunnable(() -> {
+                if (lunagramGeneration != lunagramRecordingGeneration) return;
+                recordQueue.postRunnable(() -> {
+                    if (lunagramGeneration == lunagramRecordingGeneration) stopRecording(send, notify, scheduleDate, once, payStars);
+                });
+            });
+            requestRecordAudioFocus(false);
+            return;
         }
         recordQueue.postRunnable(() -> {
             if (sendAfterDone == 3) {

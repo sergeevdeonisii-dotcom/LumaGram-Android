@@ -15,12 +15,12 @@ public final class LunagramSubscriptionCatalog {
         STANDARD("standard", "Standard", 100, 70),
         PLUS("plus", "Plus", 140, 100),
         PRO("pro", "Pro", 200, 140),
-        ULTRA("ultra", "Ultra", 500, 360);
+        ULTRA("ultra", "Ultra", 249, 180);
 
         public final String id;
         public final String title;
         public final int monthlyUsdCents;
-        // Owner-approved reference 50 Stars / $0.70, nearest ten; not a live exchange rate.
+        // Fixed catalog price, not a live exchange rate. Retired entries are wire history only.
         public final int monthlyStars;
 
         Plan(String id, String title, int monthlyUsdCents, int monthlyStars) {
@@ -36,16 +36,15 @@ public final class LunagramSubscriptionCatalog {
 
         public int totalUsdCents(Period period) {
             requirePeriod(period);
-            // All five approved monthly amounts are even cents; no fractional cent is lost.
-            return monthlyUsdCents * period.priceNumerator / Period.PRICE_DENOMINATOR;
+            // USD is settled in whole cents: 249 * 2.5 = 622.5 cents rounds HALF_UP to 623.
+            return usdCentsFor(monthlyUsdCents, period);
         }
 
         public int totalStars(Period period) {
             requirePeriod(period);
             // Apply the duration factor to the approved monthly Stars price, then HALF_UP
             // to the nearest ten. Work in half-Stars throughout (175 becomes 180).
-            int halfStars = monthlyStars * period.priceNumerator;
-            return (halfStars + 10) / 20 * 10;
+            return starsFor(monthlyStars, period);
         }
 
         public String totalUsdAmount(Period period) {
@@ -84,7 +83,8 @@ public final class LunagramSubscriptionCatalog {
         TON
     }
 
-    public static final List<Plan> PLANS = Collections.unmodifiableList(Arrays.asList(Plan.values()));
+    /** Only Ultra can be selected for a new purchase. Enum IDs are retained for existing receipts. */
+    public static final List<Plan> PLANS = Collections.singletonList(Plan.ULTRA);
     public static final List<Period> PERIODS = Collections.unmodifiableList(Arrays.asList(Period.values()));
 
     private LunagramSubscriptionCatalog() {
@@ -92,6 +92,44 @@ public final class LunagramSubscriptionCatalog {
 
     private static void requirePeriod(Period period) {
         if (period == null) throw new IllegalArgumentException("Subscription period is required");
+    }
+
+    public static boolean isPurchasable(Plan plan) {
+        return plan == Plan.ULTRA;
+    }
+
+    /** Exact, case-sensitive historical IDs; unknown IDs are never upgraded to Ultra. */
+    public static Plan planFromId(String id) {
+        for (Plan plan : Plan.values()) if (plan.id.equals(id)) return plan;
+        return null;
+    }
+
+    private static int usdCentsFor(int monthlyCents, Period period) {
+        return (monthlyCents * period.priceNumerator + Period.PRICE_DENOMINATOR / 2)
+                / Period.PRICE_DENOMINATOR;
+    }
+
+    private static int starsFor(int monthlyStars, Period period) {
+        int halfStars = monthlyStars * period.priceNumerator;
+        return (halfStars + 10) / 20 * 10;
+    }
+
+    /**
+     * Existing authenticated receipts retain their exact old price. This compatibility check
+     * does not make a retired plan purchasable and never grants a subscription by itself.
+     */
+    public static boolean isKnownReceiptUsdPrice(String planId, Period period, long cents) {
+        Plan plan = planFromId(planId);
+        if (plan == null || period == null) return false;
+        return cents == plan.totalUsdCents(period)
+                || plan == Plan.ULTRA && cents == usdCentsFor(500, period);
+    }
+
+    public static boolean isKnownReceiptStarsPrice(String planId, Period period, long stars) {
+        Plan plan = planFromId(planId);
+        if (plan == null || period == null) return false;
+        return stars == plan.totalStars(period)
+                || plan == Plan.ULTRA && stars == starsFor(360, period);
     }
 
     /** Fail closed until the authenticated invoice/redemption service is actually connected. */

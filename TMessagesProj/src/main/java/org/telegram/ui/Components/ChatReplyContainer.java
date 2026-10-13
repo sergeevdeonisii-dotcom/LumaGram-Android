@@ -29,12 +29,14 @@ import org.telegram.ui.Components.spoilers.SpoilerEffect;
 public class ChatReplyContainer extends FrameLayout {
 
     private final Theme.ResourcesProvider resourcesProvider;
+    private int liquidGlassContentInsetPx = dp(64);
 
     public Layout[] layouts = new Layout[2];
 
     public ChatReplyContainer(Context context, Theme.ResourcesProvider resourcesProvider) {
         super(context);
         this.resourcesProvider = resourcesProvider;
+        setClipChildren(true);
 
         for (int i = 0; i < layouts.length; ++i) {
             layouts[i] = new Layout(context, resourcesProvider);
@@ -105,6 +107,16 @@ public class ChatReplyContainer extends FrameLayout {
         }
     }
 
+    /** Content origin from the actual input bubble, in this row's local pixels. */
+    public void setLiquidGlassContentInset(int contentInsetPx) {
+        final int inset = Math.max(0, contentInsetPx);
+        if (liquidGlassContentInsetPx == inset) return;
+        liquidGlassContentInsetPx = inset;
+        for (Layout layout : layouts) {
+            if (layout.liquidGlassMode) layout.setLiquidGlassMode(true);
+        }
+    }
+
     public class Layout extends FrameLayout implements Theme.Colorable {
 
         private final Theme.ResourcesProvider resourcesProvider;
@@ -122,6 +134,7 @@ public class ChatReplyContainer extends FrameLayout {
         public Layout(Context context, Theme.ResourcesProvider resourcesProvider) {
             super(context);
             this.resourcesProvider = resourcesProvider;
+            setClipChildren(true);
 
             icon = new ImageView(context);
             icon.setScaleType(ImageView.ScaleType.CENTER);
@@ -129,16 +142,22 @@ public class ChatReplyContainer extends FrameLayout {
 
             name = new SimpleTextView(context);
             name.setTextSize(14);
+            name.setMaxLines(1);
+            name.setScrollNonFitText(false);
             name.setTypeface(AndroidUtilities.bold());
             addView(name, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 18, Gravity.TOP | Gravity.LEFT, 52, 6, 0, 0));
 
             obj = new SimpleTextView(context);
             obj.setTextSize(14);
+            obj.setMaxLines(1);
+            obj.setScrollNonFitText(false);
             NotificationCenter.listenEmojiLoading(obj);
             addView(obj, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 18, Gravity.TOP | Gravity.LEFT, 52, 24, 0, 0));
 
             objHint = new SimpleTextView(context);
             objHint.setTextSize(14);
+            objHint.setMaxLines(1);
+            objHint.setScrollNonFitText(false);
             objHint.setText(LocaleController.getString(R.string.TapForForwardingOptions));
             objHint.setAlpha(0f);
             addView(objHint, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 18, Gravity.TOP | Gravity.LEFT, 52, 24, 0, 0));
@@ -177,22 +196,32 @@ public class ChatReplyContainer extends FrameLayout {
 
         private void setLiquidGlassMode(boolean enabled) {
             liquidGlassMode = enabled;
-            final int leftMargin = dp(getTextInsetDp(image.getVisibility() == VISIBLE));
+            setLeftMargin(icon, dp(LumaComposerGeometry.replyIconInsetDp(enabled)));
+            final int leftMargin = getTextInsetPx(image.getVisibility() == VISIBLE);
             setLeftMargin(name, leftMargin);
             setLeftMargin(obj, leftMargin);
             setLeftMargin(objHint, leftMargin);
-            setLeftMargin(image, dp(getTextInsetDp(false)));
+            setLeftMargin(image, getTextInsetPx(false));
             // Keep long reply snippets away from the rounded edge. Reducing the
             // measured width lets SimpleTextView ellipsize normally instead of
             // drawing the last characters outside the glass island.
-            final int rightMargin = enabled ? dp(4) : 0;
+            // The parent row already ends eight-dp before the separate close hit region.
+            final int rightMargin = 0;
             setRightMargin(name, rightMargin);
             setRightMargin(obj, rightMargin);
             setRightMargin(objHint, rightMargin);
         }
 
         public int getTextInsetDp(boolean withImage) {
-            return LumaComposerGeometry.replyTextInsetDp(liquidGlassMode, withImage);
+            return Math.round(getTextInsetPx(withImage) / AndroidUtilities.density);
+        }
+
+        public int getTextInsetPx(boolean withImage) {
+            // Editing hides the attachment island, so the bubble can start at8dp.
+            // Its content origin is not the label origin: the pencil/reply icon still
+            // owns the first52dp. Keep the header aligned with the64dp editor gutter.
+            return liquidGlassMode ? Math.max(dp(64), liquidGlassContentInsetPx) + (withImage ? dp(44) : 0)
+                    : dp(LumaComposerGeometry.replyTextInsetDp(false, withImage));
         }
 
         private void setLeftMargin(View view, int leftMargin) {

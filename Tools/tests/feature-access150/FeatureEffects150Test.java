@@ -33,7 +33,7 @@ public final class FeatureEffects150Test {
         check(LiteMode.getLiquidGlassOpacityLevel() == 2 && LiteMode.getLiquidGlassWallpaperRefractionEnabled(), "same global prefs use selected account authority");
         UserConfig.selectedAccount = 0; LunagramSubscriptionAccess.setTier(0, Tier.BASED);
         check(LiteMode.getLiquidGlassOpacityLevel() == 2 && LiteMode.getLiquidGlassInputHeightDp() == 44, "based renews advanced visual values");
-        check(!LumaEmergencyMode.isEnabled(0), "based cannot use emergency");
+        check(LumaEmergencyMode.isEnabled(0), "recognized former Based now includes Ultra emergency contents");
         LunagramSubscriptionAccess.setTier(0, Tier.ULTRA);
         check(LumaEmergencyMode.isEnabled(0) && LumaEmergencyMode.getDialogId(0) == 55, "ultra renews saved emergency choice");
         LunagramSubscriptionAccess.setTier(0, Tier.FREE); LumaEmergencyMode.setEnabled(0, false);

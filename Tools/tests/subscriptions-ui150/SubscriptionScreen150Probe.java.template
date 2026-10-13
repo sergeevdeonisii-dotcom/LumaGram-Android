@@ -23,34 +23,139 @@ public final class SubscriptionScreen150Probe {
         long getClientUserId() { return 42; }
     }
     static class View {
-        static final int GONE=8, VISIBLE=0;
+        static final int GONE=8, VISIBLE=0, INVISIBLE=4;
         int visibility=VISIBLE;
         boolean enabled=true;
+        interface OnClickListener { void onClick(View view); }
+        OnClickListener clickListener;
         void setVisibility(int value) { visibility=value; }
         void setEnabled(boolean value) { enabled=value; }
+        void setOnClickListener(OnClickListener listener) { clickListener=listener; }
+        void performClick() { check(clickListener!=null,"modeled row has an actual callback");clickListener.onClick(this); }
     }
-    static class TextView extends View { String text=""; void setText(CharSequence value) { text=value.toString(); } }
+    static final class LayoutHelper { static final int MATCH_PARENT=-1, WRAP_CONTENT=-2; }
+    static final class LinearLayout extends View {
+        static final int VERTICAL=1;
+        static final class LayoutParams {
+            final int width,height;
+            LayoutParams(int width,int height) { this.width=width;this.height=height; }
+        }
+        final List<View> children=new ArrayList<>();
+        final List<LayoutParams> params=new ArrayList<>();
+        int orientation;
+        LinearLayout(Object context) {}
+        void setOrientation(int value) { orientation=value; }
+        void addView(View child,LayoutParams layout) { children.add(child);params.add(layout); }
+    }
+    /** Models constructor inputs/listener only; layout204 tests own actual native row measurement. */
+    static final class PeriodChoiceCell extends View {
+        final String title,detail;
+        final boolean checked;
+        PeriodChoiceCell(Object context,Object provider,String title,String detail,boolean checked) {
+            this.title=title;this.detail=detail;this.checked=checked;
+        }
+    }
+    static class TextView extends View { String text=""; int color; void setText(CharSequence value) { text=value.toString(); } void setTextColor(int value) { color=value; } }
+    static final class Bitmap {
+        final int[][] pixels=new int[24][24];
+        enum Config { ARGB_8888 }
+        static Bitmap createBitmap(int width,int height,Config config) { return new Bitmap(); }
+        int getPixel(int x,int y) { return pixels[y][x]; }
+        void recycle() {}
+    }
+    static final class Rect {}
+    static final class Color {
+        static int alpha(int c) { return c>>>24; }
+        static int red(int c) { return (c>>>16)&255; }
+        static int green(int c) { return (c>>>8)&255; }
+        static int blue(int c) { return c&255; }
+    }
+    static final class Theme {
+        static final int key_windowBackgroundWhite=1, key_windowBackgroundWhiteGrayText=2, key_windowBackgroundGray=3, key_windowBackgroundWhiteBlackText=4;
+        static int getColor(int key,Object provider) { return key==2?0xff707070:0xfff0f0f0; }
+    }
     static final class Field extends TextView { String error; void setError(CharSequence value) { error=value==null?null:value.toString(); } }
     static final class TextInfoPrivacyCell extends View { String text; void setText(CharSequence value) { text=value.toString(); } }
     static final class DialogInterface { static final int BUTTON_POSITIVE=-1; }
     static final class AlertDialog {
         boolean showing=true;
-        String message;
+        Click positive,negative;
+        String message, title,negativeText;
+        View content;
+        int dismisses;
         final TextView button=new TextView();
         boolean isShowing() { return showing; }
-        void dismiss() { showing=false; }
+        void dismiss() { showing=false;dismisses++; }
+        void cancel() { if(negative!=null)negative.onClick(this,-2);dismiss(); }
         void setMessage(CharSequence value) { message=value.toString(); }
         View getButton(int id) { return button; }
+        interface Click { void onClick(Object dialog,int which); }
+        static final class Builder {
+            String message, title,negativeText;
+            Click positive,negative;
+            View content;
+            AlertDialog built;
+            Builder(Object context,Object provider) {}
+            Builder setTitle(CharSequence title) { this.title=title.toString();return this; }
+            Builder setMessage(CharSequence message) { this.message=message.toString();return this; }
+            Builder setPositiveButton(CharSequence text,Click click) { positive=click;return this; }
+            Builder setNegativeButton(CharSequence text,Click click) { negativeText=text.toString();negative=click;return this; }
+            Builder setView(View content) { this.content=content;return this; }
+            Runnable getDismissRunnable() { return ()->{check(built!=null,"dialog was created before dismissal");built.dismiss();}; }
+            AlertDialog create() {
+                AlertDialog dialog=new AlertDialog();dialog.message=message;dialog.title=title;dialog.positive=positive;
+                dialog.negative=negative;dialog.negativeText=negativeText;dialog.content=content;built=dialog;return dialog;
+            }
+        }
+    }
+    static final class AlertsCreator {
+        static String[] options;
+        static int selected;
+        static AlertDialog.Click listener;
+        static AlertDialog createSingleChoiceDialog(Object parent,String[] values,String title,int index,AlertDialog.Click click) {
+            options=values;selected=index;listener=click;return new AlertDialog();
+        }
+        static void choose(int index) { listener.onClick(null,index); }
+    }
+    static final class TextDetailCell {
+        static final class Factory {
+            static UItem of(int id,String text,String value) { UItem item=UItem.asButton(id,text);item.value=value;return item; }
+        }
+    }
+    static final class FeatureCell {
+            static final class ChoiceFactory {
+                static UItem of(int id,String title,String info) {
+                    UItem item=UItem.asButton(id,title);item.value=info;return item;
+                }
+            }
+            static final class Factory {
+                static UItem of(int id,int color,int icon,String title,String info) {
+                    UItem item=UItem.asButton(id,title);item.type="feature";item.value=info;item.icon=icon;return item;
+                }
+            }
+    }
+    static final class GLIconTextureView {
+        int idleCancels, animationCancels, stops, readbacks;
+        boolean visible=true, paused;
+        Bitmap nextFrame=new Bitmap();
+        Bitmap getBitmap(Bitmap target) { readbacks++;return nextFrame; }
+        boolean getLocalVisibleRect(Rect rect) { return visible; }
+        void setPaused(boolean value) { paused=value; }
+        void scheduleIdleAnimation(long delay) {}
+        void cancelIdleAnimation() { idleCancels++; }
+        void cancelAnimatons() { animationCancels++; }
+        void stopThread() { stops++; }
     }
     static final class UItem {
-        final String type;
+        String type;
         String text, value;
-        int id;
+        int id, icon;
         boolean checked, enabled=true;
         private UItem(String type, CharSequence text) { this.type=type; this.text=text==null?null:text.toString(); }
         static UItem asShadow(CharSequence text) { return new UItem("shadow",text); }
         static UItem asHeader(CharSequence text) { return new UItem("header",text); }
         static UItem asCustom(View view) { return new UItem("custom",null); }
+        static UItem asCustomShadow(View view) { return new UItem("custom-shadow",null); }
         static UItem asButton(int id,CharSequence text) { UItem item=new UItem("button",text);item.id=id;return item; }
         static UItem asRadio2(int id,CharSequence text,CharSequence value) { UItem item=new UItem("radio",text);item.id=id;item.value=value.toString();return item; }
         UItem setEnabled(boolean enabled) { this.enabled=enabled;return this; }
@@ -64,18 +169,85 @@ public final class SubscriptionScreen150Probe {
         static void runOnUIThread(Runnable task,long delay) { pending.put(task,delay); }
         static void hideKeyboard(View view) {}
     }
-    static final class Browser { static int opens; static void openUrl(Object context,String url,boolean allowCustom) { opens++; } }
+    static final class Browser {
+        static int opens, internalOpens;
+        static String internalUrl;
+        static boolean internalAvailable=true;
+        static void openUrl(Object context,String url,boolean allowCustom) { opens++; }
+        static boolean openAsInternalIntent(Object context,String url) { internalOpens++;internalUrl=url;return internalAvailable; }
+    }
+    static final class MessagesController {
+        int opens, type;
+        String username;
+        Base host;
+        final UserNameResolver resolver=new UserNameResolver();
+        TLRPC.User bot=new TLRPC.User();
+        boolean canOpen=true;
+        UserNameResolver getUserNameResolver() { return resolver; }
+        TLRPC.User getUser(long id) { return bot; }
+        boolean checkCanOpenChat(Bundle args,Base host) { return canOpen; }
+        void openByUserName(String username,Base host,int type) {
+            opens++;this.username=username;this.host=host;this.type=type;
+        }
+    }
+    static final class UserNameResolver {
+        int resolutions;
+        boolean defer, forced;
+        String username;
+        java.util.function.Consumer<Long> pending;
+        Runnable resolve(String username,String referrer,boolean force,java.util.function.Consumer<Long> callback) {
+            resolutions++;this.username=username;forced=force;
+            if(defer)pending=callback;else callback.accept(99L);
+            return null;
+        }
+        void complete(Long id) { java.util.function.Consumer<Long> callback=pending;pending=null;callback.accept(id); }
+    }
+    static final class TLRPC {
+        static final class User { long id=99L;boolean bot=true,deleted; }
+    }
+    static final class Bundle {
+        final Map<String,Object> values=new HashMap<>();
+        void putLong(String key,long value) { values.put(key,value); }
+        void putString(String key,String value) { values.put(key,value); }
+    }
+    static final class ChatActivity {
+        final Bundle args;
+        int account=-1;
+        ChatActivity(Bundle args) { this.args=args; }
+        void setCurrentAccount(int account) { this.account=account; }
+    }
     static class Base {
         boolean isPaused, isFinished;
+        boolean parentAvailable=true;
+        Object resourceProvider;
+        final MessagesController messages=new MessagesController();
+        int presentations, errors;
+        AlertDialog lastDialog;
+        ChatActivity presented;
+        boolean canPresent=true;
         void onResume() { isPaused=false; }
         void onPause() { isPaused=true; }
         void onFragmentDestroy() { isFinished=true; }
         void finishFragment() { isFinished=true; }
-        Object getParentActivity() { return new Object(); }
+        Object getParentActivity() { return parentAvailable?this:null; }
+        MessagesController getMessagesController() { return messages; }
+        AlertDialog showDialog(AlertDialog dialog) { errors++;lastDialog=dialog;return dialog; }
+        boolean presentFragment(ChatActivity fragment) { presentations++;presented=fragment;return canPresent; }
     }
     static final class LunagramSubscriptionClient {
         enum Error { NONE, NETWORK, SERVER, BAD_RESPONSE, ACCOUNT_CHANGED, AUTH_REQUIRED, EXPIRED, STORAGE,
-            INVALID_CODE, RATE_LIMITED, NOT_CONFIGURED, UPGRADE_REQUIRED, LEGACY_TERM_ACTIVE, QUOTE_EXPIRED, QUOTE_STALE, QUEUE_FULL }
+            INVALID_CODE, RATE_LIMITED, NOT_CONFIGURED, UPGRADE_REQUIRED, LEGACY_TERM_ACTIVE, QUOTE_EXPIRED, QUOTE_STALE, QUEUE_FULL,
+            CHECKOUT_PENDING, PAYMENT_PENDING, PAYMENT_REVIEW, PLAN_RETIRED, CLIENT_UPDATE_REQUIRED }
+        static final class CryptoOrder {
+            String orderId="a".repeat(48), planId="based", status="pending", checkoutUrl="https://t.me/CryptoBot?start=IVAb12Cd34Ef";
+            int months=1, usdCents=50;
+            boolean activated;
+            boolean outstanding() { return !"expired".equals(status) && !("paid".equals(status) && activated); }
+        }
+        static final class CryptoState {
+            boolean available=true;
+            CryptoOrder order;
+        }
         static final class Term {
             final String planId;
             final int months;
@@ -94,11 +266,17 @@ public final class SubscriptionScreen150Probe {
             long startsAtMs=1_800_000_000_000L, expiresAtMs=1_807_800_000_000L;
         }
         boolean busy, authenticated=true, pairing, persistent=true, owner=true, test, fresh=true;
-        int refreshes, restores, paused, disposed, clears;
+        int refreshes, restores, paused, disposed, clears, authStarts, authChecks, authCancels, disconnects, cryptoRefreshes, cryptoChecks;
+        int cryptoCreates;
+        Plan createdPlan;
+        Period createdPeriod;
+        static int purchases;
         long now=1_800_000_000_000L;
         Error failure=Error.NONE;
         Subscription snapshot;
         Quote proposal;
+        CryptoState crypto;
+        boolean cryptoRecovery;
         boolean isBusy() { return busy; }
         boolean isAuthenticated() { return authenticated; }
         boolean isAccountCurrent() { return owner; }
@@ -110,23 +288,35 @@ public final class SubscriptionScreen150Probe {
         Error error() { return failure; }
         Subscription subscription() { return owner?snapshot:null; }
         Quote quote() { return owner?proposal:null; }
-        String authenticationUrl() { return null; }
+        CryptoState cryptoState() { return owner && authenticated ? crypto : null; }
+        boolean isCryptoRecoveryRequired() { return owner && cryptoRecovery; }
+        static boolean isCryptoCheckoutUrl(String value) { return value != null && value.matches("https://t\\.me/CryptoBot\\?start=IV[A-Za-z0-9_-]{1,62}"); }
+        void refreshCrypto() { cryptoRefreshes++;busy=true; }
+        void checkCryptoOrder() { cryptoChecks++;busy=true; }
+        void createCryptoOrder(Plan plan,Period period) { cryptoCreates++;createdPlan=plan;createdPeriod=period; }
+        String authenticationUrl() { return pairing ? "https://t.me/LunagramAppPayBot?start=pair_test" : null; }
         void refresh() { refreshes++;busy=true; }
-        void restore() { restores++; }
-        void checkAuthentication() {}
+        void restore() { restores++;busy=true; }
+        void startAuthentication() { authStarts++; }
+        void checkAuthentication() { authChecks++; }
+        void cancelAuthentication() { authCancels++; }
+        void disconnect() { disconnects++; }
+        static String purchaseUrl(Plan plan,Period period) { purchases++;return "https://t.me/LunagramAppPayBot?start=buy_"+plan.id+"_"+period.months; }
         void clearQuote() { proposal=null;clears++; }
         void pause() { busy=false;paused++; }
         void dispose() { disposed++; }
     }
     static final class Screen extends Base {
         static final int PLAN_ROW_START=100, PERIOD_ROW_START=150, ROW_CRYPTO_BOT=200, ROW_TON=201,
-            ROW_PAY=202, ROW_STARS=203, ROW_ACTIVATE_CODE=300, ROW_CONNECT=400, ROW_CHECK=401,
-            ROW_CANCEL_AUTH=402, ROW_DISCONNECT=403;
+            ROW_PAY=202, ROW_STARS=203, ROW_CRYPTO_OPEN=204, ROW_CRYPTO_CHECK=205, ROW_CRYPTO_ACTIVATE=206,
+            ROW_ACTIVATE_CODE=300, ROW_CONNECT=400, ROW_CHECK=401,
+            ROW_CANCEL_AUTH=402, ROW_DISCONNECT=403, ROW_OPEN_BOT=404,
+            ROW_SELECT_PLAN=450, ROW_SELECT_PERIOD=451, ROW_TERM_DETAILS=452, ROW_SELECT_PAYMENT=453, FEATURE_ROW_START=500;
         static final int ACTIVATION_IDLE=0, ACTIVATION_PREVIEW=1, ACTIVATION_CONFIRM=2;
-        int currentAccount, activationOperation;
-        boolean statusRequested;
+        int currentAccount, activationOperation, activationOpens, cryptoBotNavigation;
+        boolean statusRequested, statusLoading, cryptoRequested, cryptoLaunchRequested, activationIsCrypto, authenticationLaunchRequested, cryptoBotOpening;
         String openedPairUrl;
-        Plan selectedPlan=Plan.BASED;
+        final Plan selectedPlan=Plan.ULTRA;
         Period selectedPeriod=Period.MONTH_1;
         PaymentMethod selectedMethod=PaymentMethod.TELEGRAM_STARS;
         LunagramSubscriptionClient client=new LunagramSubscriptionClient();
@@ -134,62 +324,354 @@ public final class SubscriptionScreen150Probe {
         TextInfoPrivacyCell connectionCell=new TextInfoPrivacyCell();
         TextInfoPrivacyCell featuresCell=new TextInfoPrivacyCell();
         TextInfoPrivacyCell termCell=new TextInfoPrivacyCell();
+        TextInfoPrivacyCell cryptoCell=new TextInfoPrivacyCell();
+        View subscriptionHeader=new View();
+        TextView currentPlanLabel=new TextView();
+        TextView subscriptionTitle=new TextView(), subscriptionIntro=new TextView();
+        Bitmap logoProbe;
+        int logoProbeFrames;
+        boolean logoReady,logoFailed,motionAllowed=true;
+        View logoFallback=new View();
+        GLIconTextureView subscriptionLogo=new GLIconTextureView();
         AlertDialog activationDialog;
         Field activationField;
         final Runnable poll=()->{};
+        private void showActivationDialog() { activationOpens++; }
+        private void showCryptoActivationDialog() { activationOpens++; }
+        private boolean logoMotionAllowed() { return motionAllowed; }
         /* ACTUAL_BOUNDARY */
         /* ACTUAL_METHODS */
     }
+    private static LinearLayout periodOptions(Screen screen) {
+        check(screen.lastDialog!=null&&screen.lastDialog.showing,"duration dialog is shown");
+        check(screen.lastDialog.title.equals(getString(R.string.LunagramSubscriptionPeriod)),"duration dialog has localized title");
+        check(screen.lastDialog.content instanceof LinearLayout,"duration options use the actual custom content");
+        LinearLayout options=(LinearLayout)screen.lastDialog.content;
+        check(options.orientation==LinearLayout.VERTICAL,"durations keep catalog order in a vertical list");
+        check(options.children.size()==LunagramSubscriptionCatalog.PERIODS.size(),"all four custom duration rows exist");
+        for(int i=0;i<options.children.size();i++) {
+            check(options.children.get(i) instanceof PeriodChoiceCell,"each duration has a modeled native radio row");
+            check(options.params.get(i).width==LayoutHelper.MATCH_PARENT&&options.params.get(i).height==LayoutHelper.WRAP_CONTENT,
+                    "dialog gives every duration full container width and content height");
+        }
+        return options;
+    }
+
+    private static void testHeaderLoading() {
+        for (int mask=0;mask<256;mask++) {
+            Screen screen=new Screen();
+            screen.statusLoading=(mask&1)!=0;screen.client.busy=(mask&2)!=0;
+            screen.client.owner=(mask&4)!=0;screen.client.test=(mask&8)!=0;
+            screen.isPaused=(mask&16)!=0;screen.isFinished=(mask&32)!=0;
+            screen.client.fresh=(mask&64)!=0;
+            if ((mask&128)!=0) screen.client=null;
+            boolean expected=(mask&1)!=0&&(mask&2)!=0&&(mask&4)!=0&&(mask&8)==0
+                    &&(mask&16)==0&&(mask&32)==0&&(mask&64)==0&&(mask&128)==0;
+            check(screen.currentPlanText().equals(getString(R.string.LunagramSubscriptionCheckingStatus))==expected,
+                    "header loading requires pending owner-bound live restore/status, not a generic busy operation: "+mask);
+            check(screen.currentPlanId()==null,"loading UI never promotes a missing/cache-only receipt: "+mask);
+        }
+        Screen opening=new Screen();opening.client.authenticated=false;opening.client.fresh=false;
+        opening.onResume();
+        check(opening.client.restores==1&&opening.statusLoading&&opening.client.busy,"initial resume starts real local restore");
+        check(opening.currentPlanText().equals(getString(R.string.LunagramSubscriptionCheckingStatus)),"restore starts with concise loading, not disconnected/error warning");
+        LunagramSubscriptionClient.Subscription snapshot=new LunagramSubscriptionClient.Subscription();
+        snapshot.current=new LunagramSubscriptionClient.Term("ultra",1,opening.client.now-1,opening.client.now+10000);
+        opening.client.snapshot=snapshot;opening.client.authenticated=true;opening.client.busy=false;
+        int updates=opening.listView.adapter.updates;
+        opening.onSubscriptionChanged();
+        check(opening.client.refreshes==1&&opening.statusRequested&&opening.statusLoading&&opening.client.busy,"restored history always chains to actual status request");
+        check(opening.listView.adapter.updates==updates,"restore does not bind the historical warning between requests");
+        opening.onSubscriptionChanged();
+        check(opening.currentPlanText().equals(getString(R.string.LunagramSubscriptionCheckingStatus))&&opening.currentPlanId()==null,"pending refresh does not call cached paid term active");
+        opening.client.busy=false;opening.client.failure=LunagramSubscriptionClient.Error.NETWORK;
+        opening.onSubscriptionChanged();
+        check(!opening.statusLoading&&opening.currentPlanText().equals(getString(R.string.LunagramSubscriptionLastConfirmed)),"actual failed refresh restores historical-data warning");
+        check(opening.currentPlanId()==null,"failed refresh retains neutral non-authoritative status");
+        opening.onItemClick(UItem.asButton(Screen.ROW_CHECK,"refresh"),null,0,0,0);
+        check(opening.statusLoading&&opening.client.busy&&opening.currentPlanText().equals(getString(R.string.LunagramSubscriptionCheckingStatus)),"explicit retry uses the same concise pending state");
+        opening.client.busy=false;opening.client.fresh=true;opening.client.failure=LunagramSubscriptionClient.Error.NONE;
+        opening.onSubscriptionChanged();
+        check(!opening.statusLoading&&opening.currentPlanText().equals(getString(R.string.LunagramSubscriptionUltraActive)),"only fresh authenticated success becomes active");
+        check(opening.client.cryptoRefreshes==1&&opening.currentPlanText().equals(getString(R.string.LunagramSubscriptionUltraActive)),"later crypto metadata request does not flash header loading");
+        opening.statusLoading=true;opening.onPause();
+        check(!opening.statusLoading,"pause clears UI-only pending state");
+        Screen noSession=new Screen();noSession.client.authenticated=false;noSession.client.fresh=false;
+        noSession.onResume();noSession.client.busy=false;noSession.onSubscriptionChanged();
+        check(!noSession.statusLoading&&noSession.client.refreshes==0,"restore without session ends loading without pretending a status request exists");
+        check(noSession.currentPlanText().equals(getString(R.string.LunagramSubscriptionStatusUnknown)),"missing account/session retains truthful unknown status");
+        Screen fresh=new Screen();fresh.client.snapshot=snapshot;fresh.onResume();
+        check(fresh.statusLoading&&fresh.client.refreshes==1&&fresh.currentPlanText().equals(getString(R.string.LunagramSubscriptionUltraActive)),"fresh authenticated term stays visibly active during refresh");
+        fresh.client.now=snapshot.current.expiresAtMs;
+        check(fresh.currentPlanId()==null&&fresh.currentPlanText().equals(getString(R.string.LunagramSubscriptionFreeTier)),"expiry remains exclusive even while refresh is pending");
+        int priorUpdates=fresh.listView.adapter.updates;fresh.onFragmentDestroy();fresh.onSubscriptionChanged();
+        check(fresh.client==null&&fresh.isFinished&&fresh.listView.adapter.updates==priorUpdates,"late completion cannot update destroyed fragment");
+    }
     public static void main(String[] args) {
-        for (Plan plan:Plan.values()) for (Period period:Period.values()) {
-            Screen screen=new Screen(); screen.selectedPlan=plan;screen.selectedPeriod=period;
+        testHeaderLoading();
+        Screen failureScreen=new Screen();
+        failureScreen.client.failure=LunagramSubscriptionClient.Error.NETWORK;
+        check(failureScreen.errorText().equals("LunagramSubscriptionNetworkError"),"network failures have connection guidance");
+        failureScreen.client.failure=LunagramSubscriptionClient.Error.SERVER;
+        check(failureScreen.errorText().equals("LunagramSubscriptionServerError"),"server rejection is distinct from network guidance");
+        failureScreen.client.failure=LunagramSubscriptionClient.Error.STORAGE;
+        check(failureScreen.errorText().equals("LunagramSubscriptionStorageError"),"storage failures have secure-session guidance");
+        failureScreen.client.failure=LunagramSubscriptionClient.Error.PLAN_RETIRED;
+        check(failureScreen.errorText().equals("LunagramSubscriptionPlanRetired"),"retired offer points to current Ultra, not generic network error");
+        failureScreen.client.failure=LunagramSubscriptionClient.Error.CLIENT_UPDATE_REQUIRED;
+        check(failureScreen.errorText().equals("LunagramSubscriptionClientUpdateRequired"),"outdated billing catalog asks for app update, not a more expensive tier");
+        Bitmap logo=new Bitmap();
+        check(!Screen.hasVisibleLogoFrame(null)&&!Screen.hasVisibleLogoFrame(logo),"no surface/transparent first frame cannot retire fallback");
+        for(int[] row:logo.pixels)Arrays.fill(row,0xff000000);
+        check(!Screen.hasVisibleLogoFrame(logo),"opaque black EGL frame is not visible logo");
+        for(int[] row:logo.pixels)Arrays.fill(row,0xffffffff);
+        check(!Screen.hasVisibleLogoFrame(logo),"white clear frame lacks branded disc");
+        for(int y=5;y<19;y++)for(int x=5;x<12;x++)logo.pixels[y][x]=0xef7557fc;
+        check(!Screen.hasVisibleLogoFrame(logo),"partly faded brand pixels cannot retire fallback");
+        for(int y=5;y<19;y++)for(int x=5;x<12;x++)logo.pixels[y][x]=0xff7557fc;
+        check(Screen.hasVisibleLogoFrame(logo),"opaque branded disc plus white tile/plane can retire fallback");
+        Screen reduced=new Screen();reduced.motionAllowed=false;
+        reduced.updateLogoState();
+        check(!reduced.subscriptionLogo.paused,"reduced motion must still render through initially invisible frame");
+        for(int i=0;i<12;i++)reduced.verifyLogoFrame();
+        check(!reduced.logoReady&&reduced.logoFallback.visibility==View.VISIBLE&&!reduced.subscriptionLogo.paused,
+                "transparent submitted frames retain fallback and keep first-frame work running");
+        reduced.subscriptionLogo.nextFrame=logo;
+        for(int i=0;i<4;i++)reduced.verifyLogoFrame();
+        check(reduced.logoReady&&reduced.logoFallback.visibility==View.INVISIBLE&&reduced.subscriptionLogo.paused,
+                "only verified visible frame replaces fallback and stops reduced-motion renderer");
+        check(reduced.subscriptionLogo.readbacks==4,"sample only every fourth frame, not continuous GPU readback");
+        Screen blank=new Screen();
+        for(int i=0;i<32;i++)blank.verifyLogoFrame();
+        check(blank.logoFailed&&!blank.logoReady&&blank.subscriptionLogo.paused&&blank.logoFallback.visibility==View.VISIBLE,
+                "persistent blank rendering fails safely to current-logo fallback");
+        check(blank.subscriptionLogo.readbacks==8,"blank surface has bounded eight readbacks");
+        Screen hiddenLogo=new Screen();hiddenLogo.logoReady=true;hiddenLogo.subscriptionLogo.visible=false;hiddenLogo.updateLogoState();
+        check(hiddenLogo.subscriptionLogo.paused,"offscreen logo does not render");
+        hiddenLogo.subscriptionLogo.visible=true;hiddenLogo.isPaused=true;hiddenLogo.updateLogoState();
+        check(hiddenLogo.subscriptionLogo.paused,"paused fragment does not render");
+        for (Plan plan:LunagramSubscriptionCatalog.PLANS) for (Period period:Period.values()) {
+            Screen screen=new Screen();screen.selectedPeriod=period;
             ArrayList<UItem> items=new ArrayList<>();screen.fillItems(items,new UniversalAdapter());
-            int planChecked=0,periodChecked=0;
+            int planSelectors=0,periodSelectors=0,featureRows=0;
+            Set<Integer> featureIcons=new HashSet<>();
             for (UItem item:items) {
-                if (item.id>=100&&item.id<105) {
-                    Plan rowPlan=Plan.values()[item.id-100];
-                    check(item.value.contains(Integer.toString(rowPlan.totalStars(period))),"plan total Stars");
-                    check(item.value.contains(rowPlan.totalUsdAmount(period)),"plan total USD");
-                    if(item.checked)planChecked++;
+                check(!(item.id>=100&&item.id<105)&&!(item.id>=150&&item.id<154),"no duplicated expanded plan/duration radios");
+                if (item.id==Screen.ROW_SELECT_PLAN) {
+                    check(item.text.equals(plan.title),"selected plan title");
+                    check(item.value.contains(Integer.toString(plan.totalStars(period))),"plan total Stars");
+                    check(item.value.contains(plan.totalUsdAmount(period)),"plan total USD");
+                    planSelectors++;
                 }
-                if (item.id>=150&&item.id<154) {
-                    Period rowPeriod=Period.values()[item.id-150];
-                    check(item.value.contains(Integer.toString(plan.totalStars(rowPeriod))),"period total Stars");
-                    if(item.checked)periodChecked++;
+                if (item.id==Screen.ROW_SELECT_PERIOD) {
+                    check(item.value.equals(screen.totalPrice(plan,period)),"selected duration carries exact current Ultra price");
+                    periodSelectors++;
+                }
+                if(item.type.equals("feature")) {
+                    Feature feature=Feature.values()[item.id-Screen.FEATURE_ROW_START];
+                    check(LunagramFeatureCatalog.includes(plan.id,feature.id)&&!LunagramFeatureCatalog.isBaselineFree(feature),"feature row belongs to selected tier");
+                    check(item.text.equals(getString(screen.featureResource(feature)))&&item.value.equals(getString(screen.featureInfoResource(feature))),"localized native feature row + brief");
+                    featureRows++;
+                    check(periodSelectors==0,"all features precede purchase controls");
+                    check(featureIcons.add(item.icon),"each feature has a distinct native icon");
                 }
             }
-            check(planChecked==1&&periodChecked==1,"independent checked selections");
-            check(items.get(1).type.equals("header")&&items.get(2).type.equals("custom"),"account normal row within section");
-            int periodHeader=-1;for(int i=0;i<items.size();i++)if(getString(R.string.LunagramSubscriptionPeriod).equals(items.get(i).text))periodHeader=i;
-            check(periodHeader>3&&items.get(periodHeader-1).type.equals("shadow"),"account section ends before duration");
-            for(int i=1;i<periodHeader-1;i++)check(!items.get(i).type.equals("shadow"),"no thin header pill or split account actions");
-            check(items.get(items.size()-3).text.equals(getString(R.string.LunagramSubscriptionTermStatus)),"expiration section is bottommost");
-            check(items.get(items.size()-2).type.equals("custom"),"expiration text shares its header card");
+            check(planSelectors==0&&periodSelectors==1,"one Ultra offer: no plan picker, exactly one duration selector");
+            check(featureRows==34,"all thirty-four Ultra capabilities appear exactly once, with no free baseline rows");
+            check(items.get(0).type.equals("custom-shadow"),"transparent 3D brand hero first, not giant opaque card");
+            int accountHeader=-1;for(int i=0;i<items.size();i++)if(getString(R.string.LunagramSubscriptionAccount).equals(items.get(i).text))accountHeader=i;
+            check(accountHeader>3&&items.get(accountHeader-1).type.equals("shadow"),"features close before account section");
+            check(items.get(accountHeader+1).type.equals("custom"),"account connection remains in its section");
+            int botRow=-1,activationRow=-1;
+            for(int i=0;i<items.size();i++) {
+                if(items.get(i).id==Screen.ROW_OPEN_BOT) { check(botRow==-1,"only one bot shortcut");botRow=i; }
+                if(items.get(i).id==Screen.ROW_ACTIVATE_CODE)activationRow=i;
+            }
+            check(botRow==accountHeader+2&&items.get(botRow).enabled,"native bot shortcut retained in account section");
+            check(items.get(botRow).text.equals(getString(R.string.LunagramSubscriptionOpenBot)),"shortcut has explicit localized label");
+            check(activationRow>accountHeader&&items.get(activationRow).enabled,"native activation remains available");
+            int accountEnd=botRow+1;while(!items.get(accountEnd).type.equals("shadow"))accountEnd++;
+            for(int i=accountHeader;i<accountEnd;i++)check(!items.get(i).type.equals("shadow"),"no thin header pill or split account actions");
+            check(items.get(items.size()-2).id==Screen.ROW_TERM_DETAILS,"detailed expiration remains accessible at bottom");
+            check(items.get(items.size()-3).type.equals("custom"),"concise current-tier expiration footer remains bottommost");
             for(int i=0;i<items.size()-1;i++) {
                 if(items.get(i).type.equals("header"))check(!items.get(i+1).type.equals("shadow"),"no isolated thin header-only pills anywhere");
             }
             String features=screen.plannedFeaturesText(plan);
             for(Feature feature:Feature.values()) {
                 int resource=screen.featureResource(feature);
-                if(resource==0)continue;
+                if(LunagramFeatureCatalog.isBaselineFree(feature)) {
+                    check(resource==0,"free baseline is not advertised as an Ultra purchase");
+                    continue;
+                }
+                check(resource!=0,"every paid feature has a localized title: "+feature);
+                check(screen.featureInfoResource(feature)!=R.string.LunagramSubscriptionInfoLocal,"every paid feature has its own accurate information: "+feature);
                 check(features.contains(getString(resource))==LunagramFeatureCatalog.includes(plan.id,feature.id),"cumulative display "+plan+feature);
+            }
+            screen.onItemClick(UItem.asButton(Screen.ROW_SELECT_PAYMENT,"payment"),null,0,0,0);
+            check(AlertsCreator.options.length==2&&AlertsCreator.selected==0,"only Stars/Crypto payment choices");
+            AlertsCreator.choose(1);check(screen.selectedMethod==PaymentMethod.CRYPTO_BOT_USDT,"select Crypto");
+            AlertsCreator.choose(-1);AlertsCreator.choose(2);check(screen.selectedMethod==PaymentMethod.CRYPTO_BOT_USDT,"invalid payment callback inert");
+            AlertsCreator.choose(0);check(screen.selectedMethod==PaymentMethod.TELEGRAM_STARS,"select Stars");
+            int updatesBeforePicker=screen.listView.adapter.updates;
+            screen.onItemClick(UItem.asButton(Screen.ROW_SELECT_PERIOD,"period"),null,0,0,0);
+            LinearLayout durationOptions=periodOptions(screen);
+            check(screen.selectedPeriod==period&&screen.listView.adapter.updates==updatesBeforePicker,"opening duration chooser does not select or refresh");
+            check(screen.lastDialog.negativeText.equals(getString(R.string.Cancel))&&screen.lastDialog.negative==null,
+                    "Cancel dismisses without a hidden selection callback");
+            int checkedDurations=0;
+            for(int i=0;i<4;i++) {
+                Period option=LunagramSubscriptionCatalog.PERIODS.get(i);
+                PeriodChoiceCell row=(PeriodChoiceCell)durationOptions.children.get(i);
+                check(row.title.equals(screen.periodTitle(option)),"duration title is only the localized period");
+                check(row.detail.equals(screen.periodPrice(plan,option))&&row.detail.contains(plan.totalUsdAmount(option))
+                        &&row.detail.contains(Integer.toString(plan.totalStars(option))),"duration detail uses exact current Ultra totals");
+                check(!row.detail.contains(screen.periodTitle(option)),"duration detail does not repeat the term");
+                check(row.checked==(option==period),"radio selected state matches current period");
+                if(row.checked)checkedDurations++;
+            }
+            check(checkedDurations==1,"exactly one duration selected on opening");
+            screen.lastDialog.cancel();
+            check(!screen.lastDialog.showing&&screen.selectedPeriod==period&&screen.listView.adapter.updates==updatesBeforePicker,
+                    "Cancel preserves selected period and does not refresh rows");
+            for(int i=0;i<4;i++) {
+                screen.onItemClick(UItem.asButton(Screen.ROW_SELECT_PERIOD,"period"),null,0,0,0);
+                durationOptions=periodOptions(screen);
+                AlertDialog shown=screen.lastDialog;
+                int beforeSelect=screen.listView.adapter.updates;
+                ((PeriodChoiceCell)durationOptions.children.get(i)).performClick();
+                check(screen.selectedPeriod==LunagramSubscriptionCatalog.PERIODS.get(i),"each custom row selects its own captured period");
+                check(!shown.showing&&shown.dismisses==1,"selection dismisses its own dialog once");
+                check(screen.listView.adapter.updates==beforeSelect+1,"valid choice refreshes purchase details exactly once");
+            }
+            check(screen.selectedPeriod==Period.MONTH_12,"last chosen term remains 12 months");
+            check(screen.client.cryptoCreates==0&&LunagramSubscriptionClient.purchases==0,"duration browsing or selection alone never starts a purchase");
+            for(Feature feature:Feature.values()) {
+                if(!LunagramFeatureCatalog.includes(plan.id,feature.id)||LunagramFeatureCatalog.isBaselineFree(feature)||screen.featureResource(feature)==0)continue;
+                screen.onItemClick(UItem.asButton(Screen.FEATURE_ROW_START+feature.ordinal(),"feature"),null,0,0,0);
+                check(screen.lastDialog.title.equals(getString(screen.featureResource(feature)))
+                        &&screen.lastDialog.message.equals(getString(screen.featureInfoResource(feature))),"feature tap only short native text");
+            }
+        }
+        for(int stale=0;stale<3;stale++) {
+            Screen picker=new Screen();picker.selectedPeriod=Period.MONTH_3;
+            picker.onItemClick(UItem.asButton(Screen.ROW_SELECT_PAYMENT,"payment"),null,0,0,0);
+            if(stale==0)picker.client.owner=false;else if(stale==1)picker.isPaused=true;else picker.isFinished=true;
+            AlertsCreator.choose(1);check(picker.selectedMethod==PaymentMethod.TELEGRAM_STARS,"stale payment chooser callback inert");
+        }
+        for(int stale=0;stale<4;stale++) {
+            Screen picker=new Screen();picker.selectedPeriod=Period.MONTH_3;
+            picker.onItemClick(UItem.asButton(Screen.ROW_SELECT_PERIOD,"period"),null,0,0,0);
+            LinearLayout options=periodOptions(picker);
+            AlertDialog shown=picker.lastDialog;
+            int beforeSelect=picker.listView.adapter.updates;
+            if(stale==0)picker.client.owner=false;else if(stale==1)picker.isPaused=true;
+            else if(stale==2)picker.isFinished=true;else picker.client=null;
+            ((PeriodChoiceCell)options.children.get(3)).performClick();
+            check(picker.selectedPeriod==Period.MONTH_3,"stale duration chooser callback does not change term: "+stale);
+            check(picker.listView.adapter.updates==beforeSelect,"stale duration callback does not update detached/stale screen: "+stale);
+            check(!shown.showing&&shown.dismisses==1,"stale selection still closes its own dialog: "+stale);
+        }
+        for(int unavailable=0;unavailable<5;unavailable++) {
+            Screen picker=new Screen();picker.selectedPeriod=Period.MONTH_6;
+            if(unavailable==0)picker.client=null;else if(unavailable==1)picker.client.owner=false;
+            else if(unavailable==2)picker.isPaused=true;else if(unavailable==3)picker.isFinished=true;else picker.parentAvailable=false;
+            picker.onItemClick(UItem.asButton(Screen.ROW_SELECT_PERIOD,"period"),null,0,0,0);
+            check(picker.lastDialog==null&&picker.selectedPeriod==Period.MONTH_6&&picker.listView.adapter.updates==0,
+                    "unavailable account/lifecycle/parent does not open duration dialog: "+unavailable);
+        }
+        Screen navigation=new Screen();
+        Screen terms=new Screen();terms.selectedMethod=PaymentMethod.CRYPTO_BOT_USDT;terms.selectedPeriod=Period.MONTH_3;
+        terms.onItemClick(UItem.asButton(Screen.ROW_PAY,"pay"),null,0,0,0);
+        check(terms.client.cryptoCreates==0&&terms.lastDialog.message.contains("CryptoTerms")
+                &&terms.lastDialog.message.contains("6.23")&&terms.lastDialog.message.contains("Ultra"),"new Ultra checkout requires explicit terms acceptance with exact current total");
+        terms.selectedPeriod=Period.MONTH_12;
+        terms.lastDialog.positive.onClick(null,0);
+        check(terms.client.cryptoCreates==1&&terms.client.createdPlan==Plan.ULTRA&&terms.client.createdPeriod==Period.MONTH_3,
+                "consent creates only the offer and period actually displayed, not later selection");
+        for(int denied=0;denied<5;denied++) {
+            Screen staleTerms=new Screen();staleTerms.showCryptoTerms();
+            if(denied==0)staleTerms.client.owner=false;else if(denied==1)staleTerms.isPaused=true;
+            else if(denied==2)staleTerms.isFinished=true;else if(denied==3)staleTerms.client.authenticated=false;else staleTerms.client.test=true;
+            staleTerms.lastDialog.positive.onClick(null,0);
+            check(staleTerms.client.cryptoCreates==0,"stale/test/unauthenticated consent cannot create payment "+denied);
+        }
+        int oldPurchases=LunagramSubscriptionClient.purchases;
+        for(int denied=0;denied<4;denied++) {
+            Screen blockedPay=new Screen();
+            if(denied==0)blockedPay.client.owner=false;else if(denied==1)blockedPay.isPaused=true;
+            else if(denied==2)blockedPay.isFinished=true;else blockedPay.client.test=true;
+            blockedPay.onItemClick(UItem.asButton(Screen.ROW_PAY,"pay"),null,0,0,0);
+            check(LunagramSubscriptionClient.purchases==oldPurchases,"invalid owner/lifecycle/test cannot construct Stars purchase "+denied);
+        }
+        navigation.client.authenticated=false;
+        navigation.selectedPeriod=Period.MONTH_12;
+        UItem openBot=UItem.asButton(Screen.ROW_OPEN_BOT,getString(R.string.LunagramSubscriptionOpenBot));
+        navigation.onItemClick(openBot,null,0,0,0);
+        check(navigation.messages.opens==1&&"LunagramAppPayBot".equals(navigation.messages.username),"one native click opens only the fixed subscription bot");
+        check(navigation.messages.host==navigation&&navigation.messages.type==3,"native mode preserves the subscription screen for Back");
+        check(navigation.client.authStarts==0&&navigation.client.authChecks==0&&navigation.client.authCancels==0
+                &&navigation.client.disconnects==0&&navigation.client.refreshes==0&&navigation.activationOpens==0
+                &&LunagramSubscriptionClient.purchases==0&&Browser.opens==0,"shortcut performs no pairing, auth, redemption, checkout or browser action");
+        check(navigation.selectedPlan==Plan.ULTRA&&navigation.selectedPeriod==Period.MONTH_12,"opening bot leaves plan and duration unchanged");
+        navigation.client.busy=true;
+        navigation.onItemClick(openBot,null,0,0,0);
+        check(navigation.messages.opens==2,"safe chat shortcut remains available during status lookup");
+        for(int condition=0;condition<6;condition++) {
+            Screen blocked=new Screen();
+            switch(condition) {
+                case 0: blocked.client=null;break;
+                case 1: blocked.client.owner=false;break;
+                case 2: blocked.client.test=true;break;
+                case 3: blocked.isPaused=true;break;
+                case 4: blocked.isFinished=true;break;
+                default: blocked.parentAvailable=false;
+            }
+            blocked.onItemClick(openBot,null,0,0,0);
+            blocked.openSubscriptionBot();
+            check(blocked.messages.opens==0,"stale account/test/lifecycle/parent cannot navigate: "+condition);
+            if(condition<3) {
+                ArrayList<UItem> blockedItems=new ArrayList<>();blocked.fillItems(blockedItems,new UniversalAdapter());
+                UItem blockedButton=null;
+                for(UItem item:blockedItems)if(item.id==Screen.ROW_OPEN_BOT)blockedButton=item;
+                check(blockedButton!=null&&!blockedButton.enabled,"unavailable account shortcut stays visible and disabled: "+condition);
             }
         }
         Screen screen=new Screen();
+        Screen recoveredPair=new Screen();
+        recoveredPair.client.authenticated=false;recoveredPair.client.pairing=true;
+        int opensBeforePair=Browser.opens;
+        recoveredPair.onSubscriptionChanged();
+        check(Browser.opens==opensBeforePair,"restored pairing does not reopen bot");
+        check(AndroidUtilities.pending.get(recoveredPair.poll)==3000,"restored pairing resumes bounded completion polling");
+        recoveredPair.onResume();
+        check(recoveredPair.client.authChecks==1&&Browser.opens==opensBeforePair,"resume checks existing pair without bot navigation");
+        recoveredPair.authenticationLaunchRequested=true;
+        recoveredPair.onSubscriptionChanged();
+        check(Browser.opens==opensBeforePair+1&&!recoveredPair.authenticationLaunchRequested,"explicit new Connect launches approved bot link once");
+        recoveredPair.onSubscriptionChanged();
+        check(Browser.opens==opensBeforePair+1,"pair polling never relaunches bot");
+        recoveredPair.authenticationLaunchRequested=true;recoveredPair.onPause();
+        check(!recoveredPair.authenticationLaunchRequested,"pause cancels pending authentication navigation");
         LunagramSubscriptionClient.Subscription snapshot=new LunagramSubscriptionClient.Subscription();
         snapshot.serverNowMs=screen.client.now;snapshot.paidUntilMs=screen.client.now+100_000;
         snapshot.current=new LunagramSubscriptionClient.Term("based",1,screen.client.now-10_000,screen.client.now+20_000);
         snapshot.queued.add(new LunagramSubscriptionClient.Term("pro",3,screen.client.now+20_000,screen.client.now+100_000));
         screen.client.snapshot=snapshot;
         check(screen.subscriptionFooter().contains("CurrentTerm"),"fresh current term label");
+        check(screen.compactSubscriptionFooter().contains("ActiveUntil")&&screen.compactSubscriptionFooter().contains("Ultra"),"legacy paid identity normalizes to Ultra while expiry stays authoritative");
+        check(screen.currentPlanText().contains("UltraActive")&&!screen.currentPlanText().contains("ActiveUntil"),"header Ultra active, footer expiry without duplicated full status");
         screen.scheduleTermBoundary();
         check(AndroidUtilities.pending.get(screen.termBoundary)==20_050,"one precise nearest-boundary timer");
         screen.client.now+=20_000;
         check(!screen.subscriptionFooter().contains("CurrentTerm"),"ended term is not called current");
+        check(screen.compactSubscriptionFooter().equals(getString(R.string.LunagramSubscriptionFreeTier)),"concise footer expired exactly at boundary");
         check(screen.subscriptionFooter().contains("TermNeedsRefresh"),"started queue waits for server, not local promotion");
         screen.client.fresh=false;screen.client.authenticated=false;screen.client.failure=LunagramSubscriptionClient.Error.AUTH_REQUIRED;
         check(screen.subscriptionFooter().contains("LastConfirmed"),"401 preserves historical label");
         check(!screen.subscriptionFooter().contains("CurrentTerm"),"stale observation grants no active status");
+        check(screen.compactSubscriptionFooter().equals(getString(R.string.LunagramSubscriptionLastConfirmed))
+                &&screen.currentPlanText().equals(getString(R.string.LunagramSubscriptionLastConfirmed)),"stale cache never shown as active tier/expiry");
         for(int i=0;i<100;i++)snapshot.queued.add(new LunagramSubscriptionClient.Term("pro",3,screen.client.now+50_000,screen.client.now+100_000));
         check(screen.subscriptionFooter().contains("MoreTerms"),"large queue is bounded in footer");
         screen.scheduleTermBoundary();check(!AndroidUtilities.pending.containsKey(screen.termBoundary),"stale snapshot cancels boundary timer");
@@ -203,13 +685,145 @@ public final class SubscriptionScreen150Probe {
         screen.client.failure=LunagramSubscriptionClient.Error.NONE;screen.client.proposal=new LunagramSubscriptionClient.Quote();
         screen.activationOperation=Screen.ACTIVATION_PREVIEW;screen.updateActivationDialog();
         check(screen.activationField.visibility==View.GONE,"code replaced by confirmation summary");
-        check(screen.activationDialog.message.contains("ConfirmDetails")&&screen.activationDialog.message.contains("Pro")&&screen.activationDialog.message.contains("350"),"server plan/price/date preview");
+        check(screen.activationDialog.message.contains("ConfirmDetails")&&screen.activationDialog.message.contains("Ultra")&&screen.activationDialog.message.contains("350"),"legacy quote shows Ultra access but preserves frozen server price/date preview");
+        check(screen.totalPrice(Plan.ULTRA,Period.MONTH_3).contains("450"),"new purchase price remains separate from 350-Star historical quote");
         check(screen.activationDialog.button.text.contains("ConfirmCode"),"explicit second action");
         screen.client.failure=LunagramSubscriptionClient.Error.NETWORK;screen.activationOperation=Screen.ACTIVATION_CONFIRM;
         screen.updateActivationDialog();check(screen.activationDialog.showing&&screen.activationField.text.equals("KEEP-CODE"),"confirm failure does not clear code or dismiss");
         screen.client.failure=LunagramSubscriptionClient.Error.NONE;screen.activationOperation=Screen.ACTIVATION_CONFIRM;
         screen.updateActivationDialog();check(!screen.activationDialog.showing&&screen.activationField.text.isEmpty(),"only confirmed success clears/dismisses");
         screen.onPause();check(screen.isPaused&&screen.client.paused==1&&!AndroidUtilities.pending.containsKey(screen.termBoundary),"pause invalidates timer and client work");
+        Screen cryptoScreen=new Screen();cryptoScreen.selectedMethod=PaymentMethod.CRYPTO_BOT_USDT;
+        cryptoScreen.client.authenticated=false;
+        ArrayList<UItem> cryptoRows=new ArrayList<>();cryptoScreen.fillItems(cryptoRows,new UniversalAdapter());
+        check(cryptoScreen.cryptoCell.text.contains("CryptoConnect"),"Disconnected crypto section gives connection prerequisite");
+        for(UItem row:cryptoRows)if(row.id==Screen.ROW_PAY)check(!row.enabled,"Unauthenticated crypto checkout stays disabled");
+        cryptoScreen.client.authenticated=true;cryptoScreen.statusRequested=true;
+        cryptoScreen.onSubscriptionChanged();
+        check(cryptoScreen.client.cryptoRefreshes==1 && cryptoScreen.cryptoRequested,"Authenticated screen retrieves durable crypto state once");
+        cryptoScreen.onSubscriptionChanged();
+        check(cryptoScreen.client.cryptoRefreshes==1,"Busy metadata lookup does not recurse or duplicate requests");
+        cryptoScreen.client.busy=false;cryptoScreen.client.crypto=new LunagramSubscriptionClient.CryptoState();
+        int genericBefore=Browser.opens;
+        cryptoScreen.currentAccount=7;
+        cryptoScreen.client.crypto.order=new LunagramSubscriptionClient.CryptoOrder();
+        cryptoScreen.onSubscriptionChanged();
+        check(cryptoScreen.presentations==0,"Recovered pending order never opens checkout on resume/state refresh");
+        cryptoScreen.onItemClick(UItem.asButton(Screen.ROW_CRYPTO_OPEN,"Open Crypto Bot"),null,0,0,0);
+        check(cryptoScreen.presentations==1&&Browser.opens==genericBefore,"Explicit open dispatches internally to Lunagram, never a browser");
+        check("CryptoBot".equals(cryptoScreen.messages.resolver.username)&&cryptoScreen.messages.resolver.forced,"Only the official fixed username is resolved without stale cache");
+        check(cryptoScreen.presented.account==7&&cryptoScreen.presented.args.values.get("user_id").equals(99L),"Native chat is explicitly pinned to invoice owner account and resolved bot");
+        check("IVAb12Cd34Ef".equals(cryptoScreen.presented.args.values.get("botUser")),"Native bot receives exact provider start payload, not synthesized invoice hash");
+        cryptoScreen.isPaused=true;cryptoScreen.openCryptoCheckout();
+        check(cryptoScreen.presentations==1,"Paused fragment cannot open payment bot");
+        cryptoScreen.isPaused=false;
+        cryptoScreen.client.crypto.order.checkoutUrl="https://t.me/FakeBot?start=IVAb12Cd34Ef";
+        cryptoScreen.openCryptoCheckout();
+        check(cryptoScreen.presentations==1,"Screen applies URL allowlist again before bot handoff");
+        cryptoScreen.client.crypto.order.checkoutUrl="https://app.cr.bot/invoices/Ab12Cd34Ef56";
+        cryptoScreen.openCryptoCheckout();
+        check(cryptoScreen.presentations==1,"A legacy browser URL cannot bypass v3 bot-only routing");
+        cryptoScreen.client.crypto.order=new LunagramSubscriptionClient.CryptoOrder();
+        cryptoScreen.canPresent=false;
+        cryptoScreen.openCryptoCheckout();
+        check(cryptoScreen.presentations==2&&cryptoScreen.errors==1&&Browser.opens==genericBefore,"Internal dispatch failure offers retry without browser fallback");
+        cryptoScreen.canPresent=true;
+        cryptoScreen.cryptoRequested=true;cryptoScreen.cryptoLaunchRequested=true;
+        cryptoScreen.onSubscriptionChanged();
+        check(cryptoScreen.presentations==3&&!cryptoScreen.cryptoLaunchRequested,"Explicit create success hands off once to official bot");
+        cryptoScreen.onSubscriptionChanged();
+        check(cryptoScreen.presentations==3,"Subsequent status notification never reopens invoice bot");
+        for(int guard=0;guard<6;guard++) {
+            Screen blocked=new Screen();blocked.client.crypto=new LunagramSubscriptionClient.CryptoState();
+            blocked.client.crypto.order=new LunagramSubscriptionClient.CryptoOrder();
+            switch(guard) {
+                case 0:blocked.client.authenticated=false;break;
+                case 1:blocked.client.owner=false;break;
+                case 2:blocked.client.busy=true;break;
+                case 3:blocked.isPaused=true;break;
+                case 4:blocked.isFinished=true;break;
+                default:blocked.parentAvailable=false;
+            }
+            blocked.openCryptoCheckout();
+            check(blocked.presentations==0&&blocked.messages.resolver.resolutions==0,"Crypto bot dispatch obeys auth/owner/operation/lifecycle guard "+guard);
+        }
+        for(int guard=0;guard<12;guard++) {
+            Screen delayed=new Screen();delayed.client.crypto=new LunagramSubscriptionClient.CryptoState();
+            delayed.client.crypto.order=new LunagramSubscriptionClient.CryptoOrder();delayed.messages.resolver.defer=true;
+            delayed.openCryptoCheckout();delayed.openCryptoCheckout();
+            check(delayed.messages.resolver.resolutions==1,"Repeated tap cannot duplicate pending bot resolution");
+            switch(guard) {
+                case 0:delayed.client.authenticated=false;break;
+                case 1:delayed.client.owner=false;break;
+                case 2:delayed.client.busy=true;break;
+                case 3:delayed.isPaused=true;break;
+                case 4:delayed.isFinished=true;break;
+                case 5:delayed.parentAvailable=false;break;
+                case 6:delayed.client=new LunagramSubscriptionClient();break;
+                case 7:delayed.currentAccount++;break;
+                case 8:delayed.client.crypto.order.orderId="b".repeat(48);break;
+                case 9:delayed.client.crypto.order.status="paid";break;
+                case 10:delayed.client.crypto.order.checkoutUrl="https://t.me/CryptoBot?start=IVOtherToken";break;
+                default:delayed.client.crypto=null;
+            }
+            delayed.messages.resolver.complete(99L);
+            check(delayed.presentations==0&&!delayed.cryptoBotOpening,"Delayed resolution cannot escape owner/order/lifecycle guard "+guard);
+        }
+        Screen resumed=new Screen();resumed.client.crypto=new LunagramSubscriptionClient.CryptoState();
+        resumed.client.crypto.order=new LunagramSubscriptionClient.CryptoOrder();resumed.messages.resolver.defer=true;
+        resumed.openCryptoCheckout();java.util.function.Consumer<Long> oldCallback=resumed.messages.resolver.pending;
+        resumed.onPause();resumed.isPaused=false;resumed.openCryptoCheckout();
+        oldCallback.accept(99L);
+        check(resumed.presentations==0&&resumed.cryptoBotOpening,"Late pre-pause callback cannot open or release the newer navigation latch");
+        resumed.messages.resolver.complete(99L);
+        check(resumed.presentations==1&&!resumed.cryptoBotOpening,"Only new explicit post-pause action opens preserved invoice");
+        Screen destroyed=new Screen();destroyed.client.crypto=new LunagramSubscriptionClient.CryptoState();
+        destroyed.client.crypto.order=new LunagramSubscriptionClient.CryptoOrder();destroyed.messages.resolver.defer=true;
+        destroyed.openCryptoCheckout();destroyed.onFragmentDestroy();destroyed.messages.resolver.complete(99L);
+        check(destroyed.presentations==0&&destroyed.client==null,"Destroyed subscription fragment ignores late bot resolver response");
+        for(int invalid=0;invalid<5;invalid++) {
+            Screen denied=new Screen();denied.client.crypto=new LunagramSubscriptionClient.CryptoState();
+            denied.client.crypto.order=new LunagramSubscriptionClient.CryptoOrder();denied.messages.resolver.defer=true;
+            denied.openCryptoCheckout();
+            switch(invalid){case 0:denied.messages.bot=null;break;case 1:denied.messages.bot.bot=false;break;
+                case 2:denied.messages.bot.deleted=true;break;case 3:denied.messages.bot.id=100L;break;default:break;}
+            denied.messages.resolver.complete(invalid==4?null:99L);
+            check(denied.presentations==0&&denied.errors==1,"Missing/invalid bot gives retry without navigation "+invalid);
+        }
+        check(Browser.internalOpens==0&&Browser.opens==genericBefore,"Payment never uses generic deep-link handler or any browser");
+        cryptoScreen.client.cryptoRecovery=true;
+        cryptoRows.clear();cryptoScreen.fillItems(cryptoRows,new UniversalAdapter());
+        check(cryptoScreen.cryptoCell.text.contains("CryptoRecovery"),"Lost create reply has explicit recovery copy");
+        for(UItem row:cryptoRows)check(row.id!=Screen.ROW_PAY&&row.id!=Screen.ROW_CRYPTO_OPEN,"Unknown creation cannot create or open another invoice");
+        cryptoScreen.client.cryptoRecovery=false;
+        for(String state:new String[]{"creating","pending","review_required","paid","expired","activated"}) {
+            cryptoScreen.client.crypto.order=new LunagramSubscriptionClient.CryptoOrder();
+            LunagramSubscriptionClient.CryptoOrder order=cryptoScreen.client.crypto.order;
+            order.status=state.equals("activated")?"paid":state;order.activated=state.equals("activated");
+            if(!state.equals("pending"))order.checkoutUrl=null;
+            cryptoRows.clear();cryptoScreen.fillItems(cryptoRows,new UniversalAdapter());
+            boolean pay=false,open=false,activate=false,checkPayment=false;
+            for(UItem row:cryptoRows) {
+                if(row.id==Screen.ROW_PAY)pay=row.enabled;
+                if(row.id==Screen.ROW_CRYPTO_OPEN)open=row.enabled;
+                if(row.id==Screen.ROW_CRYPTO_CHECK)checkPayment=row.enabled;
+                if(row.id==Screen.ROW_CRYPTO_ACTIVATE)activate=row.enabled;
+            }
+            check(pay==(state.equals("expired")||state.equals("activated")),"New invoice only after terminal previous order: "+state);
+            check(open==state.equals("pending"),"Only pending order exposes invoice link: "+state);
+            check(activate==state.equals("paid"),"Only unactivated paid order offers activation: "+state);
+            check(checkPayment==(state.equals("creating")||state.equals("pending")||state.equals("review_required")),"Unresolved orders retain recovery action: "+state);
+            check(cryptoScreen.cryptoCell.text.contains("0.50")&&cryptoScreen.cryptoCell.text.contains("Ultra"),"Outstanding legacy order preserves its own frozen total, not current purchase price");
+        }
+        cryptoScreen.activationDialog=new AlertDialog();cryptoScreen.activationField=null;cryptoScreen.activationIsCrypto=true;
+        cryptoScreen.client.proposal=new LunagramSubscriptionClient.Quote();cryptoScreen.activationOperation=Screen.ACTIVATION_PREVIEW;
+        cryptoScreen.updateActivationDialog();
+        check(cryptoScreen.activationDialog.message.contains("CryptoConfirmDetails")&&!cryptoScreen.activationDialog.message.contains("350"),"Crypto preview shows exact dates without pretending a Stars charge or asking for key");
+        cryptoScreen.activationOperation=Screen.ACTIVATION_CONFIRM;cryptoScreen.cryptoRequested=true;
+        cryptoScreen.updateActivationDialog();
+        check(!cryptoScreen.activationDialog.showing&&!cryptoScreen.cryptoRequested,"Confirmed crypto activation triggers durable state recovery");
+        cryptoScreen.cryptoLaunchRequested=true;cryptoScreen.onPause();
+        check(!cryptoScreen.cryptoLaunchRequested,"Leaving the fragment cancels automatic handoff intent");
         System.out.println("PASS: "+assertions+" actual-extracted subscription screen checks; modeled native cells/client, not rendered device UI.");
     }
 }

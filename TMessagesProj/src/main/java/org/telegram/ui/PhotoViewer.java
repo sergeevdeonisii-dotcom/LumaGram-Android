@@ -2194,6 +2194,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     private final static int gallery_menu_chromecast = 24;
     private final static int gallery_menu_create_sticker = 25;
     private final static int gallery_menu_delete2 = 26;
+    private final static int gallery_menu_meme = 27;
 
     private final static int ads_sponsor_info = 101;
     private final static int ads_about = 102;
@@ -4675,6 +4676,38 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         }
     }
 
+    private void createLunagramMeme() {
+        final org.telegram.messenger.LunagramMediaAccess.Session access = org.telegram.messenger.LunagramMediaAccess.forAccount(currentAccount);
+        if (!access.canUse(org.telegram.messenger.LunagramFeatureCatalog.Feature.VIDEO_MEMES)) {
+            if (parentActivity != null) Toast.makeText(parentActivity,
+                    LocaleController.formatString(R.string.LunagramFeatureRequiresTier, "Ultra"), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (parentActivity == null || !allowShare
+                || currentMessageObject != null && (currentMessageObject.isSecretMedia() || currentMessageObject.messageOwner.noforwards
+                || currentMessageObject.hasRevealedExtendedMedia())
+                || MessagesController.getInstance(currentAccount).isPeerNoForwards(currentDialogId)) return;
+        if (videoPlayer == null || videoTextureView == null || !videoTextureView.isAvailable() || !videoSizeSet) {
+            Toast.makeText(parentActivity, getString(R.string.LunagramMemeFrameUnavailable), Toast.LENGTH_LONG).show();
+            return;
+        }
+        videoPlayer.pause();
+        try {
+            int width = videoTextureView.getWidth(), height = videoTextureView.getHeight();
+            if (width <= 0 || height <= 0) return;
+            float scale = Math.min(1f, 1600f / Math.max(width, height));
+            Bitmap frame = videoTextureView.getBitmap(Math.max(1, (int) (width * scale)), Math.max(1, (int) (height * scale)));
+            if (frame == null) {
+                Toast.makeText(parentActivity, getString(R.string.LunagramMemeFrameUnavailable), Toast.LENGTH_LONG).show();
+                return;
+            }
+            showAlertDialog(org.telegram.ui.Components.LunagramMemeEditor.create(parentActivity, resourcesProvider, frame, access));
+        } catch (Exception error) {
+            FileLog.e(error);
+            Toast.makeText(parentActivity, getString(R.string.LunagramMemeFrameUnavailable), Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void setScaleToFill() {
         float bitmapWidth = centerImage.getBitmapWidth();
         float bitmapHeight = centerImage.getBitmapHeight();
@@ -4916,6 +4949,8 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                         return;
                     }
                     closePhoto(true, false);
+                } else if (id == gallery_menu_meme) {
+                    createLunagramMeme();
                 } else if (id == gallery_menu_save) {
                     if (Build.VERSION.SDK_INT >= 23 && (Build.VERSION.SDK_INT <= 28 || BuildVars.NO_SCOPED_STORAGE) && parentActivity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                         parentActivity.requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 4);
@@ -5846,6 +5881,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             castItem.addView(castItemButton, 0, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         }
 
+        videoItem.addSubItem(gallery_menu_meme, R.drawable.msg_edit, getString(R.string.LunagramMeme));
         videoItem.redrawPopup(0xf9222222);
         videoItem.setOnMenuDismiss(byClick -> checkProgress(0, false, false));
 
@@ -15705,6 +15741,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             if (isVideo && !isLivePhoto || isEmbedVideo) {
                 speedItem.setVisibility(View.VISIBLE);
                 videoItem.setVisibility(View.VISIBLE);
+                videoItem.setSubItemShown(gallery_menu_meme, allowShare && !noforwards && !isEmbedVideo && !isLivePhoto);
                 menuItem.showSubItem(gallery_menu_speed);
                 menuItem.setSubItemShown(gallery_menu_create_sticker, false);
                 speedGap.setVisibility(menuItem.getVisibleSubItemsCount() > 1 ? View.VISIBLE : View.GONE);

@@ -26,7 +26,7 @@ public final class RoundEditions100Test {
         check(LumaBuildPolicy.allowsPrivacyTools() == unrestricted, "Public retains ghost, deletion retention and edit history");
         check(LumaBuildPolicy.allowsAnonymousNumber() == unrestricted, "Public retains local anonymous-number display");
         check(LumaBuildPolicy.allowsProfileVerification() == unrestricted, "Public retains local profile display");
-        check(LumaBuildPolicy.allowsBuiltInUpdates() == personal, "Personal update feed remains isolated");
+        check(LumaBuildPolicy.allowsBuiltInUpdates() == unrestricted, "Personal/public use separate channels; Friends updater stays disabled");
         MessagesController.values.clear();
         check(LumaRoundVideoStabilization.getMode() == LumaRoundVideoStabilization.OFF, "Stabilization remains opt-in");
         int[] modes = {Integer.MIN_VALUE, -1, 0, 1, 2, 3, Integer.MAX_VALUE};

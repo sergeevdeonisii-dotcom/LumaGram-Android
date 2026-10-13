@@ -1,0 +1,245 @@
+import java.util.ArrayList;
+import java.util.Arrays;
+import org.telegram.messenger.LunagramSwipeGesture;
+import org.telegram.messenger.LunagramExperienceSettings;
+import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.LumaAccountData;
+import org.telegram.ui.Components.LunagramSwipeMenu;
+import org.telegram.messenger.LocaleController;
+import android.graphics.Canvas;
+import android.graphics.RectF;
+
+/** Exercises extracted production touch/policy methods with simulated UI boundaries. */
+public class LunagramSwipeProbe extends TouchBase {
+    @@TOUCH@@
+    @@POLICY@@
+    @@ACTION@@
+    @@PREPARE@@
+    @@INTERCEPT@@
+    @@OWNED_TOUCH@@
+    @@DRAW@@
+
+    final LunagramSwipeGesture lunagramSwipeGesture=new LunagramSwipeGesture();
+    LunagramSwipeMenu lunagramSwipeMenu;boolean lunagramSwipeTouchConsumed;
+    final android.content.Context context=new android.content.Context();
+    android.content.Context getContext(){return context;}int getMeasuredWidth(){return 400;}int getMeasuredHeight(){return 800;}
+    int chatListViewPaddingTop,chatListViewPaddingVisibleOffset,blurredViewBottomOffset;
+    final SelectionHelper textSelectionHelper=new SelectionHelper();final ActionBar actionBar=new ActionBar();Overlay quickShareSelectorOverlay;
+    boolean isFastScrollAnimationRunning(){return false;}boolean isReport(){return false;}
+    static class SelectionHelper {void checkSelectionCancel(MotionEvent e){}}
+    static class ActionBar {boolean isActionModeShowed(){return false;}}
+    static class Overlay {boolean isActive(){return false;}}
+    static class ViewConfiguration {static ViewConfiguration get(Object context){return new ViewConfiguration();}int getScaledTouchSlop(){return 8;}}
+    Object drawLaterRoundProgressCell,fragmentTransition;boolean invalidated,fromPullingDownTransition,toPullingDownTransition,isInsideContainer;
+    Atmosphere lunagramAtmosphere;final RectF selectorRect=new RectF();float pullingDownOffset,pullingDownAnimateProgress,drawingChatListViewYoffset;
+    final LunagramSwipeProbe chatListView=this;final org.telegram.ui.ActionBar.Theme.ResourcesProvider themeDelegate=null;
+    int getPaddingTop(){return 0;}int getPaddingBottom(){return 0;}
+    static class Atmosphere {void draw(Object...args){}}
+    void drawChatBackgroundElements(Canvas c){c.events.add("background");}void drawChatForegroundElements(Canvas c){c.events.add("foreground");}
+    View slidingView;boolean startedTrackingSlidingView,maybeStartTrackingSlidingView,inPreviewMode,wasManualScroll,wasTrackingVibrate;
+    int startedTrackingPointerId,startedTrackingX,startedTrackingY,endTrackingX,chatMode,currentAccount;
+    float trackAnimationProgress;long lastTrackingAnimationTime,threadMessageId,mergeDialogId,dialogId=555;
+    static final int MODE_QUICK_REPLIES=1,MODE_SUGGESTIONS=2,MODE_SAVED=3,SCROLL_STATE_IDLE=0,OPTION_COPY=4;
+    Object currentEncryptedChat;Chat currentChat;ArrayList<MessageObject> threadMessageObjects;
+    View bottomChannelButtonsLayout;boolean bottomOverlayChatWaitsReply,protectedPeer,textSelection,hasActivity=true;
+    MessageObject replyingMessageObject,selectedObject=new MessageObject(900);MessageObject.GroupedMessages selectedObjectGroup,group;
+    final ChatMessageCell pressed=new ChatMessageCell(new MessageObject(42));
+    final LayoutManager chatLayoutManager=new LayoutManager();int offset,copyCalls,replyCalls,forwardCalls,forwardResult,menuHaptics,stockHaptics;
+    View getPressedChildView(){return pressed;}MessageObject getSlidingMessageObject(){return pressed.message;}
+    void slidingViewSetOffset(int value){offset=value;}int slidingViewGetOffsetX(){return offset;}int getSlidingNonAnimationTranslationX(boolean value){return offset;}
+    boolean canSendMessageToTopic(MessageObject value){return true;}int getMessageType(MessageObject value){return 0;}boolean hasTextSelection(){return textSelection;}
+    int getScrollState(){return scrollState;}View getParent(){return new View();}boolean performHapticFeedback(int value){menuHaptics++;return true;}boolean performHapticFeedback(int value,int flags){stockHaptics++;return true;}
+    void updateTextureViewPosition(boolean a,boolean b){}void setGroupTranslationX(ChatMessageCell cell,int x){}void invalidate(){}
+    boolean isThreadChat(){return false;}void presentFragment(DialogsActivity value){replyCalls++;}void showFieldPanelForReply(MessageObject value){replyCalls++;}
+    MessageObject.GroupedMessages getGroup(long id){return id!=0?group:null;}long getDialogId(){return dialogId;}boolean isPeerNoForwards(){return protectedPeer;}
+    Object getParentActivity(){return hasActivity?this:null;}UserConfig getUserConfig(){return UserConfig.getInstance(currentAccount);}
+    Sender getSendMessagesHelper(){return new Sender();}void processSelectedOption(int value){copyCalls++;}String getString(int id){return "Saved Messages";}
+    final class Sender {int sendMessage(ArrayList<MessageObject> messages,long peer,Object...arguments){check(peer==getUserConfig().getClientUserId(),"Save targets current owner");forwardCalls++;return forwardResult;}}
+    static class MessageObject {
+        static final int TYPE_PAID_MEDIA=22,TYPE_STORY=23;final Owner messageOwner=new Owner();int id,type,currentAccount;long groupId;
+        boolean ephemeral,blurred,sponsored,out,wasJustSent;CharSequence caption;
+        MessageObject(int id){this.id=id;messageOwner.message="hello";}
+        int getId(){return id;}long getDialogId(){return 555;}long getGroupId(){return groupId;}Object getFromPeer(){return 555L;}
+        boolean isEphemeral(){return ephemeral;}boolean needDrawBluredPreview(){return blurred;}boolean isSponsored(){return sponsored;}
+        boolean isOut(){return out;}boolean isRoundVideo(){return false;}boolean isVideo(){return false;}
+        static class GroupedMessages {MessageObject captionMessage;ArrayList<MessageObject> messages=new ArrayList<>();}
+    }
+    static class Owner {boolean noforwards;String message,originalLanguage;Object rich_message,entities;boolean wasJustSent;}
+    static class View {static final int VISIBLE=0;int getVisibility(){return 0;}void requestDisallowInterceptTouchEvent(boolean value){}boolean onTouchEvent(MotionEvent event){return true;}}
+    static class ChatMessageCell extends View {final MessageObject message;ChatMessageCell(MessageObject message){this.message=message;}}
+    static class Chat {boolean megagroup=true;}
+    static class ChatObject {static boolean isForum(Chat chat){return false;}static boolean isNotInChat(Chat chat){return false;}static boolean isChannel(Chat chat){return false;}static boolean canPost(Chat chat){return true;}static boolean canSendMessages(Chat chat){return true;}}
+    static class AndroidUtilities {static int dp(float value){return Math.round(value);}static int getPixelsInCM(float cm,boolean horizontal){return 25;}}
+    static class HapticFeedbackConstants {static final int KEYBOARD_TAP=1,FLAG_IGNORE_GLOBAL_SETTING=2;}
+    static class LayoutManager {boolean scroll=true;void setCanScrollVertically(boolean value){scroll=value;}}
+    static class Bundle {void putBoolean(String key,boolean value){}void putInt(String key,int value){}void putLong(String key,long value){}}
+    static class DialogsActivity {static final int DIALOGS_TYPE_FORWARD=1;DialogsActivity(Bundle args){}void setDelegate(Object owner){}}
+    static class DialogObject {static long getPeerDialogId(Object value){return (Long)value;}}
+    static class UserObject {static final long VERIFY=777000;}
+    static class TextUtils {static boolean isEmpty(CharSequence value){return value==null||value.length()==0;}}
+    static class TranslateAlert2 {static int calls;static String getToLanguage(){return "en";}static void showAlert(Object...args){calls++;}}
+    static class BulletinFactory {static BulletinFactory of(Object value){return new BulletinFactory();}BulletinFactory createSimpleBulletin(int icon,String value){return this;}void show(){}}
+    static class AlertsCreator {static int errors;static void showSendMediaAlert(Object...args){errors++;}}
+    static class R {static class raw {static final int saved_messages=1;}static class string {static final int LunagramSaveToSelf=1;}}
+    static class MotionEvent {
+        static final int ACTION_DOWN=0,ACTION_UP=1,ACTION_MOVE=2,ACTION_CANCEL=3,ACTION_POINTER_DOWN=5,ACTION_POINTER_UP=6;
+        final int action,pointer;final float x,y;MotionEvent(int action,float x,float y){this(action,x,y,0);}MotionEvent(int action,float x,float y,int pointer){this.action=action;this.x=x;this.y=y;this.pointer=pointer;}
+        static MotionEvent obtain(long a,long b,int action,float x,float y,int flags){return new MotionEvent(action,x,y);}void recycle(){}
+        int getAction(){return action;}int getActionMasked(){return action&255;}int getPointerId(int index){return pointer;}float getX(){return x;}float getY(){return y;}
+    }
+    static int checks;static void check(boolean value,String label){checks++;if(!value)throw new AssertionError(label);}
+    void touch(int action,float x,float y){processTouchEvent(new MotionEvent(action,x,y));}
+    void arm(){touch(0,300,100);touch(2,260,100);touch(2,200,100);check(startedTrackingSlidingView,"Horizontal tracking starts");lunagramSwipeGesture.advanceHold(SystemClock.now+LunagramSwipeGesture.MENU_HOLD_MS);}
+    static class SystemClock { static long now=1000; static long uptimeMillis(){return now;} }
+    void postInvalidateOnAnimation(){}
+    static boolean heldMove(LunagramSwipeGesture g,float dx,float y,float threshold,float row) {
+        int previous=g.selected();
+        if(!g.menuActive() && -dx>=threshold && Float.isFinite(y) && row>0 && threshold>0) {
+            g.move(dx,g.originY(),threshold,row,1000);
+            g.advanceHold(1000+LunagramSwipeGesture.MENU_HOLD_MS);
+        }
+        g.move(dx,y,threshold,row,1000+LunagramSwipeGesture.MENU_HOLD_MS);
+        return previous!=g.selected();
+    }
+    static boolean has(int[] values,int value){for(int item:values)if(item==value)return true;return false;}
+    public static void main(String[] args){
+        UserConfig.selectedAccount=0;LunagramExperienceSettings.setSwipeEnabled(0,true);LunagramExperienceSettings.setSwipeOrder(0,new int[]{1,2,3,4});
+        LunagramSwipeGesture gesture=new LunagramSwipeGesture();int[] order={1,2,3,4};gesture.begin(100,order);order[0]=4;
+        check(!heldMove(gesture,-49,100,50,44)&&gesture.selected()==0,"Threshold prevents short commits");
+        check(heldMove(gesture,-50,100,50,44)&&gesture.selected()==1,"Threshold inclusive and input snapshot immutable");
+        heldMove(gesture,-30,100,50,44);check(gesture.selected()==1,"Hysteresis retains armed action");heldMove(gesture,-22,100,50,44);check(gesture.selected()==0,"Backoff disarms");
+        heldMove(gesture,-60,56,50,44);check(gesture.selected()==1,"Negative vertical delta clamps to first action");
+        heldMove(gesture,-60,188,50,44);check(gesture.release(false)==3&&gesture.release(false)==0,"Only one release commit");
+        gesture.begin(0,new int[]{1,2,3,4});heldMove(gesture,-60,22,50,44);check(gesture.selected()==1,"Half-row jitter retains first action");
+        heldMove(gesture,-60,28,50,44);check(gesture.selected()==2,"Crossing forward hysteresis boundary selects next action");
+        for(int y:new int[]{21,23,25,20,27}){heldMove(gesture,-60,y,50,44);check(gesture.selected()==2,"Row-edge jitter does not alternate action");}
+        heldMove(gesture,-60,16,50,44);check(gesture.selected()==1,"Crossing return boundary restores first action");
+        heldMove(gesture,-60,10000,50,44);check(gesture.selected()==4,"Positive overdrag clamps to final action");
+        heldMove(gesture,-60,-10000,50,44);check(gesture.selected()==1,"Negative overdrag never wraps to save");
+        gesture.cancel();check(!heldMove(gesture,-60,44,50,44)&&gesture.release(false)==0,"Cancellation consumes gesture");
+        gesture.begin(500,new int[]{1,2,3,4});gesture.setDirection(-1);heldMove(gesture,-60,500,50,48);check(gesture.selected()==1,"Bottom-edge menu begins on first action");
+        gesture.setDirection(1);check(gesture.direction()==-1,"Armed menu direction is fixed");heldMove(gesture,-60,468,50,48);check(gesture.selected()==2,"Upward menu advances upwards");
+        heldMove(gesture,-60,550,50,48);check(gesture.selected()==1,"Downward overdrag clamps on upward menu");
+        gesture.begin(0,new int[]{1});check(!heldMove(gesture,Float.NaN,0,50,44)&&!heldMove(gesture,-60,Float.NaN,50,44)&&!heldMove(gesture,-60,0,0,44)&&!heldMove(gesture,-60,0,50,0),"Invalid deltas/geometry do not arm");
+        for(String invalid:new String[]{null,"","1,1,3,4","0,2,3,4","1,2,3","1,2,3,4,5","1,2,no,4","12345678901234567890"})check(Arrays.equals(new int[]{1,2,3,4},LunagramSwipeGesture.decodeOrder(invalid)),"Malformed stored order resets safely");
+        check(Arrays.equals(new int[]{4,3,2,1},LunagramSwipeGesture.decodeOrder("4,3,2,1")),"Valid reordering survives decode");
+        LunagramSwipeProbe p=new LunagramSwipeProbe();p.arm();p.touch(1,200,100);p.touch(1,200,100);check(p.replyCalls==1,"Ordinary reply commits once");
+        p=new LunagramSwipeProbe();p.arm();check(p.menuHaptics==1&&p.stockHaptics==0,"Enabled menu arms with one haptic, never duplicate baseline haptic");
+        p.touch(2,200,100);check(p.menuHaptics==1&&p.stockHaptics==0,"Unchanged armed action produces no repeated haptic");
+        p.touch(2,200,144);p.touch(2,200,144);check(p.menuHaptics==2&&p.stockHaptics==0,"Changing selected action produces exactly one menu haptic");
+        p.touch(3,200,144);check(p.menuHaptics==2&&p.copyCalls==0,"Cancel produces neither extra haptic nor action");
+        p=new LunagramSwipeProbe();p.touch(0,300,100);p.touch(2,270,100);p.touch(2,260,100);p.touch(1,260,100);check(p.replyCalls==0,"Ordinary short swipe remains below commit threshold");
+        p=new LunagramSwipeProbe();p.arm();p.touch(2,200,144);p.touch(3,200,144);check(p.copyCalls==0&&p.replyCalls==0&&p.chatLayoutManager.scroll,"Cancel makes no commit and restores scrolling");
+        p=new LunagramSwipeProbe();p.arm();p.touch(5|(1<<8),200,144);p.touch(2,200,144);p.touch(1,200,144);check(p.copyCalls==0&&p.replyCalls==0&&p.chatLayoutManager.scroll,"Second pointer cancels gesture without commit");
+        p=new LunagramSwipeProbe();MessageObject old=p.selectedObject;p.arm();p.touch(2,200,144);p.touch(1,200,144);check(p.copyCalls==1&&p.selectedObject==old,"Copy executes and restores prior selection");
+        p=new LunagramSwipeProbe();p.arm();p.touch(2,200,144);p.protectedPeer=true;p.touch(1,200,144);check(p.copyCalls==0,"Permissions rechecked at release");
+        p=new LunagramSwipeProbe();p.arm();p.touch(2,290,100);p.touch(1,290,100);check(p.replyCalls==0,"Backed-off gesture does not reply");
+        p=new LunagramSwipeProbe();p.arm();p.touch(2,200,144);LunagramExperienceSettings.setSwipeEnabled(0,false);p.touch(1,200,144);check(p.replyCalls==0&&p.copyCalls==0,"Disabling menu during a held gesture never falls back to reply");LunagramExperienceSettings.setSwipeEnabled(0,true);
+        LunagramExperienceSettings.setSwipeEnabled(0,false);p=new LunagramSwipeProbe();p.arm();p.touch(2,200,100);check(p.menuHaptics==0&&p.stockHaptics==1,"Disabled menu retains one baseline threshold haptic");p.touch(1,200,100);check(p.replyCalls==1,"Disabled menu preserves baseline reply");LunagramExperienceSettings.setSwipeEnabled(0,true);
+        p=new LunagramSwipeProbe();MessageObject message=p.pressed.message;
+        for(int kind=0;kind<4;kind++){p.protectedPeer=kind==0;message.messageOwner.noforwards=kind==1;message.type=kind==2?22:0;p.dialogId=kind==3?777000:555;check(!has(p.lunagramSwipeActions(message),2)&&!has(p.lunagramSwipeActions(message),4),"Protected target cannot copy/save: "+kind);p.runLunagramSwipeAction(message,2);p.runLunagramSwipeAction(message,4);}
+        check(p.copyCalls==0&&p.forwardCalls==0,"Forbidden copy/save produces no side effect");
+        p.protectedPeer=false;message.messageOwner.noforwards=false;message.type=0;p.dialogId=555;
+        message.ephemeral=true;check(p.lunagramSwipeActions(message).length==0,"Ephemeral has no actions");message.ephemeral=false;message.blurred=true;check(p.lunagramSwipeActions(message).length==0,"Locked preview has no actions");message.blurred=false;message.sponsored=true;check(p.lunagramSwipeActions(message).length==0,"Sponsored has no actions");message.sponsored=false;
+        message.groupId=1;p.group=new MessageObject.GroupedMessages();p.group.messages.add(message);MessageObject sibling=new MessageObject(43);p.group.messages.add(sibling);
+        sibling.messageOwner.noforwards=true;p.runLunagramSwipeAction(message,4);sibling.messageOwner.noforwards=false;sibling.type=22;p.runLunagramSwipeAction(message,4);sibling.type=0;sibling.ephemeral=true;p.runLunagramSwipeAction(message,4);check(p.forwardCalls==0,"Protected/paid/ephemeral album member blocks forwarding");sibling.ephemeral=false;
+        p.runLunagramSwipeAction(message,4);check(p.forwardCalls==1,"Allowed save forwards to self");UserConfig.selectedAccount=1;p.runLunagramSwipeAction(message,2);check(p.copyCalls==0,"Inactive account cannot commit action");UserConfig.selectedAccount=0;
+        int translations=TranslateAlert2.calls;p.runLunagramSwipeAction(message,3);check(TranslateAlert2.calls==translations+1,"Translation remains available without sending");
+        message.currentAccount=1;p.runLunagramSwipeAction(message,2);p.runLunagramSwipeAction(message,4);check(p.copyCalls==0&&p.forwardCalls==1,"Stale message from another account cannot commit");message.currentAccount=0;
+        LunagramExperienceSettings.setPet(0,1);LunagramExperienceSettings.setSwipeOrder(0,new int[]{4,3,2,1});UserConfig.owners[0]=900;
+        check(LunagramExperienceSettings.pet(0)==0&&Arrays.equals(new int[]{1,2,3,4},LunagramExperienceSettings.swipeOrder(0)),"Reused login slot has isolated preferences");UserConfig.owners[0]=100;check(LunagramExperienceSettings.pet(0)==1&&Arrays.equals(new int[]{4,3,2,1},LunagramExperienceSettings.swipeOrder(0)),"Original owner retains preferences");
+        try{LunagramExperienceSettings.setSwipeOrder(0,new int[]{1,1,3,4});throw new AssertionError("Invalid drag order accepted");}catch(IllegalArgumentException expected){}
+        LunagramExperienceSettings.setSwipeOrder(0,new int[]{1,2,3,4});routingChecks();menuChecks();quickHoldChecks();
+        System.out.println("PASS Lunagram swipe "+checks+" checks: actual gesture/menu and extracted touch, interception, draw order, permissions; modeled Android event/draw boundaries, not native visual/device proof");
+    }
+
+    static void quickHoldChecks(){
+        int permutations=0;
+        for(int a=1;a<=4;a++)for(int b=1;b<=4;b++)for(int c=1;c<=4;c++)for(int d=1;d<=4;d++) {
+            int[] order={a,b,c,d};if(!LunagramSwipeGesture.validOrder(order))continue;permutations++;
+            for(int direction:new int[]{1,-1})for(float drift:new float[]{-500,-48,-12,0,12,48,500}) {
+                LunagramSwipeGesture g=new LunagramSwipeGesture();g.begin(200,order);g.setDirection(direction);
+                g.move(-60,200,50,48,1000);g.move(-100,200+drift,50,48,1080);
+                check(!g.menuActive()&&g.selected()==1,"Flick always highlights Reply regardless of drift/order");
+                check(g.release(false)==1&&g.release(false)==0,"Flick commits only Reply once");
+                check(!g.advanceHold(9999),"Late frame cannot open released menu");
+            }
+            LunagramSwipeGesture g=new LunagramSwipeGesture();g.begin(200,order);g.move(-60,200,50,48,1000);
+            check(!g.advanceHold(1239)&&!g.menuActive(),"Menu waits full stable hold");
+            check(g.advanceHold(1240)&&g.menuActive()&&g.selected()==1,"Stationary hold opens menu on Reply even reordered");
+            float anchor=g.originY();
+            for(int i=0;i<4;i++){g.move(-60,anchor+i*48,50,48,1250+i);check(g.selected()==order[i],"Held menu honors custom action order");}
+            g.cancel();check(g.release(false)==0,"Held cancel never commits");
+        }
+        check(permutations==24,"Every reordered quick/held menu tested");
+        LunagramSwipeGesture g=new LunagramSwipeGesture();g.begin(100,new int[]{1,2,3,4});g.move(-60,100,50,48,1000);
+        g.move(-90,130,50,48,1230);check(!g.advanceHold(1240),"Movement resets dwell rather than opening menu during slow drag");
+        check(g.advanceHold(1470)&&g.selected()==1,"New stable hold anchors Reply at new finger position");
+        g.move(-90,162,50,48,1480);check(g.selected()==2,"Vertical selection available after hold");
+        g.move(-20,162,50,48,1490);check(!g.menuActive()&&g.release(false)==0,"Backoff cancels held action");
+        g.begin(100,new int[]{2,3,4});g.move(-60,100,50,48,1000);check(g.release(false)==0,"Unavailable Reply never turns flick into Copy or Save");
+        LunagramSwipeProbe p=new LunagramSwipeProbe();SystemClock.now=2000;
+        p.touch(0,300,100);p.touch(2,240,100);p.touch(2,200,148);p.touch(1,200,148);
+        check(p.replyCalls==1&&p.copyCalls==0&&p.forwardCalls==0,"Extracted production quick diagonal chooses Reply");
+        p=new LunagramSwipeProbe();p.touch(0,300,100);p.touch(2,240,100);
+        Canvas before=new Canvas();p.dispatchDraw(before);check(!before.events.contains("rect"),"No full menu during flick");
+        SystemClock.now+=240;Canvas held=new Canvas();p.dispatchDraw(held);
+        check(p.lunagramSwipeGesture.menuActive()&&held.events.contains("rect"),"Actual draw advances stationary hold and displays menu");
+        p.touch(2,240,148);p.touch(1,240,148);check(p.copyCalls==1&&p.replyCalls==0,"Extracted held gesture selects Copy");
+        p=new LunagramSwipeProbe();p.touch(0,300,100);p.touch(2,240,100);
+        org.telegram.messenger.LunagramSubscriptionAccess.paid=false;
+        SystemClock.now+=300;p.dispatchDraw(new Canvas());p.touch(1,240,148);
+        check(p.copyCalls==0&&p.replyCalls==0&&!p.lunagramSwipeGesture.menuActive(),"Expiry during captured gesture cancels all menu actions");
+        org.telegram.messenger.LunagramSubscriptionAccess.paid=true;
+    }
+
+    static void routingChecks(){
+        check(LunagramSwipeGesture.shouldCapture(-20,10,12),"Clear horizontal diagonal captures before scroll");
+        check(!LunagramSwipeGesture.shouldCapture(-12,9,12)&&!LunagramSwipeGesture.shouldCapture(40,0,12)&&!LunagramSwipeGesture.shouldCapture(-11,0,12),"Vertical, right and below-slop gestures do not capture");
+        check(!LunagramSwipeGesture.shouldCapture(Float.NaN,0,12)&&!LunagramSwipeGesture.shouldCapture(-20,Float.POSITIVE_INFINITY,12),"Nonfinite capture rejected");
+        LunagramSwipeProbe p=new LunagramSwipeProbe();p.onInterceptTouchEvent(new MotionEvent(0,300,100));
+        MotionEvent diagonal=new MotionEvent(2,280,110);check(p.onInterceptTouchEvent(diagonal),"Horizontal diagonal is intercepted before RecyclerView drag");p.onTouchEvent(diagonal);
+        p.onTouchEvent(new MotionEvent(2,240,110));check(p.lunagramSwipeGesture.selected()==1&&p.scrollState==0&&!p.chatLayoutManager.scroll&&p.superTouchMoves==0,"Owned gesture stops list scrolling and arms using total horizontal displacement");
+        p.onTouchEvent(new MotionEvent(5|(1<<8),240,150));p.onTouchEvent(new MotionEvent(2,240,160));check(p.lunagramSwipeTouchConsumed&&p.superTouchMoves==0,"Second pointer cancels but retains stream ownership");
+        p.onTouchEvent(new MotionEvent(1,240,160));check(!p.lunagramSwipeTouchConsumed&&p.replyCalls==0&&p.copyCalls==0&&p.forwardCalls==0&&p.chatLayoutManager.scroll,"Pointer cancellation releases stream without action");
+        p=new LunagramSwipeProbe();p.onInterceptTouchEvent(new MotionEvent(0,300,100));check(p.onInterceptTouchEvent(new MotionEvent(2,295,120)),"Vertical intent delegates to RecyclerView");
+        check(p.scrollState==1&&!p.maybeStartTrackingSlidingView&&!p.lunagramSwipeTouchConsumed&&p.chatLayoutManager.scroll,"Vertical drag cancels swipe candidate without suppressing scroll");
+        p.onInterceptTouchEvent(new MotionEvent(2,200,130));check(!p.startedTrackingSlidingView,"Later diagonal movement cannot steal an active list drag");
+        p=new LunagramSwipeProbe();p.onInterceptTouchEvent(new MotionEvent(0,300,100));check(p.onInterceptTouchEvent(new MotionEvent(2,220,125)),"A single large horizontal MOVE captures");
+        // ViewGroup may cancel only the old child on this MOVE and deliver the following UP to us.
+        p.onTouchEvent(new MotionEvent(1,220,125));check(p.replyCalls==1&&p.copyCalls==0&&p.forwardCalls==0&&p.menuHaptics==1,"Capture MOVE followed directly by UP commits only initially highlighted Reply once");
+        p=new LunagramSwipeProbe();p.onInterceptTouchEvent(new MotionEvent(0,300,100));p.onInterceptTouchEvent(new MotionEvent(2,220,125));p.onTouchEvent(new MotionEvent(3,220,125));check(p.replyCalls==0&&p.forwardCalls==0,"Single large MOVE followed by CANCEL never commits");
+        for(float pull:new float[]{0,20}){
+            p=new LunagramSwipeProbe();p.arm();p.pullingDownOffset=pull;Canvas canvas=new Canvas();p.dispatchDraw(canvas);
+            check(canvas.events.indexOf("background")<canvas.events.indexOf("children")&&canvas.events.indexOf("children")<canvas.events.indexOf("foreground")&&canvas.events.indexOf("foreground")<canvas.events.indexOf("rect"),"Menu paints above all chat foregrounds, including translated-list route");
+            check(canvas.balanced(),"Overlay preserves canvas stack");
+        }
+    }
+    static void menuChecks(){
+        String[][] locales={{"","Reply","Copy","Translate","Save to Saved Messages"},{"","Ответить","Копировать","Перевести сообщение","Сохранить в Избранное"}};
+        for(String[] locale:locales)for(float scale:new float[]{1,1.5f,2})for(int width:new int[]{320,411})for(int direction:new int[]{1,-1}){
+            LocaleController.labels=locale;android.content.Context context=new android.content.Context();context.resources.getDisplayMetrics().scaledDensity=scale;
+            LunagramSwipeMenu menu=new LunagramSwipeMenu(context);LunagramSwipeGesture g=new LunagramSwipeGesture();float origin=direction>0?100:540;g.begin(origin,new int[]{1,2,3,4});
+            check(menu.prepare(g,width,640,64,72)&&g.direction()==direction,"Menu chooses safe fixed direction");heldMove(g,-60,origin,50,menu.rowHeight());
+            Canvas first=new Canvas();menu.draw(first,g,width,640,null);float[] box=first.rectangles.get(0);
+            check(box[0]>=12&&box[2]<=width-12&&box[1]>=72&&box[3]<=560&&box[5]==255,"Opaque menu fits usable viewport");
+            for(String label:Arrays.copyOfRange(locale,1,5)){float[] position=first.labels.get(label);check(position!=null&&position[0]>=box[0]&&position[0]+position[2]<=box[2]&&position[1]>=box[1]&&position[1]+position[3]<=box[3],"Full localized layout within menu: "+label);}
+            heldMove(g,-60,origin+direction*menu.rowHeight(),50,menu.rowHeight());Canvas second=new Canvas();menu.draw(second,g,width,640,null);
+            check(g.selected()==2&&first.labels.keySet().equals(second.labels.keySet()),"Selection changes without permuting action labels");
+            for(String label:first.labels.keySet())check(Arrays.equals(first.labels.get(label),second.labels.get(label)),"Label stays in its initial row: "+label);
+            check(first.balanced()&&second.balanced(),"All label saves restored");
+            menu.draw(new Canvas(),g,width+1,640,null);check(g.release(false)==0,"Viewport resize cancels commit instead of using stale bounds");
+        }
+        LocaleController.labels=locales[0];android.content.Context context=new android.content.Context();LunagramSwipeMenu menu=new LunagramSwipeMenu(context);LunagramSwipeGesture g=new LunagramSwipeGesture();g.begin(80,new int[]{1,2,3,4});
+        check(menu.prepare(g,320,152,0,0),"Short viewport uses bounded action scrolling");
+        for(int i=0;i<4;i++){heldMove(g,-60,80+g.direction()*i*menu.rowHeight(),50,menu.rowHeight());Canvas c=new Canvas();menu.draw(c,g,320,152,null);float[] box=c.rectangles.get(0),selected=c.rectangles.get(1);check(g.selected()==i+1&&selected[1]>=box[1]&&selected[3]<=box[3],"Selected short-viewport row remains visible");}
+        g.begin(50,new int[]{1,2,3,4});check(menu.prepare(g,320,64,0,0),"Single-row viewport can present initial reply");heldMove(g,-60,50,50,menu.rowHeight());Canvas tiny=new Canvas();menu.draw(tiny,g,320,64,null);float[] tinyBox=tiny.rectangles.get(0),tinyReply=tiny.labels.get("Reply");check(g.selected()==1&&tinyReply[1]>=tinyBox[1]&&tinyReply[1]+tinyReply[3]<=tinyBox[3],"Very short viewport defaults to visible Reply, never Save");
+        g.begin(10,new int[]{1,2,3,4});check(!menu.prepare(g,70,640,0,0)&&!menu.prepare(g,320,40,0,0),"Insufficient geometry rejects menu safely");
+    }
+}
+class TouchBase {
+ int scrollState,superTouchMoves;float downY;
+ public boolean onInterceptTouchEvent(LunagramSwipeProbe.MotionEvent e){if(e.getActionMasked()==0){downY=e.y;scrollState=0;}if(e.getActionMasked()==3)scrollState=0;if(e.getActionMasked()==2&&Math.abs(e.y-downY)>8)scrollState=1;return scrollState==1;}
+ public boolean onTouchEvent(LunagramSwipeProbe.MotionEvent e){if(e.getActionMasked()==2)superTouchMoves++;return true;}
+ protected void dispatchDraw(Canvas canvas){canvas.events.add("children");}
+}

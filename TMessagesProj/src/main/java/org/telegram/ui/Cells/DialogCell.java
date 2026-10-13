@@ -83,6 +83,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
+import org.telegram.messenger.LunagramStreamerMode;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.utils.DrawableUtils;
 import org.telegram.tgnet.ConnectionsManager;
@@ -2382,6 +2383,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             if (ellipsizeWidth < 0) {
                 ellipsizeWidth = 0;
             }
+            if (LunagramStreamerMode.isEnabled(currentAccount) && currentDialogFolderId == 0) {
+                nameString = LunagramStreamerMode.hiddenName(chat != null || currentDialogId < 0);
+            }
             if (nameString instanceof String) {
                 nameString = ((String) nameString).replace('\n', ' ');
             }
@@ -3193,6 +3197,8 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     }
 
     public boolean update(int mask, boolean animated) {
+        // Rebuild cached names even though the underlying Telegram peer did not change.
+        if (mask == MessagesController.UPDATE_MASK_ALL) mask = 0;
         boolean requestLayout = false;
         boolean rebuildLayout = false;
         boolean invalidate = false;
@@ -5503,7 +5509,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             if (isTopic && forumTopic != null) {
                 sb.append(getString(R.string.AccDescrTopic));
                 sb.append(". ");
-                sb.append(forumTopic.title);
+                sb.append(LunagramStreamerMode.displayName(currentAccount, forumTopic.title, true));
                 sb.append(". ");
             } else if (user != null) {
                 if (UserObject.isReplyUser(user)) {
@@ -5518,7 +5524,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                     if (user.self) {
                         sb.append(getString(R.string.SavedMessages));
                     } else {
-                        sb.append(ContactsController.formatName(user.first_name, user.last_name));
+                        sb.append(LunagramStreamerMode.displayName(currentAccount, user));
                     }
                 }
                 sb.append(". ");
@@ -5529,7 +5535,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                     sb.append(getString(R.string.AccDescrGroup));
                 }
                 sb.append(". ");
-                sb.append(chat.title);
+                sb.append(LunagramStreamerMode.displayName(currentAccount, chat));
                 sb.append(". ");
             }
         }
@@ -5576,7 +5582,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         if (chat != null && !message.isOut() && message.isFromUser() && message.messageOwner.action == null) {
             TLRPC.User fromUser = MessagesController.getInstance(currentAccount).getUser(message.messageOwner.from_id.user_id);
             if (fromUser != null) {
-                sb.append(ContactsController.formatName(fromUser.first_name, fromUser.last_name));
+                sb.append(LunagramStreamerMode.displayName(currentAccount, fromUser));
                 sb.append(". ");
             }
         }
@@ -5785,6 +5791,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     public String getMessageNameString() {
         if (message == null) {
             return null;
+        }
+        if (LunagramStreamerMode.isEnabled(currentAccount)) {
+            return LunagramStreamerMode.hiddenName(message.getFromChatId() < 0);
         }
         TLRPC.User user;
         TLRPC.User fromUser = null;

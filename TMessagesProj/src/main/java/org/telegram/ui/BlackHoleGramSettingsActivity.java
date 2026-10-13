@@ -28,6 +28,7 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
     private static final int ROW_UPDATES = 3;
     private static final int ROW_SEARCH = 4;
     private static final int ROW_ROUND_CAMERA = 5;
+    private static final int ROW_EXPERIENCE = 6;
 
     @Override
     public View createView(Context context) {
@@ -85,6 +86,8 @@ public class BlackHoleGramSettingsActivity extends BaseFragment {
             openSettings(new BlackHoleSearchActivity());
         } else if (item.id == ROW_ROUND_CAMERA) {
             openSettings(new RoundVideoSettingsActivity());
+        } else if (item.id == ROW_EXPERIENCE) {
+            openSettings(new LunagramExperienceSettingsActivity());
         } else if (item.id >= 101 && item.id <= 105) {
             if (item.id == 101 && !LunagramFeatureGate.require(this, Feature.SETTINGS_PROFILES)) return;
             if (item.id == 104 && !LunagramFeatureGate.require(this, Feature.SETTINGS_TRANSFER)) return;

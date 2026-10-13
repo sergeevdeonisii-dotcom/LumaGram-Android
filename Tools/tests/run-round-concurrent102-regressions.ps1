@@ -19,23 +19,29 @@ $root=Join-Path $repo 'TMessagesProj/src/main/java/org/telegram'
 $camera=[IO.File]::ReadAllText((Join-Path $root 'utils/camera/roundvideo/RoundVideoCameraController.java'))
 $gl=[IO.File]::ReadAllText((Join-Path $root 'utils/camera/roundvideo/RoundVideoGlProcessor.java'))
 $view=[IO.File]::ReadAllText((Join-Path $root 'ui/Components/InstantCameraView2.java'))
-foreach($guard in @('targetFps != 30 && targetFps != 60','activeFrameRate.getValue() != targetFps',
+foreach($guard in @('!RoundVideoConcurrentCamera.supportsLowLatencyStartup(targetFps)','activeFrameRate.getValue() != targetFps',
         'first.fps.getLower() <= 0 || second.fps.getLower() <= 0',
         'first.fps.getUpper() != targetFps || second.fps.getUpper() != targetFps','Build.VERSION.SDK_INT < 30','candidate.isSupported()',
         'glProcessor.addConcurrentInput','processor.selectConcurrentInput','concurrentCamera.close(null)',
         'glProcessor.resetToPrimaryInput()')) {
     if(!$camera.Contains($guard)){throw "Missing concurrent safety guard: $guard"}
 }
+foreach($guard in @('Build.VERSION.SDK_INT >= 28',
+        'RoundVideoConcurrentCamera.setSessionFrameRate(configuration, device, activeFpsRange)',
+        'outputs.add(new OutputConfiguration(recordingSurface))',
+        'if (!processedPreview) outputs.add(new OutputConfiguration(previewSurface))')) {
+    if(!$camera.Contains($guard)){throw "Missing unchanged-output/FPS sequential session setup: $guard"}
+}
 $concurrent=[IO.File]::ReadAllText((Join-Path $root 'utils/camera/roundvideo/RoundVideoConcurrentCamera.java'))
 if($camera.Contains('first.fps.getLower() != 60') -or $concurrent.Contains('target == 60 && slot.spec.fps.getLower() != 60')) {
     throw 'Advertised adaptive 60 candidates must reach real dual-sensor qualification instead of being discarded by their lower AE bound.'
 }
-foreach($guard in @('QUALIFICATION_TIMEOUT_MS = 1_000L','CaptureResult.SENSOR_TIMESTAMP',
+foreach($guard in @('QUALIFICATION_TIMEOUT_MS = 2_500L','CaptureResult.SENSOR_TIMESTAMP',
         '!slots[0].cadenceQualified || !slots[1].cadenceQualified','measured < 57d || measured > 63d')) {
     if(!$concurrent.Contains($guard)){throw "Missing actual concurrent FPS qualification: $guard"}
 }
 if(!$camera.Contains('RoundVideoSession.FrameRate.fromValue(spec.frameRate)') -or
-    !$camera.Contains('if (glProcessor != null && glProcessor.hasFirstFrame()) startRecordingAfterFirstFrame();')) {
+    !$camera.Contains('startRecordingWhenSessionReady();')) {
     throw 'Concurrent recovery must preserve negotiated FPS and start the existing recorder exactly once.'
 }
 $cameraPermission=$camera.IndexOf('ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)')
@@ -44,7 +50,7 @@ $concurrentStart=$camera.IndexOf('if (tryStartConcurrentCameras()) return;')
 if($cameraPermission -lt 0 -or $audioPermission -lt 0 -or $cameraPermission -gt $concurrentStart -or $audioPermission -gt $concurrentStart) {
     throw 'Both camera and audio permission checks must run before starting any warm camera.'
 }
-if(!$gl.Contains('input.texture.updateTexImage();') -or !$gl.Contains('if (input == activeInput) drawFrame(timestamp);')) {
+if(!$gl.Contains('input.texture.updateTexImage();') -or !$gl.Contains('if (input == activeInput) {') -or !$gl.Contains('drawFrame(timestamp);')) {
     throw 'Standby frames must be drained, not encoded.'
 }
 if(!$gl.Contains('input == pendingInput') -or !$gl.Contains('postDelayed(selectionTimeout, 750L)')) {
@@ -63,4 +69,4 @@ foreach($locale in @('values','values-ru')) {
         if(@($xml.resources.string|Where-Object name -CEQ $key).Count -ne 1){throw "Missing/duplicate string: $locale/$key"}
     }
 }
-Write-Output 'PASS: dual-stream integration, verified 60 FPS or unchanged single-camera fallback, standby exclusion, bounded fresh-frame wait and preview source guards.'
+Write-Output 'PASS: warm 30 FPS integration, high-FPS single-camera cold-start policy, retained dual-sensor qualification safety, standby exclusion and bounded fresh-frame wait.'

@@ -789,7 +789,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
     }
 
     public StarGiftSheet setLocalPreview(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift) {
-        if (!LumaBuildPolicy.isPersonalEdition() || fragment == null || gift == null
+        if (fragment == null || gift == null
                 || !LunagramSubscriptionAccess.canUse(currentAccount, LunagramFeatureCatalog.Feature.LOCAL_NFT)
                 || fragment.getCurrentAccount() != currentAccount || currentAccount != UserConfig.selectedAccount
                 || gift.ownerUserId <= 0 || gift.ownerUserId != UserConfig.getInstance(currentAccount).getClientUserId()

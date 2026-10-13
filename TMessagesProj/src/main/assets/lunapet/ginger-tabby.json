@@ -1,0 +1,389 @@
+{
+  "version": 1,
+  "clips": [
+    {
+      "name": "walk",
+      "asset": "ginger-walk.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": [
+        {
+          "anchorX": 156.5,
+          "anchorY": 250
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 250
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 251
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 250
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 251
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 252
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 252
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 250
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 251
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 251
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 249
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 249
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 249
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 249
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 249
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 249
+        }
+      ]
+    },
+    {
+      "name": "loaf",
+      "asset": "ginger-loaf.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": [
+        {
+          "anchorX": 156.5,
+          "anchorY": 199
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 199
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 199
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 199
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 199
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 199
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 199
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 199
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 198
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 198
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 198
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 198
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 199
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 199
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 199
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 199
+        }
+      ]
+    },
+    {
+      "name": "roll",
+      "asset": "ginger-roll.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": [
+        {
+          "anchorX": 156.5,
+          "anchorY": 244
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 244
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 250
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 251
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 228
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 222
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 233
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 230
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 219
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 220
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 220
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 220
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 213
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 214
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 224
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 224
+        }
+      ]
+    },
+    {
+      "name": "ball",
+      "asset": "ginger-ball.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": [
+        {
+          "anchorX": 156.5,
+          "anchorY": 304,
+          "sourceRect": {
+            "left": 0,
+            "top": 0,
+            "right": 313,
+            "bottom": 340
+          }
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 304,
+          "sourceRect": {
+            "left": 313,
+            "top": 0,
+            "right": 627,
+            "bottom": 340
+          }
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 304,
+          "sourceRect": {
+            "left": 627,
+            "top": 0,
+            "right": 940,
+            "bottom": 340
+          }
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 304,
+          "sourceRect": {
+            "left": 940,
+            "top": 0,
+            "right": 1254,
+            "bottom": 340
+          }
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 277,
+          "sourceRect": {
+            "left": 0,
+            "top": 340,
+            "right": 313,
+            "bottom": 650
+          }
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 276,
+          "sourceRect": {
+            "left": 313,
+            "top": 340,
+            "right": 627,
+            "bottom": 650
+          }
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 276,
+          "sourceRect": {
+            "left": 627,
+            "top": 340,
+            "right": 940,
+            "bottom": 650
+          }
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 275,
+          "sourceRect": {
+            "left": 940,
+            "top": 340,
+            "right": 1254,
+            "bottom": 650
+          }
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 279,
+          "sourceRect": {
+            "left": 0,
+            "top": 650,
+            "right": 313,
+            "bottom": 980
+          }
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 279,
+          "sourceRect": {
+            "left": 313,
+            "top": 650,
+            "right": 627,
+            "bottom": 980
+          }
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 279,
+          "sourceRect": {
+            "left": 627,
+            "top": 650,
+            "right": 940,
+            "bottom": 980
+          }
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 279,
+          "sourceRect": {
+            "left": 940,
+            "top": 650,
+            "right": 1254,
+            "bottom": 980
+          }
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 197,
+          "sourceRect": {
+            "left": 0,
+            "top": 980,
+            "right": 313,
+            "bottom": 1254
+          }
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 197,
+          "sourceRect": {
+            "left": 313,
+            "top": 980,
+            "right": 627,
+            "bottom": 1254
+          }
+        },
+        {
+          "anchorX": 156.5,
+          "anchorY": 197,
+          "sourceRect": {
+            "left": 627,
+            "top": 980,
+            "right": 940,
+            "bottom": 1254
+          }
+        },
+        {
+          "anchorX": 157,
+          "anchorY": 196,
+          "sourceRect": {
+            "left": 940,
+            "top": 980,
+            "right": 1254,
+            "bottom": 1254
+          }
+        }
+      ]
+    }
+  ]
+}

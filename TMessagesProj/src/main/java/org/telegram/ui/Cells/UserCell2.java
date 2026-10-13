@@ -25,6 +25,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
+import org.telegram.messenger.LunagramStreamerMode;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
@@ -36,7 +37,7 @@ import org.telegram.ui.Components.CheckBox;
 import org.telegram.ui.Components.CheckBoxSquare;
 import org.telegram.ui.Components.LayoutHelper;
 
-public class UserCell2 extends FrameLayout {
+public class UserCell2 extends FrameLayout implements NotificationCenter.NotificationCenterDelegate {
 
     private Theme.ResourcesProvider resourcesProvider;
     private BackupImageView avatarImageView;
@@ -179,6 +180,7 @@ public class UserCell2 extends FrameLayout {
     }
 
     public void update(int mask) {
+        if (mask == MessagesController.UPDATE_MASK_ALL) mask = 0;
         TLRPC.FileLocation photo = null;
         String newName = null;
         TLRPC.User currentUser = null;
@@ -244,19 +246,19 @@ public class UserCell2 extends FrameLayout {
 
         if (currentName != null) {
             lastName = null;
-            nameTextView.setText(currentName);
+            nameTextView.setText(LunagramStreamerMode.displayName(currentAccount, currentName, currentChat != null));
         } else {
             if (currentUser != null) {
                 lastName = newName == null ? UserObject.getUserName(currentUser) : newName;
             } else {
                 lastName = newName == null ? currentChat.title : newName;
             }
-            nameTextView.setText(lastName);
+            nameTextView.setText(LunagramStreamerMode.displayName(currentAccount, lastName, currentChat != null));
         }
 
         if (currentStatus != null) {
             statusTextView.setTextColor(statusColor);
-            statusTextView.setText(currentStatus);
+            statusTextView.setText(LunagramStreamerMode.isEnabled(currentAccount) ? "" : currentStatus);
             if (avatarImageView != null) {
                 avatarImageView.setForUserOrChat(currentUser, avatarDrawable);
             }
@@ -315,5 +317,25 @@ public class UserCell2 extends FrameLayout {
     @Override
     public boolean hasOverlappingRendering() {
         return false;
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.updateInterfaces);
+        if (currentObject != null || currentName != null) update(0);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.updateInterfaces);
+    }
+
+    @Override
+    public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.updateInterfaces && account == currentAccount
+                && (Integer) args[0] == MessagesController.UPDATE_MASK_ALL
+                && (currentObject != null || currentName != null)) update(0);
     }
 }

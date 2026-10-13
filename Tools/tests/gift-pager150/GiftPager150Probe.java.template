@@ -142,16 +142,23 @@ public final class GiftPager150Probe {
     }
     static TL_stars.SavedStarGift real(long id,boolean unique){TL_stars.SavedStarGift g=new TL_stars.SavedStarGift();g.msg_id=(int)id;g.flags=8;g.gift=unique?new TL_stars.TL_starGiftUnique():new TL_stars.TL_starGift();g.gift.id=id;return g;}
     static LumaLocalGifts.LocalSavedGift local(long id){LumaLocalGifts.LocalSavedGift g=new LumaLocalGifts.LocalSavedGift();g.localKey="unique:"+id;g.gift=new TL_stars.TL_starGiftUnique();g.gift.id=id;return g;}
-    public static void main(String[] args){
+    static void runEdition(boolean personal){
+        LumaBuildPolicy.personal=personal;
+        LunagramSubscriptionAccess.allowed=true;LumaLocalGifts.removes=0;
+        UserConfig.selectedAccount=0;UserConfig.user=42;
+        Utilities.globalQueue.tasks.clear();AndroidUtilities.ui.tasks.clear();
         for(int pins=0;pins<16;pins++){
             Parent p=new Parent();TL_stars.SavedStarGift a=real(1,false),b=real(2,true);LumaLocalGifts.LocalSavedGift clone=local(2),c=local(3);
             p.list.gifts.add(a);p.list.gifts.add(b);p.localProfileGifts.add(clone);p.localProfileGifts.add(c);
             TL_stars.SavedStarGift[] all={a,b,clone,c};for(int i=0;i<4;i++)if((pins&(1<<i))!=0)p.localPinnedGiftIds.add(p.getLocalGiftId(all[i]));
-            LumaLocalGiftPreview.PagerSource source=p.createPreviewPager(p.list);StarGiftSheet s=new StarGiftSheet();s.setProfilePreviewPager(source);
+            LumaLocalGiftPreview.PagerSource source=p.createPreviewPager(p.list);
+            check(source!=null,"mixed pager available in both editions");
+            StarGiftSheet s=new StarGiftSheet();s.setProfilePreviewPager(source);
             check(source.size()==4,"combined count");check(source.indexOf(b)!=source.indexOf(clone),"real unique and local clone stay distinct");
             check(!s.eq(b,clone),"native neighbor equality separates local clone from server gift");
             for(int index=0;index<4;index++){
                 TL_stars.SavedStarGift item=source.get(index);s.bindProfilePreview(item);
+                if(item instanceof LumaLocalGifts.LocalSavedGift)check(s.localPreviewGift==item,"native local binder available in both editions");
                 check(s.getProfilePreviewPosition()==index,"display position");
                 check(s.getNeighbourSavedGift(false)==(index==0?null:source.get(index-1)),"left neighbor matches displayed order");
                 check(s.getNeighbourSavedGift(true)==(index==3?null:source.get(index+1)),"right neighbor matches displayed order");
@@ -160,6 +167,11 @@ public final class GiftPager150Probe {
                     check(s.getInputStarGift()==null&&StarGiftSheet.getInputStarGift(42,item)==null,"private/static input conversion fails closed");
                     check(s.getGift()==null&&s.getListPosition()==-1,"local does not become server gift or upgrade index");
                     check(s.beforeTableTextView.visibility==View.GONE&&s.afterTableTextView.visibility==View.GONE&&s.underButtonContainer.visibility==View.GONE,"no transaction footer links");
+                    check(Objects.equals(s.button.text,getString(R.string.OK)),"main local button is OK, never direct delete");
+                    int dismissed=s.dismissed,removed=LumaLocalGifts.removes;
+                    s.button.click.onClick(s.button);
+                    check(s.dismissed==dismissed+1&&LumaLocalGifts.removes==removed,"main local button only dismisses");
+                    s.dismissed=dismissed;
                 }else{
                     check(s.topView==s.nativeTopView&&s.localPreviewGift==null,"local to real restores native header");
                     check(s.getListPosition()==p.list.gifts.indexOf(item),"upgrade lookup remains SERVER index");
@@ -207,6 +219,15 @@ public final class GiftPager150Probe {
         check(p.localProfileGifts.size()==1,"expiry preserves local data");
         sheet.setLocalPreview(p.fragment,gift);check(sheet.localPreviewGift==null,"direct local bind denied after expiry");
         LunagramSubscriptionAccess.allowed=true;check(owner.size()==2,"reactivation restores local overlay from retained data");
-        System.out.println("PASS: "+checks+" extracted native gift binder/pager/input/metadata/delete checks; modeled UI, no server or device operations.");
+        StarGiftSheet foreign=new StarGiftSheet();gift.ownerUserId=99;foreign.setLocalPreview(p.fragment,gift);
+        check(foreign.localPreviewGift==null,"foreign owner cannot bind in either edition");
+        gift.ownerUserId=42;UserConfig.selectedAccount=1;foreign.setLocalPreview(p.fragment,gift);
+        check(foreign.localPreviewGift==null,"inactive account cannot bind in either edition");
+        UserConfig.selectedAccount=0;
+    }
+    public static void main(String[] args){
+        runEdition(false);
+        runEdition(true);
+        System.out.println("PASS: "+checks+" extracted public+personal native gift binder/pager/input/metadata/delete checks; modeled UI, no server or device operations.");
     }
 }

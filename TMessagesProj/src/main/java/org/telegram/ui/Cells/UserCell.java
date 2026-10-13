@@ -40,6 +40,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
+import org.telegram.messenger.LunagramStreamerMode;
 import org.telegram.messenger.utils.DrawableUtils;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
@@ -511,6 +512,7 @@ public class UserCell extends FrameLayout implements NotificationCenter.Notifica
     }
 
     public void update(int mask) {
+        if (mask == MessagesController.UPDATE_MASK_ALL) mask = 0;
         TLRPC.FileLocation photo = null;
         String newName = null;
         TLRPC.User currentUser = null;
@@ -637,7 +639,7 @@ public class UserCell extends FrameLayout implements NotificationCenter.Notifica
                     name = Emoji.replaceEmoji(name, nameTextView.getPaint().getFontMetricsInt(), false);
                 } catch (Exception ignore) {}
             }
-            nameTextView.setText(name);
+            nameTextView.setText(currentObject instanceof String ? name : LunagramStreamerMode.displayName(currentAccount, name, currentChat != null));
         } else {
             if (currentUser != null) {
                 lastName = newName == null ? UserObject.getUserName(currentUser) : AndroidUtilities.removeRTL(AndroidUtilities.removeDiacritics(newName));
@@ -655,7 +657,7 @@ public class UserCell extends FrameLayout implements NotificationCenter.Notifica
                     name = Emoji.replaceEmoji(name, nameTextView.getPaint().getFontMetricsInt(), false);
                 } catch (Exception ignore) {}
             }
-            nameTextView.setText(name);
+            nameTextView.setText(currentObject instanceof String ? name : LunagramStreamerMode.displayName(currentAccount, name, currentChat != null));
         }
         long botVerificationIcon = 0;
         if (currentUser != null) {
@@ -703,7 +705,7 @@ public class UserCell extends FrameLayout implements NotificationCenter.Notifica
             if (query != null) {
                 status = AndroidUtilities.highlightText(status, query, resourcesProvider);
             }
-            statusTextView.setText(status);
+            statusTextView.setText(LunagramStreamerMode.isEnabled(currentAccount) ? "" : status);
         } else if (currentUser != null) {
             if (currentUser.bot) {
                 statusTextView.setTextColor(statusColor);
@@ -816,6 +818,10 @@ public class UserCell extends FrameLayout implements NotificationCenter.Notifica
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.emojiLoaded) {
             nameTextView.invalidate();
+        } else if (id == NotificationCenter.updateInterfaces && account == currentAccount
+                && (Integer) args[0] == MessagesController.UPDATE_MASK_ALL
+                && (currentObject != null || currentName != null)) {
+            update(0);
         }
     }
 
@@ -823,6 +829,8 @@ public class UserCell extends FrameLayout implements NotificationCenter.Notifica
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.emojiLoaded);
+        NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.updateInterfaces);
+        if (currentObject != null || currentName != null) update(0);
         emojiStatus.attach();
         botVerification.attach();
     }
@@ -831,6 +839,7 @@ public class UserCell extends FrameLayout implements NotificationCenter.Notifica
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);
+        NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.updateInterfaces);
         emojiStatus.detach();
         botVerification.detach();
         storyParams.onDetachFromWindow();

@@ -824,6 +824,16 @@ public class Theme {
                 currentColors.put(key_chat_wallpaper_gradient_rotation, backgroundRotation);
             }
 
+            if (usesClassicDayMessages()) {
+                // Keep Day's white chrome, but use Telegram's complete classic
+                // outgoing palette so text and media controls match the green bubble.
+                resetAccentColorsForMyMessagesGiftThemeLight(currentColors);
+                currentColors.put(key_chat_messageTextOut, defaultColors[key_chat_messageTextOut]);
+                currentColors.put(key_chat_messageLinkOut, defaultColors[key_chat_messageLinkOut]);
+                currentColors.put(key_chat_outDivider, defaultColors[key_chat_outDivider]);
+                isMyMessagesGradientColorsNear = true;
+            }
+
             int outBubble = currentColors.get(key_chat_outBubble);
             if (outBubble == 0) {
                 outBubble = getColor(key_chat_outBubble);
@@ -899,6 +909,23 @@ public class Theme {
             applyCalculatedArticleCodeColors(currentColorsNoAccent, currentColors, isDarkTheme);
 
             return !isMyMessagesGradientColorsNear;
+        }
+
+        private boolean usesClassicDayMessages() {
+            // Only the two bundled blue Day presets; never overwrite an edited,
+            // imported or per-chat theme, even if it happens to be named Day.
+            if (parentTheme == null || !"Day".equals(parentTheme.name)
+                    || !"day.attheme".equals(parentTheme.assetName)
+                    || parentTheme.pathToFile != null || parentTheme.info != null
+                    || info != null || pathToFile != null || accentColor2 != 0
+                    || myMessagesGradientAccentColor2 != 0 || myMessagesGradientAccentColor3 != 0
+                    || myMessagesAnimated) {
+                return false;
+            }
+            return id == 0 && accentColor == 0xff4c91df
+                    && myMessagesAccentColor == 0 && myMessagesGradientAccentColor1 == 0
+                    || id == 9 && accentColor == 0xff56a2c9
+                    && myMessagesAccentColor == 0xff6580dc && myMessagesGradientAccentColor1 == 0xff3ec1d6;
         }
 
         public void resetAccentColorsForMyMessagesGiftThemeLight(SparseIntArray currentColors) {
@@ -1575,6 +1602,10 @@ public class Theme {
         public int getPreviewOutColor() {
             if (firstAccentIsDefault && currentAccentId == DEFALT_THEME_ACCENT_ID) {
                 return 0xfff0fee0;
+            }
+            ThemeAccent accent = getAccent(false);
+            if (accent != null && accent.usesClassicDayMessages()) {
+                return defaultColors[key_chat_outBubble];
             }
             return previewOutColor;
         }

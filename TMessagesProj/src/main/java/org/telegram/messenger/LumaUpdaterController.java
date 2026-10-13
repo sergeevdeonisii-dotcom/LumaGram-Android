@@ -40,6 +40,8 @@ public final class LumaUpdaterController {
     private static final long CHECK_INTERVAL = 15L * 60L * 1000L;
     private static final long CHECK_TIMEOUT = 30_000L;
     private static final String OFFICIAL_API_MANIFEST = "https://api.github.com/repos/sergeevdeonisii-dotcom/LumaGram-Android/contents/updates/latest.json?ref=main";
+    private static final String PUBLIC_MANIFEST = "https://lunagram.matveidrugmoi.chatgpt.site/updates/public.json";
+    private static final String PUBLIC_ASSET_BASE = "https://github.com/Lunagram-App/Lunagram/releases/download/";
     private static final long MAX_APK_SIZE = 1024L * 1024L * 1024L;
     private static volatile LumaUpdaterController instance;
 
@@ -76,6 +78,7 @@ public final class LumaUpdaterController {
     private HttpGetTask checkingTask;
     private Runnable checkTimeout;
     private int downloadGeneration;
+    private int installGeneration;
     private final ArrayList<Runnable> checkCompletions = new ArrayList<>();
 
     private LumaUpdaterController() {
@@ -85,7 +88,8 @@ public final class LumaUpdaterController {
     }
 
     private SharedPreferences preferences() {
-        return ApplicationLoader.applicationContext.getSharedPreferences("luma_updates", Context.MODE_PRIVATE);
+        return ApplicationLoader.applicationContext.getSharedPreferences(
+                LumaBuildPolicy.isPublicEdition() ? "luma_updates_public" : "luma_updates", Context.MODE_PRIVATE);
     }
 
     private void load() {
@@ -97,6 +101,16 @@ public final class LumaUpdaterController {
         sha256 = prefs.getString("sha256", null);
         path = prefs.getString("path", null);
         lastCheck = prefs.getLong("last_check", 0L);
+        // A manual personal -> public install shares application data, but must
+        // never inherit the other edition's pending APK, source or cached path.
+        if (LumaBuildPolicy.isPublicEdition()
+                && (!isPublicAsset(version, versionCode, fileUrl)
+                || !"public".equals(prefs.getString("edition", null))
+                || TextUtils.isEmpty(sha256) || !sha256.matches("[0-9a-f]{64}")
+                || !TextUtils.isEmpty(path) && !isOwnedPublicApk(new File(path)))) {
+            clearPendingUpdate(true);
+            lastCheck = 0L;
+        }
         final int installedVersion = getCurrentVersionCode();
         if (versionCode <= installedVersion || !TextUtils.isEmpty(path) && !new File(path).exists()) {
             clearPendingUpdate(true);
@@ -108,6 +122,7 @@ public final class LumaUpdaterController {
 
     private void save() {
         SharedPreferences.Editor editor = preferences().edit();
+        if (LumaBuildPolicy.isPublicEdition()) editor.putString("edition", "public");
         putOrRemove(editor, "version", version);
         putOrRemove(editor, "changelog", changelog);
         putOrRemove(editor, "file_url", fileUrl);
@@ -136,6 +151,7 @@ public final class LumaUpdaterController {
 
     public String getManifestUrl() {
         if (!LumaBuildPolicy.allowsBuiltInUpdates()) return "";
+        if (LumaBuildPolicy.isPublicEdition()) return PUBLIC_MANIFEST;
         String saved = preferences().getString("manifest_url", null);
         // The source editor is no longer exposed. Recover old cleared/corrupt
         // values without losing a valid custom HTTPS source.
@@ -144,6 +160,9 @@ public final class LumaUpdaterController {
 
     public boolean setManifestUrl(String value) {
         if (!LumaBuildPolicy.allowsBuiltInUpdates()) return false;
+        // No hidden preference, imported source or API fallback may route a
+        // public installation into the personal release channel.
+        if (LumaBuildPolicy.isPublicEdition()) return PUBLIC_MANIFEST.equals(value);
         value = value == null ? "" : value.trim();
         if (!TextUtils.isEmpty(value) && !isHttps(value)) {
             return false;
@@ -286,7 +305,8 @@ public final class LumaUpdaterController {
 
     private void requestManifest(int generation, String manifestUrl, boolean fallback) {
         if (generation != checkGeneration || !checking) return;
-        final boolean official = TextUtils.equals(manifestUrl, BuildVars.LUMA_UPDATE_MANIFEST_URL);
+        final boolean official = !LumaBuildPolicy.isPublicEdition()
+                && TextUtils.equals(manifestUrl, BuildVars.LUMA_UPDATE_MANIFEST_URL);
         final boolean useApi = official && !fallback;
         final int requestId = ++checkRequestId;
         HttpGetTask task = new HttpGetTask(response -> AndroidUtilities.runOnUIThread(() ->
@@ -320,11 +340,21 @@ public final class LumaUpdaterController {
                 newChangelog = json.optString("changelog", null);
                 valid = !TextUtils.isEmpty(newVersion) && newVersionCode > 0 && isHttps(newFileUrl)
                         && newSha256.matches("[0-9a-f]{64}");
+                if (LumaBuildPolicy.isPublicEdition()) {
+                    valid &= PUBLIC_MANIFEST.equals(manifestUrl)
+                            && "public".equals(json.optString("edition", null))
+                            && "org.luma.liquid.web".equals(json.optString("package_name", null))
+                            && "arm64-v8a".equals(json.optString("architecture", null))
+                            // Require the literal absolute URL, not a relative,
+                            // normalized or redirected alias for another asset.
+                            && isPublicAsset(newVersion, newVersionCode, json.getString("file_url"));
+                }
             } catch (Exception e) {
                 FileLog.e("Invalid Lunagram update manifest", e);
             }
         }
-        if (!valid && !fallback && TextUtils.equals(manifestUrl, BuildVars.LUMA_UPDATE_MANIFEST_URL)) {
+        if (!valid && !fallback && !LumaBuildPolicy.isPublicEdition()
+                && TextUtils.equals(manifestUrl, BuildVars.LUMA_UPDATE_MANIFEST_URL)) {
             requestManifest(generation, manifestUrl, true);
             return;
         }
@@ -538,6 +568,11 @@ public final class LumaUpdaterController {
             return null;
         }
         File file = new File(path);
+        if (LumaBuildPolicy.isPublicEdition() && !isOwnedPublicApk(file)) {
+            path = null;
+            save();
+            return null;
+        }
         if (!file.exists()) {
             path = null;
             save();
@@ -554,6 +589,35 @@ public final class LumaUpdaterController {
         }
         if (!ApplicationLoader.applicationLoaderInstance.checkApkInstallPermissions(activity)) {
             return false;
+        }
+        if (LumaBuildPolicy.isPublicEdition()) {
+            // Re-check cached bytes on every installation, including after a
+            // restart/restore. Never trust only a persisted path and metadata.
+            final int expectedVersion = versionCode;
+            final String expectedHash = sha256;
+            final String expectedUrl = fileUrl;
+            if (!isPublicAsset(version, expectedVersion, expectedUrl)) return false;
+            final int generation = ++installGeneration;
+            Utilities.globalQueue.postRunnable(() -> {
+                String error = verifyDownloadedApk(file, expectedHash, expectedVersion);
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (generation != installGeneration || expectedVersion != versionCode
+                            || !TextUtils.equals(expectedHash, sha256)
+                            || !TextUtils.equals(expectedUrl, fileUrl)
+                            || !TextUtils.equals(file.getAbsolutePath(), path)) return;
+                    if (error != null) {
+                        deleteDownloadedFile();
+                        save();
+                        lastError = error;
+                        NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateAvailable);
+                        return;
+                    }
+                    if (!activity.isFinishing() && !activity.isDestroyed()) {
+                        AndroidUtilities.openForView(file, "Lunagram.apk", "application/vnd.android.package-archive", activity, null, false);
+                    }
+                });
+            });
+            return true;
         }
         return AndroidUtilities.openForView(file, "Lunagram.apk", "application/vnd.android.package-archive", activity, null, false);
     }
@@ -592,9 +656,15 @@ public final class LumaUpdaterController {
             }
             PackageManager packageManager = ApplicationLoader.applicationContext.getPackageManager();
             int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+            if (LumaBuildPolicy.isPublicEdition()) flags |= PackageManager.GET_META_DATA;
             PackageInfo archive = packageManager.getPackageArchiveInfo(file.getAbsolutePath(), flags);
             PackageInfo installed = packageManager.getPackageInfo(ApplicationLoader.applicationContext.getPackageName(), flags);
             if (archive == null || !TextUtils.equals(archive.packageName, ApplicationLoader.applicationContext.getPackageName())) {
+                return LocaleController.getString(R.string.LumaUpdatePackageMismatch);
+            }
+            if (LumaBuildPolicy.isPublicEdition() && (archive.applicationInfo == null
+                    || archive.applicationInfo.metaData == null
+                    || !"public".equals(archive.applicationInfo.metaData.getString("org.lunagram.edition")))) {
                 return LocaleController.getString(R.string.LumaUpdatePackageMismatch);
             }
             long archiveVersion = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? archive.getLongVersionCode() : archive.versionCode;
@@ -662,6 +732,26 @@ public final class LumaUpdaterController {
         return !TextUtils.isEmpty(value) && value.regionMatches(true, 0, "https://", 0, 8);
     }
 
+    /** Exact public repository, immutable version tag and public ARM64 asset. */
+    private static boolean isPublicAsset(String version, int code, String url) {
+        if (version == null || !version.matches("[0-9]{1,4}(?:\\.[0-9]{1,4}){1,3}")
+                || code <= 0 || url == null) return false;
+        String tag = "v" + version;
+        String name = "Lunagram-" + version + "-public";
+        return url.equals(PUBLIC_ASSET_BASE + tag + "/" + name + "-arm64.apk")
+                || url.equals(PUBLIC_ASSET_BASE + tag + "-hotfix-" + code + "/"
+                + name + "-hotfix-" + code + "-arm64.apk");
+    }
+
+    private boolean isOwnedPublicApk(File file) {
+        try {
+            return file.isFile() && file.getName().equals("luma-update-" + versionCode + ".apk")
+                    && updateDirectory().getCanonicalFile().equals(file.getCanonicalFile().getParentFile());
+        } catch (IOException ignored) {
+            return false;
+        }
+    }
+
     private static String appendCacheBuster(String value) {
         return value + (value.contains("?") ? "&" : "?") + "luma_check=" + System.currentTimeMillis();
     }
@@ -702,6 +792,7 @@ public final class LumaUpdaterController {
     }
 
     private File updateDirectory() {
-        return new File(ApplicationLoader.applicationContext.getFilesDir(), "cache");
+        return new File(ApplicationLoader.applicationContext.getFilesDir(),
+                LumaBuildPolicy.isPublicEdition() ? "cache/lunagram-public-updates" : "cache");
     }
 }

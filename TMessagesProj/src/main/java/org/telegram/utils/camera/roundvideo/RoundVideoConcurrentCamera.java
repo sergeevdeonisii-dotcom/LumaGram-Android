@@ -1,6 +1,7 @@
 package org.telegram.utils.camera.roundvideo;
 
 import android.annotation.SuppressLint;
+import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -66,7 +67,7 @@ final class RoundVideoConcurrentCamera {
     private int selected;
     private boolean started, configuring, closed, ready, stabilization = true;
     private boolean qualifying;
-    private static final long QUALIFICATION_TIMEOUT_MS = 1_000L;
+    private static final long QUALIFICATION_TIMEOUT_MS = 2_500L;
     private static final int WARMUP_FRAMES = 4;
     private static final int QUALIFICATION_INTERVALS = 12;
     private static final int MONITOR_INTERVALS = 30;
@@ -84,11 +85,12 @@ final class RoundVideoConcurrentCamera {
         int warmupFrames, intervals;
         long firstTimestamp, lastTimestamp;
         boolean cadenceQualified;
+        boolean firstFrameSeen;
 
         Slot(Spec spec, Surface surface) { this.spec = spec; this.surface = surface; }
 
-        SessionConfiguration configuration() {
-            return new SessionConfiguration(SessionConfiguration.SESSION_REGULAR,
+        SessionConfiguration configuration() throws CameraAccessException {
+            SessionConfiguration configuration = new SessionConfiguration(SessionConfiguration.SESSION_REGULAR,
                     Collections.singletonList(new OutputConfiguration(surface)), executor,
                     new CameraCaptureSession.StateCallback() {
                         @Override public void onConfigured(CameraCaptureSession session) {
@@ -109,6 +111,8 @@ final class RoundVideoConcurrentCamera {
                             if (!closed) fail(new IllegalStateException("Concurrent camera session closed unexpectedly"));
                         }
                     });
+            if (device != null) setSessionFrameRate(configuration, device, spec.fps);
+            return configuration;
         }
 
         final CameraDevice.StateCallback deviceCallback = new CameraDevice.StateCallback() {
@@ -145,6 +149,8 @@ final class RoundVideoConcurrentCamera {
         final CameraCaptureSession.CaptureCallback measuredCallback = new CameraCaptureSession.CaptureCallback() {
             @Override public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
                 if (closed || Slot.this.session != session) return;
+                Long firstFrame = result.get(CaptureResult.SENSOR_TIMESTAMP);
+                if (firstFrame != null && firstFrame > 0) { firstFrameSeen = true; maybeReady(); }
                 if (spec.frameRate == 60 && qualifying) {
                     Long timestamp = result.get(CaptureResult.SENSOR_TIMESTAMP);
                     if (timestamp != null && timestamp > 0 && timestamp > lastTimestamp) {
@@ -160,7 +166,10 @@ final class RoundVideoConcurrentCamera {
                             // so advertised 60 FPS alone is not simultaneous-60 proof.
                             // Sensor cadence, never Handler callback arrival, is used.
                             if (measured < 57d || measured > 63d) {
-                                fail(new IllegalStateException("Concurrent 60 FPS sensor cadence rejected: " + measured));
+                                cadenceQualified = false;
+                                firstTimestamp = timestamp;
+                                intervals = 0;
+                                if (ready) fail(new IllegalStateException("Concurrent 60 FPS sensor cadence rejected: " + measured));
                                 return;
                             }
                             cadenceQualified = true;
@@ -193,6 +202,31 @@ final class RoundVideoConcurrentCamera {
         return manager.isConcurrentSessionConfigurationSupported(configurations);
     }
 
+    static void setSessionFrameRate(SessionConfiguration configuration, CameraDevice device,
+                                    Range<Integer> fps) throws CameraAccessException {
+        if (fps == null) return;
+        // AE FPS is commonly a session parameter. Supplying it only in the
+        // first repeating request can make the HAL configure twice at 60 FPS.
+        CaptureRequest.Builder parameters = device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+        parameters.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fps);
+        configuration.setSessionParameters(parameters.build());
+    }
+
+    /** Check dimensions before creating the encoder/GL pipeline. No camera is opened. */
+    static boolean supportsSizes(CameraManager manager, Handler handler, Spec first, Spec second) throws CameraAccessException {
+        Map<String, SessionConfiguration> configurations = new LinkedHashMap<>();
+        CameraCaptureSession.StateCallback state = new CameraCaptureSession.StateCallback() {
+            @Override public void onConfigured(CameraCaptureSession session) {}
+            @Override public void onConfigureFailed(CameraCaptureSession session) {}
+        };
+        for (Spec spec : new Spec[]{first, second}) {
+            configurations.put(spec.id, new SessionConfiguration(SessionConfiguration.SESSION_REGULAR,
+                    Collections.singletonList(new OutputConfiguration(spec.size, SurfaceTexture.class)),
+                    command -> handler.post(command), state));
+        }
+        return manager.isConcurrentSessionConfigurationSupported(configurations);
+    }
+
     @SuppressLint("MissingPermission")
     void start() {
         if (started || closed) return;
@@ -209,9 +243,13 @@ final class RoundVideoConcurrentCamera {
     }
 
     boolean select(RoundVideoSession.CameraFacing facing) {
+        return select(facing, true);
+    }
+
+    boolean select(RoundVideoSession.CameraFacing facing, boolean updateControls) {
         if (!ready || closed) return false;
         selected = slots[0].spec.facing == facing ? 0 : 1;
-        updateRequests();
+        if (updateControls) updateRequests();
         return !closed;
     }
 
@@ -248,15 +286,23 @@ final class RoundVideoConcurrentCamera {
         return true;
     }
 
+    static boolean supportsLowLatencyStartup(int frameRate) {
+        // A cold dual-60 trial must measure both sensors before it is safe to
+        // record. Do not spend that qualification window after the user has
+        // already pressed Record; the single-camera path keeps the same FPS.
+        return frameRate == 30;
+    }
+
     private void maybeReady() {
         if (ready || closed || slots[0].session == null || slots[1].session == null) return;
-        if (slots[0].spec.frameRate == 60) {
-            if (!qualifying) {
-                qualifying = true;
-                handler.postDelayed(qualificationTimeout, QUALIFICATION_TIMEOUT_MS);
-            }
-            if (!slots[0].cadenceQualified || !slots[1].cadenceQualified) return;
+        handler.removeCallbacks(startupTimeout); // Configuration timeout must not consume sensor warm-up time.
+        if (!qualifying) {
+            qualifying = true;
+            handler.postDelayed(qualificationTimeout, QUALIFICATION_TIMEOUT_MS);
         }
+        if (slots[0].spec.frameRate == 60) {
+            if (!slots[0].cadenceQualified || !slots[1].cadenceQualified) return;
+        } else if (!slots[0].firstFrameSeen || !slots[1].firstFrameSeen) return;
         ready = true;
         handler.removeCallbacks(startupTimeout);
         handler.removeCallbacks(qualificationTimeout);

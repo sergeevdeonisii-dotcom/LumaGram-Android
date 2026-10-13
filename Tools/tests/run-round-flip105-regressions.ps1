@@ -21,6 +21,7 @@ $helperPath=Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/ui/Compone
 $view=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/ui/Components/InstantCameraView2.java'))
 $helper=[IO.File]::ReadAllText($helperPath)
 $session=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/camera/roundvideo/RoundVideoSession.java'))
+$controller=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/camera/roundvideo/RoundVideoCameraController.java'))
 function Method([string]$Source,[string]$Signature) {
     $start=$Source.IndexOf($Signature,[StringComparison]::Ordinal)
     if ($start -lt 0) { throw "Missing real integration method: $Signature" }
@@ -34,9 +35,15 @@ function Method([string]$Source,[string]$Signature) {
 $started=Method $view 'public void onCameraSwitchStarted('
 $configured=Method $view 'public void onCameraSwitchCompleted('
 $first=Method $view 'public void onCameraSwitchFirstFrame('
-if (!$started.Contains('cameraFlip.begin();') -or $started.IndexOf('cameraFlip.begin();') -gt $started.IndexOf('showCameraSwitchPlaceholder();') -or !$started.Contains('setRotationY(0f)')) { throw 'HAL wait must retain an unrotated full-size placeholder.' }
+if (!$started.Contains('cameraFlip.begin();') -or $started.IndexOf('cameraFlip.begin();') -gt $started.IndexOf('showCameraSwitchPlaceholder();')) { throw 'HAL wait must retain an unrotated full-size placeholder.' }
 if ($configured -match 'cameraFlip\.|\.cancel\(|setRotationY\(') { throw 'HAL configuration must not cancel a valid first-frame flip.' }
-if (!$first.Contains('cameraFlip.firstFrame(LumaRoundCameraFlip.animationsEnabled());')) { throw 'Actual target first-frame hook must start the bounded motion.' }
+if (!$first.Contains('cameraFlip.firstFrame();')) { throw 'Actual target first-frame hook must uncover the live preview.' }
+$preview=Method $view 'public void onCameraPreviewFirstFrame('
+if (!$preview.Contains('hideInitialPlaceholder();') -or !$preview.Contains('RoundVideoSession.State.STARTING') -or
+        $preview.Contains('recordingStarted') -or $preview.Contains('recordStarted')) { throw 'Actual preview arrival must reveal startup pixels without starting the recording clock.' }
+$surface=Method $controller 'public void onSurfaceTextureUpdated('
+if (!$surface.Contains('cameraPreviewInputSeen') -or !$surface.Contains('surfaceTexture.getTimestamp() > 0L') -or
+        !$surface.Contains('callback.onCameraPreviewFirstFrame();')) { throw 'Initial preview must be backed by actual camera input and a presented texture.' }
 foreach ($body in @($started,$first)) {
     if (!$body.Contains('if (!canAnimateCameraSwitch())')) { throw 'Late callbacks must reject inactive/hidden UI owners.' }
 }
@@ -64,16 +71,14 @@ if (!$snapshot.Contains('if (persist) Utilities.stackBlurBitmap(bitmap, 15);')) 
 if (!$snapshot.Contains('if (!textureView.isAvailable()) return;') -or !$snapshot.Contains('if (bitmap == null) return;') -or $snapshot.Contains('lastBitmap = null')) { throw 'Unavailable snapshot must retain the last available overlay.' }
 $show=Method $view 'private void showCameraSwitchPlaceholder('
 if (!$show.Contains('saveLastCameraBitmap(false);') -or !$show.Contains('textureOverlayView.setImageBitmap(lastBitmap);')) { throw 'Switch overlay must retain captured-frame feedback without persistence work.' }
+if (!$show.Contains('session.isFastSwitchActive()') -or $show.IndexOf('return;') -gt $show.IndexOf('saveLastCameraBitmap(false);')) { throw 'Warm GL switching must bypass synchronous bitmap readback and frozen overlay.' }
 $button=Method $view 'private void switchCamera('
 if (!$button.Contains('switchCameraDrawable.setCurrentFrame(0);') -or !$button.Contains('switchCameraDrawable.start();')) { throw 'Existing RLottie button response must remain.' }
 if ($helper -match 'RoundVideoSession|RoundVideoGlProcessor|CameraDevice|SurfaceTexture|recorder|FileLog') { throw 'The flip helper must remain UI-only and cannot alter camera/video data.' }
-foreach ($required in @('DURATION_MS = 140L','MAX_LIFETIME_MS = 220L','ValueAnimator.ofFloat(0f, 1f)',
-    'ticket != generation || animation != animator','target.setRotationY(-90f * (1f - deceleration))',
-    'SharedConfig.animationsEnabled()','Build.VERSION.SDK_INT < 26','ValueAnimator.areAnimatorsEnabled()')) {
-    if (!$helper.Contains($required)) { throw "Missing bounded motion contract: $required" }
-}
+if ($helper -match 'ValueAnimator|postDelayed|runOnUIThread|Math\.sin') { throw 'Camera preview must not pulse, distort or wait for animation on switching.' }
 $firstMotion=Method $helper 'public void firstFrame('
-if ($firstMotion.IndexOf('target.hidePlaceholder();') -lt 0 -or $firstMotion.IndexOf('target.hidePlaceholder();') -gt $firstMotion.IndexOf('ValueAnimator.ofFloat(') -or $firstMotion.Contains('progress >= 0.5f')) { throw 'An available target frame must not wait behind the old snapshot for a second animation phase.' }
+if (!$firstMotion.Contains('target.hidePlaceholder();') -or !$firstMotion.Contains('awaitingFirstFrame = false;') -or
+    $firstMotion.Contains('target.setRotationY(')) { throw 'A ready frame must be uncovered immediately without a rotation discontinuity or arrival animation.' }
 $run=Join-Path $output ([guid]::NewGuid().ToString('N'))
 $jvm=Join-Path $run 'jvm';$native=Join-Path $run 'android36'
 New-Item -ItemType Directory -Path $jvm,$native -Force | Out-Null
@@ -81,6 +86,7 @@ $queueTemplate=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'round-flip105/Ro
 $queuePath=Join-Path $run 'RoundSwitchQueue105Probe.java'
 $queueTemplate=$queueTemplate.Replace('/* ACTUAL_STARTED_BODY */',(Method $session 'public void onCameraSwitchStarted('))
 $queueTemplate=$queueTemplate.Replace('/* ACTUAL_FRAME_BODY */',(Method $session 'public void onCameraSwitchFirstFrame('))
+$queueTemplate=$queueTemplate.Replace('/* ACTUAL_PREVIEW_BODY */',(Method $session 'public void onCameraPreviewFirstFrame('))
 [IO.File]::WriteAllText($queuePath,$queueTemplate,[Text.UTF8Encoding]::new($false))
 $template=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'round-flip105/AnimatorFixtures.java.template'))
 $parts=[regex]::Matches($template,'(?m)^// FILE: ([^\r\n]+)\r?\n')

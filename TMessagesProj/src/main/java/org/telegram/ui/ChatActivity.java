@@ -167,6 +167,9 @@ import org.telegram.messenger.LumaDeletedMessages;
 import org.telegram.messenger.LumaEditHistory;
 import org.telegram.messenger.LumaBuildPolicy;
 import org.telegram.messenger.LumaGhostMode;
+import org.telegram.messenger.LunagramExperienceSettings;
+import org.telegram.messenger.LunagramSwipeGesture;
+import org.telegram.ui.Components.LunagramSwipeMenu;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
@@ -1140,6 +1143,14 @@ public class ChatActivity extends BaseFragment implements
     protected FireworksOverlay fireworksOverlay;
 
     private boolean swipeBackEnabled = true;
+    private final LunagramSwipeGesture lunagramSwipeGesture = new LunagramSwipeGesture();
+    private LunagramSwipeMenu lunagramSwipeMenu;
+    private org.telegram.ui.Components.LunagramChatAtmosphere lunagramAtmosphere;
+    private final int[] lunagramInputLocation = new int[2];
+    private final int[] lunagramContentLocation = new int[2];
+    private final RectF lunagramPetRailBounds = new RectF();
+    private boolean lunagramPetOnRail;
+    private float lunagramPetRailLeft = Float.NaN, lunagramPetRailRight = Float.NaN;
 
     public static Pattern publicMsgUrlPattern;
     public static Pattern voiceChatUrlPattern;
@@ -1215,6 +1226,7 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_DELETE = 1;
     public final static int OPTION_FORWARD = 2;
     public final static int OPTION_COPY = 3;
+    public final static int OPTION_LUNAGRAM_REMIND = 90029;
     public final static int OPTION_SAVE_TO_GALLERY = 4;
     public final static int OPTION_APPLY_LOCALIZATION_OR_THEME = 5;
     public final static int OPTION_SHARE = 6;
@@ -2809,6 +2821,24 @@ public class ChatActivity extends BaseFragment implements
         }
 
         chatInputViewsContainer.setSplitInputLayout(centerInsetLeft, defaultInset, drawLeftButton, true);
+        if (replyLayout != null) {
+            // Use the same clamped central bubble origin as its drawable, not a static
+            // 64dp label margin: expanded/localized bot menus can move that origin.
+            final int containerWidth = chatInputViewsContainer.getMeasuredWidth();
+            final int actualCenterLeft = containerWidth > 0
+                    ? Math.min(centerInsetLeft, containerWidth - defaultInset - dp(24)) : centerInsetLeft;
+            int contentInset = actualCenterLeft + dp(7) + dp(12);
+            if (chatActivityEnterTopView != null && chatActivityEnterTopView.isAttachedToWindow()
+                    && chatInputViewsContainer.isAttachedToWindow()) {
+                chatInputViewsContainer.getLocationInWindow(liquidInputContainerLocation);
+                chatActivityEnterTopView.getLocationInWindow(liquidInputControlLocation);
+                contentInset += liquidInputContainerLocation[0] - liquidInputControlLocation[0];
+            } else {
+                contentInset -= dp(7); // The composer/top row has the existing seven-dp outer margin.
+            }
+            replyLayout.setLiquidGlassContentInset(contentInset);
+            updateLiquidGlassReplyPanelLayout(LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS));
+        }
     }
 
     private void selectLiquidGlassFactory(boolean enabled) {
@@ -2896,21 +2926,24 @@ public class ChatActivity extends BaseFragment implements
 
         final FrameLayout.LayoutParams replyParams = (FrameLayout.LayoutParams) replyLayout.getLayoutParams();
         final FrameLayout.LayoutParams closeParams = (FrameLayout.LayoutParams) replyCloseImageView.getLayoutParams();
-        if (enabled) {
-            // The reply icon remains in the left action island. Content uses
-            // the same single 64dp inset as the text field, not a second row inset.
+        final int rowRightMargin = enabled ? dp(45) + dp(48) + dp(8) : dp(52);
+        if (replyParams.leftMargin != 0 || replyParams.rightMargin != rowRightMargin) {
             replyParams.leftMargin = 0;
-            replyParams.rightMargin = dp(89);
-            closeParams.width = dp(44);
-            closeParams.rightMargin = dp(45);
-        } else {
-            replyParams.leftMargin = 0;
-            replyParams.rightMargin = dp(52);
-            closeParams.width = dp(52);
-            closeParams.rightMargin = 0;
+            replyParams.rightMargin = rowRightMargin;
+            replyLayout.setLayoutParams(replyParams);
         }
-        replyLayout.setLayoutParams(replyParams);
-        replyCloseImageView.setLayoutParams(closeParams);
+        final int closeWidth = enabled ? dp(48) : dp(52);
+        final int closeHeight = enabled ? dp(48) : dp(46);
+        final int closeRightMargin = enabled ? dp(45) : 0;
+        final int closeTopMargin = enabled ? 0 : dp(.5f);
+        if (closeParams.width != closeWidth || closeParams.height != closeHeight
+                || closeParams.rightMargin != closeRightMargin || closeParams.topMargin != closeTopMargin) {
+            closeParams.width = closeWidth;
+            closeParams.height = closeHeight;
+            closeParams.rightMargin = closeRightMargin;
+            closeParams.topMargin = closeTopMargin;
+            replyCloseImageView.setLayoutParams(closeParams);
+        }
     }
 
     private NotificationCenter.ObserversGroup observersGroup;
@@ -3939,6 +3972,10 @@ public class ChatActivity extends BaseFragment implements
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(final int id) {
+                if (id == 97103) {
+                    LunagramExperienceSettingsActivity settings = new LunagramExperienceSettingsActivity(dialog_id);
+                    settings.setCurrentAccount(currentAccount); presentFragment(settings); return;
+                }
                 if (id == 97101 || id == 97102) {
                     BlackHoleToolsActivity tools = new BlackHoleToolsActivity(id == 97101 ? BlackHoleToolsActivity.NOTES : BlackHoleToolsActivity.VAULT,
                             id == 97101 ? dialog_id : 0);
@@ -4574,6 +4611,7 @@ public class ChatActivity extends BaseFragment implements
             headerItem.setContentDescription(LocaleController.getString(R.string.AccDescrMoreOptions));
             headerItem.lazilyAddSubItem(97101, R.drawable.msg_edit, getString(R.string.BHGNotes));
             headerItem.lazilyAddSubItem(97102, R.drawable.msg_secret, getString(R.string.BHGVault));
+            headerItem.lazilyAddSubItem(97103, R.drawable.msg_customize, getString(R.string.LunagramExperienceTitle));
 
             if (currentUser != null && currentUser.self && chatMode != MODE_SAVED) {
                 savedChatsItem = headerItem.lazilyAddSubItem(view_as_topics, R.drawable.msg_topics, LocaleController.getString(R.string.SavedViewAsChats));
@@ -4989,6 +5027,7 @@ public class ChatActivity extends BaseFragment implements
 
             private boolean ignoreLayout;
             private boolean invalidated;
+            private boolean lunagramSwipeTouchConsumed;
 
             int lastH = 0;
 
@@ -5098,11 +5137,23 @@ public class ChatActivity extends BaseFragment implements
                 if (quickShareSelectorOverlay != null && quickShareSelectorOverlay.isActive()) {
                     return false;
                 }
+                if (e.getActionMasked() == MotionEvent.ACTION_DOWN) lunagramSwipeTouchConsumed = false;
+                if (lunagramSwipeTouchConsumed) return true;
+                boolean processedSwipeMove = false;
+                if (LunagramExperienceSettings.swipeEnabled(currentAccount) && !actionBar.isActionModeShowed() && !isReport()
+                        && e.getActionMasked() == MotionEvent.ACTION_MOVE && slidingView != null) {
+                    // Decide a clearly horizontal gesture before RecyclerView can take a diagonal move.
+                    processTouchEvent(e);
+                    processedSwipeMove = true;
+                    if (lunagramSwipeTouchConsumed) return true;
+                }
                 boolean result = super.onInterceptTouchEvent(e);
                 if (actionBar.isActionModeShowed() || isReport()) {
                     return result;
                 }
-                processTouchEvent(e);
+                if (!processedSwipeMove) processTouchEvent(e);
+                if (LunagramExperienceSettings.swipeEnabled(currentAccount) && result
+                        && maybeStartTrackingSlidingView && !startedTrackingSlidingView) processTouchEvent(null);
                 return result;
             }
 
@@ -5116,6 +5167,10 @@ public class ChatActivity extends BaseFragment implements
 
             private void drawReplyButton(Canvas canvas) {
                 if (slidingView == null || Thread.currentThread() != Looper.getMainLooper().getThread()) {
+                    return;
+                }
+                if (LunagramExperienceSettings.swipeEnabled(currentAccount) && lunagramSwipeGesture.menuActive()) {
+                    // The full menu belongs to the top overlay, not the reply icon's underlay.
                     return;
                 }
                 Paint chatActionBackgroundPaint = getThemedPaint(Theme.key_paint_chatActionBackground);
@@ -5298,7 +5353,23 @@ public class ChatActivity extends BaseFragment implements
                 chatActionBackgroundDarkenPaint.setColor(wasDarkenColor);
             }
 
+            private void beginLunagramSwipeMenu(float y, MessageObject message) {
+                lunagramSwipeGesture.begin(y, LunagramExperienceSettings.swipeEnabled(currentAccount) ? lunagramSwipeActions(message) : null);
+                if (lunagramSwipeGesture.actions().length > 0) {
+                    if (lunagramSwipeMenu == null) lunagramSwipeMenu = new LunagramSwipeMenu(getContext());
+                    if (!lunagramSwipeMenu.prepare(lunagramSwipeGesture, getMeasuredWidth(), getMeasuredHeight(),
+                            Math.max(0, chatListViewPaddingTop - chatListViewPaddingVisibleOffset), blurredViewBottomOffset)) {
+                        lunagramSwipeGesture.cancel();
+                    }
+                }
+            }
+
             private void processTouchEvent(MotionEvent e) {
+                if (e != null && e.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN) {
+                    lunagramSwipeGesture.cancel();
+                    processTouchEvent(null);
+                    return;
+                }
                 if (e != null) {
                     wasManualScroll = true;
                 }
@@ -5328,11 +5399,19 @@ public class ChatActivity extends BaseFragment implements
                         maybeStartTrackingSlidingView = true;
                         startedTrackingX = (int) e.getX();
                         startedTrackingY = (int) e.getY();
+                        lunagramSwipeGesture.begin(e.getY(), LunagramExperienceSettings.swipeEnabled(currentAccount)
+                                ? lunagramSwipeActions(message) : null);
                     }
                 } else if (slidingView != null && e != null && e.getAction() == MotionEvent.ACTION_MOVE && e.getPointerId(0) == startedTrackingPointerId) {
-                    int dx = Math.max(AndroidUtilities.dp(-80), Math.min(0, (int) (e.getX() - startedTrackingX)));
+                    float rawDx = e.getX() - startedTrackingX;
+                    int dx = Math.max(AndroidUtilities.dp(-80), Math.min(0, (int) rawDx));
                     int dy = Math.abs((int) e.getY() - startedTrackingY);
-                    if (getScrollState() == SCROLL_STATE_IDLE && maybeStartTrackingSlidingView && !startedTrackingSlidingView && dx <= -AndroidUtilities.getPixelsInCM(0.4f, true) && Math.abs(dx) / 3 > dy) {
+                    boolean menuEnabled = LunagramExperienceSettings.swipeEnabled(currentAccount);
+                    boolean capture = menuEnabled ? lunagramSwipeGesture.actions().length > 0
+                            && LunagramSwipeGesture.shouldCapture(rawDx, dy, Math.max(AndroidUtilities.dp(12), ViewConfiguration.get(getContext()).getScaledTouchSlop()))
+                            : dx <= -AndroidUtilities.getPixelsInCM(0.4f, true) && Math.abs(dx) / 3 > dy;
+                    boolean startedThisMove = false;
+                    if (getScrollState() == SCROLL_STATE_IDLE && maybeStartTrackingSlidingView && !startedTrackingSlidingView && capture) {
                         MotionEvent event = MotionEvent.obtain(0, 0, MotionEvent.ACTION_CANCEL, 0, 0, 0);
                         slidingView.onTouchEvent(event);
                         super.onInterceptTouchEvent(event);
@@ -5340,12 +5419,22 @@ public class ChatActivity extends BaseFragment implements
                         chatLayoutManager.setCanScrollVertically(false);
                         maybeStartTrackingSlidingView = false;
                         startedTrackingSlidingView = true;
-                        startedTrackingX = (int) e.getX();
+                        startedThisMove = true;
+                        lunagramSwipeTouchConsumed = menuEnabled;
+                        if (!menuEnabled) startedTrackingX = (int) e.getX();
+                        beginLunagramSwipeMenu(e.getY(), getSlidingMessageObject());
                         if (getParent() != null) {
                             getParent().requestDisallowInterceptTouchEvent(true);
                         }
-                    } else if (startedTrackingSlidingView) {
-                        if (Math.abs(dx) >= AndroidUtilities.dp(50)) {
+                    }
+                    // The intercepting MOVE may only cancel the child; Android need not deliver it to onTouchEvent.
+                    if (startedTrackingSlidingView && (!startedThisMove || menuEnabled)) {
+                        if (LunagramExperienceSettings.swipeEnabled(currentAccount)
+                                && lunagramSwipeGesture.move(rawDx, e.getY(), AndroidUtilities.dp(50),
+                                lunagramSwipeMenu == null ? AndroidUtilities.dp(48) : lunagramSwipeMenu.rowHeight(), SystemClock.uptimeMillis())) {
+                            try { performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); } catch (Exception ignored) { }
+                        }
+                        if (!LunagramExperienceSettings.swipeEnabled(currentAccount) && Math.abs(dx) >= AndroidUtilities.dp(50)) {
                             if (!wasTrackingVibrate) {
                                 try {
                                     performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
@@ -5366,7 +5455,14 @@ public class ChatActivity extends BaseFragment implements
                         invalidate();
                     }
                 } else if (slidingView != null && (e == null || e.getPointerId(0) == startedTrackingPointerId && (e.getAction() == MotionEvent.ACTION_CANCEL || e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_POINTER_UP))) {
-                    if (e != null && e.getAction() != MotionEvent.ACTION_CANCEL && Math.abs(getSlidingNonAnimationTranslationX(false)) >= AndroidUtilities.dp(50)) {
+                    boolean released = e != null && e.getActionMasked() == MotionEvent.ACTION_UP && startedTrackingSlidingView;
+                    int lunagramAction = lunagramSwipeTouchConsumed
+                            ? lunagramSwipeGesture.release(!released || !LunagramExperienceSettings.swipeEnabled(currentAccount))
+                            : (released && Math.abs(getSlidingNonAnimationTranslationX(false)) >= AndroidUtilities.dp(50) ? LunagramSwipeGesture.REPLY : LunagramSwipeGesture.NONE);
+                    if (lunagramAction != LunagramSwipeGesture.NONE && lunagramAction != LunagramSwipeGesture.REPLY) {
+                        runLunagramSwipeAction(getSlidingMessageObject(), lunagramAction);
+                    }
+                    if (lunagramAction == LunagramSwipeGesture.REPLY) {
                         MessageObject message = getSlidingMessageObject();
                         final boolean allowReplyOnOpenTopic = canSendMessageToTopic(message);
                         if (
@@ -5411,6 +5507,7 @@ public class ChatActivity extends BaseFragment implements
                     invalidate();
                     maybeStartTrackingSlidingView = false;
                     startedTrackingSlidingView = false;
+                    lunagramSwipeGesture.cancel();
                     chatLayoutManager.setCanScrollVertically(true);
                 }
             }
@@ -5418,6 +5515,14 @@ public class ChatActivity extends BaseFragment implements
             @Override
             public boolean onTouchEvent(MotionEvent e) {
                 textSelectionHelper.checkSelectionCancel(e);
+                if (lunagramSwipeTouchConsumed) {
+                    // Keep the entire claimed stream, even after a second pointer cancels the action.
+                    processTouchEvent(e);
+                    if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                        lunagramSwipeTouchConsumed = false;
+                    }
+                    return true;
+                }
                 if (e.getAction() == MotionEvent.ACTION_DOWN) {
                     scrollByTouch = true;
                 }
@@ -5849,6 +5954,8 @@ public class ChatActivity extends BaseFragment implements
             protected void dispatchDraw(Canvas canvas) {
                 drawLaterRoundProgressCell = null;
                 invalidated = false;
+                if (lunagramAtmosphere != null) lunagramAtmosphere.draw(canvas, this, getMeasuredWidth(), getMeasuredHeight(),
+                        getPaddingTop(), getPaddingBottom(), themeDelegate);
 
                 canvas.save();
                 if ((fragmentTransition == null || (fromPullingDownTransition && !toPullingDownTransition)) && !isInsideContainer) {
@@ -5872,6 +5979,16 @@ public class ChatActivity extends BaseFragment implements
                     drawChatForegroundElements(canvas);
                 }
                 canvas.restore();
+                if (lunagramSwipeMenu != null && startedTrackingSlidingView && LunagramExperienceSettings.swipeEnabled(currentAccount)) {
+                    if (lunagramSwipeGesture.advanceHold(SystemClock.uptimeMillis())) {
+                        if (!lunagramSwipeMenu.prepare(lunagramSwipeGesture, getMeasuredWidth(), getMeasuredHeight(),
+                                Math.max(0, chatListViewPaddingTop - chatListViewPaddingVisibleOffset), blurredViewBottomOffset)) lunagramSwipeGesture.cancel();
+                        else try { performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); } catch (Exception ignored) { }
+                    }
+                    if (lunagramSwipeGesture.waitingForMenu()) postInvalidateOnAnimation();
+                    // Above bubble backgrounds, children, time/name/reaction foregrounds, in list coordinates.
+                    lunagramSwipeMenu.draw(canvas, lunagramSwipeGesture, getMeasuredWidth(), getMeasuredHeight(), themeDelegate);
+                }
             }
 
             protected void drawChatForegroundElements(Canvas canvas, RectF position) {
@@ -9305,7 +9422,12 @@ public class ChatActivity extends BaseFragment implements
         onBottomItemsVisibilityChanged();
         ViewCompat.setOnApplyWindowInsetsListener(fragmentView, this::onApplyWindowInsets);
         Timer.finish(t);
-
+        lunagramAtmosphere = new org.telegram.ui.Components.LunagramChatAtmosphere(currentAccount, dialog_id);
+        if (chatActivityEnterView.lunagramPetView != null && chatActivityEnterView.lunagramPetView.getParent() == null) {
+            chatActivityEnterView.lunagramPetView.setClickable(false);
+            chatActivityEnterView.lunagramPetView.setFocusable(false);
+            contentView.addView(chatActivityEnterView.lunagramPetView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 80, Gravity.TOP | Gravity.LEFT));
+        }
         return fragmentView;
     }
 
@@ -12392,6 +12514,8 @@ public class ChatActivity extends BaseFragment implements
         }
         final int oldPaddingTop = chatListView.getPaddingTop();
         final int oldPaddingBottom = chatListView.getPaddingBottom();
+        // LunaPet lives in the overlay: showing it must not move the last message
+        // or change the scroll position when the keyboard/recording state changes.
         chatListViewPaddingsAnimator.setPaddings(paddingTop, paddingBottom, !chatListView.fastScrollAnimationRunning);
         if (oldPaddingTop != chatListView.getPaddingTop() || oldPaddingBottom != chatListView.getPaddingBottom()) {
             invalidateMergedVisibleBlurredPositionsAndSources(
@@ -15801,7 +15925,7 @@ public class ChatActivity extends BaseFragment implements
                 replyImageLocation = null;
                 replyImageLocationObject = null;
                 replyImageView.setVisibility(View.INVISIBLE);
-                layoutParams1.leftMargin = layoutParams2.leftMargin = layoutParams3.leftMargin = AndroidUtilities.dp(replyLayout.current().getTextInsetDp(false));
+                layoutParams1.leftMargin = layoutParams2.leftMargin = layoutParams3.leftMargin = replyLayout.current().getTextInsetPx(false);
             } else {
                 if (thumbMediaMessageObject.isRoundVideo()) {
                     replyImageView.setRoundRadius(AndroidUtilities.dp(17));
@@ -15818,7 +15942,7 @@ public class ChatActivity extends BaseFragment implements
                 replyLayout.current().hasSpoiler = hasSpoiler;
                 replyImageView.setImage(ImageLocation.getForObject(replyImageLocation, photoSizeObject), hasSpoiler ? "5_5_b" : "50_50", ImageLocation.getForObject(thumbPhotoSize, photoSizeObject), hasSpoiler ? "5_5_b" : "50_50_b", null, size, cacheType, thumbMediaMessageObject);
                 replyImageView.setVisibility(View.VISIBLE);
-                layoutParams1.leftMargin = layoutParams2.leftMargin = layoutParams3.leftMargin = AndroidUtilities.dp(replyLayout.current().getTextInsetDp(true));
+                layoutParams1.leftMargin = layoutParams2.leftMargin = layoutParams3.leftMargin = replyLayout.current().getTextInsetPx(true);
             }
             replyNameTextView.setLayoutParams(layoutParams1);
             replyObjectTextView.setLayoutParams(layoutParams2);
@@ -18080,6 +18204,7 @@ public class ChatActivity extends BaseFragment implements
         @Override
         protected void dispatchDraw(Canvas canvas) {
             chatActivityEnterView.checkAnimation();
+            updateLunagramPetPlacement();
             updateChatListViewTopPadding();
             if (invalidateMessagesVisiblePart || (chatListItemAnimator != null && chatListItemAnimator.isRunning())) {
                 invalidateMessagesVisiblePart = false;
@@ -22282,6 +22407,10 @@ public class ChatActivity extends BaseFragment implements
             }
         } else if (id == NotificationCenter.updateInterfaces) {
             int updateMask = (Integer) args[0];
+            if (updateMask == MessagesController.UPDATE_MASK_ALL) {
+                if (chatActivityEnterView != null && chatActivityEnterView.lunagramPetView != null) chatActivityEnterView.lunagramPetView.refresh();
+                if (fragmentView != null) fragmentView.invalidate();
+            }
             if ((updateMask & MessagesController.UPDATE_MASK_NAME) != 0 || (updateMask & MessagesController.UPDATE_MASK_CHAT_NAME) != 0 || (updateMask & MessagesController.UPDATE_MASK_EMOJI_STATUS) != 0) {
                 if (currentChat != null) {
                     TLRPC.Chat chat = getMessagesController().getChat(currentChat.id);
@@ -30148,6 +30277,11 @@ public class ChatActivity extends BaseFragment implements
     @Override
     public void onResume() {
         super.onResume();
+        if (lunagramAtmosphere != null) { lunagramAtmosphere.refresh(currentAccount, dialog_id); lunagramAtmosphere.setPaused(false); }
+        if (chatActivityEnterView != null && chatActivityEnterView.lunagramPetView != null) {
+            chatActivityEnterView.lunagramPetView.refresh();
+            chatActivityEnterView.lunagramPetView.setPaused(false);
+        }
         if (org.telegram.messenger.BlackHoleVault.blocks(currentAccount, dialog_id)) {
             if (fragmentView != null) fragmentView.setVisibility(View.INVISIBLE);
             BlackHoleToolsActivity vault = new BlackHoleToolsActivity(BlackHoleToolsActivity.VAULT, dialog_id);
@@ -30368,6 +30502,13 @@ public class ChatActivity extends BaseFragment implements
 
     @Override
     public void onPause() {
+        lunagramSwipeGesture.cancel();
+        if (lunagramAtmosphere != null) lunagramAtmosphere.setPaused(true);
+        if (chatActivityEnterView != null && chatActivityEnterView.lunagramPetView != null) {
+            chatActivityEnterView.lunagramPetView.setPaused(true);
+            chatActivityEnterView.lunagramPetView.setAlpha(0f);
+        }
+        setLunagramPetOnRail(false);
         super.onPause();
         if (org.telegram.messenger.BlackHoleVault.contains(currentAccount, dialog_id) && fragmentView != null)
             fragmentView.setVisibility(View.INVISIBLE);
@@ -33700,6 +33841,130 @@ public class ChatActivity extends BaseFragment implements
         MediaController.saveFile(path, getParentActivity(), messageObject.isVideo() ? 1 : 0, null, null);
     }
 
+    private boolean isLunagramPetVisible() {
+        return lunagramPetOnRail && isLunagramPetHostAvailable();
+    }
+
+    private void setLunagramPetOnRail(boolean visible) {
+        if (lunagramPetOnRail == visible) return;
+        lunagramPetOnRail = visible;
+        // An overlay visibility change never reserves space in the conversation.
+    }
+
+    private boolean isLunagramPetHostAvailable() {
+        return chatActivityEnterView != null && chatActivityEnterView.lunagramPetView != null
+                && LunagramExperienceSettings.pet(currentAccount) != 0 && !isPaused()
+                && chatActivityEnterView.getVisibility() == View.VISIBLE && !isInPreviewMode()
+                && !chatActivityEnterView.isRecordingUiVisible() && !chatActivityEnterView.hasAudioToSend()
+                && bottomViewsVisibilityController.getCurrentPriorityContainerId() == MESSAGE_INPUT_CONTAINER;
+    }
+
+    private void updateLunagramPetPlacement() {
+        if (chatActivityEnterView == null || chatActivityEnterView.lunagramPetView == null) {
+            setLunagramPetOnRail(false);
+            return;
+        }
+        final org.telegram.ui.Components.LunagramPetView pet = chatActivityEnterView.lunagramPetView;
+        if (!isLunagramPetHostAvailable() || contentView == null || chatInputViewsContainer == null
+                || !contentView.isAttachedToWindow() || !chatInputViewsContainer.isAttachedToWindow()
+                || !chatInputViewsContainer.getPetRailBounds(lunagramPetRailBounds)) {
+            pet.setPaused(true);
+            pet.setAlpha(0f);
+            setLunagramPetOnRail(false);
+            return;
+        }
+        chatInputViewsContainer.getLocationInWindow(lunagramInputLocation);
+        contentView.getLocationInWindow(lunagramContentLocation);
+        final float offsetX = lunagramInputLocation[0] - lunagramContentLocation[0];
+        final float offsetY = lunagramInputLocation[1] - lunagramContentLocation[1];
+        final float railLeft = lunagramPetRailBounds.left + offsetX;
+        final float railRight = lunagramPetRailBounds.right + offsetX;
+        final int overlayHeight = pet.getMeasuredHeight() > 0 ? pet.getMeasuredHeight() : dp(80);
+        final float y = lunagramPetRailBounds.top + offsetY - overlayHeight + dp(pet.getFloorOffsetDp());
+        if (railLeft < 0 || railRight > contentView.getWidth() || railRight <= railLeft
+                || y < (actionBar != null ? actionBar.getBottom() : 0) || y + overlayHeight > contentView.getHeight()) {
+            pet.setPaused(true);
+            pet.setAlpha(0f);
+            setLunagramPetOnRail(false);
+            return;
+        }
+        if (railLeft != lunagramPetRailLeft || railRight != lunagramPetRailRight) {
+            pet.setRailBounds(railLeft, railRight);
+            lunagramPetRailLeft = railLeft;
+            lunagramPetRailRight = railRight;
+        }
+        pet.setTranslationX(0f);
+        pet.setTranslationY(y - pet.getTop());
+        pet.setAlpha(1f);
+        pet.setPaused(false);
+        setLunagramPetOnRail(true);
+    }
+
+    private int[] lunagramSwipeActions(MessageObject message) {
+        if (message == null || message.messageOwner == null || message.isEphemeral()
+                || message.needDrawBluredPreview() || message.isSponsored()) return new int[0];
+        boolean protectedContent = isPeerNoForwards() || message.messageOwner.noforwards
+                || message.type == MessageObject.TYPE_PAID_MEDIA || getDialogId() == UserObject.VERIFY;
+        boolean hasText = !TextUtils.isEmpty(message.caption) || !TextUtils.isEmpty(message.messageOwner.message)
+                || message.messageOwner.rich_message != null;
+        ArrayList<Integer> allowed = new ArrayList<>();
+        for (int action : LunagramExperienceSettings.swipeOrder(currentAccount)) {
+            if (action == LunagramSwipeGesture.REPLY && !message.messageOwner.noforwards
+                    || action == LunagramSwipeGesture.COPY && hasText && !protectedContent
+                    || action == LunagramSwipeGesture.TRANSLATE && hasText && message.messageOwner.rich_message == null
+                    || action == LunagramSwipeGesture.SAVE && !protectedContent && message.getId() > 0
+                    && currentEncryptedChat == null && message.type != MessageObject.TYPE_STORY) allowed.add(action);
+        }
+        int[] result = new int[allowed.size()]; for (int i = 0; i < result.length; i++) result[i] = allowed.get(i);
+        return result;
+    }
+
+    private void runLunagramSwipeAction(MessageObject message, int action) {
+        if (!LunagramExperienceSettings.swipeEnabled(currentAccount)) return;
+        if (message == null || message.currentAccount != currentAccount || getParentActivity() == null || currentAccount != UserConfig.selectedAccount) return;
+        boolean allowed = false; for (int candidate : lunagramSwipeActions(message)) if (candidate == action) allowed = true;
+        if (!allowed) return;
+        if (action == LunagramSwipeGesture.COPY) {
+            MessageObject old = selectedObject; MessageObject.GroupedMessages oldGroup = selectedObjectGroup;
+            selectedObject = message; selectedObjectGroup = getGroup(message.getGroupId());
+            try { processSelectedOption(OPTION_COPY); } finally { selectedObject = old; selectedObjectGroup = oldGroup; }
+        } else if (action == LunagramSwipeGesture.TRANSLATE) {
+            CharSequence text = !TextUtils.isEmpty(message.caption) ? message.caption : message.messageOwner.message;
+            String fromLanguage = message.messageOwner.originalLanguage;
+            TranslateAlert2.showAlert(getParentActivity(), this, currentAccount, fromLanguage == null ? "und" : fromLanguage,
+                    TranslateAlert2.getToLanguage(), text, message.messageOwner.entities,
+                    isPeerNoForwards() || message.messageOwner.noforwards, null, null);
+        } else if (action == LunagramSwipeGesture.SAVE) {
+            ArrayList<MessageObject> group = new ArrayList<>();
+            MessageObject.GroupedMessages messagesGroup = getGroup(message.getGroupId());
+            if (messagesGroup != null) group.addAll(messagesGroup.messages); else group.add(message);
+            for (MessageObject item : group) {
+                if (item.messageOwner == null || item.messageOwner.noforwards || item.isEphemeral()
+                        || item.type == MessageObject.TYPE_PAID_MEDIA) return;
+            }
+            int result = getSendMessagesHelper().sendMessage(group, getUserConfig().getClientUserId(), false, false, true, 0, 0, null, -1, 0, 0, null);
+            if (result == 0) BulletinFactory.of(this).createSimpleBulletin(R.raw.saved_messages, getString(R.string.LunagramSaveToSelf)).show();
+            else AlertsCreator.showSendMediaAlert(result, this, null);
+        }
+    }
+
+    private void showLunagramReminder(MessageObject message) {
+        if (message == null || message.messageOwner == null || message.getId() <= 0 || message.isEphemeral() || getParentActivity() == null) return;
+        if (!LunagramFeatureGate.require(this, org.telegram.messenger.LunagramFeatureCatalog.Feature.MESSAGE_REMINDERS)) return;
+        java.util.Calendar evening = java.util.Calendar.getInstance(); evening.set(java.util.Calendar.HOUR_OF_DAY, 20); evening.set(java.util.Calendar.MINUTE, 0); evening.set(java.util.Calendar.SECOND, 0); evening.set(java.util.Calendar.MILLISECOND, 0);
+        boolean nextDay = evening.getTimeInMillis() <= System.currentTimeMillis(); if (nextDay) evening.add(java.util.Calendar.DAY_OF_YEAR, 1);
+        java.util.Calendar morning = java.util.Calendar.getInstance(); morning.add(java.util.Calendar.DAY_OF_YEAR, 1); morning.set(java.util.Calendar.HOUR_OF_DAY, 9); morning.set(java.util.Calendar.MINUTE, 0); morning.set(java.util.Calendar.SECOND, 0); morning.set(java.util.Calendar.MILLISECOND, 0);
+        final long[] times = {System.currentTimeMillis() + 3600000, evening.getTimeInMillis(), morning.getTimeInMillis()};
+        final int account = currentAccount;
+        final org.telegram.messenger.LunagramMediaAccess.Session ownerSession = org.telegram.messenger.LunagramMediaAccess.forAccount(account);
+        String[] choices = {getString(R.string.LunagramReminderHour), getString(nextDay ? R.string.LunagramReminderTomorrowEvening : R.string.LunagramReminderEvening), getString(R.string.LunagramReminderTomorrow)};
+        showDialog(AlertsCreator.createSingleChoiceDialog(getParentActivity(), choices, getString(R.string.LunagramReminderTitle), -1, (dialog, index) -> {
+            if (index < 0 || index >= times.length || account != UserConfig.selectedAccount || !ownerSession.isCurrent()) return;
+            boolean success = org.telegram.messenger.LunagramMessageReminders.schedule(account, message.getDialogId(), message.getId(), times[index]);
+            BulletinFactory.of(this).createSimpleBulletin(R.drawable.msg_notifications, getString(success ? R.string.LunagramReminderSet : R.string.LunagramReminderFailed)).show();
+        }));
+    }
+
     private void processSelectedOption(int option) {
         if (selectedObject == null || getParentActivity() == null) {
             return;
@@ -33818,6 +34083,10 @@ public class ChatActivity extends BaseFragment implements
                     return;
                 }
                 undoView.showWithAction(0, UndoView.ACTION_MESSAGE_COPIED, null);
+                break;
+            }
+            case OPTION_LUNAGRAM_REMIND: {
+                showLunagramReminder(selectedObject);
                 break;
             }
             case OPTION_SAVE_TO_GALLERY: {
@@ -46144,7 +46413,9 @@ public class ChatActivity extends BaseFragment implements
         final int type = getMessageType(message);
         final boolean isEphemeral = message.isEphemeral();
         final boolean isEphemeralFromBot = isEphemeral && !message.isOut();
-
+        if (!isEphemeral && !message.isSponsored() && message.getId() > 0 && !message.needDrawBluredPreview()) {
+            icons.add(R.drawable.msg_notifications); items.add(getString(R.string.LunagramReminderTitle)); options.add(OPTION_LUNAGRAM_REMIND);
+        }
 
         boolean allowChatActions = true;
         boolean allowPin;

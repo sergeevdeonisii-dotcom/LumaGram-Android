@@ -15,6 +15,7 @@ public final class RoundConcurrent102Test {
         final RoundVideoConcurrentCamera cameras;
         int ready, failures, stabilizationRetries;
         boolean rejectStabilization;
+        boolean auto30Frames = true;
         final int fps, secondFps, lowerFps;
         Scenario() { this(30); }
         Scenario(int fps) { this(fps, fps, fps); }
@@ -40,11 +41,17 @@ public final class RoundConcurrent102Test {
         void open(String id) { CameraDevice d = device(id); d.callback.onOpened(d); }
         CameraCaptureSession configure(String id) {
             CameraCaptureSession session = new CameraCaptureSession();
-            device(id).configuration.callback.onConfigured(session); return session;
+            device(id).configuration.callback.onConfigured(session);
+            if (fps == 30 && auto30Frames && !session.closed) session.frame(1L);
+            return session;
         }
         void closed(String id) { device(id).closed(); handler.drain(); }
     }
     public static void main(String[] args) throws Exception {
+        for (int fps : new int[]{0, 15, 24, 30, 60, 90, 120, 240}) {
+            check(RoundVideoConcurrentCamera.supportsLowLatencyStartup(fps) == (fps == 30),
+                    "Only warm 30 FPS may occupy the cold recording start path: " + fps);
+        }
         Scenario s = new Scenario();
         check(s.cameras.isSupported(), "Advertised pair and real stream configuration accepted");
         check(s.manager.checkedConfigurations == 2, "Both stream configurations checked");
@@ -56,6 +63,9 @@ public final class RoundConcurrent102Test {
         check(s.manager.devices.size() == 2, "Open both camera devices");
         s.open("front"); check(s.device("front").configs == 0, "Do not configure before second device opens");
         s.open("back"); check(s.device("front").configs == 1 && s.device("back").configs == 1, "Configure once after both open");
+        check(s.device("front").configuration.parameters.fps.getUpper() == 30
+                && s.device("back").configuration.parameters.fps.getUpper() == 30,
+                "Both 30 FPS session parameters precede first repeating capture");
         CameraCaptureSession front = s.configure("front");
         check(!s.cameras.isReady() && s.ready == 0, "Wait for both sessions");
         CameraCaptureSession back = s.configure("back");
@@ -125,9 +135,12 @@ public final class RoundConcurrent102Test {
         check(s.manager.devices.isEmpty() && s.handler.delayed.isEmpty(), "Closed actor never opens cameras again");
         s = new Scenario(60); check(s.cameras.isSupported(), "Fixed advertised 60 can enter bounded hardware qualification");
         s.cameras.start(); s.open("front"); s.open("back");
+        check(s.device("front").configuration.parameters.fps.getLower() == 60
+                && s.device("back").configuration.parameters.fps.getUpper() == 60,
+                "Both cameras configure at selected 60 FPS before either starts repeating");
         front = s.configure("front"); back = s.configure("back");
         check(!s.cameras.isReady() && s.ready == 0, "Configured sessions alone never claim actual concurrent 60");
-        check(s.handler.delayed.size() == 2, "Qualification is bounded independently of initial open timeout");
+        check(s.handler.delayed.size() == 1, "Configured cameras get a separate bounded sensor-qualification phase");
         for (int i = 1; i <= 17; i++) front.frame(i * 16_666_667L);
         check(s.ready == 0, "Both sensor streams must qualify, not just selected camera");
         for (int i = 1; i <= 17; i++) back.frame(i * 16_666_667L);
@@ -144,6 +157,7 @@ public final class RoundConcurrent102Test {
         front = s.configure("front"); back = s.configure("back");
         for (int i = 1; i <= 17; i++) { front.frame(i * 16_666_667L); back.frame(i * 33_333_333L); }
         check(s.ready == 0 && !s.cameras.isReady(), "Nominal 60 request with actual standby 30 never starts recording as dual 60");
+        s.handler.timeout();
         s.closed("front"); s.closed("back"); check(s.failures == 1, "Unsupported actual dual rate yields ordinary single-camera recovery");
         s = new Scenario(60); s.cameras.start(); s.open("front"); s.open("back");
         front = s.configure("front"); back = s.configure("back");
@@ -184,7 +198,9 @@ public final class RoundConcurrent102Test {
             s = new Scenario(60, 60, lower); s.cameras.start(); s.open("front"); s.open("back");
             front = s.configure("front"); back = s.configure("back");
             for (int i = 1; i <= 17; i++) { front.frame(i * 16_666_667L); back.frame(i * 33_333_333L); }
-            check(s.ready == 0 && front.closed && back.closed, "Adaptive range producing actual 30 never announces dual 60");
+            check(s.ready == 0, "Adaptive range producing actual 30 never announces dual 60");
+            s.handler.timeout();
+            check(front.closed && back.closed, "Adaptive 30 fallback waits for the bounded sensor-qualification deadline");
             s.closed("front"); s.closed("back");
             check(s.failures == 1, "Rejected adaptive cadence completes bounded single-camera recovery");
 
@@ -213,6 +229,22 @@ public final class RoundConcurrent102Test {
             front.frame(timestamp); back.frame(timestamp);
         }
         check(s.ready == 1, "Small sensor jitter passes even when callbacks arrive together, without callback-wallclock FPS guesses");
+        s = new Scenario(30); s.auto30Frames = false;
+        s.cameras.start(); s.open("front"); s.open("back");
+        front = s.configure("front"); back = s.configure("back");
+        check(!s.cameras.isReady(), "30 FPS capture sessions alone do not prove standby has a frame");
+        front.frame(1L); check(!s.cameras.isReady(), "30 FPS selected frame alone cannot announce warm pair");
+        back.frame(1L); check(s.ready == 1, "Both real30 FPS frames establish warm readiness");
+        int frontRepeats = front.repeats, backRepeats = back.repeats;
+        check(s.cameras.select(RoundVideoSession.CameraFacing.BACK, false), "Ordinary warm flip selects existing GL input");
+        check(front.repeats == frontRepeats && back.repeats == backRepeats, "Flip without controls does not resubmit either HAL repeating request");
+        s = new Scenario(60); s.cameras.start(); s.open("front"); s.open("back");
+        front = s.configure("front"); back = s.configure("back");
+        for (int i = 1; i <= 17; i++) { front.frame(i * 33_333_333L); back.frame(i * 33_333_333L); }
+        check(!front.closed && !back.closed && s.ready == 0, "Transient warmup30 does not prematurely close a possible60 pair");
+        long warmStart = 17 * 33_333_333L;
+        for (int i = 1; i <= 12; i++) { front.frame(warmStart + i * 16_666_667L); back.frame(warmStart + i * 16_666_667L); }
+        check(s.ready == 1 && s.cameras.activeSpec().frameRate == 60, "Settled actual60 is accepted before the sensor deadline without downgrade");
         System.out.println("PASS: " + checks + " production concurrent-camera lifecycle checks (simulated Camera2, not a hardware FPS claim).");
     }
 }

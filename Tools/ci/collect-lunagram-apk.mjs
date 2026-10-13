@@ -17,6 +17,7 @@ const RELEASES = {
   '104': { version: '1.0.4', code: 71669, unifiedVersionName: true, separatePublicEdition: true },
   '105': { version: '1.0.5', code: 71679, unifiedVersionName: true, separatePublicEdition: true, friendsEditionAllowed: false },
   '150': { version: '1.5', code: 71699, unifiedVersionName: true, separatePublicEdition: true, friendsEditionAllowed: false },
+  '206': { version: '2.0.6', code: 71869, unifiedVersionName: true, separatePublicEdition: true, friendsEditionAllowed: false, publicOnly: true },
 };
 
 function requireValue(condition, message) {
@@ -25,7 +26,8 @@ function requireValue(condition, message) {
 
 export function expectedArtifact(edition, release = '150') {
   requireValue(Object.hasOwn(RELEASES, release), 'Unknown APK release.');
-  const { version, code, unifiedVersionName, separatePublicEdition, friendsEditionAllowed = true } = RELEASES[release];
+  const { version, code, unifiedVersionName, separatePublicEdition, friendsEditionAllowed = true, publicOnly = false } = RELEASES[release];
+  requireValue(!publicOnly || edition === 'public', 'This test release allows the public edition only.');
   requireValue(edition === 'full' || (friendsEditionAllowed && edition === 'friends') || (separatePublicEdition && edition === 'public'), 'Unknown APK edition for this release.');
   return {
     edition,
@@ -64,6 +66,7 @@ export function expectedEditions(release = '150', includeFriends = false) {
   requireValue(Object.hasOwn(RELEASES, release), 'Unknown APK release.');
   requireValue(typeof includeFriends === 'boolean', 'Invalid Friends build selection.');
   requireValue(!includeFriends || RELEASES[release].friendsEditionAllowed !== false, 'Friends edition is not available for this release.');
+  if (RELEASES[release].publicOnly) return ['public'];
   const separatePublicEdition = RELEASES[release].separatePublicEdition === true;
   requireValue(!includeFriends || separatePublicEdition, 'Optional Friends builds require separate Public edition support.');
   return separatePublicEdition ? ['full', 'public', ...(includeFriends ? ['friends'] : [])] : ['full', 'friends'];
@@ -77,6 +80,12 @@ export function validateArtifactMetadata(metadata, release, commit, editions) {
     && metadata.architecture === 'arm64-v8a' && metadata.sourceCommit === commit
     && Array.isArray(metadata.artifacts) && metadata.artifacts.length === editions.length
     && (schemaVersion !== 2 || metadata.release === release), 'APK artifact metadata is inconsistent.');
+  if (RELEASES[release].publicOnly) {
+    requireValue(metadata.temporarySigning === true && metadata.productionSigningRequired === true
+      && metadata.verification?.compiledLibraryEdition === 'public'
+      && metadata.verification?.packagedEdition === 'public'
+      && metadata.verification?.debuggable === false, 'Public test artifact verification is incomplete.');
+  }
   for (const edition of editions) {
     const entries = metadata.artifacts.filter(item => item?.edition === edition);
     const expected = expectedArtifact(edition, release);
@@ -93,6 +102,30 @@ export function validateApkBadging(badging, edition, release = '150') {
   requireValue(name === PACKAGE && versionCode === expected.versionCode && versionName === expected.versionName, 'Packaged APK identity/version does not match its metadata.');
   const abiLine = badging.match(/^native-code:\s*(.*)$/m)?.[1];
   requireValue(abiLine?.trim() === "'arm64-v8a'", 'Packaged APK must contain arm64-v8a native libraries only.');
+  if (RELEASES[release].publicOnly) requireValue(!/^application-debuggable(?:\s|$)/m.test(badging), 'A debug APK is not a public test candidate.');
+}
+
+/** Inspect the actual merged binary manifest, not a source placeholder or another metadata node. */
+export function validatePackagedPublicEdition(xmlTree) {
+  const entries = [];
+  let node = null;
+  const finish = () => { if (node) entries.push(node.lines.join('\n')); node = null; };
+  for (const line of xmlTree.split(/\r?\n/)) {
+    const element = /^(\s*)E:\s/.exec(line);
+    if (node && element && element[1].length <= node.indent) finish();
+    if (/^\s*E: meta-data\b/.test(line)) node = { indent: element[1].length, lines: [] };
+    else if (node && /^\s*A: /.test(line) && /^\s*/.exec(line)[0].length === node.indent + 2) node.lines.push(line);
+  }
+  finish();
+  const editionNodes = entries.filter(entry => /A: android:name(?:\([^)]*\))?="org\.lunagram\.edition"(?:\s|$)/.test(entry));
+  requireValue(editionNodes.length === 1, 'Packaged edition declaration is missing or duplicated.');
+  const values = [...editionNodes[0].matchAll(/A: android:value(?:\([^)]*\))?="([^"]*)"(?:\s|$)/g)];
+  requireValue(values.length === 1 && values[0][1] === 'public', 'Packaged edition is not public.');
+}
+
+export function validateCompiledPublicFlags(javapOutput) {
+  // javap is captured in memory only: adjacent fields may contain API credentials.
+  validateGeneratedFlag(javapOutput, 'public', '206');
 }
 
 async function sha256(file) {
@@ -118,6 +151,19 @@ async function collect(args) {
   const badging = spawnSync(args.aapt, ['dump', 'badging', sourceApk], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
   requireValue(!badging.error && badging.status === 0, 'Android APK inspection failed.');
   validateApkBadging(badging.stdout, args.edition, args.release);
+  let verification;
+  if (RELEASES[args.release].publicOnly) {
+    requireValue(typeof args.javap === 'string' && args.javap.length > 0, 'The JDK bytecode inspector is required.');
+    const library = path.join(repo, 'TMessagesProj/build/intermediates/compile_library_classes_jar/standalone/bundleLibCompileToJarStandalone/classes.jar');
+    requireValue(fs.statSync(library).isFile(), 'Compiled Telegram library is unavailable.');
+    const compiled = spawnSync(args.javap, ['-constants', '-public', '-classpath', library, 'org.telegram.messenger.BuildConfig'], { encoding: 'utf8', maxBuffer: 1024 * 1024 });
+    requireValue(!compiled.error && compiled.status === 0, 'Compiled edition inspection failed.');
+    validateCompiledPublicFlags(compiled.stdout);
+    const manifest = spawnSync(args.aapt, ['dump', 'xmltree', sourceApk, 'AndroidManifest.xml'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+    requireValue(!manifest.error && manifest.status === 0, 'Packaged edition inspection failed.');
+    validatePackagedPublicEdition(manifest.stdout);
+    verification = { compiledLibraryEdition: 'public', packagedEdition: 'public', debuggable: false };
+  }
   const revision = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' });
   const commit = revision.stdout?.trim();
   requireValue(revision.status === 0 && /^[0-9a-f]{40}$/.test(commit), 'Source commit is unavailable.');
@@ -129,6 +175,7 @@ async function collect(args) {
   const separatePublicEdition = RELEASES[args.release].separatePublicEdition === true;
   let metadata = { schemaVersion: separatePublicEdition ? 2 : 1,
     ...(separatePublicEdition ? { release: args.release } : {}),
+    ...(verification ? { temporarySigning: true, productionSigningRequired: true, verification } : {}),
     sourceCommit: commit, packageName: PACKAGE, architecture: 'arm64-v8a', artifacts: [] };
   if (fs.existsSync(metadataPath)) {
     metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));

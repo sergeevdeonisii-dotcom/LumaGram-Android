@@ -543,6 +543,7 @@ public abstract class BaseFragment {
     @CallSuper
     public void onResume() {
         isPaused = false;
+        org.telegram.messenger.LunagramInterfaceSounds.play(currentAccount, org.telegram.messenger.LunagramInterfaceSounds.SWITCH);
         if (actionBar != null) {
             actionBar.onResume();
         }

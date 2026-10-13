@@ -1,0 +1,98 @@
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+
+/** Actual recorder factory, with a modeled microphone and explicit runtime entitlement. */
+public final class MediaRecorderAccessProbe {
+    static int checks;
+    static void check(boolean value, String text) { checks++; if (!value) throw new AssertionError(text); }
+    static final class LunagramFeatureCatalog { enum Feature { VOICE_STEREO } }
+    static final class LunagramMediaAccess {
+        static final class Session {
+            boolean paid = true;
+            boolean current = true;
+            boolean isCurrent() { return current; }
+            boolean canUse(LunagramFeatureCatalog.Feature feature) { return paid; }
+        }
+    }
+    static final class Build { static final class VERSION { static int SDK_INT = 36; } }
+    static final class Context { static final String AUDIO_SERVICE = "audio"; }
+    static final class ApplicationLoader {
+        static final ContextService applicationContext = new ContextService();
+        static final class ContextService { Object getSystemService(String name) { return new AudioManager(); } }
+    }
+    static final class AudioManager {
+        static final int GET_DEVICES_INPUTS = 1;
+        AudioDeviceInfo[] getDevices(int kind) { return new AudioDeviceInfo[] { new AudioDeviceInfo() }; }
+    }
+    static final class AudioDeviceInfo {}
+    static final class AudioFormat {
+        static final int CHANNEL_IN_STEREO = 2, CHANNEL_IN_MONO = 1, ENCODING_PCM_16BIT = 2;
+    }
+    static final class MediaRecorder { static final class AudioSource { static final int DEFAULT = 0; } }
+    static final class AudioRecord {
+        static final int STATE_INITIALIZED = 1, RECORDSTATE_RECORDING = 3;
+        static final ArrayList<AudioRecord> created = new ArrayList<>();
+        static Runnable onStart;
+        int channels;
+        boolean released, recording;
+        AudioRecord(int source, int rate, int mask, int encoding, int bytes) { channels = mask; created.add(this); }
+        static int getMinBufferSize(int rate, int mask, int encoding) { return 4000; }
+        int getState() { return STATE_INITIALIZED; }
+        int getChannelCount() { return channels; }
+        void startRecording() { recording = true; if (onStart != null) { Runnable task = onStart; onStart = null; task.run(); } }
+        int getRecordingState() { return recording ? RECORDSTATE_RECORDING : 0; }
+        AudioDeviceInfo getRoutedDevice() { return new AudioDeviceInfo(); }
+        void release() { released = true; recording = false; }
+    }
+    int sampleRate = 48000, lunagramRecordingChannels, recordBufferSize;
+    ByteBuffer fileBuffer;
+    ArrayList<ByteBuffer> recordBuffers = new ArrayList<>();
+    boolean deviceHasStereoInput(AudioDeviceInfo info) { return info != null; }
+
+    @@FACTORY@@
+
+    static void reset() { AudioRecord.created.clear(); AudioRecord.onStart = null; }
+    public static void main(String[] args) throws Exception {
+        LunagramMediaAccess.Session access = new LunagramMediaAccess.Session();
+        MediaRecorderAccessProbe subject = new MediaRecorderAccessProbe();
+        reset();
+        AudioRecord paid = subject.createLunagramRecorder(access, true, true);
+        check(paid.channels == 2 && subject.lunagramRecordingChannels == 2, "authorized supported stereo stays stereo");
+        check(subject.fileBuffer.capacity() == 3840, "stereo PCM format preserved");
+        access.paid = false;
+        check(paid.recording && !paid.released, "expiry does not interrupt the existing captured segment");
+        reset();
+        AudioRecord free = subject.createLunagramRecorder(access, true, true);
+        check(free.channels == 1 && AudioRecord.created.size() == 1, "new expired recording opens only mono");
+        check(subject.fileBuffer.capacity() == 1920, "free PCM is mono");
+        reset();
+        boolean denied = false;
+        try { subject.createLunagramRecorder(access, true, false); } catch (IOException expected) { denied = true; }
+        check(denied && AudioRecord.created.isEmpty(), "expired paused stereo cannot open a new stereo segment or corrupt its format");
+        reset(); access.paid = true;
+        AudioRecord.onStart = () -> access.paid = false;
+        AudioRecord changed = subject.createLunagramRecorder(access, true, true);
+        check(changed.channels == 1 && AudioRecord.created.size() == 2, "expiry during microphone startup falls back to mono");
+        check(AudioRecord.created.get(0).released, "rejected stereo microphone is released");
+        check(!changed.released && changed.recording, "ordinary recording still starts");
+        reset(); access.paid = true;
+        AudioRecord.onStart = () -> access.paid = false;
+        denied = false;
+        try { subject.createLunagramRecorder(access, true, false); } catch (IOException expected) { denied = true; }
+        check(denied && AudioRecord.created.size() == 1 && AudioRecord.created.get(0).released, "paused stereo loses authority during startup: release and preserve draft, never resume mono");
+        reset();
+        check(subject.createLunagramRecorder(null, false, true).channels == 1, "base recording never needs a subscription session");
+        reset(); access.current = false;
+        denied = false;
+        try { subject.createLunagramRecorder(access, false, true); } catch (IOException expected) { denied = true; }
+        check(denied && AudioRecord.created.isEmpty(), "stale identity cannot start even free mono for the replacement account");
+        reset(); access.current = true; access.paid = true;
+        AudioRecord.onStart = () -> access.current = false;
+        denied = false;
+        try { subject.createLunagramRecorder(access, true, true); } catch (IOException expected) { denied = true; }
+        check(denied && AudioRecord.created.size() == 1 && AudioRecord.created.get(0).released, "owner replacement during startup releases microphone without mono retry");
+        System.out.println("PASS: " + checks + " extracted media-recorder runtime boundary checks; modeled AudioRecord, not hardware stereo proof.");
+    }
+}

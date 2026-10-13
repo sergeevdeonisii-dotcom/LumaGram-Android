@@ -91,6 +91,7 @@ public class Icon3D {
     public static final int TYPE_GOLDEN_STAR = 2;
     public static final int TYPE_DEAL = 3;
     public static final int TYPE_DIAMOND = 4;
+    public static final int TYPE_LUNAGRAM = 5;
 
     private static final String[] starModel = new String[] {
         "models/star.binobj"
@@ -117,7 +118,9 @@ public class Icon3D {
         this.type = type;
         String[] modelPaths;
         float modelScale = 1.0f;
-        if (type == TYPE_COIN) {
+        if (type == TYPE_LUNAGRAM) {
+            modelPaths = new String[]{"lunagram:tile", "lunagram:disc", "lunagram:plane"};
+        } else if (type == TYPE_COIN) {
             modelPaths = coinModel;
         } else if (type == TYPE_DEAL) {
             modelPaths = dealModel;
@@ -136,7 +139,7 @@ public class Icon3D {
         mNormals = new FloatBuffer[N];
         trianglesCount = new int[N];
         for (int i = 0; i < N; ++i) {
-            ObjLoader obj = new ObjLoader(context, modelPaths[i], modelScale);
+            ObjLoader obj = type == TYPE_LUNAGRAM ? new ObjLoader(LunagramLogoMesh.create(i)) : new ObjLoader(context, modelPaths[i], modelScale);
 
             mVertices[i] = ByteBuffer.allocateDirect(obj.positions.length * 4)
                     .order(ByteOrder.nativeOrder()).asFloatBuffer();
@@ -161,7 +164,9 @@ public class Icon3D {
         int[] linked = new int[1];
 
         String fragmentShaderSource;
-        if (type == TYPE_STAR || type == TYPE_GOLDEN_STAR) {
+        if (type == TYPE_LUNAGRAM) {
+            fragmentShaderSource = "shaders/lunagram_logo.glsl";
+        } else if (type == TYPE_STAR || type == TYPE_GOLDEN_STAR) {
             fragmentShaderSource = "shaders/fragment4.glsl";
         } else if (type == TYPE_DIAMOND) {
             fragmentShaderSource = "shaders/fragment5.glsl";
@@ -272,7 +277,10 @@ public class Icon3D {
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mBackgroundTextureHandle);
 
         Bitmap bitmap = null;
-        if (type == TYPE_STAR || type == TYPE_GOLDEN_STAR) {
+        if (type == TYPE_LUNAGRAM) {
+            bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+            bitmap.eraseColor(Color.WHITE);
+        } else if (type == TYPE_STAR || type == TYPE_GOLDEN_STAR) {
             bitmap = SvgHelper.getBitmap(R.raw.start_texture, 240, 240, Color.WHITE);
         } else if (type == TYPE_COIN) {
             bitmap = getBitmapFromAsset(context, "models/coin_border.png");

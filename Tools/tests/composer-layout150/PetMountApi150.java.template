@@ -1,0 +1,48 @@
+import android.content.Context;
+import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
+import android.view.View;
+import android.widget.FrameLayout;
+
+/** Compile actual placement/getter against Android framework window/View/RectF APIs. */
+public final class PetMountApi150 {
+    /* ACTUAL_PET_HOST */
+    /* ACTUAL_PET_VISIBLE */
+    /* ACTUAL_PET_ON_RAIL */
+    /* ACTUAL_PET_PLACEMENT */
+    EnterView chatActivityEnterView;
+    View contentView, actionBar;
+    InputContainer chatInputViewsContainer;
+    Priorities bottomViewsVisibilityController;
+    int[] lunagramInputLocation, lunagramContentLocation;
+    RectF lunagramPetRailBounds;
+    boolean lunagramPetOnRail;
+    float lunagramPetRailLeft, lunagramPetRailRight;
+    int currentAccount;
+    static final int MESSAGE_INPUT_CONTAINER = 1;
+    static int dp(float value) { return (int) Math.ceil(value); }
+    boolean isPaused() { return false; } boolean isInPreviewMode() { return false; }
+    void checkUi_chatListViewPaddings() {}
+    static class Priorities { int getCurrentPriorityContainerId() { return 1; } }
+    static class LunagramExperienceSettings { static int pet(int account) { return 1; } }
+    static class LiteMode { static int getLiquidGlassInputHeightDp() { return 44; } }
+    static class PetView extends View {
+        PetView(Context context) { super(context); }
+        static int getFloorOffsetDp() { return 22; }
+        void setRailBounds(float left, float right) {} void setPaused(boolean value) {}
+    }
+    static class EnterView extends View {
+        PetView lunagramPetView;
+        EnterView(Context context) { super(context); }
+        boolean isRecordingUiVisible() { return false; } boolean hasAudioToSend() { return false; }
+    }
+    static class InputContainer extends FrameLayout {
+        InputContainer(Context context) { super(context); }
+        static final int INPUT_BUBBLE_RADIUS = 22;
+        boolean drawInputBackground, splitInputEnabled;
+        Drawable blurredBackgroundDrawable, leftButtonBackgroundDrawable, rightButtonBackgroundDrawable;
+        float inputBubbleHeight, bubbleInputTranlationY, inputBubbleOffsetLeft, inputBubbleOffsetRight;
+        int inputBubbleHeightRound, currentBlurredHeight, splitInputCenterInsetLeft, splitInputCenterInsetRight;
+        /* ACTUAL_PET_RAIL */
+    }
+}

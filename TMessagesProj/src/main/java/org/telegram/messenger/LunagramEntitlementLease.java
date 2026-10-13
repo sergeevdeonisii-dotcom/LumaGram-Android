@@ -63,6 +63,8 @@ final class LunagramEntitlementLease {
 
     private static LunagramFeatureCatalog.Tier knownTier(String id) {
         LunagramFeatureCatalog.Tier tier = LunagramFeatureCatalog.tierFromId(id);
-        return tier == null ? LunagramFeatureCatalog.Tier.FREE : tier;
+        // Map the recognized paid tier only after its authenticated interval is active.
+        // Nothing here changes the immutable start/end dates or the offline lease bound.
+        return tier == null ? LunagramFeatureCatalog.Tier.FREE : LunagramFeatureCatalog.effectiveTier(tier);
     }
 }

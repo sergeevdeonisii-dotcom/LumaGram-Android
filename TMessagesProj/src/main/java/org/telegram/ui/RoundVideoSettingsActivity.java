@@ -27,6 +27,7 @@ import org.telegram.ui.Cells.TextCheckCell;
 import org.telegram.ui.Cells.TextInfoPrivacyCell;
 import org.telegram.ui.Cells.TextSettingsCell;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.InstantCameraViewBase;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.SlideChooseView;
 import org.telegram.utils.camera.roundvideo.RoundVideoSession;
@@ -119,7 +120,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
     private void onRowClicked(int position) {
         // Keep the legacy preference intact while Camera2 uses explicit resolution/bitrate.
         if (position == ROW_QUALITY) {
-            if (SharedSettings.roundVideoCamera2Enabled.get()) return;
+            if (InstantCameraViewBase.isUsingCamera2Implementation()) return;
             LumaRoundVideoQuality.setEnabled(!LumaRoundVideoQuality.isEnabled());
             adapter.notifyItemChanged(position);
             return;
@@ -130,11 +131,11 @@ public class RoundVideoSettingsActivity extends BaseFragment {
             return;
         }
         if (position == ROW_ENABLED) {
-            SharedSettings.roundVideoCamera2Enabled.set(!SharedSettings.roundVideoCamera2Enabled.get());
+            InstantCameraViewBase.setUseCamera2Implementation(!InstantCameraViewBase.isUsingCamera2Implementation());
             adapter.notifyDataSetChanged();
             return;
         }
-        if (!SharedSettings.roundVideoCamera2Enabled.get()) {
+        if (!InstantCameraViewBase.isUsingCamera2Implementation()) {
             return;
         }
         if (position == ROW_CONCURRENT_ENABLED) {
@@ -233,12 +234,12 @@ public class RoundVideoSettingsActivity extends BaseFragment {
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int position = holder.getAdapterPosition();
             if (position == ROW_QUALITY) {
-                return !SharedSettings.roundVideoCamera2Enabled.get();
+                return !InstantCameraViewBase.isUsingCamera2Implementation();
             }
             if (position == ROW_ENABLED || position == ROW_REAR_CAMERA) {
                 return true;
             }
-            if (!SharedSettings.roundVideoCamera2Enabled.get()) {
+            if (!InstantCameraViewBase.isUsingCamera2Implementation()) {
                 return false;
             }
             return position == ROW_OUTPUT_RESOLUTION
@@ -277,7 +278,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
         @Override
         public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
             if (holder.getItemViewType() == TYPE_SEPARATOR) return;
-            boolean enabled = SharedSettings.roundVideoCamera2Enabled.get();
+            boolean enabled = InstantCameraViewBase.isUsingCamera2Implementation();
             if (holder.getItemViewType() == TYPE_HEADER) {
                 HeaderCell cell = (HeaderCell) holder.itemView;
                 cell.setText(position == ROW_GENERAL_HEADER
@@ -291,8 +292,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 SlideChooseView cell = (SlideChooseView) holder.itemView;
                 cell.setCallback(null);
                 if (position == ROW_FRAME_RATE) {
-                    int fallback = enabled ? SharedSettings.getRoundVideoFrameRate().getValue() : LumaRoundVideoQuality.HIGH_FRAME_RATE;
-                    cell.setOptions(LumaRoundVideoQuality.getPreferredFrameRate(fallback) / 30 - 1, "30", "60");
+                    cell.setOptions(InstantCameraViewBase.getRequestedRecordingFrameRate() / 30 - 1, "30", "60");
                     cell.setCallback(LumaRoundVideoQuality::setFrameRateLevel);
                 } else {
                     cell.setOptions(LumaRoundVideoStabilization.getMode(), stabilizationOptions());
