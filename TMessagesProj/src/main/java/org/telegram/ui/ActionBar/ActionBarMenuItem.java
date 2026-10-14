@@ -131,6 +131,10 @@ public class ActionBarMenuItem extends FrameLayout {
 
         }
 
+        /** Called after the search container's own fade has actually completed. */
+        public void onSearchCollapseFinished() {
+        }
+
         public void onTextChanged(EditText editText) {
         }
 
@@ -972,16 +976,30 @@ public class ActionBarMenuItem extends FrameLayout {
             }
             searchContainerAnimator.setDuration(150);
             searchContainerAnimator.addListener(new AnimatorListenerAdapter() {
+                private boolean cancelled;
+
+                @Override
+                public void onAnimationCancel(Animator animation) {
+                    cancelled = true;
+                }
+
                 @Override
                 public void onAnimationEnd(Animator animation) {
+                    if (cancelled || searchContainerAnimator != animation || searchContainer.getTag() != null) {
+                        return;
+                    }
                     searchContainer.setAlpha(0);
                     for (int i = 0; i < menuIcons.size(); i++) {
                         menuIcons.get(i).setAlpha(1f);
                     }
                     searchContainer.setVisibility(View.GONE);
+                    searchContainerAnimator = null;
+                    if (listener != null) {
+                        listener.onSearchCollapseFinished();
+                    }
                 }
             });
-            searchContainerAnimator.start();
+            final AnimatorSet closingAnimator = searchContainerAnimator;
 
             searchField.clearFocus();
             setVisibility(VISIBLE);
@@ -997,6 +1015,11 @@ public class ActionBarMenuItem extends FrameLayout {
             }
             if (listener != null) {
                 listener.onSearchCollapse();
+            }
+            // Order matters when system animations are disabled: completion
+            // may be synchronous, but must still follow onSearchCollapse().
+            if (searchContainerAnimator == closingAnimator && searchContainer.getTag() == null) {
+                closingAnimator.start();
             }
             if (openKeyboard) {
                 AndroidUtilities.hideKeyboard(searchField);

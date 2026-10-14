@@ -1,0 +1,156 @@
+import java.util.*;
+
+/** Real native reaction hit testing and feed delegate; modeled Android host, no rendering/server claims. */
+public final class FeedChipTouchProbe {
+    static int checks;
+    static void check(boolean value,String why){checks++;if(!value)throw new AssertionError(why);}
+    static class TLRPC {
+        static class Reaction {}
+        static class TL_reactionPaid extends Reaction {}
+        static class ReactionCount {Reaction reaction=new Reaction();}
+    }
+    static class MessageOwner {Object reactions=new Object();}
+    static class MessageObject {MessageOwner messageOwner=new MessageOwner();}
+    static class ChatMessageCell {MessageObject message=new MessageObject();MessageObject getMessageObject(){return message;}}
+    static class Config {long id=100;long getClientUserId(){return id;}}
+    interface Delegate {
+        boolean canPerformActions();boolean canPerformReply();
+        void didPressReaction(ChatMessageCell c,TLRPC.ReactionCount r,boolean l,float x,float y);
+    }
+    interface Result {void done(boolean ok);}
+    static class Feed {
+        boolean available=true;int sent;MessageObject lastPost;TLRPC.Reaction lastReaction;
+        boolean isAvailable(){return available;}boolean checkAccess(){return available;}
+        void react(MessageObject post,TLRPC.Reaction reaction,Result result){sent++;lastPost=post;lastReaction=reaction;result.done(true);}
+    }
+    static class Activity {
+        Feed feed=new Feed();boolean visible=true;long owner=100;Config config=new Config();int opens,pickers,failures;
+        Config getUserConfig(){return config;}void openPost(MessageObject p){opens++;}void chooseReaction(MessageObject p){pickers++;}void failedReaction(){failures++;}
+        /* ACTUAL_SEND */
+        final Delegate delegate=new Delegate(){
+            /* ACTUAL_GATE */
+            /* ACTUAL_REPLY_GATE */
+            /* ACTUAL_REACTION */
+        };
+        final Delegate cellDelegate=delegate;
+        final class BodyCell extends NativeCell {
+            MessageObject bodyTouchPost;float bodyTouchX,bodyTouchY;
+            /* ACTUAL_BODY_CANCEL */
+            /* ACTUAL_BODY_TOUCH */
+            /* ACTUAL_BODY_LONG */
+            /* ACTUAL_BODY_DETACH */
+        }
+    }
+    static class MotionEvent {
+        static final int ACTION_DOWN=0,ACTION_UP=1,ACTION_MOVE=2,ACTION_CANCEL=3;
+        final int action;final float x,y;int pointers=1;MotionEvent(int a,float x,float y){action=a;this.x=x;this.y=y;}
+        int getAction(){return action;}int getActionMasked(){return action;}int getPointerCount(){return pointers;}float getX(){return x;}float getY(){return y;}
+        static MotionEvent obtain(long down,long now,int action,float x,float y,int meta){return new MotionEvent(action,x,y);}void recycle(){}
+    }
+    interface IMessageCell {}
+    static class View {int paddingTop;int getPaddingTop(){return paddingTop;}}
+    static class ChatActionCell extends View implements IMessageCell {float sideMenuWidth;}
+    static class ViewConfiguration {static int getLongPressTimeout(){return 500;}static int getTapTimeout(){return 100;}static ViewConfiguration get(Object context){return new ViewConfiguration();}int getScaledTouchSlop(){return 6;}}
+    static class HapticFeedbackConstants {static final int LONG_PRESS=0;}
+    static class AndroidUtilities {
+        static final ArrayList<Runnable> tasks=new ArrayList<>();
+        static void cancelRunOnUIThread(Runnable r){tasks.remove(r);}static void runOnUIThread(Runnable r,int delay){tasks.add(r);}
+        static void runPending(){ArrayList<Runnable> pending=new ArrayList<>(tasks);tasks.clear();for(Runnable r:pending)r.run();}
+    }
+    static class Bounce {boolean pressed;void setPressed(boolean p){pressed=p;}}
+    static class NativeCell extends ChatMessageCell {
+        boolean nativeHandled,attached=true;int nativeTouches;
+        private boolean checkingForLongPress;private int pressCount;
+        private CheckForTap pendingCheckForTap;private CheckForLongPress pendingCheckForLongPress;
+        /* ACTUAL_BASE_TAP */
+        /* ACTUAL_BASE_LONG */
+        /* ACTUAL_BASE_START */
+        /* ACTUAL_BASE_CANCEL */
+        Object getContext(){return this;}Object getParent(){return attached?this:null;}
+        void postDelayed(Runnable task,int delay){AndroidUtilities.runOnUIThread(task,delay);}void removeCallbacks(Runnable task){AndroidUtilities.cancelRunOnUIThread(task);}
+        void performHapticFeedback(int type){}
+        public boolean onTouchEvent(MotionEvent event){nativeTouches++;return nativeHandled;}
+        protected boolean onLongPress(){return false;}protected void onDetachedFromWindow(){attached=false;}
+        int getBackgroundDrawableLeft(){return 20;}int getBackgroundDrawableRight(){return 280;}
+        int getBackgroundDrawableTop(){return 4;}int getBackgroundDrawableBottom(){return 140;}
+    }
+    static class ReactionButton {
+        float x,y,width=50,height=28;final Bounce bounce=new Bounce();final TLRPC.ReactionCount reactionCount=new TLRPC.ReactionCount();
+        ReactionButton(float x){this.x=x;}
+    }
+    static class NativeReactions {
+        boolean isEmpty,isSmall,pressed;final MessageObject messageObject=new MessageObject();
+        View parentView=new View();float x=20,y=200,lastX,lastY,touchSlop=6;
+        final ArrayList<ReactionButton> reactionButtons=new ArrayList<>();ReactionButton lastSelectedButton;Runnable longPressRunnable;
+        final Activity activity;final ChatMessageCell cell=new ChatMessageCell();
+        NativeReactions(Activity a){activity=a;reactionButtons.add(new ReactionButton(0));reactionButtons.add(new ReactionButton(60));}
+        void didPressReaction(TLRPC.ReactionCount r,boolean longpress,float x,float y){activity.delegate.didPressReaction(cell,r,longpress,x,y);}
+        // ChatMessageCell gates before calling its production reaction layout. The runner checks that source contract.
+        boolean dispatch(int type,float px,float py){return activity.delegate.canPerformActions()&&checkTouchEvent(new MotionEvent(type,px,py));}
+        void tap(float px,float py){dispatch(MotionEvent.ACTION_DOWN,px,py);dispatch(MotionEvent.ACTION_UP,px,py);}
+        /* ACTUAL_NATIVE_TOUCH */
+    }
+    static void gestures(){
+        Activity a=new Activity();NativeReactions n=new NativeReactions(a);
+        check(a.delegate.canPerformActions(),"visible feed enables native hit targets");check(!a.delegate.canPerformReply(),"feed cannot start chat reply swipe");
+        check(n.dispatch(MotionEvent.ACTION_DOWN,30,210),"reaction DOWN owns touch");check(n.reactionButtons.get(0).bounce.pressed,"native press feedback retained");
+        n.dispatch(MotionEvent.ACTION_UP,30,210);check(a.feed.sent==1&&a.feed.lastPost==n.cell.message,"native chip dispatch reaches existing feed send");
+        check(a.feed.lastReaction==n.reactionButtons.get(0).reactionCount.reaction,"exact clicked reaction delivered");
+        check(!n.reactionButtons.get(0).bounce.pressed&&AndroidUtilities.tasks.isEmpty(),"UP releases feedback and long press");
+        n.tap(90,210);check(a.feed.sent==2&&a.feed.lastReaction==n.reactionButtons.get(1).reactionCount.reaction,"second chip independent target");
+        n.tap(75,210);n.tap(30,180);check(a.feed.sent==2,"space between chips/outside row is not a reaction");
+        n.dispatch(MotionEvent.ACTION_DOWN,30,210);n.dispatch(MotionEvent.ACTION_CANCEL,30,210);AndroidUtilities.runPending();
+        check(a.feed.sent==2&&a.pickers==0&&!n.pressed,"cancel does not react or open chooser");
+        n.dispatch(MotionEvent.ACTION_DOWN,30,210);n.dispatch(MotionEvent.ACTION_MOVE,30,240);n.dispatch(MotionEvent.ACTION_UP,30,240);AndroidUtilities.runPending();
+        check(a.feed.sent==2&&a.pickers==0&&!n.reactionButtons.get(0).bounce.pressed,"scroll cancels chip press");
+        n.dispatch(MotionEvent.ACTION_DOWN,30,210);AndroidUtilities.runPending();n.dispatch(MotionEvent.ACTION_UP,30,210);
+        check(a.pickers==1&&a.feed.sent==2,"hold opens chooser once without accidental tap");
+        n.tap(30,210);check(a.feed.sent==3,"tap still usable after cancel and hold");
+        n.reactionButtons.get(0).reactionCount.reaction=new TLRPC.TL_reactionPaid();n.tap(30,210);
+        check(a.opens==1&&a.feed.sent==3,"paid chip opens original; never spends Stars in preview");
+        n.isEmpty=true;n.tap(90,210);check(a.feed.sent==3,"empty layout inert");n.isEmpty=false;
+        n.isSmall=true;n.tap(90,210);check(a.feed.sent==3,"native small reactions stay read-only");
+    }
+    static void boundaries(){
+        for(int kind=0;kind<4;kind++){
+            Activity a=new Activity();NativeReactions n=new NativeReactions(a);
+            if(kind==0)a.visible=false;if(kind==1)a.feed.available=false;if(kind==2)a.config.id=200;if(kind==3)a.feed=null;
+            check(!a.delegate.canPerformActions(),"inactive feed gate "+kind);
+            check(!n.dispatch(MotionEvent.ACTION_DOWN,30,210),"inactive target cannot capture "+kind);
+        }
+        Activity a=new Activity();NativeReactions n=new NativeReactions(a);
+        n.dispatch(MotionEvent.ACTION_DOWN,30,210);a.feed.available=false;AndroidUtilities.runPending();
+        check(a.pickers==0&&a.feed.sent==0,"revoked access between DOWN and held callback is guarded");
+        a.feed.available=true;
+        a.delegate.didPressReaction(null,new TLRPC.ReactionCount(),false,0,0);
+        a.delegate.didPressReaction(n.cell,null,false,0,0);
+        TLRPC.ReactionCount invalid=new TLRPC.ReactionCount();invalid.reaction=null;a.delegate.didPressReaction(n.cell,invalid,false,0,0);
+        check(a.feed.sent==0,"malformed/stale delegate payload ignored");
+    }
+    static void runHold(){AndroidUtilities.runPending();AndroidUtilities.runPending();}
+    static MotionEvent event(int type,float x,float y){return new MotionEvent(type,x,y);}
+    static void firstReaction(){
+        AndroidUtilities.tasks.clear();Activity a=new Activity();Activity.BodyCell body=a.new BodyCell();
+        body.message.messageOwner.reactions=null; // Plain text without reaction chips: native cell returns false.
+        check(body.onTouchEvent(event(MotionEvent.ACTION_DOWN,80,40)),"empty-reaction plain text captures body hold");
+        runHold();check(a.pickers==1&&a.feed.sent==0,"empty-reaction text opens allowed picker without sending a reaction");
+        body.onTouchEvent(event(MotionEvent.ACTION_UP,80,40));runHold();check(a.pickers==1,"hold opens once");
+        body.onTouchEvent(event(MotionEvent.ACTION_DOWN,80,40));body.onTouchEvent(event(MotionEvent.ACTION_UP,80,40));runHold();
+        check(a.pickers==1,"body tap does not open picker");
+        body.onTouchEvent(event(MotionEvent.ACTION_DOWN,80,40));body.onTouchEvent(event(MotionEvent.ACTION_MOVE,80,60));runHold();
+        check(a.pickers==1,"scrolling body cancels pending hold");
+        body.onTouchEvent(event(MotionEvent.ACTION_DOWN,80,40));MotionEvent multi=event(MotionEvent.ACTION_MOVE,80,40);multi.pointers=2;body.onTouchEvent(multi);runHold();
+        check(a.pickers==1,"multitouch cancels pending body hold");
+        body.onTouchEvent(event(MotionEvent.ACTION_DOWN,80,40));body.onTouchEvent(event(MotionEvent.ACTION_CANCEL,80,40));runHold();
+        check(a.pickers==1,"CANCEL cancels pending body hold");
+        check(!body.onTouchEvent(event(MotionEvent.ACTION_DOWN,80,-20)),"origin/header is outside message body");
+        check(!body.onTouchEvent(event(MotionEvent.ACTION_DOWN,5,40)),"card gutter is outside bubble body");runHold();check(a.pickers==1,"outside body has no picker");
+        body.nativeHandled=true;check(body.onTouchEvent(event(MotionEvent.ACTION_DOWN,80,40)),"interactive child keeps native handling");
+        check(body.bodyTouchPost==null,"native links/media/chips do not acquire fallback body hold");runHold();check(a.pickers==1,"fallback never duplicates native hold");body.nativeHandled=false;
+        body.onTouchEvent(event(MotionEvent.ACTION_DOWN,80,40));body.message=new MessageObject();runHold();check(a.pickers==1,"recycled message cannot open old picker");
+        body.onTouchEvent(event(MotionEvent.ACTION_DOWN,80,40));body.cancelBodyLongPress();runHold();check(a.pickers==1,"bind cancels queued hold");
+        body.onTouchEvent(event(MotionEvent.ACTION_DOWN,80,40));a.visible=false;runHold();check(a.pickers==1,"pause blocks queued hold");a.visible=true;
+        body.onTouchEvent(event(MotionEvent.ACTION_DOWN,80,40));body.onDetachedFromWindow();runHold();check(a.pickers==1,"detach cancels queued hold");
+    }
+    public static void main(String[] args){gestures();boundaries();firstReaction();System.out.println("PASS actual native reaction touch + feed delegate + first-reaction body hold: "+checks+" checks");}
+}

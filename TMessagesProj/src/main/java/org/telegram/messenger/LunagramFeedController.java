@@ -238,9 +238,21 @@ public final class LunagramFeedController implements NotificationCenter.Notifica
         })));
     }
 
-    /** Same sendReaction protocol as the chat, but wait for server acceptance and expose errors. No paid reactions. */
-    public void react(MessageObject post, TLRPC.Reaction reaction, Result result) {
-        if (!valid(generation) || post == null || post.currentAccount != account || reaction == null || reaction instanceof TLRPC.TL_reactionPaid) return;
+    private MessageObject findPost(MessageObject post) {
+        if (post == null || post.messageOwner == null || post.currentAccount != account
+                || post.getId() <= 0 || !channels.contains(-post.getDialogId())) return null;
+        for (MessageObject candidate : posts) {
+            if (candidate.getDialogId() == post.getDialogId() && candidate.getId() == post.getId()) return candidate;
+        }
+        return null;
+    }
+
+    /** Same sendReaction protocol as the chat, with server-authoritative counts and errors. No paid reactions. */
+    public void react(MessageObject display, TLRPC.Reaction reaction, Result result) {
+        if (!valid(generation) || reaction == null || reaction instanceof TLRPC.TL_reactionPaid) return;
+        // Cells own layout clones. Always build the toggle from the current feed message, not a stale clone.
+        final MessageObject post = findPost(display);
+        if (post == null) return;
         String key = post.getDialogId() + ":" + post.getId();
         if (!reactionsInFlight.add(key)) return;
         int token = generation;
@@ -261,14 +273,16 @@ public final class LunagramFeedController implements NotificationCenter.Notifica
         if (!req.reaction.isEmpty()) req.flags |= 1;
         requests.add(ConnectionsManager.getInstance(account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
             if (!valid(token)) return;
-            reactionsInFlight.remove(key);
             if (response instanceof TLRPC.Updates && error == null) {
-                post.selectReaction(chosen, false, false);
+                // Updates/reload own the counts. Toggling locally here can undo an update delivered before this callback.
                 MessagesController.getInstance(account).processUpdates((TLRPC.Updates) response, false);
                 listener.onFeedChanged();
                 reloadPost(post, token);
                 result.done(true);
-            } else result.done(false);
+            } else {
+                reactionsInFlight.remove(key);
+                result.done(false);
+            }
         })));
     }
 
@@ -278,12 +292,16 @@ public final class LunagramFeedController implements NotificationCenter.Notifica
         req.channel = MessagesController.getInstance(account).getInputChannel(-post.getDialogId());
         req.id.add(post.getId());
         requests.add(ConnectionsManager.getInstance(account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-            if (!valid(token) || !(response instanceof TLRPC.messages_Messages)) return;
+            if (!valid(token)) return;
+            // Keep taps serialized until the authoritative state has arrived, including failed reloads.
+            reactionsInFlight.remove(post.getDialogId() + ":" + post.getId());
+            if (error != null || !(response instanceof TLRPC.messages_Messages)) return;
             TLRPC.messages_Messages messages = (TLRPC.messages_Messages) response;
             cachePeers(messages);
             for (TLRPC.Message message : messages.messages) {
                 if (message.id == post.getId() && MessageObject.getDialogId(message) == post.getDialogId()) {
-                    int index = posts.indexOf(post);
+                    // A notification may replace the layout object while this request is in flight.
+                    int index = posts.indexOf(findPost(post));
                     if (index >= 0) {
                         if (message instanceof TLRPC.TL_message) posts.set(index, new MessageObject(account, message, true, true));
                         else posts.remove(index);

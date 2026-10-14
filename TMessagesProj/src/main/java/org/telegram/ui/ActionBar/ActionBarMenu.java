@@ -12,6 +12,7 @@ import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.AndroidUtilities.find;
 
 import android.content.Context;
+import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -42,6 +43,7 @@ public class ActionBarMenu extends LinearLayout {
     private ArrayList<Integer> ids;
     private View exclusiveItem;
     private View exclusiveItemAnchor;
+    private boolean searchOnly;
 
     public ActionBarMenu(Context context, ActionBar layer) {
         super(context);
@@ -403,10 +405,12 @@ public class ActionBarMenu extends LinearLayout {
         }
         exclusiveItem = null;
         exclusiveItemAnchor = null;
+        searchOnly = false;
         removeAllViews();
     }
 
     public void onMenuButtonPressed() {
+        if (searchOnly) return;
         if (exclusiveItem != null && exclusiveItem.getVisibility() == View.VISIBLE) {
             // The compact chat header intentionally has no overflow menu.
             // Do not let a hardware MENU key open a logically visible but
@@ -566,6 +570,7 @@ public class ActionBarMenu extends LinearLayout {
     }
 
     public int getItemsMeasuredWidth(boolean ignoreAlpha) {
+        if (searchOnly) return 0;
         if (exclusiveItem != null && exclusiveItem.getVisibility() == View.VISIBLE) {
             return exclusiveItem.getMeasuredWidth();
         }
@@ -584,6 +589,7 @@ public class ActionBarMenu extends LinearLayout {
     }
 
     public int getVisibleItemsMeasuredWidth() {
+        if (searchOnly) return 0;
         if (exclusiveItem != null && exclusiveItem.getVisibility() != View.GONE) {
             return exclusiveItem.getMeasuredWidth();
         }
@@ -598,6 +604,7 @@ public class ActionBarMenu extends LinearLayout {
     }
 
     public int getVisibleItemsMeasuredWidthWithAlpha() {
+        if (searchOnly) return 0;
         if (exclusiveItem != null && exclusiveItem.getVisibility() == View.VISIBLE) {
             return (int) (exclusiveItem.getMeasuredWidth() * exclusiveItem.getAlpha());
         }
@@ -658,6 +665,21 @@ public class ActionBarMenu extends LinearLayout {
         this.glassMode = glassMode;
     }
 
+    /** Search retains its native layout/fade without exposing compact-header actions. */
+    public void setSearchOnly(boolean searchOnly) {
+        if (this.searchOnly == searchOnly) return;
+        this.searchOnly = searchOnly;
+        updateExclusiveAccessibility();
+        requestLayout();
+        invalidate();
+    }
+
+    @Override
+    protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+        if (searchOnly && child instanceof ActionBarMenuItem) return false;
+        return super.drawChild(canvas, child, drawingTime);
+    }
+
     /**
      * Shows a single menu item without changing the logical visibility of the
      * remaining items. This lets a chat temporarily use an iOS-like avatar
@@ -702,7 +724,8 @@ public class ActionBarMenu extends LinearLayout {
     private void updateExclusiveAccessibility() {
         for (int i = 0, n = getChildCount(); i < n; i++) {
             final View child = getChildAt(i);
-            child.setImportantForAccessibility(exclusiveItem == null || child == exclusiveItem
+            child.setImportantForAccessibility(!(searchOnly && child instanceof ActionBarMenuItem)
+                && (exclusiveItem == null || child == exclusiveItem)
                 ? View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
                 : View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         }
@@ -710,8 +733,31 @@ public class ActionBarMenu extends LinearLayout {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        if (exclusiveItem != null) {
+        if (exclusiveItem != null || searchOnly) {
             updateExclusiveAccessibility();
+        }
+        if (searchOnly) {
+            // Search is the only visible child in this mode. Do not temporarily
+            // rewrite action visibility: collapse callbacks still own it.
+            final int width = MeasureSpec.getSize(widthMeasureSpec);
+            int height = getPaddingTop() + getPaddingBottom();
+            boolean hasSearch = false;
+            for (int i = 0, n = getChildCount(); i < n; i++) {
+                final View child = getChildAt(i);
+                if (child instanceof ActionBarMenuItem || child.getVisibility() == GONE) continue;
+                final MarginLayoutParams lp = (MarginLayoutParams) child.getLayoutParams();
+                final int childWidth = Math.max(0, width - getPaddingLeft() - getPaddingRight()
+                    - lp.leftMargin - lp.rightMargin);
+                child.measure(MeasureSpec.makeMeasureSpec(childWidth, MeasureSpec.EXACTLY),
+                    getChildMeasureSpec(heightMeasureSpec, getPaddingTop() + getPaddingBottom()
+                        + lp.topMargin + lp.bottomMargin, lp.height));
+                height = Math.max(height, getPaddingTop() + getPaddingBottom()
+                    + lp.topMargin + lp.bottomMargin + child.getMeasuredHeight());
+                hasSearch = true;
+            }
+            setMeasuredDimension(resolveSize(hasSearch ? width : 0, widthMeasureSpec),
+                resolveSize(height, heightMeasureSpec));
+            return;
         }
         if (glassMode) {
             for (int a = 0, N = getChildCount(); a < N; a++) {
@@ -749,6 +795,7 @@ public class ActionBarMenu extends LinearLayout {
     }
 
     public int getItemsWidth() {
+        if (searchOnly) return 0;
         if (exclusiveItem != null && exclusiveItem.getVisibility() == View.VISIBLE) {
             return exclusiveItem.getWidth();
         }
@@ -773,7 +820,22 @@ public class ActionBarMenu extends LinearLayout {
 
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
-        if (exclusiveItem != null && exclusiveItem.getParent() == this && exclusiveItem.getVisibility() != GONE) {
+        if (searchOnly) {
+            for (int i = 0, n = getChildCount(); i < n; i++) {
+                final View child = getChildAt(i);
+                if (child instanceof ActionBarMenuItem || child.getVisibility() == GONE) {
+                    child.layout(0, 0, 0, 0);
+                    continue;
+                }
+                final MarginLayoutParams lp = (MarginLayoutParams) child.getLayoutParams();
+                final int childLeft = getLayoutDirection() == LAYOUT_DIRECTION_RTL
+                    ? r - l - getPaddingRight() - lp.rightMargin - child.getMeasuredWidth()
+                    : getPaddingLeft() + lp.leftMargin;
+                final int childTop = getPaddingTop() + lp.topMargin;
+                child.layout(childLeft, childTop, childLeft + child.getMeasuredWidth(),
+                    childTop + child.getMeasuredHeight());
+            }
+        } else if (exclusiveItem != null && exclusiveItem.getParent() == this && exclusiveItem.getVisibility() != GONE) {
             final MarginLayoutParams lp = (MarginLayoutParams) exclusiveItem.getLayoutParams();
             final int childLeft = getPaddingLeft() + lp.leftMargin;
             final int childTop = getPaddingTop() + lp.topMargin;

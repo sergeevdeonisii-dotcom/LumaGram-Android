@@ -465,8 +465,7 @@ public class ChatActivity extends BaseFragment implements
     private AvatarDrawable liquidHeaderAvatarDrawable;
     private final int[] liquidInputControlLocation = new int[2];
     private final int[] liquidInputContainerLocation = new int[2];
-    private final Runnable restoreLiquidHeaderAfterSearch = () ->
-        updateLiquidGlassHeaderLayout(LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS));
+    private boolean liquidHeaderSearchActive;
     private boolean searchItemVisible;
     private RadialProgressView progressBar;
     private ActionBarMenuItem.Item addContactItem;
@@ -2878,11 +2877,16 @@ public class ChatActivity extends BaseFragment implements
             && (currentUser != null || currentChat != null);
 
         final ActionBarMenu menu = actionBar.createMenu();
+        menu.setSearchOnly(useLiquidHeader && liquidHeaderSearchActive);
         if (useLiquidHeader) {
-            liquidHeaderAvatarItem.setVisibility(View.VISIBLE);
+            liquidHeaderAvatarItem.setVisibility(liquidHeaderSearchActive ? View.GONE : View.VISIBLE);
             // The avatar replaces the overflow button; the center pill opens the profile.
             liquidHeaderAvatarItem.setEnabled(headerItem != null && headerItem.hasSubMenu());
-            menu.setExclusiveItem(liquidHeaderAvatarItem, liquidHeaderAvatarView);
+            if (liquidHeaderSearchActive) {
+                menu.setExclusiveItem(null);
+            } else {
+                menu.setExclusiveItem(liquidHeaderAvatarItem, liquidHeaderAvatarView);
+            }
             avatarContainer.setExternalAvatarMode(true);
             avatarContainer.setActionBar(actionBar);
             actionBar.setChatAvatarContainer(avatarContainer);
@@ -2924,14 +2928,21 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void updateLiquidHeaderForSearch(boolean expanded) {
-        AndroidUtilities.cancelRunOnUIThread(restoreLiquidHeaderAfterSearch);
         if (expanded) {
-            updateLiquidGlassHeaderLayout(false);
-        } else {
-            // Search's own action-bar transition lasts 320 ms. Restore the
-            // compact header only after its search container is gone.
-            AndroidUtilities.runOnUIThread(restoreLiquidHeaderAfterSearch, 340);
+            liquidHeaderSearchActive = true;
+            // Keep the compact title presentation while search owns the menu.
+            // Its closing fade must never reveal the legacy avatar or actions.
+            updateLiquidGlassHeaderLayout(LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS));
         }
+    }
+
+    private void finishLiquidHeaderSearch() {
+        if (isFinished || searching || !liquidHeaderSearchActive || searchItem == null
+                || searchItem.isSearchFieldVisible()) {
+            return;
+        }
+        liquidHeaderSearchActive = false;
+        updateLiquidGlassHeaderLayout(LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS));
     }
 
     private void updateLiquidGlassReplyPanelLayout(boolean enabled) {
@@ -3668,7 +3679,7 @@ public class ChatActivity extends BaseFragment implements
         if (messageEnterTransitionContainer != null) messageEnterTransitionContainer.cancelAll();
         if (lunagramSpeech != null) { lunagramSpeech.close(); lunagramSpeech = null; }
         super.onFragmentDestroy();
-        AndroidUtilities.cancelRunOnUIThread(restoreLiquidHeaderAfterSearch);
+        liquidHeaderSearchActive = false;
         if (messageMetricsView != null) {
             messageMetricsView.finish();
         }
@@ -39500,7 +39511,6 @@ public class ChatActivity extends BaseFragment implements
 
         @Override
         public void onSearchCollapse() {
-            updateLiquidHeaderForSearch(false);
             searching = false;
             updatePagedownButtonVisibility(true);
             updateSearchUpDownButtonVisibility(true);
@@ -39638,6 +39648,14 @@ public class ChatActivity extends BaseFragment implements
                 hashtagSearchTabs.show(false);
             }
             setFilterMessages(false);
+            // clearSearch() may collapse an already-hidden search directly.
+            // A visible container still waits for its actual fade completion.
+            finishLiquidHeaderSearch();
+        }
+
+        @Override
+        public void onSearchCollapseFinished() {
+            finishLiquidHeaderSearch();
         }
 
         @Override

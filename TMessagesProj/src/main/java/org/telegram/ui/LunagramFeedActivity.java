@@ -7,7 +7,9 @@ import android.os.Bundle;
 import android.text.style.CharacterStyle;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.FrameLayout;
@@ -49,7 +51,7 @@ import org.telegram.ui.Components.blur3.source.BlurredBackgroundSourceRenderNode
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 
-/** A read-only chronological projection of selected channels, not a synthetic dialog. */
+/** A chronological projection of selected channels, with explicit reactions but no read acknowledgements. */
 public final class LunagramFeedActivity extends BaseFragment implements MainTabsActivity.TabFragmentDelegate {
     private LunagramFeedController feed;
     private RecyclerListView list;
@@ -399,7 +401,7 @@ public final class LunagramFeedActivity extends BaseFragment implements MainTabs
     private final class PostView extends LinearLayout {
         final ProfileSearchCell origin;
         final ChatMessageCell message;
-        final TextView react, open, folded;
+        final TextView folded;
         MessageObject post;
         PostView(Context context) {
             super(context);
@@ -421,17 +423,10 @@ public final class LunagramFeedActivity extends BaseFragment implements MainTabs
                 if (revealedPosts.size() >= 512) revealedPosts.clear();
                 revealedPosts.add(post.getDialogId() + ":" + post.getId()); bind(post);
             });
-            LinearLayout actions = new LinearLayout(context);
-            react = button(context, R.string.LunagramFeedReact);
-            open = button(context, R.string.LunagramFeedOpenPost);
-            actions.addView(react, new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1));
-            actions.addView(open, new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1));
-            addView(actions, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
             origin.setOnClickListener(v -> openPost(post));
-            open.setOnClickListener(v -> openPost(post));
-            react.setOnClickListener(v -> chooseReaction(post));
         }
         void bind(MessageObject value) {
+            ((FeedMessageCell) message).cancelBodyLongPress();
             post = value;
             TLRPC.Chat chat = getMessagesController().getChat(-post.getDialogId());
             String title = org.telegram.messenger.LunagramStreamerMode.isEnabled(currentAccount)
@@ -450,15 +445,57 @@ public final class LunagramFeedActivity extends BaseFragment implements MainTabs
                 display.resetLayout();
                 message.setMessageObject(display, null, false, false, false);
             }
-            react.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlueText));
-            open.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlueText));
         }
     }
 
     /** A feed has no ChatActivity parent to supply its actual width or paint gradient bubbles. */
     private final class FeedMessageCell extends ChatMessageCell {
         private int feedWidth;
+        private MessageObject bodyTouchPost;
+        private float bodyTouchX, bodyTouchY;
         FeedMessageCell(Context context) { super(context, LunagramFeedActivity.this.currentAccount, false, null, LunagramFeedActivity.this.resourceProvider); }
+        void cancelBodyLongPress() {
+            bodyTouchPost = null;
+            cancelCheckLongPress();
+        }
+        @Override public boolean onTouchEvent(MotionEvent event) {
+            final int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                cancelBodyLongPress();
+                final boolean handled = super.onTouchEvent(event);
+                // Native links/media/reaction chips keep their own gesture. Plain text needs the
+                // long-press entry point normally supplied by ChatActivity's RecyclerListView.
+                if (handled || !cellDelegate.canPerformActions() || getMessageObject() == null
+                        || event.getX() < getBackgroundDrawableLeft() || event.getX() > getBackgroundDrawableRight()
+                        || event.getY() < getBackgroundDrawableTop() || event.getY() > getBackgroundDrawableBottom()) return handled;
+                bodyTouchPost = getMessageObject();
+                bodyTouchX = event.getX(); bodyTouchY = event.getY();
+                startCheckLongPress();
+                return true;
+            }
+            if (bodyTouchPost != null) {
+                final int slop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+                if (action != MotionEvent.ACTION_MOVE || event.getPointerCount() != 1
+                        || Math.abs(event.getX() - bodyTouchX) > slop || Math.abs(event.getY() - bodyTouchY) > slop) {
+                    cancelBodyLongPress();
+                }
+                return true;
+            }
+            return super.onTouchEvent(event);
+        }
+        @Override protected boolean onLongPress() {
+            if (bodyTouchPost == null) return super.onLongPress();
+            if (!cellDelegate.canPerformActions() || bodyTouchPost != getMessageObject()) {
+                cancelBodyLongPress();
+                return false;
+            }
+            chooseReaction(bodyTouchPost);
+            return true;
+        }
+        @Override protected void onDetachedFromWindow() {
+            cancelBodyLongPress();
+            super.onDetachedFromWindow();
+        }
         @Override public int getParentWidth() {
             if (feedWidth > 0) return feedWidth;
             int available = list == null ? 0 : list.getWidth() - AndroidUtilities.dp(16);
@@ -481,6 +518,11 @@ public final class LunagramFeedActivity extends BaseFragment implements MainTabs
     }
 
     private final ChatMessageCell.ChatMessageCellDelegate cellDelegate = new ChatMessageCell.ChatMessageCellDelegate() {
+        @Override public boolean canPerformActions() {
+            // ChatMessageCell's default is false: without this even its native reaction hit targets are inert.
+            return visible && feed != null && feed.isAvailable() && owner == getUserConfig().getClientUserId();
+        }
+        @Override public boolean canPerformReply() { return false; }
         private void open(ChatMessageCell cell) { openPost(cell.getMessageObject()); }
         @Override public void didPressImage(ChatMessageCell cell, float x, float y, boolean fullPreview) { open(cell); }
         @Override public boolean needPlayMessage(ChatMessageCell cell, MessageObject message, boolean muted) { open(cell); return false; }
@@ -500,6 +542,7 @@ public final class LunagramFeedActivity extends BaseFragment implements MainTabs
         @Override public void didPressVoteButtons(ChatMessageCell cell, ArrayList<TLRPC.PollAnswer> buttons, int count, int x, int y) { open(cell); }
         @Override public void didPressPollMedia(ChatMessageCell cell, ImageReceiver receiver, TLRPC.PollAnswer answer, TLRPC.MessageMedia media, float x, float y, int index) { open(cell); }
         @Override public void didPressReaction(ChatMessageCell cell, TLRPC.ReactionCount reaction, boolean longpress, float x, float y) {
+            if (!canPerformActions() || cell == null || reaction == null || reaction.reaction == null) return;
             if (longpress) chooseReaction(cell.getMessageObject());
             else react(cell.getMessageObject(), reaction.reaction);
         }

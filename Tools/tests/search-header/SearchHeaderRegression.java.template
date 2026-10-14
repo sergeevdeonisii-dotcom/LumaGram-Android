@@ -1,0 +1,200 @@
+import java.util.*;
+
+public class SearchHeaderRegression {
+    static int checks;
+    static void check(boolean value, String message) { checks++; if (!value) throw new AssertionError(message); }
+    static int dp(float value) { return (int)Math.ceil(value); }
+    static class Canvas {}
+    static class View {
+        static final int VISIBLE=0, INVISIBLE=4, GONE=8, LAYOUT_DIRECTION_RTL=1;
+        static final int IMPORTANT_FOR_ACCESSIBILITY_AUTO=0, IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS=4;
+        static final Object ALPHA=new Object();
+        int visibility=VISIBLE, accessibility, width, height, left, top, right, bottom, direction;
+        Object tag; float alpha=1; ViewGroup parent; ViewGroup.MarginLayoutParams lp=new ViewGroup.MarginLayoutParams();
+        void setVisibility(int v){visibility=v;} int getVisibility(){return visibility;}
+        void setImportantForAccessibility(int v){accessibility=v;}
+        void setAlpha(float v){alpha=v;} float getAlpha(){return alpha;}
+        Object getTag(){return tag;} void setTag(Object v){tag=v;}
+        void setEnabled(boolean v){} void clearFocus(){} void requestFocus(){} void setText(String s){}
+        void requestLayout(){} void invalidate(){} void measure(int w,int h){width=MeasureSpec.getSize(w);height=MeasureSpec.getSize(h);}
+        int getMeasuredWidth(){return width;} int getMeasuredHeight(){return height;}
+        int getWidth(){return right-left;} float getX(){return left;}
+        void layout(int l,int t,int r,int b){left=l;top=t;right=r;bottom=b;}
+        ViewGroup getParent(){return parent;} ViewGroup.MarginLayoutParams getLayoutParams(){return lp;}
+        int getLayoutDirection(){return direction;}
+    }
+    static class ViewGroup extends View {
+        static class LayoutParams { int width=-1,height=-1; }
+        static class MarginLayoutParams extends LayoutParams { int leftMargin,rightMargin,topMargin,bottomMargin; }
+        ArrayList<View> children=new ArrayList<>(); int paddingLeft=2,paddingRight=3,paddingTop=0,paddingBottom=0;
+        void add(View v){children.add(v);v.parent=this;}
+        int getChildCount(){return children.size();} View getChildAt(int i){return children.get(i);}
+        int getPaddingLeft(){return paddingLeft;} int getPaddingRight(){return paddingRight;}
+        int getPaddingTop(){return paddingTop;} int getPaddingBottom(){return paddingBottom;}
+        protected boolean drawChild(Canvas c,View v,long t){return true;}
+        protected void onMeasure(int w,int h){measure(w,h);}
+        protected void onLayout(boolean c,int l,int t,int r,int b){}
+        void measureChildWithMargins(View v,int w,int wu,int h,int hu){v.measure(MeasureSpec.makeMeasureSpec(48,MeasureSpec.EXACTLY),h);}
+        void setMeasuredDimension(int w,int h){width=w;height=h;}
+        static int resolveSize(int value,int spec){return MeasureSpec.getMode(spec)==MeasureSpec.EXACTLY?MeasureSpec.getSize(spec):Math.min(value,MeasureSpec.getSize(spec));}
+        static int getChildMeasureSpec(int spec,int padding,int child){return MeasureSpec.makeMeasureSpec(Math.max(0,MeasureSpec.getSize(spec)-padding),MeasureSpec.EXACTLY);}
+    }
+    static class MeasureSpec {
+        static final int EXACTLY=0x40000000,AT_MOST=0x80000000;
+        static int makeMeasureSpec(int size,int mode){return size|mode;}
+        static int getSize(int spec){return spec&0x3fffffff;} static int getMode(int spec){return spec&0xc0000000;}
+    }
+    static class Animator {
+        static boolean immediate;
+        ArrayList<AnimatorListenerAdapter> listeners=new ArrayList<>();
+        void addListener(AnimatorListenerAdapter v){listeners.add(v);}
+        void removeAllListeners(){listeners.clear();}
+        void cancel(){for(var x:List.copyOf(listeners)) x.onAnimationCancel(this);finish();}
+        void finish(){for(var x:List.copyOf(listeners)) x.onAnimationEnd(this);}
+        void start(){if(immediate)finish();}
+    }
+    static class AnimatorSet extends Animator {
+        long duration;
+        void playTogether(Animator... v){} void setDuration(long value){duration=value;}
+    }
+    static class AnimatorListenerAdapter {
+        public void onAnimationEnd(Animator a){} public void onAnimationCancel(Animator a){}
+    }
+    static class ObjectAnimator extends Animator { static Animator ofFloat(View v,Object property,float... f){return new Animator();} }
+    static class AndroidUtilities { static void hideKeyboard(View v){} static void showKeyboard(View v){} }
+    static class FiltersView { static class MediaFilterData {boolean removable;} }
+    static class Listener {
+        void onPreToggleSearch(){} boolean canToggleSearch(){return true;} Animator getCustomToggleTransition(){return null;}
+        void onSearchFilterCleared(FiltersView.MediaFilterData f){} void onSearchCollapse(){}
+        void onSearchCollapseFinished(){} void onSearchExpand(){}
+    }
+    static class ActionBarMenuItem extends View {
+        ActionBarMenu parentMenu; View searchContainer=new View(),searchField=new View(),icon=new View();
+        Listener listener; AnimatorSet searchContainerAnimator;
+        ArrayList<FiltersView.MediaFilterData> currentSearchFilters=new ArrayList<>();
+        ActionBarMenuItem(ActionBarMenu menu){parentMenu=menu;searchContainer.setVisibility(GONE);}
+        View getIconView(){return icon;} void checkCreateSearchField(){} void clearSearchFilters(){}
+        boolean hasSubMenu(){return true;} boolean isSearchFieldVisible(){return searchContainer.getVisibility()==VISIBLE;}
+        /* TOGGLE_METHOD */
+    }
+    static class ActionBar {
+        ActionBarMenu menu=new ActionBarMenu(); Avatar avatar;
+        ActionBar(){menu.parentActionBar=this;}
+        ActionBarMenu createMenu(){return menu;} void setChatAvatarContainer(Avatar a){avatar=a;}
+        void checkAvatarContainerWidth(boolean b){} void checkMenuItemsWidth(){} void requestLayout(){} void invalidate(){}
+    }
+    static class ActionBarMenu extends ViewGroup {
+        boolean searchOnly,glassMode=true; View exclusiveItem,exclusiveItemAnchor;
+        ActionBar parentActionBar; Runnable onLayoutListener;
+        void setExclusiveItem(View v){setExclusiveItem(v,v);}
+        void setExclusiveItem(View v,View anchor){exclusiveItem=v;exclusiveItemAnchor=anchor;updateExclusiveAccessibility();}
+        /* MENU_METHODS */
+    }
+    static class Avatar extends View {
+        boolean external; void setExternalAvatarMode(boolean v){external=v;}
+        void setActionBar(ActionBar a){}
+    }
+    static class LiteMode {
+        static final int FLAG_LIQUID_GLASS=1; static boolean enabled=true;
+        static boolean isEnabled(int flag){return enabled;}
+    }
+    static class Chat {
+        static final int MODE_DEFAULT=0;
+        ActionBar actionBar=new ActionBar(); Avatar avatarContainer=new Avatar();
+        View liquidHeaderAvatarView=new View(); ActionBarMenuItem liquidHeaderAvatarItem=new ActionBarMenuItem(actionBar.menu);
+        ActionBarMenuItem headerItem=new ActionBarMenuItem(actionBar.menu),searchItem=new ActionBarMenuItem(actionBar.menu);
+        boolean liquidHeaderSearchActive,isFinished,searching,inBubbleMode,isInsideContainer;
+        int chatMode,restores; Object currentUser=new Object(),currentChat;
+        boolean isReport(){return false;} boolean isInPreviewMode(){return false;} boolean isThreadChat(){return false;}
+        void updateLiquidHeaderAvatar(){restores++;} void checkActionBarMenu(boolean v){}
+        Chat(){
+            actionBar.menu.add(searchItem.searchContainer);actionBar.menu.add(searchItem);
+            actionBar.menu.add(headerItem);actionBar.menu.add(liquidHeaderAvatarItem);
+            searchItem.searchContainer.lp.leftMargin=12;searchItem.searchContainer.lp.rightMargin=8;
+            searchItem.listener=new Listener(){
+                void onSearchExpand(){updateLiquidHeaderForSearch(true);searching=true;}
+                void onSearchCollapse(){searching=false;}
+                void onSearchCollapseFinished(){finishLiquidHeaderSearch();}
+            };
+            updateLiquidGlassHeaderLayout(true);
+        }
+        /* CHAT_METHODS */
+    }
+    static void assertSearch(Chat c,String label) {
+        check(c.avatarContainer.external,label+": compact title retained");
+        check(c.actionBar.menu.searchOnly,label+": search owns actions");
+        check(c.liquidHeaderAvatarItem.visibility==View.GONE,label+": separate avatar hidden");
+        check(!c.actionBar.menu.drawChild(new Canvas(),c.headerItem,0),label+": no legacy action drawn");
+        check(c.actionBar.menu.drawChild(new Canvas(),c.searchItem.searchContainer,0),label+": search fade drawn");
+        check(c.actionBar.menu.getItemsWidth()==0,label+": no legacy glass menu width");
+    }
+    static void finishOpening(Chat c){if(c.searchItem.searchContainerAnimator!=null)c.searchItem.searchContainerAnimator.finish();}
+    static void assertClosed(Chat c,String label){
+        check(!c.liquidHeaderSearchActive,label+": pending state cleared");
+        check(!c.actionBar.menu.searchOnly,label+": search-only released");
+        check(c.actionBar.menu.exclusiveItem==c.liquidHeaderAvatarItem,label+": avatar owns menu");
+        check(c.avatarContainer.external,label+": no legacy avatar");
+        check(c.searchItem.searchContainer.visibility==View.GONE,label+": search gone");
+    }
+    public static void main(String[] args) {
+        for(boolean reduced:new boolean[]{false,true}){
+            Animator.immediate=reduced;
+            Chat c=new Chat(); c.searchItem.toggleSearch(true);finishOpening(c);assertSearch(c,"expanded");
+            c.searchItem.toggleSearch(true);
+            if(!reduced){assertSearch(c,"closing");check(c.searchItem.searchContainerAnimator.duration==150,"native search duration retained");c.searchItem.searchContainerAnimator.finish();}
+            assertClosed(c,"completed");
+        }
+        Animator.immediate=false;
+        Chat c=new Chat();c.searchItem.toggleSearch(true);finishOpening(c);c.searchItem.toggleSearch(true);
+        AnimatorSet obsolete=c.searchItem.searchContainerAnimator;
+        AnimatorListenerAdapter late=obsolete.listeners.get(0);
+        c.searchItem.toggleSearch(true);finishOpening(c);late.onAnimationEnd(obsolete);
+        assertSearch(c,"rapid reopen");check(c.searchItem.searchContainer.visibility==View.VISIBLE,"stale close cannot hide reopened search");
+        c.searchItem.toggleSearch(false);late.onAnimationEnd(obsolete);
+        assertSearch(c,"stale completion during newer close");
+        check(c.searchItem.searchContainer.visibility==View.VISIBLE,"stale completion cannot finish newer close");
+        c.searchItem.searchContainerAnimator.finish();assertClosed(c,"second close");
+        c=new Chat();c.searchItem.toggleSearch(true);finishOpening(c);c.searchItem.toggleSearch(true);
+        obsolete=c.searchItem.searchContainerAnimator;obsolete.cancel();assertSearch(c,"cancelled close");
+        c.searchItem.toggleSearch(true);finishOpening(c);assertSearch(c,"reopen after cancellation");
+        c.searchItem.toggleSearch(false);c.isFinished=true;c.liquidHeaderSearchActive=false;
+        int before=c.restores;c.searchItem.searchContainerAnimator.finish();check(c.restores==before,"disposed fragment cannot restore header");
+        c=new Chat();c.searchItem.toggleSearch(true);finishOpening(c);c.searchItem.toggleSearch(false);
+        c.isFinished=true;before=c.restores;c.searchItem.searchContainerAnimator.finish();
+        check(c.restores==before,"finished guard also protects pending state before disposal cleanup");
+        c=new Chat();c.searchItem.toggleSearch(true);finishOpening(c);c.searchItem.toggleSearch(false);
+        before=c.restores;c.finishLiquidHeaderSearch();check(c.restores==before,"visible search blocks premature finish");
+        c.searchItem.searchContainerAnimator.finish();before=c.restores;c.finishLiquidHeaderSearch();check(c.restores==before,"completion is idempotent");
+        c=new Chat();c.searchItem.toggleSearch(true);c.searchItem.toggleSearch(false);
+        c.searchItem.toggleSearch(true);c.searchItem.toggleSearch(false);
+        c.searchItem.searchContainerAnimator.finish();assertClosed(c,"toggle before opening finishes");
+        c=new Chat();c.searchItem.toggleSearch(true);finishOpening(c);
+        c.searching=false;c.searchItem.searchContainer.setVisibility(View.GONE);
+        c.finishLiquidHeaderSearch();assertClosed(c,"direct collapse of already hidden search");
+        LiteMode.enabled=false;
+        c=new Chat();c.searchItem.toggleSearch(true);finishOpening(c);
+        check(!c.actionBar.menu.searchOnly,"non-liquid header keeps original menu");
+        check(!c.avatarContainer.external,"non-liquid header keeps original avatar mode");
+        c.searchItem.toggleSearch(false);c.searchItem.searchContainerAnimator.finish();
+        check(!c.liquidHeaderSearchActive,"non-liquid header completion clears state");
+        check(c.actionBar.menu.exclusiveItem==null,"non-liquid header never receives avatar menu");
+        LiteMode.enabled=true;
+        for(int width:new int[]{240,360,590,960})for(int direction:new int[]{0,1}){
+            c=new Chat();c.searchItem.toggleSearch(true);finishOpening(c);ActionBarMenu menu=c.actionBar.menu;menu.direction=direction;
+            menu.onMeasure(MeasureSpec.makeMeasureSpec(width,MeasureSpec.EXACTLY),MeasureSpec.makeMeasureSpec(56,MeasureSpec.EXACTLY));
+            menu.onLayout(true,0,0,width,56);
+            View search=c.searchItem.searchContainer;
+            check(search.getWidth()==width-25,"search fills space minus unchanged margins");
+            check(search.left==14,"search original inset retained in LTR and RTL");
+            check(menu.width==width && menu.height==56,"menu dimensions stable");
+            for(View child:menu.children)if(child instanceof ActionBarMenuItem){
+                check(child.getWidth()==0,"suppressed actions cannot receive touches");
+                check(child.accessibility==View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS,"suppressed actions not announced");
+            }
+            check(search.accessibility==View.IMPORTANT_FOR_ACCESSIBILITY_AUTO,"search remains accessible");
+            c.searchItem.toggleSearch(false);c.searchItem.searchContainerAnimator.finish();assertClosed(c,"layout close");
+            check(c.liquidHeaderAvatarItem.accessibility==View.IMPORTANT_FOR_ACCESSIBILITY_AUTO,"avatar accessibility restored");
+        }
+        System.out.println("PASS search header: "+checks+" assertions; actual toggle/layout/completion methods.");
+    }
+}

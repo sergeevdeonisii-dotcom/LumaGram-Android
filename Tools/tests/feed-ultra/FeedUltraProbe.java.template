@@ -33,11 +33,11 @@ public final class FeedUltraProbe {
     static class TLRPC {
         static class Chat {long id; boolean left,kicked; Chat(long id){this.id=id;}}
         static class ChatFull { }
-        static class Message {int id,date;long dialog;}
+        static class Message {int id,date;long dialog;ArrayList<String> chosen=new ArrayList<>();}
         static class TL_message extends Message { }
-        static class Reaction { }
+        static class Reaction {String key;Reaction(){this("heart");}Reaction(String key){this.key=key;}}
         static class TL_reactionPaid extends Reaction { }
-        static class TL_messageReactions { }
+        static class TL_messageReactions {ArrayList<String> chosen=new ArrayList<>();}
         static class TL_messages_getHistory {Object peer;int offset_id,limit;}
         static class TL_channels_getFullChannel {Object channel;}
         static class TL_messages_chatFull {ArrayList<Object> users=new ArrayList<>();ArrayList<Chat> chats=new ArrayList<>();ChatFull full_chat=new ChatFull();}
@@ -48,16 +48,22 @@ public final class FeedUltraProbe {
     }
     static class ChatObject {static boolean isChannelAndNotMegaGroup(TLRPC.Chat c){return true;} }
     static class ReactionsLayoutInBubble {
-        static class VisibleReaction {boolean isStar; static VisibleReaction fromTL(TLRPC.Reaction r){return new VisibleReaction();} TLRPC.Reaction toTLReaction(){return new TLRPC.Reaction();} }
+        static class VisibleReaction {
+            boolean isStar;String key;
+            static VisibleReaction fromTL(TLRPC.Reaction r){VisibleReaction v=new VisibleReaction();v.key=r.key;v.isStar=r instanceof TLRPC.TL_reactionPaid;return v;}
+            TLRPC.Reaction toTLReaction(){return new TLRPC.Reaction(key);}
+            @Override public boolean equals(Object other){return other instanceof VisibleReaction&&Objects.equals(key,((VisibleReaction)other).key);}
+            @Override public int hashCode(){return Objects.hashCode(key);}
+        }
     }
     static class MessageObject {
         TLRPC.Message messageOwner; boolean forceUpdate,reactionsChanged; int selected,currentAccount;
         MessageObject(int a,TLRPC.Message m,boolean x,boolean y){messageOwner=m;currentAccount=a;}
         static long getDialogId(TLRPC.Message m){return m.dialog;} long getDialogId(){return messageOwner.dialog;} int getId(){return messageOwner.id;}
-        boolean hasChosenReaction(ReactionsLayoutInBubble.VisibleReaction r){return false;}
-        ArrayList<ReactionsLayoutInBubble.VisibleReaction> getChoosenReactions(){return new ArrayList<>();}
+        boolean hasChosenReaction(ReactionsLayoutInBubble.VisibleReaction r){return messageOwner.chosen.contains(r.key);}
+        ArrayList<ReactionsLayoutInBubble.VisibleReaction> getChoosenReactions(){ArrayList<ReactionsLayoutInBubble.VisibleReaction> result=new ArrayList<>();for(String key:messageOwner.chosen)result.add(ReactionsLayoutInBubble.VisibleReaction.fromTL(new TLRPC.Reaction(key)));return result;}
         void selectReaction(ReactionsLayoutInBubble.VisibleReaction r,boolean a,boolean b){selected++;}
-        static void updateReactions(TLRPC.Message m,TLRPC.TL_messageReactions r){ }
+        static void updateReactions(TLRPC.Message m,TLRPC.TL_messageReactions r){m.chosen=new ArrayList<>(r.chosen);}
     }
     static class ConnectionsManager {
         interface Callback {void run(Object result,Object error);}
@@ -160,13 +166,15 @@ public final class FeedUltraProbe {
         reset();MessagesController.instance.chats.clear();feed=create();feed.refresh();LunagramSubscriptionClient.epochs[0]++;
         MessagesStorage.drain();check(ConnectionsManager.instance.requests.isEmpty()&&MessagesController.instance.peerWrites==0,"queued storage cannot restart an old login");
         for(int kind=0;kind<3;kind++) {
-            reset();feed=create();MessageObject p=post();int[] results={0};
+            reset();feed=create();feed.refresh();ConnectionsManager.instance.reply(0,history());
+            MessageObject p=post();int[] results={0};
+            int before=ConnectionsManager.instance.requests.size(),peerWrites=MessagesController.instance.peerWrites;
             if(kind==0)feed.loadReactions(7,x->results[0]++);
             if(kind==1)feed.react(p,new TLRPC.Reaction(),x->results[0]++);
             if(kind==2)feed.reloadPost(p,feed.generation);
             LunagramSubscriptionClient.epochs[0]++;
-            ConnectionsManager.instance.reply(0,kind==0?new TLRPC.TL_messages_chatFull():kind==1?new TLRPC.Updates():history());
-            check(results[0]==0&&p.selected==0&&MessagesController.instance.peerWrites==0&&MessagesController.instance.updates==0,"reaction/reload epoch boundary "+kind);
+            ConnectionsManager.instance.reply(before,kind==0?new TLRPC.TL_messages_chatFull():kind==1?new TLRPC.Updates():history());
+            check(results[0]==0&&p.selected==0&&MessagesController.instance.peerWrites==peerWrites&&MessagesController.instance.updates==0,"reaction/reload epoch boundary "+kind);
         }
     }
     static void notificationsAndUnpaid() {
@@ -180,5 +188,58 @@ public final class FeedUltraProbe {
         reset();LunagramSubscriptionAccess.allowed=false;feed=create();feed.refresh();
         check(ConnectionsManager.instance.requests.isEmpty()&&feed.posts().isEmpty(),"free startup no network");
     }
-    public static void main(String[] args) {identityAndPreferences();loadAndRevoke();responseBoundaries();notificationsAndUnpaid();System.out.println("PASS full production feed controller: "+checks+" checks");}
+    static void reactionToggles() {
+        reset();LunagramFeedController feed=create();feed.refresh();ConnectionsManager.instance.reply(0,history());
+        MessageObject original=feed.posts().get(0), stale=post();stale.messageOwner.chosen.add("heart");
+        int[] outcomes={0,0};LunagramFeedController.Result callback=ok->{outcomes[ok?0:1]++;};
+        feed.react(stale,new TLRPC.Reaction(),callback);
+        TLRPC.TL_messages_sendReaction request=(TLRPC.TL_messages_sendReaction)ConnectionsManager.instance.requests.get(1).body;
+        check(request.peer.equals(-7L)&&request.msg_id==40,"chip targets original channel and message");
+        check(request.reaction.size()==1&&request.reaction.get(0).key.equals("heart")&&request.flags==1,"stale clone choice ignored; current post adds");
+        check(original.messageOwner.chosen.isEmpty()&&original.selected==0,"no optimistic/fake counter before server");
+        feed.react(original,new TLRPC.Reaction("fire"),callback);
+        check(ConnectionsManager.instance.requests.size()==2,"rapid tap serialized per post");
+        // Authoritative update may arrive before the send response; it must not be toggled away.
+        TLRPC.TL_messageReactions early=new TLRPC.TL_messageReactions();early.chosen.add("heart");
+        NotificationCenter.instance.post(0,NotificationCenter.didUpdateReactions,-7L,40,early);
+        ConnectionsManager.instance.reply(1,new TLRPC.Updates());
+        check(outcomes[0]==1&&original.selected==0&&original.messageOwner.chosen.equals(Arrays.asList("heart")),"server acceptance never re-toggles earlier update");
+        check(ConnectionsManager.instance.requests.get(2).body instanceof TLRPC.TL_channels_getMessages,"server post reload follows accepted reaction");
+        feed.react(original,new TLRPC.Reaction(),callback);
+        check(ConnectionsManager.instance.requests.size()==3,"tap waits for authoritative reload; cannot toggle stale state");
+        // Replacing the MessageObject while reload is pending must not make its identity lookup fail.
+        MessageObject replacement=post();ArrayList<MessageObject> replacements=new ArrayList<>();replacements.add(replacement);
+        NotificationCenter.instance.post(0,NotificationCenter.replaceMessagesObjects,-7L,replacements);
+        TLRPC.messages_Messages accepted=history();accepted.messages.get(0).chosen.add("heart");
+        ConnectionsManager.instance.reply(2,accepted);
+        check(feed.posts().get(0).messageOwner.chosen.equals(Arrays.asList("heart")),"reload resolves replaced post by channel and id");
+        check(feed.posts().get(0)!=original,"reload installs authoritative server object");
+        feed.react(original,new TLRPC.Reaction(),callback);
+        request=(TLRPC.TL_messages_sendReaction)ConnectionsManager.instance.requests.get(3).body;
+        check(request.reaction.isEmpty()&&request.flags==0,"tap chosen chip removes final reaction");
+        ConnectionsManager.instance.reply(3,new TLRPC.Updates());ConnectionsManager.instance.reply(4,history());
+        check(feed.posts().get(0).messageOwner.chosen.isEmpty(),"server removal reflected in feed");
+        feed.posts().get(0).messageOwner.chosen.addAll(Arrays.asList("a","b","c"));
+        feed.react(original,new TLRPC.Reaction("d"),callback);
+        request=(TLRPC.TL_messages_sendReaction)ConnectionsManager.instance.requests.get(5).body;
+        check(request.reaction.size()==3&&request.reaction.get(0).key.equals("b")&&request.reaction.get(2).key.equals("d"),"user reaction limit preserved");
+        ConnectionsManager.instance.requests.get(5).callback.run(null,new Object());AndroidUtilities.drain();
+        check(outcomes[1]==1&&feed.posts().get(0).messageOwner.chosen.equals(Arrays.asList("a","b","c")),"denied server response leaves counts unchanged and reports failure");
+        feed.react(original,new TLRPC.Reaction("b"),callback);
+        request=(TLRPC.TL_messages_sendReaction)ConnectionsManager.instance.requests.get(6).body;
+        check(request.reaction.size()==2&&request.reaction.get(0).key.equals("a")&&request.reaction.get(1).key.equals("c"),"removing one chip preserves other choices; failed request unlocked");
+        int before=ConnectionsManager.instance.requests.size();MessageObject foreign=post();foreign.messageOwner.dialog=-9;
+        feed.react(foreign,new TLRPC.Reaction(),callback);check(ConnectionsManager.instance.requests.size()==before,"foreign channel not admitted");
+        MessageObject deleted=post();deleted.messageOwner.id=999;
+        feed.react(deleted,new TLRPC.Reaction(),callback);check(ConnectionsManager.instance.requests.size()==before,"missing/deleted post not admitted");
+        ConnectionsManager.instance.reply(6,new TLRPC.Updates());
+        ConnectionsManager.instance.requests.get(7).callback.run(null,new Object());AndroidUtilities.drain();
+        feed.react(original,new TLRPC.Reaction("c"),callback);
+        check(ConnectionsManager.instance.requests.size()==9,"failed authoritative reload releases pending lock");
+        ConnectionsManager.instance.reply(8,new TLRPC.Updates());
+        NotificationCenter.instance.post(0,NotificationCenter.messagesDeleted,new ArrayList<>(Arrays.asList(40)),7L,false);
+        ConnectionsManager.instance.reply(9,history());
+        check(feed.posts().stream().noneMatch(p->p.getId()==40),"late reaction reload cannot resurrect deleted post");
+    }
+    public static void main(String[] args) {identityAndPreferences();loadAndRevoke();responseBoundaries();notificationsAndUnpaid();reactionToggles();System.out.println("PASS full production feed controller: "+checks+" checks");}
 }

@@ -7,7 +7,8 @@ New-Item -ItemType Directory -Path $run -Force | Out-Null
 $controller=[IO.File]::ReadAllText((Join-Path $base 'org/telegram/messenger/LunagramFeedController.java'))
 $nested=[regex]::Replace($controller,'(?m)^package .*;\r?\n|^import .*;\r?\n','').Replace('public final class LunagramFeedController','static final class LunagramFeedController')
 $probe=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'feed-ultra/FeedUltraProbe.java.template')).Replace('/* ACTUAL_CONTROLLER */',$nested)
-$javac=Join-Path $JavaHome 'bin/javac.exe';$java=Join-Path $JavaHome 'bin/java.exe'
+$suffix=if($env:OS -eq 'Windows_NT'){'.exe'}else{''}
+$javac=Join-Path $JavaHome ('bin/javac'+$suffix);$java=Join-Path $JavaHome ('bin/java'+$suffix)
 function RunProbe([string]$name,[string]$source,[bool]$negative){
     $folder=Join-Path $run $name;New-Item -ItemType Directory -Path $folder -Force | Out-Null
     $file=Join-Path $folder 'FeedUltraProbe.java';[IO.File]::WriteAllText($file,$source,[Text.UTF8Encoding]::new($false))
@@ -29,7 +30,10 @@ foreach($mutation in @(
     @('no-live-clear',$probe.Replace('posts.clear();','')),
     @('no-cancellation',$probe.Replace('ConnectionsManager.getInstance(account).cancelRequest(request, true);','{}')),
     @('source-bypass',$probe.Replace('if (access == null || !access.isAvailable()) return false;','')),
-    @('post-account-bypass',$probe.Replace('post.currentAccount != account || ',''))
+    @('post-account-bypass',$probe.Replace('post.currentAccount != account','false')),
+    @('clone-instead-of-canonical',$probe.Replace('final MessageObject post = findPost(display);','final MessageObject post = display;')),
+    @('identity-only-reload',$probe.Replace('posts.indexOf(findPost(post))','posts.indexOf(post)')),
+    @('server-update-double-toggle',$probe.Replace('MessagesController.getInstance(account).processUpdates((TLRPC.Updates) response, false);','post.selectReaction(chosen, false, false); MessagesController.getInstance(account).processUpdates((TLRPC.Updates) response, false);'))
 )){
     if($mutation[1] -eq $probe){throw "Mutation did not change source: $($mutation[0])"}
     RunProbe $mutation[0] $mutation[1] $true
