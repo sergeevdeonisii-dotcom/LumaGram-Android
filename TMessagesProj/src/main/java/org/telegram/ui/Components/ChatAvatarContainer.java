@@ -1459,7 +1459,9 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             } else if (externalAvatarMode && type != null && type >= 0 && type < statusDrawables.length) {
                 // Reserve an inline slot for the animated typing/recording icon so
                 // icon and label are centered as one compact group.
-                newSubtitle = TYPING_DRAWABLE_PLACEHOLDER + " " + newSubtitle;
+                // A half-em gap keeps the moving icon clear of the label even
+                // at the far end of its cycle, and follows the subtitle font.
+                newSubtitle = TYPING_DRAWABLE_PLACEHOLDER + "\u2002" + newSubtitle;
             }
             useOnlineColor = true;
             // A network/connection label temporarily owns the subtitle. Keep

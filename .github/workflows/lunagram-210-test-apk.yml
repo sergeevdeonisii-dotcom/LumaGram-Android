@@ -43,6 +43,9 @@ jobs:
       - name: Run focused access, local tools and gesture regressions without credentials
         shell: pwsh
         run: |
+          ./Tools/tests/run-status-drawable-bounds-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'status-bounds210')
+          ./Tools/tests/run-chat-header-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'chat-header210')
+          node --test Tools/tests/chat-header-tools.test.mjs
           ./Tools/tests/run-lunagram210-surface-contracts.ps1 -Aapt2 (Join-Path $env:ANDROID_HOME 'build-tools/36.0.0/aapt2') -OutputRoot (Join-Path $env:RUNNER_TEMP 'surface210')
           ./Tools/tests/run-feature-catalog150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'feature-catalog210')
           ./Tools/tests/run-subscription-screen150-regressions.ps1 -JavaHome $env:JAVA_HOME -OutputRoot (Join-Path $env:RUNNER_TEMP 'subscription-screen210')

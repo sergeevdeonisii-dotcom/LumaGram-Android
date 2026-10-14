@@ -51,7 +51,8 @@ if($Integration){
         'org/telegram/ui/Components/Text.java','org/telegram/ui/Components/RecyclerListView.java',
         'org/telegram/ui/Components/Paint/PaintTypeface.java',
         'org/telegram/ui/ActionBar/ActionBar.java','org/telegram/ui/ActionBar/ActionBarMenu.java',
-        'org/telegram/ui/ActionBar/ActionBarMenuItem.java')
+        'org/telegram/ui/ActionBar/ActionBarMenuItem.java',
+        'org/telegram/ui/Components/SendingFileDrawable.java','org/telegram/ui/Components/PlayingGameDrawable.java')
 }
 $sources=@($names | Sort-Object -Unique | ForEach-Object { Join-Path $base $_ })
 $cached=Join-Path $repo 'TMessagesProj/build/intermediates/compile_library_classes_jar/standalone/bundleLibCompileToJarStandalone/classes.jar'

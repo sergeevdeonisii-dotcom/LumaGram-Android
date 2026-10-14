@@ -280,8 +280,8 @@ $run = Join-Path $OutputRoot ([guid]::NewGuid().ToString() + '/chat-header')
 New-Item -ItemType Directory -Path (Join-Path $run 'classes') | Out-Null
 $sourceFile = Join-Path $run 'ChatHeaderRegressionTest.java'
 [System.IO.File]::WriteAllText($sourceFile, $harness, [System.Text.UTF8Encoding]::new($false))
-& (Join-Path $JavaHome 'bin/javac.exe') -J-Xmx128m -encoding UTF-8 -d (Join-Path $run 'classes') $sourceFile
+& (Join-Path $JavaHome 'bin/javac') -J-Xmx128m -encoding UTF-8 -d (Join-Path $run 'classes') $sourceFile
 if ($LASTEXITCODE -ne 0) { throw 'Chat header regression compilation failed.' }
-& (Join-Path $JavaHome 'bin/java.exe') -Xmx64m -cp (Join-Path $run 'classes') ChatHeaderRegressionTest
+& (Join-Path $JavaHome 'bin/java') -Xmx64m -cp (Join-Path $run 'classes') ChatHeaderRegressionTest
 if ($LASTEXITCODE -ne 0) { throw 'Chat header / UTF-16 regressions failed.' }
 Write-Output "Test artifacts: $run"

@@ -72,6 +72,11 @@ public class SendingFileDrawable extends StatusDrawable {
     @Override
     public void draw(Canvas canvas) {
         Paint paint = currentPaint == null ? Theme.chat_statusRecordPaint : currentPaint;
+        // SimpleTextView positions inline status icons with nonzero bounds.
+        // Keep the original animation in local coordinates, including its gap
+        // from the label, instead of drawing at the edge of the whole view.
+        final int saveCount = canvas.save();
+        canvas.translate(getBounds().left, getBounds().top);
         for (int a = 0; a < 3; a++) {
             if (a == 0) {
                 paint.setAlpha((int) (255 * progress));
@@ -84,6 +89,7 @@ public class SendingFileDrawable extends StatusDrawable {
             canvas.drawLine(side, AndroidUtilities.dp(isChat ? 3 : 4), side + AndroidUtilities.dp(4), AndroidUtilities.dp(isChat ? 7 : 8), paint);
             canvas.drawLine(side, AndroidUtilities.dp(isChat ? 11 : 12), side + AndroidUtilities.dp(4), AndroidUtilities.dp(isChat ? 7 : 8), paint);
         }
+        canvas.restoreToCount(saveCount);
 
         if (started) {
             update();
