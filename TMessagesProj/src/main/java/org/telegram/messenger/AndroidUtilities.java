@@ -262,7 +262,7 @@ public class AndroidUtilities {
     public static Typeface bold() {
         if (mediumTypeface == null) {
             if (SharedConfig.useSystemBoldFont && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                mediumTypeface = Typeface.create(null, 500, false);
+                mediumTypeface = LunagramTypography.resolveSystemMedium(Typeface.create(null, 500, false));
             } else {
                 mediumTypeface = getTypeface(TYPEFACE_ROBOTO_MEDIUM);
             }
@@ -2390,6 +2390,11 @@ public class AndroidUtilities {
     }
 
     public static Typeface getTypeface(String assetPath) {
+        return LunagramTypography.resolveAsset(assetPath, getTypefaceForArtwork(assetPath));
+    }
+
+    /** Media editor fonts are content, not app typography. */
+    public static Typeface getTypefaceForArtwork(String assetPath) {
         synchronized (typefaceCache) {
             if (!typefaceCache.containsKey(assetPath)) {
                 try {

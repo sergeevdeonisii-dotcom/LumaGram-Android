@@ -11321,7 +11321,7 @@
     <string name="LunagramSubscriptionInfoPet">An animated cat above the input field. It plays, reacts to typing and sending, and hides during recording.</string>
     <string name="LunagramSubscriptionInfoSounds">Quiet interface sound packs: Space, Typewriter, Retro Console and Drops.</string>
     <string name="LunagramSubscriptionInfoAtmosphere">Stars, rain, fireflies or an aquarium in individual chats, with adjustable intensity.</string>
-    <string name="LunagramSubscriptionInfoSendAnimations">Animate sent messages with letters, a drop or a paper plane.</string>
+    <string name="LunagramSubscriptionInfoSendAnimations">Separate effects for outgoing messages and new messages in the open chat.</string>
     <string name="LunagramSubscriptionInfoStreamer">Mask names, avatars and phone numbers in the interface. Message text and notifications are not hidden.</string>
     <string name="LunagramSubscriptionInfoReminders">Choose a message and a time. A notification takes you back to it; notifications must be allowed.</string>
     <string name="LunagramSubscriptionInfoMemes">Pause a video, add top and bottom captions to the frame, then send it as an image.</string>
@@ -11441,7 +11441,7 @@
     <string name="LunagramSubscriptionFeaturePet">LunaPet</string>
     <string name="LunagramSubscriptionFeatureSounds">Interface sound packs</string>
     <string name="LunagramSubscriptionFeatureAtmosphere">Chat atmosphere</string>
-    <string name="LunagramSubscriptionFeatureSendAnimations">Send animations</string>
+    <string name="LunagramSubscriptionFeatureSendAnimations">Message animations</string>
     <string name="LunagramSubscriptionFeatureStreamer">Screenshot and stream mode</string>
     <string name="LunagramSubscriptionFeatureReminders">Message reminders</string>
     <string name="LunagramSubscriptionFeatureMemes">Memes from video frames</string>
@@ -11777,7 +11777,8 @@
     <string name="LunagramSoundTypewriter">Typewriter</string>
     <string name="LunagramSoundRetro">Retro console</string>
     <string name="LunagramSoundDrops">Drops</string>
-    <string name="LunagramSendEffectTitle">Send animation</string>
+    <string name="LunagramSendEffectTitle">Outgoing animation</string>
+    <string name="LunagramIncomingEffectTitle">Incoming animation</string>
     <string name="LunagramSendLetters">Letters</string>
     <string name="LunagramSendDrop">Drop</string>
     <string name="LunagramSendPlane">Paper plane</string>

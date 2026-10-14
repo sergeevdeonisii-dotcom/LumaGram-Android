@@ -2264,8 +2264,9 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
             glassDrawableBack.draw(canvas);
         }
         if (glassDrawableMenu != null && menuWidth > 0 && !glassOnlyBack && !doNotDrawGlassMenu) {
-            final float exclusiveCenterX = menu != null ? menu.getExclusiveItemCenterXInParent() : Float.NaN;
-            final float exclusiveCenterY = menu != null ? menu.getExclusiveItemCenterYInParent() : Float.NaN;
+            final ActionBarMenu glassMenu = actionModeVisible ? actionMode : menu;
+            final float exclusiveCenterX = glassMenu != null ? glassMenu.getExclusiveItemCenterXInParent() : Float.NaN;
+            final float exclusiveCenterY = glassMenu != null ? glassMenu.getExclusiveItemCenterYInParent() : Float.NaN;
             if (!Float.isNaN(exclusiveCenterX)) {
                 final int diameter = s + p * 2;
                 final int menuLeft = Math.round(exclusiveCenterX - diameter / 2f);

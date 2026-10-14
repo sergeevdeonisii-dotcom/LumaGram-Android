@@ -4,12 +4,12 @@ $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $run=Join-Path ([IO.Path]::GetFullPath($OutputRoot)) ([guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $run -Force | Out-Null
 $keys=@([IO.File]::ReadAllLines((Join-Path $PSScriptRoot 'lunagram20-experience/localization-keys.txt')) | Where-Object {$_})
-if($keys.Count -ne 135 -or @($keys | Sort-Object -Unique).Count -ne $keys.Count){throw 'The reviewed2.0 localization key list must contain exactly135 unique entries.'}
+if($keys.Count -ne 136 -or @($keys | Sort-Object -Unique).Count -ne $keys.Count){throw 'The reviewed experience localization key list must contain exactly136 unique entries.'}
 $plugin=[IO.File]::ReadAllText((Join-Path $repo 'buildSrc/src/main/kotlin/org/telegram/plugin/TelegramBuildAppPlugin.kt'))
-if($plugin -notmatch '(?s)stringsXml\.from\(\s*telegramModule\.fileTree\("src/main/res/values"\)\s*\{\s*include\("strings.xml"\)' -or
-    $plugin -notmatch '(?s)localizationFiles\.from\(\s*telegramModule\.fileTree\("src/main/res"\)\s*\{\s*include\("values-\*/strings.xml"\)' -or
+if($plugin -notmatch '(?s)stringsXml\.from\(\s*telegramModule\.fileTree\("src/main/res/values"\)\s*\{\s*include\("strings.xml"(?:,\s*"lunagram_\*\.xml")?\)' -or
+    $plugin -notmatch '(?s)localizationFiles\.from\(\s*telegramModule\.fileTree\("src/main/res"\)\s*\{\s*include\("values-\*/strings.xml"(?:,\s*"values-\*/lunagram_\*\.xml")?\)' -or
     !$plugin.Contains('TelegramStringsTask::assetsOutputDir')){throw 'Localization probe input selection must match the real app generator plugin.'}
-$paths=@();$sets=@();$family='^Lunagram(?:Stereo|Voice|EffectsOff$|Experience|Recording|Swipe|SaveToSelf$|Pet|Sounds|Sound|Send|Atmosphere|Streamer|Reminder|Hidden|Feed|Video|Meme|Welcome20|Subscription(?:RotateLogo$|ActiveUntil$|FreeTier$|PersonalTier$|LegacyTier$|CurrentPlan$|Info(?:Glass|Formatting|Typing|Undo|Round|Number|Level|Verification|Nft|Notes|Profiles|Transfer|Ghost|Deleted|Edits|Emergency|Vault|Journal|Export|Pdf|Local)$))'
+$paths=@();$sets=@();$family='^Lunagram(?:Stereo|Voice|EffectsOff$|Experience|Recording|Swipe|SaveToSelf$|Pet|Sounds|Sound|Send|Incoming|Atmosphere|Streamer|Reminder|Hidden|Feed|Video|Meme|Welcome20|Subscription(?:RotateLogo$|ActiveUntil$|FreeTier$|PersonalTier$|LegacyTier$|CurrentPlan$|Info(?:Glass|Formatting|Typing|Undo|Round|Number|Level|Verification|Nft|Notes|Profiles|Transfer|Ghost|Deleted|Edits|Emergency|Vault|Journal|Export|Pdf|Local)$))'
 foreach($locale in @('values','values-ru')){
     $path=Join-Path $repo ('TMessagesProj/src/main/res/'+$locale+'/strings.xml');$paths+=$path
     $xml=[xml][IO.File]::ReadAllText($path)
@@ -42,4 +42,4 @@ $file=Join-Path $run 'ExperienceLocalization20Probe.java';[IO.File]::WriteAllTex
 if($LASTEXITCODE -ne 0){throw 'Actual localization lookup bodies failed host compile.'}
 & (Join-Path $JavaHome 'bin/java.exe') -Xmx128m -cp $run ExperienceLocalization20Probe @paths
 if($LASTEXITCODE -ne 0){throw 'Actual getStringV2 lookup or standalone-only negative control failed.'}
-Write-Output 'PASS all135 EN/RU2.0 keys: exact generator inputs, parity, duplicates, real lookup bodies, missing-asset negative controls. Not a Gradle asset/device render test.'
+Write-Output 'PASS all136 EN/RU experience keys: exact generator inputs, parity, duplicates, real lookup bodies, missing-asset negative controls. Not a Gradle asset/device render test.'

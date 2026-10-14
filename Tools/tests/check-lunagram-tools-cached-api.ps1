@@ -37,7 +37,21 @@ if($Integration){
         'org/telegram/messenger/LunagramLocalLabelsModel.java','org/telegram/messenger/LunagramLocalLabels.java',
         'org/telegram/ui/Components/LunagramAliasSheet.java','org/telegram/ui/ProxyListActivity.java',
         'org/telegram/ui/Components/ChatAvatarContainer.java','org/telegram/messenger/LunagramFeedController.java',
-        'org/telegram/messenger/LunagramFeedMerger.java')
+        'org/telegram/messenger/LunagramFeedMerger.java',
+        'org/telegram/messenger/LunagramIncomingAnimation.java','org/telegram/messenger/LunagramSendEffectGeometry.java',
+        'org/telegram/ui/Components/LunagramIncomingMessageEffect.java','org/telegram/ui/Cells/ChatMessageCell.java',
+        'org/telegram/ui/recyclerview/ChatListItemAnimator.java',
+        'org/telegram/ui/MessageEnterTransitionContainer.java','org/telegram/ui/VoiceMessageEnterTransition.java',
+        'org/telegram/messenger/LunagramTypography.java','org/telegram/messenger/AndroidUtilities.java',
+        'org/telegram/messenger/ApplicationLoader.java','org/telegram/ui/LunagramTypographyActivity.java',
+        'org/telegram/ui/BlackHoleSearchActivity.java','org/telegram/ui/Components/LunagramTypographyViews.java',
+        'org/telegram/ui/ActionBar/BaseFragment.java','org/telegram/ui/ActionBar/AlertDialog.java',
+        'org/telegram/ui/ActionBar/BottomSheet.java','org/telegram/ui/ActionBar/SimpleTextView.java',
+        'org/telegram/ui/ActionBar/Theme.java','org/telegram/ui/Components/AnimatedTextView.java',
+        'org/telegram/ui/Components/Text.java','org/telegram/ui/Components/RecyclerListView.java',
+        'org/telegram/ui/Components/Paint/PaintTypeface.java',
+        'org/telegram/ui/ActionBar/ActionBar.java','org/telegram/ui/ActionBar/ActionBarMenu.java',
+        'org/telegram/ui/ActionBar/ActionBarMenuItem.java')
 }
 $sources=@($names | Sort-Object -Unique | ForEach-Object { Join-Path $base $_ })
 $cached=Join-Path $repo 'TMessagesProj/build/intermediates/compile_library_classes_jar/standalone/bundleLibCompileToJarStandalone/classes.jar'

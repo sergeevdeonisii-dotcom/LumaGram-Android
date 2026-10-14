@@ -2457,6 +2457,7 @@ public class RecyclerListView extends RecyclerView implements IBlur3Capture {
 
     @Override
     public void onChildAttachedToWindow(View child) {
+        LunagramTypographyViews.apply(child);
         if (getAdapter() instanceof SelectionAdapter) {
             ViewHolder holder = findContainingViewHolder(child);
             if (holder != null) {

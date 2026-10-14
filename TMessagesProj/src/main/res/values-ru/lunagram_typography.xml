@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="LufTitle">Шрифт приложения</string>
+    <string name="LufFamily">Шрифт</string>
+    <string name="LufWeight">Насыщенность</string>
+    <string name="LufSystem">Стандартный Telegram</string>
+    <string name="LufSans">Без засечек</string>
+    <string name="LufSerif">С засечками</string>
+    <string name="LufMono">Моноширинный</string>
+    <string name="LufCondensed">Узкий</string>
+    <string name="LufNormal">Обычная</string>
+    <string name="LufMedium">Средняя</string>
+    <string name="LufBold">Жирная</string>
+    <string name="LufPreview">Предпросмотр</string>
+    <string name="LufPreviewTitle">Сообщения Lunagram</string>
+    <string name="LufPreviewText">Привет! Так будет выглядеть текст.\nБуквы, цифры 123 и эмодзи 🙂</string>
+    <string name="LufReset">Вернуть стандартный шрифт</string>
+    <string name="LufInfo">Локальный шрифт меню, списка чатов и сообщений. Отправляемое оформление, эмодзи и код не меняются. Сайты и текст внутри медиа сохраняют свои шрифты.</string>
+    <string name="LufRestart">Сохранено. Шрифт применится во всём Lunagram после полного перезапуска приложения.</string>
+    <string name="LufCurrent">Изменения применятся после перезапуска Lunagram. Предпросмотр обновляется сразу.</string>
+</resources>

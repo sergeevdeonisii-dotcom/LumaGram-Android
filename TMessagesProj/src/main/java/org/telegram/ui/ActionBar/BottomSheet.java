@@ -1510,6 +1510,7 @@ public class BottomSheet extends Dialog implements BaseFragment.AttachedSheet {
     @Override
     protected void onStart() {
         super.onStart();
+        org.telegram.ui.Components.LunagramTypographyViews.attach(getWindow());
     }
 
     public void setUseLightStatusBar(boolean value) {

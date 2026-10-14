@@ -43,6 +43,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LunagramExperienceSettings;
+import org.telegram.messenger.LunagramMediaAccess;
 import org.telegram.messenger.LunagramSendEffectGeometry;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
@@ -132,13 +133,17 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
     private final Path revealPath = new Path();
     private final IdentityHashMap<CharSequence, int[]> revealBoundaries = new IdentityHashMap<>();
     private Drawable flightPlane;
+    private LunagramMediaAccess.Session session;
+    private boolean active;
+    private boolean finished;
 
     @SuppressLint("WrongConstant")
     public TextMessageEnterTransition(ChatMessageCell messageView, ChatActivity chatActivity, RecyclerListView listView, MessageEnterTransitionContainer container, Theme.ResourcesProvider resourcesProvider) {
         this.resourcesProvider = resourcesProvider;
         currentAccount = chatActivity.getCurrentAccount();
         // A disabled system/app animator must never hide the live cell for a custom effect.
-        if (!SharedConfig.animationsEnabled() || Build.VERSION.SDK_INT >= 26 && !ValueAnimator.areAnimatorsEnabled()) return;
+        if (!SharedConfig.animationsEnabled() || AndroidUtilities.getAnimatorDurationScale() <= 0
+                || Build.VERSION.SDK_INT >= 26 && !ValueAnimator.areAnimatorsEnabled()) return;
         if (!LiteMode.isPowerSaverApplied() && SharedConfig.getDevicePerformanceClass() != SharedConfig.PERFORMANCE_CLASS_LOW) {
             sendEffect = LunagramExperienceSettings.sendEffect(currentAccount);
         }
@@ -164,8 +169,6 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
         if (!messageView.getTransitionParams().wasDraw) {
             messageView.draw(new Canvas());
         }
-
-        messageView.setEnterTransitionInProgress(true);
 
         CharSequence editText = chatActivityEnterView.getEditText();
         CharSequence text = messageView.getMessageObject().messageText;
@@ -385,9 +388,6 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
 
         messageId = messageView.getMessageObject().stableId;
 
-        chatActivityEnterView.getEditField().setAlpha(0f);
-        chatActivityEnterView.setTextTransitionIsRunning(true);
-
         if (messageView.replyNameLayout != null && messageView.replyNameLayout.getText().length() > 1) {
             if (messageView.replyNameLayout.getPrimaryHorizontal(0) != 0) {
                 replyNameDx = messageView.replyNameLayout.getWidth() - messageView.replyNameLayout.getLineWidth(0);
@@ -396,8 +396,12 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
 
         animator = ValueAnimator.ofFloat(0f, 1f);
         animator.addUpdateListener(valueAnimator -> {
+            if (!isValid()) {
+                cancel();
+                return;
+            }
             progress = (float) valueAnimator.getAnimatedValue();
-            chatActivityEnterView.getEditField().setAlpha(progress);
+            if (container.isTextTransitionOwner(this)) chatActivityEnterView.getEditField().setAlpha(progress);
             container.invalidate();
         });
 
@@ -405,21 +409,10 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
         animator.setInterpolator(new LinearInterpolator());
         animator.setDuration(sendEffect == 1 ? 460 : sendEffect == 2 ? 420 : sendEffect == 3 ? 540 : ChatListItemAnimator.DEFAULT_DURATION);
 
-        container.addTransition(this);
-        notificationsLocker.lock();
-
         animator.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(Animator animation) {
-                notificationsLocker.unlock();
-                container.removeTransition(TextMessageEnterTransition.this);
-                messageView.setEnterTransitionInProgress(false);
-                messageView.getTransitionParams().lastDrawingBackgroundRect.set(messageView.getBackgroundDrawableLeft(), messageView.getBackgroundDrawableTop(), messageView.getBackgroundDrawableRight(), messageView.getBackgroundDrawableBottom());
-                chatActivityEnterView.setTextTransitionIsRunning(false);
-                chatActivityEnterView.getEditField().setAlpha(1f);
-                chatActivity.getReplyNameTextView().setAlpha(1f);
-                chatActivity.getReplyObjectTextView().setAlpha(1f);
-                AnimatedEmojiSpan.release(null, animatedEmojiStack);
+                finish();
             }
         });
 
@@ -429,12 +422,57 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
                 fromMessageDrawable = drawable.getTransitionDrawable(getThemedColor(Theme.key_chat_messagePanelBackground));
             }
         }
+        // Do not hide any live views until all layout preparation has succeeded.
+        session = LunagramMediaAccess.forAccount(currentAccount);
+        active = true;
+        container.addTransition(this);
+        messageView.beginEnterTransition(this);
+        chatActivityEnterView.getEditField().setAlpha(0f);
+        chatActivityEnterView.setTextTransitionIsRunning(true);
+        notificationsLocker.lock();
     }
 
     public void start() {
-        if (animator != null) {
+        if (animator != null && !finished) {
             animator.start();
         }
+    }
+
+    private boolean isValid() {
+        return active && !finished && messageView.ownsEnterTransition(this)
+                && messageView.getMessageObject() == currentMessageObject && messageView.isAttachedToWindow()
+                && currentMessageObject.stableId == messageId
+                && session != null && session.isCurrent() && chatActivity.canAnimateLunagramIncomingMessages()
+                && SharedConfig.animationsEnabled() && AndroidUtilities.getAnimatorDurationScale() > 0;
+    }
+
+    @Override
+    public void cancel() {
+        if (finished) return;
+        if (animator != null && animator.isStarted()) animator.cancel();
+        finish();
+    }
+
+    private void finish() {
+        if (!active || finished) return;
+        finished = true;
+        notificationsLocker.unlock();
+        if (messageView.ownsEnterTransition(this)) {
+            if (messageView.getMessageObject() == currentMessageObject) {
+                messageView.getTransitionParams().lastDrawingBackgroundRect.set(messageView.getBackgroundDrawableLeft(), messageView.getBackgroundDrawableTop(), messageView.getBackgroundDrawableRight(), messageView.getBackgroundDrawableBottom());
+            }
+            messageView.finishEnterTransition(this);
+        }
+        // A previous send must not restore the next send's composer or reply header.
+        if (container.isTextTransitionOwner(this)) {
+            enterView.setTextTransitionIsRunning(false);
+            if (enterView.getEditField() != null) enterView.getEditField().setAlpha(1f);
+            if (chatActivity.getReplyNameTextView() != null) chatActivity.getReplyNameTextView().setAlpha(1f);
+            if (chatActivity.getReplyObjectTextView() != null) chatActivity.getReplyObjectTextView().setAlpha(1f);
+        }
+        container.removeTransition(this);
+        AnimatedEmojiSpan.release(null, animatedEmojiStack);
+        animatedEmojiStack = null;
     }
 
     private boolean isRtlLine(Layout layout, int line) {
@@ -452,7 +490,10 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
 
     public void onDraw(Canvas canvas) {
         if (sendEffect != 0 && LunagramExperienceSettings.sendEffect(currentAccount) == 0) sendEffect = 0;
-        if (messageView == null || messageView.getMessageObject() == null || messageView.getMessageObject().stableId != messageId) return;
+        if (!isValid()) {
+            cancel();
+            return;
+        }
         final int save = canvas.save();
         final float originalProgress = progress;
         try {
@@ -659,8 +700,10 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
 
 
         if (hasReply) {
-            chatActivity.getReplyNameTextView().setAlpha(0f);
-            chatActivity.getReplyObjectTextView().setAlpha(0f);
+            if (container.isTextTransitionOwner(this)) {
+                chatActivity.getReplyNameTextView().setAlpha(0f);
+                chatActivity.getReplyObjectTextView().setAlpha(0f);
+            }
 
             float replyHeight = lerp(dp(35), messageView.replyHeight, progressX);
             int offset = dp(10);
@@ -795,9 +838,12 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
                 Theme.chat_replyNamePaint.setAlpha(wasAlpha);
                 final SimpleTextView uiText = chatActivity.getReplyNameTextView();
                 canvas.saveLayerAlpha(0, 0, uiText.getWidth(), uiText.getHeight(), (int) (0xFF * (1f - progressX)), Canvas.ALL_SAVE_FLAG);
-                uiText.setAlpha(1f);
-                uiText.draw(canvas);
-                uiText.setAlpha(0f);
+                if (container.isTextTransitionOwner(this)) {
+                    float oldAlpha = uiText.getAlpha();
+                    uiText.setAlpha(1f);
+                    uiText.draw(canvas);
+                    uiText.setAlpha(oldAlpha);
+                }
                 canvas.restore();
                 canvas.restore();
             }
@@ -974,10 +1020,10 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
         }
 
         float sendProgress = this.progress > 0.4f ? 1f : this.progress / 0.4f;
-        if (sendProgress == 1f) {
+        if (sendProgress == 1f && container.isTextTransitionOwner(this)) {
             enterView.setTextTransitionIsRunning(false);
         }
-        if (enterView.getSendButton().getVisibility() == View.VISIBLE && sendProgress < 1f) {
+        if (container.isTextTransitionOwner(this) && enterView.getSendButton().getVisibility() == View.VISIBLE && sendProgress < 1f) {
             ViewPositionWatcher.computeCoordinatesInParent(enterView.getSendButton(), chatActivity.contentView, tmpPointF);
             canvas.save();
             canvas.translate(
@@ -990,7 +1036,6 @@ public class TextMessageEnterTransition implements MessageEnterTransitionContain
             sendButton.draw(canvas);
             canvas.restore();
 
-            canvas.restore();
             canvas.restore();
         }
     }

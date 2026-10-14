@@ -378,7 +378,7 @@
     <string name="LunagramSubscriptionInfoPet">Котик над полем ввода: играет, реагирует на набор и отправку, прячется во время записи.</string>
     <string name="LunagramSubscriptionInfoSounds">Тихие звуки интерфейса: «Космос», «Печатная машинка», «Ретро-консоль» и «Капли».</string>
     <string name="LunagramSubscriptionInfoAtmosphere">Звёзды, дождь, светлячки или аквариум в отдельных чатах. Интенсивность можно настроить.</string>
-    <string name="LunagramSubscriptionInfoSendAnimations">Анимация отправки с буквами, каплей или бумажным самолётиком.</string>
+    <string name="LunagramSubscriptionInfoSendAnimations">Отдельные эффекты для исходящих и новых сообщений в открытом чате.</string>
     <string name="LunagramSubscriptionInfoStreamer">Скрывает имена, аватарки и номера в интерфейсе. Текст сообщений и уведомления не скрываются.</string>
     <string name="LunagramSubscriptionInfoReminders">Выбери сообщение и время — уведомление вернёт к нему. Нужно разрешение на уведомления.</string>
     <string name="LunagramSubscriptionInfoMemes">Останови видео, добавь верхнюю и нижнюю подпись к кадру и отправь готовую картинку.</string>
@@ -498,7 +498,7 @@
     <string name="LunagramSubscriptionFeaturePet">LunaPet</string>
     <string name="LunagramSubscriptionFeatureSounds">Звуковые паки интерфейса</string>
     <string name="LunagramSubscriptionFeatureAtmosphere">Атмосфера чата</string>
-    <string name="LunagramSubscriptionFeatureSendAnimations">Анимации отправки</string>
+    <string name="LunagramSubscriptionFeatureSendAnimations">Анимации сообщений</string>
     <string name="LunagramSubscriptionFeatureStreamer">Режим скриншотов и стримов</string>
     <string name="LunagramSubscriptionFeatureReminders">Напоминания о сообщениях</string>
     <string name="LunagramSubscriptionFeatureMemes">Мем из кадра</string>
@@ -814,7 +814,8 @@
     <string name="LunagramSoundTypewriter">Печатная машинка</string>
     <string name="LunagramSoundRetro">Ретро-консоль</string>
     <string name="LunagramSoundDrops">Капли</string>
-    <string name="LunagramSendEffectTitle">Анимация отправки</string>
+    <string name="LunagramSendEffectTitle">Анимация исходящих</string>
+    <string name="LunagramIncomingEffectTitle">Анимация входящих</string>
     <string name="LunagramSendLetters">Буквы</string>
     <string name="LunagramSendDrop">Капля</string>
     <string name="LunagramSendPlane">Самолётик</string>

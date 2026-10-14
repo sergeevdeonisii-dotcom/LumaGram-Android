@@ -288,10 +288,44 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     boolean enterTransitionInProgress;
+    private Object enterTransitionOwner;
+    private org.telegram.ui.Components.LunagramIncomingMessageEffect lunagramIncomingEffect;
+    private boolean drawingLunagramIncoming;
+
+    public void setLunagramIncomingEffect(org.telegram.ui.Components.LunagramIncomingMessageEffect effect) {
+        if (lunagramIncomingEffect != null && effect == null) {
+            setAlpha(1f);
+            setScaleX(1f);
+            setScaleY(1f);
+            setTranslationY(0f);
+            transitionParams.messageEntering = false;
+        }
+        lunagramIncomingEffect = effect;
+        invalidate();
+    }
+
+    public boolean hasLunagramIncomingEffect(org.telegram.ui.Components.LunagramIncomingMessageEffect effect) {
+        return lunagramIncomingEffect == effect;
+    }
 
     public void setEnterTransitionInProgress(boolean b) {
+        enterTransitionOwner = null;
         enterTransitionInProgress = b;
         invalidate();
+    }
+
+    public void beginEnterTransition(Object owner) {
+        enterTransitionOwner = owner;
+        enterTransitionInProgress = true;
+        invalidate();
+    }
+
+    public boolean ownsEnterTransition(Object owner) {
+        return enterTransitionOwner == owner;
+    }
+
+    public void finishEnterTransition(Object owner) {
+        if (ownsEnterTransition(owner)) setEnterTransitionInProgress(false);
     }
 
     public ReactionsLayoutInBubble.ReactionButton getReactionButton(ReactionsLayoutInBubble.VisibleReaction visibleReaction) {
@@ -6365,6 +6399,8 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
 
     @Override
     protected void onDetachedFromWindow() {
+        setLunagramIncomingEffect(null);
+        setEnterTransitionInProgress(false);
         super.onDetachedFromWindow();
 
         if (observersGroup != null) {
@@ -13351,6 +13387,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                                  boolean topNear,
                                  boolean firstInChat,
                                  boolean lastInChatList) {
+        if (currentMessageObject != messageObject) setEnterTransitionInProgress(false);
+        if (lunagramIncomingEffect != null && !lunagramIncomingEffect.matches(messageObject)) {
+            setLunagramIncomingEffect(null);
+        }
         if (attachedToWindow && !frozen) {
             setMessageContent(messageObject, groupedMessages, bottomNear, topNear, firstInChat, lastInChatList);
         } else {
@@ -16949,6 +16989,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 canvas.save();
                 final float blockRtl = (block.isRtl() ? rtlOffset - (block.quote ? dp(10) : 0) : 0);
                 canvas.translate(textX - blockRtl, textY + block.textYOffset(textLayoutBlocks, transitionParams) + transitionYOffsetForDrawables + block.padTop);
+                if (lunagramIncomingEffect != null && origin && !explanation) {
+                    lunagramIncomingEffect.clipText(canvas, block.textLayout);
+                }
                 if (a == linkBlockNum && !explanation || a == linkExplanationBlockNum && explanation) {
                     if (!drawOnlyText && links.draw(canvas)) {
                         invalidate();
@@ -20173,6 +20216,24 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         drawInternal(canvas);
     }
     public void drawInternal(Canvas canvas) {
+        if (lunagramIncomingEffect != null && !lunagramIncomingEffect.matches(currentMessageObject)) {
+            setLunagramIncomingEffect(null);
+        }
+        if (lunagramIncomingEffect == null) {
+            drawInternalContent(canvas);
+            return;
+        }
+        int save = canvas.save();
+        drawingLunagramIncoming = true;
+        try {
+            if (lunagramIncomingEffect.beginDraw(canvas, this, true)) drawInternalContent(canvas);
+        } finally {
+            drawingLunagramIncoming = false;
+            canvas.restoreToCount(save);
+        }
+    }
+
+    private void drawInternalContent(Canvas canvas) {
         if (currentMessageObject == null) {
             return;
         }
@@ -21127,6 +21188,22 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     public void drawOutboundsContent(Canvas canvas) {
+        if (lunagramIncomingEffect != null && !lunagramIncomingEffect.matches(currentMessageObject)) {
+            setLunagramIncomingEffect(null);
+        }
+        if (lunagramIncomingEffect == null || drawingLunagramIncoming) {
+            drawOutboundsContentInternal(canvas);
+            return;
+        }
+        int save = canvas.save();
+        try {
+            if (lunagramIncomingEffect.beginDraw(canvas, this, false)) drawOutboundsContentInternal(canvas);
+        } finally {
+            canvas.restoreToCount(save);
+        }
+    }
+
+    private void drawOutboundsContentInternal(Canvas canvas) {
         if (channelRecommendationsCell != null && currentMessageObject != null && currentMessageObject.type == MessageObject.TYPE_JOINED_CHANNEL) {
             channelRecommendationsCell.draw(canvas);
             return;
@@ -21572,6 +21649,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             int saveCount = canvas.getSaveCount();
             canvas.save();
             canvas.translate(textX - (block.isRtl() ? (int) Math.ceil(rtlOffset) : 0), textY + block.padTop + block.textYOffset(textLayoutBlocks, transitionParams) + transitionYOffsetForDrawables);
+            if (lunagramIncomingEffect != null && origin) {
+                lunagramIncomingEffect.clipText(canvas, block.textLayout);
+            }
             float drawingYOffset = textY + block.textYOffset(textLayoutBlocks, transitionParams) + transitionYOffsetForDrawables;
             float top = 0; // parentBoundsTop - getY() - drawingYOffset + dp(20);
             float bottom = 0; // parentBoundsBottom - getY() - drawingYOffset - dp(20);

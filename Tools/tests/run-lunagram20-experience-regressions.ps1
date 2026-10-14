@@ -48,15 +48,21 @@ $mutations=@(
     @('atmosphere-reduced','SharedConfig.animationsEnabled() && AndroidUtilities.getAnimatorDurationScale()>0','SharedConfig.animationsEnabled()','reduced atmosphere static and no timer'),
     @('no-experience-grant','return LunagramSubscriptionAccess.canUse(account, feature);','return true;','expiry disables swipe/feed'),
     @('atmosphere-stale-grant','        mode=LunagramExperienceSettings.atmosphere(account,dialogId);','','already-open atmosphere respects expiry without refresh'),
-    @('sound-stale-epoch','|| epoch != LunagramSubscriptionClient.accountEpoch(account)','','queued same-owner epoch guard')
+    @('sound-stale-epoch','|| epoch != LunagramSubscriptionClient.accountEpoch(account)','','queued same-owner epoch guard'),
+    @('incoming-shared-outgoing-key','"experience.incomingEffect"','"experience.sendEffect"','incoming default does not inherit outgoing'),
+    @('incoming-selected-account','public static int incomingEffect(int account) { return allowed(account,','public static int incomingEffect(int account) { return allowed(UserConfig.selectedAccount,','incoming grant belongs to requested account')
 )
 foreach($m in $mutations){if(!$template.Contains($m[1])){throw "Missing mutation anchor: $($m[0])"};Run-Probe $m[0] ($template.Replace($m[1],$m[2])) $m[3]}
 $activity=[IO.File]::ReadAllText((Join-Path $base 'org/telegram/ui/LunagramExperienceSettingsActivity.java'))
-foreach($pair in @(@('petNames',2),@('soundNames',5),@('sendNames',4),@('atmosphereNames',5),@('intensityNames',3))){
+foreach($pair in @(@('petNames',2),@('soundNames',5),@('sendNames',4),@('incomingNames',4),@('atmosphereNames',5),@('intensityNames',3))){
     $body=[regex]::Match($activity,'private String\[\] '+$pair[0]+'\(\) \{ return names\(([^)]+)\); \}').Groups[1].Value
     if([regex]::Matches($body,'R\.string\.').Count -ne $pair[1]){throw "Settings labels mismatch enum: $($pair[0])"}
 }
+$outgoingNames=[regex]::Match($activity,'private String\[\] sendNames\(\) \{ return names\(([^)]+)\); \}').Groups[1].Value
+$incomingNames=[regex]::Match($activity,'private String\[\] incomingNames\(\) \{ return names\(([^)]+)\); \}').Groups[1].Value
+if(!$outgoingNames -or $incomingNames -ne $outgoingNames){throw 'Incoming and outgoing settings must offer the same effect names and stable enum order'}
 foreach($required in @('if (!swipeOnly)', 'if (dialogId != 0)', 'if (LunagramSwipeGesture.validOrder(order))', 'screen.setCurrentAccount(currentAccount)', 'list.adapter.update(false)')){if(!$activity.Contains($required)){throw "Settings UI contract missing: $required"}}
+foreach($required in @('case 4: case 12: return Feature.SEND_ANIMATIONS;', 'TextDetailCell.Factory.of(12, text(R.string.LunagramIncomingEffectTitle), incomingNames()[LunagramExperienceSettings.incomingEffect(currentAccount)])', 'else if (item.id == 12) LunagramExperienceSettings.setIncomingEffect(currentAccount, index);', 'if (!currentOwner() || index < 0 || index >= names.length || !LunagramFeatureGate.require(this, feature)) return;')){if(!$activity.Contains($required)){throw "Incoming settings UI contract missing: $required"}}
 $chat=[IO.File]::ReadAllText((Join-Path $base 'org/telegram/ui/ChatActivity.java'))
 foreach($required in @('lunagramAtmosphere.setPaused(true)', 'lunagramAtmosphere.setPaused(false)', 'lunagramAtmosphere.refresh(currentAccount, dialog_id)', 'chatActivityEnterView.lunagramPetView.getParent() == null', 'bottomViewsVisibilityController.getCurrentPriorityContainerId() == MESSAGE_INPUT_CONTAINER', 'pet.setAlpha(0f)', 'y < (actionBar != null ? actionBar.getBottom() : 0)', 'chatInputViewsContainer.getPetRailBounds(lunagramPetRailBounds)', 'pet.getFloorOffsetDp()', 'pet.setPaused(true)', 'pet.setPaused(false)')){if(!$chat.Contains($required)){throw "Chat attachment contract missing: $required"}}
 if($chat.Contains('isLunagramPetVisible() ? dp(50) : 0') -or $chat.Contains('paddingBottom + petSpace')){throw 'Pet must never reserve message-list padding'}

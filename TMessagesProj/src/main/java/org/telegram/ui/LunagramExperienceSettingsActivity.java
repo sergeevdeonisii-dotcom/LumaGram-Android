@@ -51,7 +51,7 @@ public final class LunagramExperienceSettingsActivity extends BaseFragment imple
             case 1: case 11: return Feature.SWIPE_ACTIONS;
             case 2: return Feature.LUNA_PET;
             case 3: return Feature.INTERFACE_SOUNDS;
-            case 4: return Feature.SEND_ANIMATIONS;
+            case 4: case 12: return Feature.SEND_ANIMATIONS;
             case 5: case 6: return Feature.CHAT_ATMOSPHERE;
             case 7: return Feature.STREAMER_MODE;
             case 9: return Feature.VOICE_STEREO;
@@ -88,6 +88,7 @@ public final class LunagramExperienceSettingsActivity extends BaseFragment imple
             items.add(TextDetailCell.Factory.of(2, text(R.string.LunagramPetTitle), petNames()[LunagramExperienceSettings.pet(currentAccount)]));
             items.add(TextDetailCell.Factory.of(3, text(R.string.LunagramSoundsTitle), soundNames()[LunagramExperienceSettings.soundPack(currentAccount)]));
             items.add(TextDetailCell.Factory.of(4, text(R.string.LunagramSendEffectTitle), sendNames()[LunagramExperienceSettings.sendEffect(currentAccount)]));
+            items.add(TextDetailCell.Factory.of(12, text(R.string.LunagramIncomingEffectTitle), incomingNames()[LunagramExperienceSettings.incomingEffect(currentAccount)]));
             items.add(UItem.asCheck(10, text(R.string.LunagramFeedShowTab)).setChecked(LunagramExperienceSettings.feedVisible(currentAccount)));
             if (dialogId != 0) {
                 items.add(TextDetailCell.Factory.of(5, text(R.string.LunagramAtmosphereTitle), atmosphereNames()[LunagramExperienceSettings.atmosphere(currentAccount, dialogId)]));
@@ -130,15 +131,16 @@ public final class LunagramExperienceSettingsActivity extends BaseFragment imple
         if (item.id == 1) {
             boolean enabled = !LunagramExperienceSettings.swipeEnabled(currentAccount); LunagramExperienceSettings.setSwipeEnabled(currentAccount, enabled);
             if (view instanceof TextCheckCell) ((TextCheckCell) view).setChecked(enabled);
-        } else if (item.id >= 2 && item.id <= 6) {
-            String[] names = item.id == 2 ? petNames() : item.id == 3 ? soundNames() : item.id == 4 ? sendNames() : item.id == 5 ? atmosphereNames() : intensityNames();
-            int selected = item.id == 2 ? LunagramExperienceSettings.pet(currentAccount) : item.id == 3 ? LunagramExperienceSettings.soundPack(currentAccount) : item.id == 4 ? LunagramExperienceSettings.sendEffect(currentAccount) : item.id == 5 ? LunagramExperienceSettings.atmosphere(currentAccount, dialogId) : LunagramExperienceSettings.atmosphereIntensity(currentAccount, dialogId);
+        } else if ((item.id >= 2 && item.id <= 6) || item.id == 12) {
+            String[] names = item.id == 2 ? petNames() : item.id == 3 ? soundNames() : item.id == 4 ? sendNames() : item.id == 5 ? atmosphereNames() : item.id == 12 ? incomingNames() : intensityNames();
+            int selected = item.id == 2 ? LunagramExperienceSettings.pet(currentAccount) : item.id == 3 ? LunagramExperienceSettings.soundPack(currentAccount) : item.id == 4 ? LunagramExperienceSettings.sendEffect(currentAccount) : item.id == 5 ? LunagramExperienceSettings.atmosphere(currentAccount, dialogId) : item.id == 12 ? LunagramExperienceSettings.incomingEffect(currentAccount) : LunagramExperienceSettings.atmosphereIntensity(currentAccount, dialogId);
             showDialog(AlertsCreator.createSingleChoiceDialog(getParentActivity(), names, item.text.toString(), selected, (dialog, index) -> {
                 if (!currentOwner() || index < 0 || index >= names.length || !LunagramFeatureGate.require(this, feature)) return;
                 if (item.id == 2) LunagramExperienceSettings.setPet(currentAccount, index);
                 else if (item.id == 3) { LunagramExperienceSettings.setSoundPack(currentAccount, index); org.telegram.messenger.LunagramInterfaceSounds.play(currentAccount, org.telegram.messenger.LunagramInterfaceSounds.SWITCH); }
                 else if (item.id == 4) LunagramExperienceSettings.setSendEffect(currentAccount, index);
                 else if (item.id == 5) LunagramExperienceSettings.setAtmosphere(currentAccount, dialogId, index);
+                else if (item.id == 12) LunagramExperienceSettings.setIncomingEffect(currentAccount, index);
                 else LunagramExperienceSettings.setAtmosphereIntensity(currentAccount, dialogId, index);
                 list.adapter.update(false);
             }));
@@ -159,6 +161,7 @@ public final class LunagramExperienceSettingsActivity extends BaseFragment imple
     private String[] petNames() { return names(R.string.LunagramEffectsOff, R.string.LunagramPetCat); }
     private String[] soundNames() { return names(R.string.LunagramEffectsOff, R.string.LunagramSoundSpace, R.string.LunagramSoundTypewriter, R.string.LunagramSoundRetro, R.string.LunagramSoundDrops); }
     private String[] sendNames() { return names(R.string.Default, R.string.LunagramSendLetters, R.string.LunagramSendDrop, R.string.LunagramSendPlane); }
+    private String[] incomingNames() { return names(R.string.Default, R.string.LunagramSendLetters, R.string.LunagramSendDrop, R.string.LunagramSendPlane); }
     private String[] atmosphereNames() { return names(R.string.LunagramEffectsOff, R.string.LunagramAtmosphereStars, R.string.LunagramAtmosphereRain, R.string.LunagramAtmosphereFireflies, R.string.LunagramAtmosphereAquarium); }
     private String[] intensityNames() { return names(R.string.AutoDownloadLow, R.string.SpeedNormal, R.string.AutoDownloadHigh); }
     private String[] names(int... ids) { String[] values = new String[ids.length]; for (int i=0;i<ids.length;i++) values[i]=text(ids[i]); return values; }

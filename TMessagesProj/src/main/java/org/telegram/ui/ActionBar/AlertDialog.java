@@ -1394,6 +1394,12 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        org.telegram.ui.Components.LunagramTypographyViews.attach(getWindow());
+    }
+
+    @Override
     public void onBackPressed() {
         super.onBackPressed();
         if (onBackButtonListener != null) {

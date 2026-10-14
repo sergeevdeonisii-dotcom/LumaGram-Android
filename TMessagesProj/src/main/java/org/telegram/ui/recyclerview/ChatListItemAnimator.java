@@ -5,6 +5,8 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
+import android.graphics.Canvas;
+import android.os.SystemClock;
 import android.util.LongSparseArray;
 import android.view.View;
 import android.view.ViewPropertyAnimator;
@@ -18,6 +20,11 @@ import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.BuildVars;
+import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LunagramExperienceSettings;
+import org.telegram.messenger.LunagramIncomingAnimation;
+import org.telegram.messenger.LunagramMediaAccess;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.MessageObject;
@@ -32,6 +39,7 @@ import org.telegram.ui.ChatActivity;
 import org.telegram.ui.Components.ChatGreetingsView;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.RecyclerListView;
+import org.telegram.ui.Components.LunagramIncomingMessageEffect;
 import org.telegram.ui.Components.ThanosEffect;
 import org.telegram.ui.TextMessageEnterTransition;
 import org.telegram.ui.VoiceMessageEnterTransition;
@@ -65,6 +73,88 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
 
     private boolean reversePositions;
     private final Theme.ResourcesProvider resourcesProvider;
+    private final LunagramIncomingAnimation lunagramIncoming = new LunagramIncomingAnimation();
+    private final ArrayList<RecyclerView.ViewHolder> lunagramIncomingHolders = new ArrayList<>();
+
+    private boolean canAnimateLunagramIncoming() {
+        return activity != null && activity.canAnimateLunagramIncomingMessages()
+                && SharedConfig.animationsEnabled() && AndroidUtilities.getAnimatorDurationScale() > 0
+                && !LiteMode.isPowerSaverApplied()
+                && SharedConfig.getDevicePerformanceClass() != SharedConfig.PERFORMANCE_CLASS_LOW;
+    }
+
+    public void registerLunagramIncomingMessage(int messageId) {
+        if (canAnimateLunagramIncoming() && LunagramExperienceSettings.incomingEffect(activity.getCurrentAccount()) != 0) {
+            lunagramIncoming.register(messageId, SystemClock.uptimeMillis());
+        }
+    }
+
+    public void cancelLunagramIncomingAnimations() {
+        lunagramIncoming.clear();
+        for (RecyclerView.ViewHolder holder : new ArrayList<>(lunagramIncomingHolders)) endAnimation(holder);
+    }
+
+    private boolean animateLunagramIncoming(RecyclerView.ViewHolder holder, float initialOffset) {
+        if (!(holder.itemView instanceof ChatMessageCell)) return false;
+        ChatMessageCell cell = (ChatMessageCell) holder.itemView;
+        MessageObject message = cell.getMessageObject();
+        if (message == null || !lunagramIncoming.consume(message.getId(), SystemClock.uptimeMillis())) return false;
+        if (!canAnimateLunagramIncoming() || message.isOutOwner() || message.getGroupId() != 0
+                || cell.getCurrentMessagesGroup() != null || cell.getHeight() > recyclerListView.getHeight()
+                || cell.getBottom() <= recyclerListView.getPaddingTop()
+                || cell.getTop() >= recyclerListView.getHeight() - recyclerListView.getPaddingBottom()) return false;
+        final int account = activity.getCurrentAccount();
+        final int effectId = LunagramExperienceSettings.incomingEffect(account);
+        if (effectId == 0) return false;
+        // Keep the same bounded text surface as the outgoing letter reveal.
+        if (effectId == 1 && (message.textLayoutBlocks == null || message.textLayoutBlocks.size() != 1
+                || message.textLayoutBlocks.get(0).textLayout.getLineCount() > 10)) return false;
+        if (lunagramIncomingHolders.size() >= 8) return false;
+        final LunagramMediaAccess.Session session = LunagramMediaAccess.forAccount(account);
+        final LunagramIncomingMessageEffect effect = new LunagramIncomingMessageEffect(message, effectId, resourcesProvider);
+        if (!cell.getTransitionParams().wasDraw) cell.drawInternal(new Canvas());
+        cell.setAlpha(1f);
+        cell.setScaleX(1f);
+        cell.setScaleY(1f);
+        cell.setTranslationY(initialOffset);
+        cell.setLunagramIncomingEffect(effect);
+        mAddAnimations.add(holder);
+        lunagramIncomingHolders.add(holder);
+        ValueAnimator animator = ValueAnimator.ofFloat(0, 1);
+        animator.setDuration(LunagramIncomingAnimation.duration(effectId));
+        animator.setInterpolator(new android.view.animation.LinearInterpolator());
+        animator.addUpdateListener(value -> {
+            if (!canAnimateLunagramIncoming() || !session.isCurrent() || cell.getMessageObject() != message
+                    || !cell.hasLunagramIncomingEffect(effect) || !cell.isAttachedToWindow()
+                    || LunagramExperienceSettings.incomingEffect(account) != effectId) {
+                value.cancel();
+                return;
+            }
+            float progress = (float) value.getAnimatedValue();
+            effect.setProgress(progress);
+            cell.setTranslationY(initialOffset * (1 - LunagramIncomingAnimation.eased(Math.min(1, progress * LunagramIncomingAnimation.duration(effectId) / DEFAULT_DURATION))));
+            cell.invalidate();
+            recyclerListView.invalidate();
+        });
+        animator.addListener(new AnimatorListenerAdapter() {
+            @Override public void onAnimationStart(Animator animation) { dispatchAddStarting(holder); }
+            @Override public void onAnimationEnd(Animator animation) {
+                if (animators.get(holder) == animation) animators.remove(holder);
+                lunagramIncomingHolders.remove(holder);
+                if (cell.hasLunagramIncomingEffect(effect)) {
+                    cell.setLunagramIncomingEffect(null);
+                    restoreTransitionParams(cell);
+                }
+                if (mAddAnimations.remove(holder)) {
+                    dispatchAddFinished(holder);
+                    dispatchFinishedWhenDone();
+                }
+            }
+        });
+        animators.put(holder, animator);
+        animator.start();
+        return true;
+    }
 
     public ChatListItemAnimator(ChatActivity activity, RecyclerListView listView, Theme.ResourcesProvider resourcesProvider) {
         this.resourcesProvider = resourcesProvider;
@@ -339,6 +429,7 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
     }
 
     public void animateAddImpl(final RecyclerView.ViewHolder holder, int addedItemsHeight) {
+        if (animateLunagramIncoming(holder, addedItemsHeight)) return;
         final View view = holder.itemView;
         final ViewPropertyAnimator animation = view.animate();
         mAddAnimations.add(holder);
@@ -1220,6 +1311,7 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
                 view.setTranslationY(0);
             }
         } else if (view instanceof ChatMessageCell) {
+            ((ChatMessageCell) view).setLunagramIncomingEffect(null);
             ((ChatMessageCell) view).getTransitionParams().resetAnimation();
             ((ChatMessageCell) view).setAnimationOffsetX(0f);
         } else if (view instanceof ChatActionCell) {
@@ -1231,6 +1323,7 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
 
     @Override
     public void endAnimations() {
+        lunagramIncoming.clear();
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("end animations");
         }
@@ -1393,6 +1486,7 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
 
     @Override
     public void animateAddImpl(RecyclerView.ViewHolder holder) {
+        if (animateLunagramIncoming(holder, holder.itemView.getTranslationY())) return;
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("animate add impl");
         }

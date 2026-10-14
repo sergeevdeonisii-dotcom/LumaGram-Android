@@ -7821,9 +7821,9 @@ public class Theme {
 
     public static void createCommonDialogResources(Context context) {
         if (dialogs_countTextPaint == null) {
-            dialogs_countTextPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_countTextPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             dialogs_countTextPaint.setTypeface(AndroidUtilities.bold());
-            dialogs_countTextPaint2 = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_countTextPaint2 = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             dialogs_countTextPaint2.setTypeface(AndroidUtilities.bold());
             dialogs_countPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             dialogs_onlineCirclePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -7845,29 +7845,29 @@ public class Theme {
             dialogs_messagePaint = new TextPaint[2];
             dialogs_messagePrintingPaint = new TextPaint[2];
             for (int a = 0; a < 2; a++) {
-                dialogs_namePaint[a] = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+                dialogs_namePaint[a] = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
                 dialogs_namePaint[a].setTypeface(AndroidUtilities.bold());
-                dialogs_nameEncryptedPaint[a] = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+                dialogs_nameEncryptedPaint[a] = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
                 dialogs_nameEncryptedPaint[a].setTypeface(AndroidUtilities.bold());
-                dialogs_messagePaint[a] = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-                dialogs_messagePrintingPaint[a] = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+                dialogs_messagePaint[a] = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+                dialogs_messagePrintingPaint[a] = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             }
-            dialogs_searchNamePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_searchNamePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             dialogs_searchNamePaint.setTypeface(AndroidUtilities.bold());
-            dialogs_searchNameEncryptedPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_searchNameEncryptedPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             dialogs_searchNameEncryptedPaint.setTypeface(AndroidUtilities.bold());
-            dialogs_messageNamePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_messageNamePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             dialogs_messageNamePaint.setTypeface(AndroidUtilities.bold());
-            dialogs_timePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            dialogs_timePaintBold = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            dialogs_timePaintBoldAccent = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            dialogs_archiveTextPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_timePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_timePaintBold = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_timePaintBoldAccent = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_archiveTextPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             dialogs_archiveTextPaint.setTypeface(AndroidUtilities.bold());
-            dialogs_archiveTextPaintSmall = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_archiveTextPaintSmall = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             dialogs_archiveTextPaintSmall.setTypeface(AndroidUtilities.bold());
-            dialogs_onlinePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            dialogs_offlinePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            dialogs_tagTextPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_onlinePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_offlinePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            dialogs_tagTextPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             dialogs_tagTextPaint.setTypeface(AndroidUtilities.bold());
 
             dialogs_tabletSeletedPaint = new Paint();
@@ -8030,40 +8030,40 @@ public class Theme {
     public static void createCommonMessageResources() {
         synchronized (sync) {
             if (chat_msgTextPaint == null) {
-                chat_msgTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-                chat_msgGameTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+                chat_msgTextPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
+                chat_msgGameTextPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
                 chat_msgTextPaintEmoji = new TextPaint[6];
-                chat_msgTextPaintOneEmoji = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-                chat_msgTextPaintTwoEmoji = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-                chat_msgTextPaintThreeEmoji = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-                chat_msgBotButtonPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+                chat_msgTextPaintOneEmoji = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
+                chat_msgTextPaintTwoEmoji = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
+                chat_msgTextPaintThreeEmoji = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
+                chat_msgBotButtonPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
                 chat_msgBotButtonPaint.setTypeface(AndroidUtilities.bold());
-                chat_namePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+                chat_namePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
                 chat_namePaint.setTypeface(AndroidUtilities.bold());
-                chat_replyNamePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+                chat_replyNamePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
                 chat_replyNamePaint.setTypeface(AndroidUtilities.bold());
-                chat_replyTextPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-                chat_quoteTextPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-                chat_explanationTextPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-                chat_titleLabelTextPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-                chat_topicTextPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+                chat_replyTextPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+                chat_quoteTextPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+                chat_explanationTextPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+                chat_titleLabelTextPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+                chat_topicTextPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
                 chat_topicTextPaint.setTypeface(AndroidUtilities.bold());
-                chat_forwardNamePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-                chat_adminPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-                chat_timePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-                chat_msgTextCodePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+                chat_forwardNamePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+                chat_adminPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+                chat_timePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+                chat_msgTextCodePaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
                 chat_msgTextCodePaint.setTypeface(Typeface.MONOSPACE);
-                chat_msgTextCode2Paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+                chat_msgTextCode2Paint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
                 chat_msgTextCode2Paint.setTypeface(Typeface.MONOSPACE);
-                chat_msgTextCode3Paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+                chat_msgTextCode3Paint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
                 chat_msgTextCode3Paint.setTypeface(Typeface.MONOSPACE);
-                chat_msgCodeBgPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-                chat_ephemeralPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+                chat_msgCodeBgPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+                chat_ephemeralPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             }
 
             final float[] emojiSizePercents = new float[] {.68f, .46f, .34f, .28f, .22f, .19f};
             for (int i = 0; i < chat_msgTextPaintEmoji.length; ++i) {
-                chat_msgTextPaintEmoji[i] = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+                chat_msgTextPaintEmoji[i] = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
                 chat_msgTextPaintEmoji[i].setTextSize(dp(emojiSizePercents[i] * 120f));
             }
             chat_msgTextPaintOneEmoji.setTextSize(dp(28 + 18));
@@ -8093,20 +8093,20 @@ public class Theme {
         createCommonMessageResources();
 
         if (chat_infoPaint == null) {
-            chat_infoPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-            chat_infoBoldPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_infoPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_infoBoldPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_infoBoldPaint.setTypeface(AndroidUtilities.bold());
-            chat_stickerCommentCountPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_stickerCommentCountPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_stickerCommentCountPaint.setTypeface(AndroidUtilities.bold());
-            chat_docNamePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_docNamePaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_docNamePaint.setTypeface(AndroidUtilities.bold());
             chat_docBackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             chat_deleteProgressPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             chat_deleteProgressPaint.setStyle(Paint.Style.STROKE);
             chat_deleteProgressPaint.setStrokeCap(Paint.Cap.ROUND);
-            chat_locationTitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_locationTitlePaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_locationTitlePaint.setTypeface(AndroidUtilities.bold());
-            chat_locationAddressPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_locationAddressPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_urlPaint = new Paint();
             chat_urlPaint.setPathEffect(LinkPath.getRoundedEffect());
             chat_outUrlPaint = new Paint();
@@ -8120,35 +8120,35 @@ public class Theme {
             chat_radialProgress2Paint = new Paint(Paint.ANTI_ALIAS_FLAG);
             chat_radialProgress2Paint.setStrokeCap(Paint.Cap.ROUND);
             chat_radialProgress2Paint.setStyle(Paint.Style.STROKE);
-            chat_audioTimePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            chat_livePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-            chat_livePaint.setTypeface(Typeface.DEFAULT_BOLD);
-            chat_audioTitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_audioTimePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            chat_livePaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_livePaint.setTypeface(org.telegram.messenger.LunagramTypography.resolve(Typeface.DEFAULT_BOLD));
+            chat_audioTitlePaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_audioTitlePaint.setTypeface(AndroidUtilities.bold());
-            chat_audioPerformerPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-            chat_botButtonPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_audioPerformerPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_botButtonPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_botButtonPaint.setTypeface(AndroidUtilities.bold());
-            chat_contactNamePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_contactNamePaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_contactNamePaint.setTypeface(AndroidUtilities.bold());
-            chat_contactPhonePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-            chat_durationPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-            chat_gamePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_contactPhonePaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_durationPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_gamePaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_gamePaint.setTypeface(AndroidUtilities.bold());
-            chat_shipmentPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-            chat_timePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            chat_adminPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            chat_ephemeralPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            chat_namePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+            chat_shipmentPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_timePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            chat_adminPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            chat_ephemeralPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            chat_namePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             chat_namePaint.setTypeface(AndroidUtilities.bold());
-            chat_forwardNamePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            chat_replyNamePaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+            chat_forwardNamePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            chat_replyNamePaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             chat_replyNamePaint.setTypeface(AndroidUtilities.bold());
-            chat_replyTextPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            chat_topicTextPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+            chat_replyTextPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            chat_topicTextPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
             chat_topicTextPaint.setTypeface(AndroidUtilities.bold());
-            chat_titleLabelTextPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            chat_commentTextPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
-            chat_instantViewPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_titleLabelTextPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            chat_commentTextPaint = org.telegram.messenger.LunagramTypography.textPaint(TextPaint.ANTI_ALIAS_FLAG);
+            chat_instantViewPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_instantViewPaint.setTypeface(AndroidUtilities.bold());
             chat_instantViewRectPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             chat_instantViewRectPaint.setStyle(Paint.Style.STROKE);
@@ -8163,18 +8163,18 @@ public class Theme {
             chat_statusRecordPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             chat_statusRecordPaint.setStyle(Paint.Style.STROKE);
             chat_statusRecordPaint.setStrokeCap(Paint.Cap.ROUND);
-            chat_actionTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-            chat_actionTextPaint2 = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-            chat_actionTextPaint3 = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_actionTextPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_actionTextPaint2 = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_actionTextPaint3 = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_actionTextPaint.setTypeface(AndroidUtilities.bold());
-            chat_unlockExtendedMediaTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_unlockExtendedMediaTextPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_unlockExtendedMediaTextPaint.setTypeface(AndroidUtilities.bold());
             chat_actionBackgroundGradientDarkenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             chat_actionBackgroundGradientDarkenPaint.setColor(0x15000000);
             chat_timeBackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            chat_contextResult_titleTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_contextResult_titleTextPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_contextResult_titleTextPaint.setTypeface(AndroidUtilities.bold());
-            chat_contextResult_descriptionTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            chat_contextResult_descriptionTextPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
             chat_composeBackgroundPaint = new Paint();
             chat_radialProgressPausedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             chat_radialProgressPausedSeekbarPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -8891,7 +8891,7 @@ public class Theme {
 
     public static void createProfileResources(Context context) {
         if (profile_verifiedDrawable == null) {
-            profile_aboutTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            profile_aboutTextPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
 
             Resources resources = context.getResources();
 

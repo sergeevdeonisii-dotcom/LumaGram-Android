@@ -15,6 +15,8 @@ import android.view.animation.LinearInterpolator;
 import androidx.core.graphics.ColorUtils;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.SharedConfig;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.ChatMessageCell;
 import org.telegram.ui.Components.ChatActivityEnterView;
@@ -36,6 +38,8 @@ public class VoiceMessageEnterTransition implements MessageEnterTransitionContai
     private final Paint gradientPaint;
     private final LinearGradient gradientShader;
     private final int messageId;
+    private final MessageObject currentMessageObject;
+    private boolean finished;
     MessageEnterTransitionContainer container;
     private final Theme.ResourcesProvider resourcesProvider;
 
@@ -45,13 +49,9 @@ public class VoiceMessageEnterTransition implements MessageEnterTransitionContai
         this.container = container;
         this.listView = listView;
 
-        messageView.setEnterTransitionInProgress(true);
-
         recordCircle = chatActivityEnterView.getRecordCircle();
         if (recordCircle != null) {
             fromRadius = recordCircle.drawingCircleRadius;
-            recordCircle.voiceEnterTransitionInProgress = true;
-            recordCircle.skipDraw = true;
         }
 
         gradientMatrix = new Matrix();
@@ -61,12 +61,15 @@ public class VoiceMessageEnterTransition implements MessageEnterTransitionContai
         gradientShader = new LinearGradient(0, AndroidUtilities.dp(12), 0, 0, 0, 0xFF000000, Shader.TileMode.CLAMP);
         gradientPaint.setShader(gradientShader);
 
-        messageId = messageView.getMessageObject().stableId;
-
-        container.addTransition(this);
+        currentMessageObject = messageView.getMessageObject();
+        messageId = currentMessageObject.stableId;
 
         animator = ValueAnimator.ofFloat(0f, 1f);
         animator.addUpdateListener(valueAnimator -> {
+            if (!isValid()) {
+                cancel();
+                return;
+            }
             progress = (float) valueAnimator.getAnimatedValue();
             container.invalidate();
         });
@@ -76,21 +79,49 @@ public class VoiceMessageEnterTransition implements MessageEnterTransitionContai
         animator.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(Animator animation) {
-                messageView.setEnterTransitionInProgress(false);
-                container.removeTransition(VoiceMessageEnterTransition.this);
-                if (recordCircle != null) {
-                    recordCircle.skipDraw = false;
-                }
+                finish();
             }
         });
 
         if (messageView.getSeekBarWaveform() != null) {
             messageView.getSeekBarWaveform().setSent();
         }
+        container.addTransition(this);
+        messageView.beginEnterTransition(this);
+        if (recordCircle != null) {
+            recordCircle.voiceEnterTransitionInProgress = true;
+            recordCircle.skipDraw = true;
+        }
     }
 
     public void start() {
-        animator.start();
+        if (!finished) animator.start();
+    }
+
+    private boolean isValid() {
+        return !finished && messageView.ownsEnterTransition(this)
+                && messageView.getMessageObject() == currentMessageObject && messageView.isAttachedToWindow()
+                && currentMessageObject.stableId == messageId
+                && SharedConfig.animationsEnabled() && AndroidUtilities.getAnimatorDurationScale() > 0;
+    }
+
+    @Override
+    public void cancel() {
+        if (finished) return;
+        if (animator.isStarted()) animator.cancel();
+        finish();
+    }
+
+    private void finish() {
+        if (finished) return;
+        finished = true;
+        messageView.finishEnterTransition(this);
+        if (recordCircle != null && container.isVoiceTransitionOwner(this)) {
+            recordCircle.skipDraw = false;
+            recordCircle.voiceEnterTransitionInProgress = false;
+            recordCircle.invalidate();
+        }
+        container.removeTransition(this);
     }
 
     float lastToCx;
@@ -98,6 +129,10 @@ public class VoiceMessageEnterTransition implements MessageEnterTransitionContai
 
     @Override
     public void onDraw(Canvas canvas) {
+        if (!isValid()) {
+            cancel();
+            return;
+        }
         float step1Time = 0.6f;
         float moveProgress = progress;
         float hideWavesProgress = progress > step1Time ? 1f : progress / step1Time;
@@ -126,6 +161,10 @@ public class VoiceMessageEnterTransition implements MessageEnterTransitionContai
         float cy = fromCy * (1f - progress) + toCy * progress;
 
         float toRadius = messageView.getRadialProgress().getProgressRect().height() / 2;
+        if (toRadius <= 0) {
+            cancel();
+            return;
+        }
         float radius = fromRadius * (1f - progress) + toRadius * progress;
 
         float listViewBottom = listView.getY() - container.getY() + listView.getMeasuredHeight();

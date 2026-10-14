@@ -2880,7 +2880,8 @@ public class ChatActivity extends BaseFragment implements
         final ActionBarMenu menu = actionBar.createMenu();
         if (useLiquidHeader) {
             liquidHeaderAvatarItem.setVisibility(View.VISIBLE);
-            liquidHeaderAvatarItem.setEnabled(avatarContainer.isAvatarClickable());
+            // The avatar replaces the overflow button; the center pill opens the profile.
+            liquidHeaderAvatarItem.setEnabled(headerItem != null && headerItem.hasSubMenu());
             menu.setExclusiveItem(liquidHeaderAvatarItem, liquidHeaderAvatarView);
             avatarContainer.setExternalAvatarMode(true);
             avatarContainer.setActionBar(actionBar);
@@ -2907,6 +2908,19 @@ public class ChatActivity extends BaseFragment implements
         if (avatarContainer != null) {
             avatarContainer.bindAvatarTo(liquidHeaderAvatarView, liquidHeaderAvatarDrawable);
         }
+    }
+
+    private void showLiquidHeaderChatMenu() {
+        if (isFinished || getParentActivity() == null || currentAccount != UserConfig.selectedAccount
+                || SharedConfig.appLocked || SharedConfig.isWaitingForPasscodeEnter
+                || org.telegram.messenger.BlackHoleVault.blocks(currentAccount, dialog_id)
+                || actionBar == null || actionBar.isActionModeShowed()
+                || headerItem == null || !headerItem.hasSubMenu()
+                || liquidHeaderAvatarItem == null || liquidHeaderAvatarItem.getVisibility() != View.VISIBLE) return;
+        if (actionBar.getActionBarMenuOnItemClick() != null
+                && !actionBar.getActionBarMenuOnItemClick().canOpenMenu()) return;
+        // Reuse the actual overflow contents and callbacks, anchored to the visible avatar.
+        headerItem.toggleSubMenu(null, liquidHeaderAvatarItem);
     }
 
     private void updateLiquidHeaderForSearch(boolean expanded) {
@@ -3650,6 +3664,8 @@ public class ChatActivity extends BaseFragment implements
 
     @Override
     public void onFragmentDestroy() {
+        if (chatListItemAnimator != null) chatListItemAnimator.cancelLunagramIncomingAnimations();
+        if (messageEnterTransitionContainer != null) messageEnterTransitionContainer.cancelAll();
         if (lunagramSpeech != null) { lunagramSpeech.close(); lunagramSpeech = null; }
         super.onFragmentDestroy();
         AndroidUtilities.cancelRunOnUIThread(restoreLiquidHeaderAfterSearch);
@@ -4026,9 +4042,7 @@ public class ChatActivity extends BaseFragment implements
                         }
                     }
                 } else if (id == liquid_header_avatar) {
-                    if (avatarContainer != null) {
-                        avatarContainer.performExternalAvatarClick();
-                    }
+                    showLiquidHeaderChatMenu();
                 } else if (id == view_as_topics) {
                     if (getUserConfig().getClientUserId() == dialog_id) {
                         getMessagesController().setSavedViewAs(true);
@@ -4842,7 +4856,7 @@ public class ChatActivity extends BaseFragment implements
 
         liquidHeaderAvatarItem = menu.addItem(liquid_header_avatar, 0);
         liquidHeaderAvatarItem.getIconView().setVisibility(View.GONE);
-        liquidHeaderAvatarItem.setContentDescription(LocaleController.getString(R.string.AccDescrProfilePicture));
+        liquidHeaderAvatarItem.setContentDescription(getString(R.string.AccDescrMoreOptions));
         liquidHeaderAvatarView = new BackupImageView(context);
         liquidHeaderAvatarView.setRoundRadius(dp(21));
         liquidHeaderAvatarItem.addView(liquidHeaderAvatarView, LayoutHelper.createFrame(42, 42, Gravity.CENTER));
@@ -22566,6 +22580,7 @@ public class ChatActivity extends BaseFragment implements
                     FileLog.d("ChatActivity didReceiveNewMessages return: opened scheduled messages");
                     return;
                 }
+                prepareLunagramIncomingAnimations(arr);
                 processNewMessages(arr);
             } else if (ChatObject.isChannel(currentChat) && !currentChat.megagroup && chatInfo != null && did == -chatInfo.linked_chat_id) {
                 for (int a = 0, N = arr.size(); a < N; a++) {
@@ -25852,6 +25867,33 @@ public class ChatActivity extends BaseFragment implements
     private void processNewMessages(ArrayList<MessageObject> arr) {
         processNewMessages(arr, true);
     }
+
+    public boolean canAnimateLunagramIncomingMessages() {
+        return !isFinished && !isPaused && !paused && !ApplicationLoader.mainInterfacePaused
+                && currentAccount == UserConfig.selectedAccount && !SharedConfig.appLocked
+                && !SharedConfig.isWaitingForPasscodeEnter && !firstLoading && openAnimationEnded
+                && chatMode == MODE_DEFAULT && !isInPreviewMode() && !isInsideContainer
+                && !isReport() && !inBubbleMode && getParentLayout() != null
+                && getParentLayout().getLastFragment() == this
+                && !org.telegram.messenger.BlackHoleVault.blocks(currentAccount, dialog_id);
+    }
+
+    private void prepareLunagramIncomingAnimations(ArrayList<MessageObject> arrivals) {
+        if (chatListItemAnimator == null || chatListView == null || chatLayoutManager == null
+                || !canAnimateLunagramIncomingMessages() || !forwardEndReached[0]
+                || chatLayoutManager.findFirstVisibleItemPosition() != 0
+                || chatListView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) return;
+        View lastMessage = chatLayoutManager.findViewByPosition(0);
+        if (lastMessage == null || lastMessage.getBottom() - chatListView.getMeasuredHeight() > dp(5)) return;
+        for (MessageObject message : arrivals) {
+            if (message != null && message.getDialogId() == dialog_id && message.getId() > 0
+                    && !message.isOutOwner() && !message.isSponsored() && message.getGroupId() == 0
+                    && messagesDict[0].get(message.getId()) == null) {
+                chatListItemAnimator.registerLunagramIncomingMessage(message.getId());
+            }
+        }
+    }
+
     private void processNewMessages(ArrayList<MessageObject> arr, final boolean animatedFromBottom) {
         FileLog.d("processNewMessages " + arr.size() + " messages");
 
@@ -30586,6 +30628,8 @@ public class ChatActivity extends BaseFragment implements
 
     @Override
     public void onPause() {
+        if (chatListItemAnimator != null) chatListItemAnimator.cancelLunagramIncomingAnimations();
+        if (messageEnterTransitionContainer != null) messageEnterTransitionContainer.cancelAll();
         if (lunagramSpeech != null) { lunagramSpeech.close(); lunagramSpeech = null; }
         lunagramSwipeGesture.cancel();
         if (lunagramAtmosphere != null) lunagramAtmosphere.setPaused(true);
