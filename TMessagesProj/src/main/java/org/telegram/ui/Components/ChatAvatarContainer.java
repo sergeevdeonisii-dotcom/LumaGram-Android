@@ -800,7 +800,8 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                 // this fading view would stop invalidating the real subtitle;
                 // copying only its text would expose the **oo** placeholder.
                 setTypingDrawable(subtitleTextLargerCopyView, snapshotTypingDrawable(),
-                    externalAvatarMode || currentTypingDrawable == statusDrawables[5]);
+                    externalAvatarMode || currentTypingDrawable == statusDrawables[5],
+                    currentTypingDrawable == statusDrawables[4]);
             }
             subtitleTextLargerCopyView.setText(subtitleTextView.getText());
         } else if (animatedSubtitleTextView != null) {
@@ -1174,10 +1175,10 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                     // edge of the full-width view and visually splits the animation
                     // from labels such as "recording voice".
                     statusDrawables[type].setColor(getThemedColor(Theme.key_chat_status));
-                    setTypingDrawable(subtitleTextView, statusDrawables[type], true);
+                    setTypingDrawable(subtitleTextView, statusDrawables[type], true, type == 4);
                 } else {
                     statusDrawables[type].setColor(getThemedColor(Theme.key_chat_status));
-                    setTypingDrawable(subtitleTextView, statusDrawables[type], false);
+                    setTypingDrawable(subtitleTextView, statusDrawables[type], false, false);
                 }
                 currentTypingDrawable = statusDrawables[type];
                 for (int a = 0; a < statusDrawables.length; a++) {
@@ -1193,7 +1194,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             }
         } else {
             currentTypingDrawable = null;
-            setTypingDrawable(subtitleTextView, null, false);
+            setTypingDrawable(subtitleTextView, null, false, false);
             for (int a = 0; a < statusDrawables.length; a++) {
                 if (statusDrawables[a] != null) {
                     statusDrawables[a].stop();
@@ -1202,7 +1203,17 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         }
     }
 
-    private static void setTypingDrawable(SimpleTextView target, Drawable drawable, boolean inline) {
+    private static String getTypingDrawableGap(int type) {
+        // The recording dot has no moving overhang and already includes a 2dp
+        // side inset. Keep a small font-relative gap; wider animations need more room.
+        return type == 4 ? "\u2009" : "\u2002";
+    }
+
+    private static void setTypingDrawable(SimpleTextView target, Drawable drawable, boolean inline, boolean roundVideo) {
+        // Center the dot optically against lowercase status text, not the full
+        // font line box. Apply to the host so bitmap fade copies cannot clip it.
+        // Always reset the offset when recording ends or the header mode changes.
+        target.setLeftDrawableTopPadding(inline && roundVideo ? dp(1) : 0);
         // Detach the old slot before attaching the new one: both SimpleTextView
         // setters clear their old drawable's callback, including the same icon
         // being moved from one slot to the other.
@@ -1459,9 +1470,9 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             } else if (externalAvatarMode && type != null && type >= 0 && type < statusDrawables.length) {
                 // Reserve an inline slot for the animated typing/recording icon so
                 // icon and label are centered as one compact group.
-                // A half-em gap keeps the moving icon clear of the label even
-                // at the far end of its cycle, and follows the subtitle font.
-                newSubtitle = TYPING_DRAWABLE_PLACEHOLDER + "\u2002" + newSubtitle;
+                // Keep moving icons clear at the far end of their cycle, but
+                // avoid the same oversized gap after the stationary video dot.
+                newSubtitle = TYPING_DRAWABLE_PLACEHOLDER + getTypingDrawableGap(type) + newSubtitle;
             }
             useOnlineColor = true;
             // A network/connection label temporarily owns the subtitle. Keep

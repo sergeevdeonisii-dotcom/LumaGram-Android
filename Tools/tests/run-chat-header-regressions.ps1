@@ -1,4 +1,5 @@
-param([string]$JavaHome = $env:JAVA_HOME, [switch]$Baseline, [string]$OutputRoot)
+param([string]$JavaHome = $env:JAVA_HOME, [switch]$Baseline, [string]$OutputRoot,
+    [ValidateSet('', 'dot-offset', 'dot-gap', 'snapshot-offset', 'reset-offset')][string]$NegativeControl = '')
 $ErrorActionPreference = 'Stop'
 $repo = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 function Read-Source([string]$path) {
@@ -25,6 +26,7 @@ $typing = Read-Source 'TMessagesProj/src/main/java/org/telegram/ui/Components/Lu
 $simple = Read-Source 'TMessagesProj/src/main/java/org/telegram/ui/ActionBar/SimpleTextView.java'
 $methods = @(
     (Extract-Method $header 'private void setTypingAnimation(boolean start)'),
+    (Extract-Method $header 'private static String getTypingDrawableGap(' -Optional),
     (Extract-Method $header 'private static void setTypingDrawable(' -Optional),
     (Extract-Method $header 'private Drawable snapshotTypingDrawable()' -Optional),
     (Extract-Method $header 'private Drawable snapshotDrawable(' -Optional),
@@ -38,6 +40,17 @@ $methods = @(
     (Extract-Method $header 'private void updateCurrentConnectionState()'),
     (Extract-Method $typing 'private static boolean isEmojiLike(')
 ) -join "`n"
+if ($NegativeControl) {
+    $mutations = @{
+        'dot-offset' = @('inline && roundVideo ? dp(1) : 0', '0')
+        'dot-gap' = @('return type == 4 ? "\u2009" : "\u2002";', 'return "\u2002";')
+        'snapshot-offset' = @('currentTypingDrawable == statusDrawables[4]);', 'false);')
+        'reset-offset' = @('target.setLeftDrawableTopPadding(inline && roundVideo ? dp(1) : 0);', 'if (inline && roundVideo) target.setLeftDrawableTopPadding(dp(1));')
+    }
+    $mutation = $mutations[$NegativeControl]
+    if (!$methods.Contains($mutation[0])) { throw "Missing negative-control target: $NegativeControl" }
+    $methods = $methods.Replace($mutation[0], $mutation[1])
+}
 $simpleMethods = @(
     (Extract-Method $simple 'public void setLeftDrawable(Drawable drawable)'),
     (Extract-Method $simple 'public boolean setRightDrawable(Drawable drawable)'),
@@ -123,10 +136,10 @@ public final class ChatHeaderRegressionTest extends HeaderBase {
     }
     static final class SimpleTextView extends Widget {
         Drawable leftDrawable,replacedDrawable,rightDrawable,rightDrawable2; String replacedText;CharSequence text="recording";
-        String layoutPlaceholder;int layoutRebuilds;
+        String layoutPlaceholder;int layoutRebuilds,leftDrawableTopPadding;
         SimpleTextView(Object context){} void invalidate(){}boolean recreateLayoutMaybe(){layoutPlaceholder=replacedText;layoutRebuilds++;return false;}
         void setTextColor(int c){}void setTag(Object t){}void setTextSizePx(int s){}void setTypeface(Object o){}
-        void setLeftDrawableTopPadding(int p){}
+        void setLeftDrawableTopPadding(int p){leftDrawableTopPadding=p;}
         void setRightDrawableOutside(boolean b){}Drawable getRightDrawable(){return rightDrawable;}
         Drawable getRightDrawable2(){return rightDrawable2;}boolean getRightDrawableOutside(){return false;}
         Drawable getLeftDrawable(){return leftDrawable;}
@@ -191,6 +204,27 @@ public final class ChatHeaderRegressionTest extends HeaderBase {
         check(h.currentTypingDrawable==null&&h.subtitleTextView.leftDrawable==null&&h.subtitleTextView.replacedDrawable==null,"stopping clears both slots");
         for(StatusDrawable d:h.statusDrawables)check(!d.started&&d.getCallback()==null,"stopped status releases callback");
         // EXTENDED_TESTS_START
+        for(float scale:new float[]{.75f,1f,1.25f,1.5f,2.625f,3f,4f}) {
+            density=scale;h.externalAvatarMode=true;MessagesController.type=4;h.setTypingAnimation(true);
+            check(h.subtitleTextView.leftDrawableTopPadding==dp(1),"video dot has a small density-aware optical lowering");
+            check("\u2009".equals(getTypingDrawableGap(4)),"stationary video dot uses a thin font-relative gap");
+            h.fadeOutToLessWidth(dp(188));copy=h.subtitleTextLargerCopyView.get();
+            check(copy.leftDrawableTopPadding==h.subtitleTextView.leftDrawableTopPadding,"video-dot fade snapshot preserves optical placement");
+            check(copy.replacedDrawable!=h.currentTypingDrawable&&h.currentTypingDrawable.getCallback()==h.subtitleTextView,"optical correction does not transfer the live callback to a snapshot");
+            for(int type:new int[]{0,1,2,3,5}) {
+                MessagesController.type=4;h.setTypingAnimation(true);
+                MessagesController.type=type;h.setTypingAnimation(true);
+                check(h.subtitleTextView.leftDrawableTopPadding==0,"changing status resets the video-only offset");
+                check("\u2002".equals(getTypingDrawableGap(type)),"other animated status gaps remain unchanged");
+            }
+            MessagesController.type=4;h.setTypingAnimation(true);h.setTypingAnimation(false);
+            check(h.subtitleTextView.leftDrawableTopPadding==0,"stopping video recording clears its optical offset");
+            h.setTypingAnimation(true);h.setExternalAvatarMode(false);
+            check(h.subtitleTextView.leftDrawableTopPadding==0,"legacy header restores original video-dot placement");
+            h.fadeOutToLessWidth(dp(188));
+            check(h.subtitleTextLargerCopyView.get().leftDrawableTopPadding==0,"legacy snapshot has no glass-only offset");
+        }
+        density=1;
         SimpleTextView s=new SimpleTextView(null);Drawable marker=new Drawable();
         s.replaceTextWithDrawable(marker,"first");
         check("first".equals(s.layoutPlaceholder),"placeholder must be published before immediate layout creation");

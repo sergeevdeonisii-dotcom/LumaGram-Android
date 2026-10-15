@@ -24,8 +24,9 @@ foreach ($name in $names) {
 }
 $template = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'status-drawable-bounds/StatusDrawableBoundsProbe.java.template'))
 function Assert-CenteredStatusGap([string]$Header) {
-    if ($Header -notmatch 'else if \(externalAvatarMode && type != null && type >= 0 && type < statusDrawables\.length\)\s*\{[^}]*newSubtitle = TYPING_DRAWABLE_PLACEHOLDER \+ "\\u2002" \+ newSubtitle;') {
-        throw 'Centered header statuses must retain the explicit font-aware EN SPACE gap.'
+    if ($Header -notmatch 'else if \(externalAvatarMode && type != null && type >= 0 && type < statusDrawables\.length\)\s*\{[^}]*newSubtitle = TYPING_DRAWABLE_PLACEHOLDER \+ getTypingDrawableGap\(type\) \+ newSubtitle;' -or
+        !$Header.Contains('return type == 4 ? "\u2009" : "\u2002";')) {
+        throw 'Centered video dot must use a thin gap while moving statuses retain EN SPACE.'
     }
     if ($Header -notmatch 'if \(type != null && type == 5\)\s*\{\s*newSubtitle = Emoji\.replaceEmoji\(') {
         throw 'The native sticker-status emoji branch must remain separate.'
@@ -47,12 +48,12 @@ if ($ExpectKnownFailures) {
 } else {
     $header = [IO.File]::ReadAllText((Join-Path $RepoRoot 'TMessagesProj/src/main/java/org/telegram/ui/Components/ChatAvatarContainer.java'))
     Assert-CenteredStatusGap $header
-    $oldGap = $header.Replace('TYPING_DRAWABLE_PLACEHOLDER + "\u2002" + newSubtitle;', 'TYPING_DRAWABLE_PLACEHOLDER + " " + newSubtitle;')
+    $oldGap = $header.Replace('return type == 4 ? "\u2009" : "\u2002";', 'return " ";')
     if ($oldGap -ceq $header) { throw 'Gap negative-control target not found.' }
     $gapRejected = $false
     try { Assert-CenteredStatusGap $oldGap } catch { $gapRejected = $true }
     if (!$gapRejected) { throw 'Old narrow status gap was accepted.' }
-    Write-Output 'PASS: centered EN SPACE gap, unchanged native sticker branch, and old-gap negative control.'
+    Write-Output 'PASS: video-only thin gap, preserved EN SPACE for moving icons, unchanged native sticker branch, and narrow-all-statuses negative control.'
     Run-Probe 'actual-production' $sources @()
     foreach ($name in @('SendingFileDrawable','PlayingGameDrawable')) {
         $mutated = [ordered]@{}
