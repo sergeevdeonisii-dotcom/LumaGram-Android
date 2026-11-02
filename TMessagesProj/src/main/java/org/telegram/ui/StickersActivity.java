@@ -221,7 +221,10 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
-                if (id == -1) {
+                if (id == 97121) {
+                    if (LunagramFeatureGate.require(StickersActivity.this, org.telegram.messenger.LunagramFeatureCatalog.Feature.LINK_TOOLS))
+                        presentFragment(new LunagramStickerListActivity(currentAccount));
+                } else if (id == -1) {
                     if (onBackPressed(true)) {
                         finishFragment();
                     }
@@ -232,6 +235,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
         });
 
 
+        actionBar.createMenu().addItem(97121, R.drawable.msg_copy).setContentDescription(getString(R.string.LulStickerList));
         ActionBarMenu actionMode = actionBar.createActionMode();
         selectedCountTextView = new NumberTextView(actionMode.getContext());
         selectedCountTextView.setTextSize(18);

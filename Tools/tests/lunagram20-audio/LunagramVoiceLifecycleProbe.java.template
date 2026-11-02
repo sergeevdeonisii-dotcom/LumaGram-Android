@@ -1,0 +1,46 @@
+import java.io.File;
+import java.util.ArrayDeque;
+/** Queue contract around the extracted production stop method; no microphone or Android runtime. */
+public final class LunagramVoiceLifecycleProbe {
+    @@STOP@@
+    int lunagramRecordingGeneration;
+    Runnable recordStartRunnable;
+    final Queue recordQueue=new Queue(),fileEncodingQueue=new Queue();
+    Recorder audioRecorder;
+    Object recordingAudio=new Object();File recordingAudioFile;
+    int sendAfterDone,sendAfterDoneScheduleDate,recordingCurrentAccount,recordingGuid;
+    boolean sendAfterDoneNotify,sendAfterDoneOnce,manualRecording=true,raiseToEarRecord=true,ignoreOnPause=true;
+    long sendAfterDonePayStars;
+    final Feedback feedbackView=new Feedback();int internalStops,focusReleases;
+    void requestRecordAudioFocus(boolean request){if(!request)focusReleases++;}
+    void setBluetoothScoOn(boolean value){}
+    void stopRecordingInternal(int send,boolean notify,int scheduleDate,boolean once,long stars){internalStops++;if(audioRecorder!=null){audioRecorder.release();audioRecorder=null;}}
+    static class Queue {
+        final ArrayDeque<Runnable> tasks=new ArrayDeque<>();
+        void postRunnable(Runnable task){tasks.add(task);}void cancelRunnable(Runnable task){tasks.remove(task);}
+        void next(){if(tasks.isEmpty())throw new AssertionError("Missing queued work");tasks.removeFirst().run();}
+        void drain(){for(int i=0;!tasks.isEmpty()&&i<30;i++)next();if(!tasks.isEmpty())throw new AssertionError("Queue did not settle");}
+    }
+    static class Recorder {int stops,releases;void stop(){stops++;}void release(){releases++;}}
+    static class Feedback {void performHapticFeedback(int value,int flag){}}
+    static class HapticFeedbackConstants {static final int KEYBOARD_TAP=1,FLAG_IGNORE_GLOBAL_SETTING=2;}
+    static class FileLog {static void e(Exception error){}static void e(String error){}}
+    static class BuildVars {static final boolean LOGS_ENABLED=false;}
+    static class AndroidUtilities {static void runOnUIThread(Runnable task){task.run();}}
+    static class NotificationCenter {static final int recordStopped=1;static NotificationCenter getInstance(int account){return new NotificationCenter();}void postNotificationName(Object...values){}}
+    static void check(boolean value,String label){if(!value)throw new AssertionError(label);}
+    public static void main(String[]args){
+        LunagramVoiceLifecycleProbe p=new LunagramVoiceLifecycleProbe();Recorder initializing=new Recorder();p.audioRecorder=initializing;p.recordStartRunnable=()->{};
+        p.fileEncodingQueue.postRunnable(()->check(initializing.stops==0&&initializing.releases==0,"Initializer owns live recorder"));
+        p.stopRecording(0,false,0,false,0);
+        check(initializing.stops==0&&initializing.releases==0&&p.recordQueue.tasks.isEmpty(),"Pending stop does not mutate mid-initialization");
+        p.fileEncodingQueue.next();p.fileEncodingQueue.next();check(initializing.stops==0,"Stop waits for record queue after encoder barrier");
+        p.recordQueue.drain();check(initializing.stops==1&&initializing.releases==1&&p.internalStops==1,"Canceled startup closes once after barrier");
+        p=new LunagramVoiceLifecycleProbe();Recorder newer=new Recorder();p.audioRecorder=newer;p.recordStartRunnable=()->{};p.stopRecording(0,false,0,false,0);
+        p.lunagramRecordingGeneration++;p.fileEncodingQueue.drain();p.recordQueue.drain();check(newer.stops==0&&newer.releases==0,"Stale canceled startup cannot stop newer generation");
+        p=new LunagramVoiceLifecycleProbe();p.recordStartRunnable=()->{};p.stopRecording(0,false,0,false,0);p.fileEncodingQueue.drain();p.recordQueue.drain();check(!p.manualRecording&&p.focusReleases>0&&p.internalStops==0,"Cancel before microphone opens releases focus without fake recording");
+        p=new LunagramVoiceLifecycleProbe();Recorder active=new Recorder();p.audioRecorder=active;p.stopRecording(1,true,123,true,9);p.recordQueue.drain();check(active.stops==1&&p.sendAfterDone==1&&p.sendAfterDoneNotify&&p.sendAfterDoneScheduleDate==123&&p.sendAfterDoneOnce&&p.sendAfterDonePayStars==9,"Active send preserves captured send arguments");
+        p=new LunagramVoiceLifecycleProbe();p.sendAfterDone=3;p.stopRecording(2,true,123,false,0);p.recordQueue.drain();check(p.internalStops==1,"Paused scheduled preview uses existing finalization path");
+        System.out.println("Lunagram voice: extracted startup/cancel generation and queue lifecycle checks passed");
+    }
+}

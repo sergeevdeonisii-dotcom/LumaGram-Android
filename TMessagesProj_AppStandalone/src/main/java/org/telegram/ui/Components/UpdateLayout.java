@@ -14,6 +14,7 @@ import android.widget.FrameLayout;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.LumaUpdaterController;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.IUpdateLayout;
@@ -67,10 +68,7 @@ public class UpdateLayout extends IUpdateLayout {
                 ApplicationLoader.applicationLoaderInstance.cancelDownloadingUpdate();
                 updateAppUpdateViews(currentAccount, true);
             } else {
-                File file = ApplicationLoader.applicationLoaderInstance.getDownloadedUpdateFile();
-                if (file != null) {
-                    AndroidUtilities.openForView(file, "Luma.apk", "application/vnd.android.package-archive", activity, null, false);
-                }
+                LumaUpdaterController.getInstance().install(activity);
             }
         });
 

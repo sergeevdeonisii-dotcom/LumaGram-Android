@@ -1,0 +1,203 @@
+import java.util.*;
+import org.telegram.messenger.LunagramSubscriptionCatalog;
+import org.telegram.messenger.LunagramSubscriptionCatalog.Plan;
+import org.telegram.messenger.LunagramSubscriptionCatalog.Period;
+
+/** Host-only contracts: extracted production measurement and dialog methods.
+ * These fake Views record Android measure specs and dialog wiring. They do not
+ * rasterize text, model Android's layout engine, or constitute device evidence. */
+public final class SubscriptionLayout204Probe {
+    private static int checks;
+    static void check(boolean value, String why) {
+        checks++;
+        if (!value) throw new AssertionError(why);
+    }
+    static class MeasureSpec {
+        static final int UNSPECIFIED = 0, EXACTLY = 0x40000000, AT_MOST = 0x80000000;
+        static int makeMeasureSpec(int size, int mode) { return (size & 0x3fffffff) | mode; }
+        static int getSize(int spec) { return spec & 0x3fffffff; }
+        static int getMode(int spec) { return spec & 0xc0000000; }
+    }
+    static class FrameLayout {
+        int widthSpec, heightSpec, measuredWidth, measuredHeight;
+        int intrinsicWidth = 180, intrinsicHeight = 64, minimumHeight = 64;
+        protected void onMeasure(int width, int height) {
+            widthSpec = width; heightSpec = height;
+            measuredWidth = resolve(intrinsicWidth, width);
+            measuredHeight = resolve(Math.max(intrinsicHeight, minimumHeight), height);
+        }
+        int resolve(int desired, int spec) {
+            int mode = MeasureSpec.getMode(spec), limit = MeasureSpec.getSize(spec);
+            return mode == MeasureSpec.EXACTLY ? limit : mode == MeasureSpec.AT_MOST ? Math.min(desired, limit) : desired;
+        }
+        public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {}
+    }
+    static final class FeatureMeasureCell extends FrameLayout {
+        /* ACTUAL_FEATURE_MEASURE */
+    }
+    static final class RadioButton {
+        final boolean checked;
+        RadioButton(boolean value) { checked = value; }
+        boolean isChecked() { return checked; }
+    }
+    static final class AccessibilityNodeInfo {
+        String className; boolean checkable, checked;
+        void setClassName(String value) { className = value; }
+        void setCheckable(boolean value) { checkable = value; }
+        void setChecked(boolean value) { checked = value; }
+    }
+    interface Click { void run(Object value); }
+    static final class PeriodChoiceCell extends FrameLayout {
+        final String title, detail;
+        final RadioButton radioButton;
+        Click click;
+        PeriodChoiceCell(Object context, Object provider, String title, String detail, boolean checked) {
+            this.title = title; this.detail = detail; this.radioButton = new RadioButton(checked);
+        }
+        void setOnClickListener(Click click) { this.click = click; }
+        /* ACTUAL_PERIOD_MEASURE */
+        /* ACTUAL_PERIOD_ACCESSIBILITY */
+    }
+    static final class LayoutHelper { static final int MATCH_PARENT = -1, WRAP_CONTENT = -2; }
+    static final class LinearLayout {
+        static final int VERTICAL = 1;
+        static final class LayoutParams {
+            final int width, height;
+            LayoutParams(int width, int height) { this.width = width; this.height = height; }
+        }
+        final List<PeriodChoiceCell> children = new ArrayList<>();
+        final List<LayoutParams> params = new ArrayList<>();
+        int orientation;
+        LinearLayout(Object context) {}
+        void setOrientation(int value) { orientation = value; }
+        void addView(PeriodChoiceCell child, LayoutParams param) { children.add(child); params.add(param); }
+    }
+    static final class AlertDialog {
+        static final class Builder {
+            LinearLayout options; String title; String negative;
+            int dismissals;
+            Builder(Object context, Object provider) {}
+            Builder setTitle(String value) { title = value; return this; }
+            Builder setView(LinearLayout view) { options = view; return this; }
+            Builder setNegativeButton(String title, Object listener) { negative = title; return this; }
+            Runnable getDismissRunnable() { return () -> dismissals++; }
+            Builder create() { return this; }
+        }
+    }
+    static final class Client { boolean current = true; boolean isAccountCurrent() { return current; } }
+    static final class Adapter { int updates; void update(boolean animated) { updates++; } }
+    static final class ListView { final Adapter adapter = new Adapter(); }
+    static final class R {
+        static final class string {
+            static final int LunagramSubscriptionPeriod = 1, Cancel = 2,
+                LunagramSubscriptionPeriod1 = 3, LunagramSubscriptionPeriod3 = 4,
+                LunagramSubscriptionPeriod6 = 5, LunagramSubscriptionPeriod12 = 6,
+                LunagramSubscriptionPeriodPrice = 7;
+        }
+    }
+    static final class LocaleController {
+        static boolean ru;
+        static String formatString(int key, Object... values) { return String.format(Locale.ROOT, resource(key), values); }
+    }
+    static String resource(int id) {
+        if (id == 1) return "Duration";
+        if (id == 2) return "Cancel";
+        /* ACTUAL_LOCALIZED_RESOURCES */
+        throw new AssertionError("Unknown resource " + id);
+    }
+    String getString(int id) { return resource(id); }
+    Object context = new Object(), resourceProvider = new Object();
+    Client client = new Client();
+    boolean isPaused, isFinished;
+    Plan selectedPlan = Plan.ULTRA;
+    Period selectedPeriod = Period.MONTH_1;
+    ListView listView = new ListView();
+    AlertDialog.Builder dialog;
+    Object getParentActivity() { return context; }
+    void showDialog(AlertDialog.Builder value) { dialog = value; }
+    /* ACTUAL_DIALOG */
+    /* ACTUAL_PERIOD_TITLE */
+    /* ACTUAL_PERIOD_PRICE */
+
+    static void testMeasure(FrameLayout cell, String name) {
+        // Numbers are synthetic spec fixtures, not estimates of rendered text size.
+        for (int width : new int[]{240, 280, 320, 360, 411, 600}) {
+            for (int mode : new int[]{MeasureSpec.EXACTLY, MeasureSpec.AT_MOST, MeasureSpec.UNSPECIFIED}) {
+                for (int content : new int[]{32, 64, 76, 96, 144, 240, 512}) {
+                    for (int heightMode : new int[]{MeasureSpec.UNSPECIFIED, MeasureSpec.AT_MOST, MeasureSpec.EXACTLY}) {
+                        cell.intrinsicWidth = width / 2;
+                        cell.intrinsicHeight = content;
+                        cell.onMeasure(MeasureSpec.makeMeasureSpec(width, mode), MeasureSpec.makeMeasureSpec(48, heightMode));
+                        check(MeasureSpec.getMode(cell.widthSpec) == MeasureSpec.EXACTLY, name + " must force full available width");
+                        check(MeasureSpec.getSize(cell.widthSpec) == width, name + " must preserve offered width, not intrinsic width");
+                        check(cell.measuredWidth == width, name + " final synthetic width");
+                        check(MeasureSpec.getMode(cell.heightSpec) == MeasureSpec.UNSPECIFIED, name + " content height must remain unconstrained");
+                        check(cell.measuredHeight == Math.max(content, cell.minimumHeight), name + " cannot clip multi-line intrinsic height");
+                    }
+                }
+            }
+        }
+    }
+    static void testDialog() {
+        int[] stars = {180, 450, 720, 1260};
+        String[] amounts = {"2.49", "6.23", "9.96", "17.43"};
+        for (boolean ru : new boolean[]{false, true}) {
+            LocaleController.ru = ru;
+            for (Period selected : LunagramSubscriptionCatalog.PERIODS) {
+                SubscriptionLayout204Probe screen = new SubscriptionLayout204Probe();
+                screen.selectedPeriod = selected;
+                screen.showPeriodDialog();
+                check(screen.dialog != null, "dialog opens with activity");
+                check(screen.dialog.options.orientation == LinearLayout.VERTICAL, "duration rows stack vertically");
+                check(screen.dialog.options.children.size() == 4, "one row for each supported duration");
+                check(screen.dialog.negative != null, "cancel remains available");
+                for (int index = 0; index < 4; index++) {
+                    Period period = LunagramSubscriptionCatalog.PERIODS.get(index);
+                    PeriodChoiceCell cell = screen.dialog.options.children.get(index);
+                    LinearLayout.LayoutParams params = screen.dialog.options.params.get(index);
+                    check(params.width == -1 && params.height == -2, "dialog rows match width and wrap content");
+                    check(cell.title.equals(screen.periodTitle(period)), "duration is a dedicated title");
+                    check(cell.detail.contains(String.valueOf(stars[index])) && cell.detail.contains(amounts[index]), "price matches exact Ultra term total");
+                    check(!cell.detail.contains(cell.title), "detail must not repeat duration into one overflowing line");
+                    check(cell.detail.contains(ru ? "всего" : "total"), "price states total not monthly");
+                    check(cell.radioButton.checked == (period == selected), "selected duration radio");
+                    AccessibilityNodeInfo info = new AccessibilityNodeInfo();
+                    cell.onInitializeAccessibilityNodeInfo(info);
+                    check("android.widget.RadioButton".equals(info.className) && info.checkable, "screen reader radio semantics");
+                    check(info.checked == (period == selected), "screen reader selected state");
+                }
+            }
+        }
+        for (int index = 0; index < 4; index++) {
+            SubscriptionLayout204Probe screen = new SubscriptionLayout204Probe();
+            screen.showPeriodDialog();
+            screen.dialog.options.children.get(index).click.run(null);
+            check(screen.selectedPeriod == LunagramSubscriptionCatalog.PERIODS.get(index), "chosen duration applied");
+            check(screen.dialog.dismissals == 1 && screen.listView.adapter.updates == 1, "selection dismisses and refreshes exactly once");
+        }
+        // Model an account/lifecycle change after opening but before a click.
+        for (int mask = 1; mask < 16; mask++) {
+            SubscriptionLayout204Probe screen = new SubscriptionLayout204Probe();
+            screen.showPeriodDialog();
+            if ((mask & 1) != 0) screen.client.current = false;
+            if ((mask & 2) != 0) screen.isPaused = true;
+            if ((mask & 4) != 0) screen.isFinished = true;
+            if ((mask & 8) != 0) screen.client = null;
+            screen.dialog.options.children.get(3).click.run(null);
+            check(screen.selectedPeriod == Period.MONTH_1, "stale dialog may not change duration");
+            check(screen.listView.adapter.updates == 0, "stale dialog may not update dead screen");
+            check(screen.dialog.dismissals == 1, "stale dialog closes safely");
+        }
+        SubscriptionLayout204Probe missingActivity = new SubscriptionLayout204Probe();
+        missingActivity.context = null;
+        missingActivity.showPeriodDialog();
+        check(missingActivity.dialog == null, "no dialog without activity");
+    }
+    public static void main(String[] args) {
+        testMeasure(new FeatureMeasureCell(), "FeatureCell");
+        testMeasure(new PeriodChoiceCell(null, null, "", "", false), "PeriodChoiceCell");
+        testDialog();
+        System.out.println("PASS: " + checks + " extracted measure-spec, duration/total-price, accessibility and lifecycle checks.");
+        System.out.println("Scope: modeled host views only; no native text measurement, pixel rendering, APK, device or network evidence.");
+    }
+}

@@ -61,15 +61,15 @@ public final class LumaLocalGiftPreview {
     }
 
     public static String getRemoveTitle() {
-        return getString(LumaBuildPolicy.isPersonalEdition() ? R.string.LumaPersonalGiftRemove : R.string.LumaLocalGiftRemove);
+        return getString(R.string.LumaPersonalGiftRemove);
     }
 
     public static String getRemoveInfo() {
-        return getString(LumaBuildPolicy.isPersonalEdition() ? R.string.LumaPersonalGiftRemoveInfo : R.string.LumaLocalGiftRemoveInfo);
+        return getString(R.string.LumaPersonalGiftRemoveInfo);
     }
 
     public static String getRemovedMessage() {
-        return getString(LumaBuildPolicy.isPersonalEdition() ? R.string.LumaPersonalGiftRemoved : R.string.LumaLocalGiftRemoved);
+        return getString(R.string.LumaPersonalGiftRemoved);
     }
 
     public static void show(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift) {
@@ -87,54 +87,8 @@ public final class LumaLocalGiftPreview {
         TL_stars.TL_starGiftUnique unique = (TL_stars.TL_starGiftUnique) gift.gift;
         if (unique.attributes == null || unique.resell_amount != null) return;
         Theme.ResourcesProvider resources = fragment.getResourceProvider();
-        if (LumaBuildPolicy.isPersonalEdition()) {
-            if (account != UserConfig.selectedAccount) return;
-            showPersonal(fragment, gift, unique, context, account, resources, pager);
-            return;
-        }
-        LinearLayout content = new LinearLayout(context);
-        content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(16), 0, dp(16), dp(12));
-
-        GiftSheet.GiftCell card = new GiftSheet.GiftCell(context, account, resources);
-        card.setStarsGift(gift, true, false);
-        content.addView(card, LayoutHelper.createLinear(200, 220, Gravity.CENTER_HORIZONTAL,
-                0, 0, 0, LumaBuildPolicy.isPersonalEdition() ? 16 : 0));
-
-        if (!LumaBuildPolicy.isPersonalEdition()) {
-            TextView local = new TextView(context);
-            local.setText(getString(R.string.LumaLocalGiftPreviewInfo));
-            local.setTextSize(13);
-            local.setTextColor(Theme.getColor(Theme.key_dialogTextGray2, resources));
-            local.setGravity(Gravity.CENTER);
-            content.addView(local, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT,
-                    LayoutHelper.WRAP_CONTENT, 0, 10, 0, 16));
-        }
-
-        content.addView(createTable(context, account, unique, resources, false),
-                LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-        ScrollView scroll = new ScrollView(context) {
-            @Override protected void onMeasure(int width, int height) {
-                int limit = Math.min(dp(500), View.MeasureSpec.getSize(height));
-                if (limit <= 0) limit = dp(500);
-                super.onMeasure(width, View.MeasureSpec.makeMeasureSpec(limit, View.MeasureSpec.AT_MOST));
-            }
-        };
-        scroll.addView(content);
-        AlertDialog preview = new AlertDialog.Builder(context, resources)
-                .setTitle(unique.title + " #" + LocaleController.formatNumber(unique.num, ','))
-                .setView(scroll)
-                .setPositiveButton(getString(R.string.OK), null)
-                .setNegativeButton(getRemoveTitle(), (dialog, which) -> confirmRemove(fragment, gift))
-                .create();
-        NotificationCenter.NotificationCenterDelegate accessObserver = (id, changedAccount, args) -> {
-            if (!LunagramSubscriptionAccess.canUse(account, LunagramFeatureCatalog.Feature.LOCAL_NFT)) preview.dismiss();
-        };
-        preview.setOnDismissListener(dialog -> NotificationCenter.getInstance(account)
-                .removeObserver(accessObserver, NotificationCenter.lunagramSubscriptionChanged));
-        if (fragment.showDialog(preview) != null) {
-            NotificationCenter.getInstance(account).addObserver(accessObserver, NotificationCenter.lunagramSubscriptionChanged);
-        }
+        if (account != UserConfig.selectedAccount) return;
+        showPersonal(fragment, gift, unique, context, account, resources, pager);
     }
 
     private static void showPersonal(BaseFragment fragment, LumaLocalGifts.LocalSavedGift gift,

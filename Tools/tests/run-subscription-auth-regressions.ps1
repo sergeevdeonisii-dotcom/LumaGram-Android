@@ -13,8 +13,9 @@ $screenPath=Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/ui/Lunagra
 $client=[IO.File]::ReadAllText($clientPath);$screen=[IO.File]::ReadAllText($screenPath)
 foreach ($required in @('https://lunagram-billing.pages.dev','https://t.me/LunagramAppPayBot?start=',
     'SSLContext.getInstance("TLSv1.2")','tls.init(null, null, null)','setInstanceFollowRedirects(false)',
-    'setConnectTimeout(10_000)','setReadTimeout(10_000)','BODY_LIMIT = 32 * 1024',
-    'REQUEST_TIMEOUT_MS = 15_000','WATCHDOG.schedule(timeout, REQUEST_TIMEOUT_MS)','requireDeadline(deadline)',
+    'setConnectTimeout(5_000)','setReadTimeout(10_000)','BODY_LIMIT = 32 * 1024',
+    'REQUEST_TIMEOUT_MS = 15_000','WATCHDOG.schedule(timeout, Math.max(1, (deadline - System.nanoTime()) / 1_000_000L))','requireDeadline(deadline)',
+    'if (bodyStarted || cancelled) throw connectionFailure','https://lunagram-billing-app-edge.sergeevdeonisii.workers.dev',
     'BlackHolePrivateData.write(account, owner','UserConfig.selectedAccount == account','ticket == generation')) {
     if (!$client.Contains($required)) { throw "Missing billing safety contract: $required" }
 }

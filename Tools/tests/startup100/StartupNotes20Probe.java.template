@@ -1,0 +1,27 @@
+package org.telegram.messenger;
+import java.util.ArrayList;
+import java.util.List;
+
+/** The actual authored-release branch, not a copied implementation. */
+public class StartupNotes20Probe {
+    static int checks;
+    static void check(boolean condition,String label){checks++;if(!condition)throw new AssertionError(label);}
+    static List<Integer> notes(String version,boolean personal){
+        BuildConfig.BUILD_VERSION_STRING=version;LumaBuildPolicy.personal=personal;
+        ArrayList<Integer> notes=new ArrayList<>();
+        /* ACTUAL_NOTES_BRANCH */
+        return notes;
+    }
+    static void addNote(List<Integer> notes,int id){notes.add(id);}
+    static class BuildConfig {static String BUILD_VERSION_STRING;}
+    static class LumaBuildPolicy {static boolean personal;static boolean isPersonalEdition(){return personal;}static boolean allowsProfileVerification(){return personal;}static boolean allowsAnonymousNumber(){return personal;}}
+    public static void main(String[] args){
+        List<Integer> authored=List.of(R.string.LunagramWelcome20Feed,R.string.LunagramWelcome20Swipe,R.string.LunagramWelcome20Audio,R.string.LunagramWelcome20Video,R.string.LunagramWelcome20Atmosphere,R.string.LunagramWelcome20Tools,R.string.LunagramWelcome20Fixes);
+        for(boolean personal:new boolean[]{false,true}){
+            check(notes("2.0",personal).equals(authored),"2.0 shows all seven authored notes, not future fallback");
+            check(notes("1.5",personal).size()==(personal?5:2),"1.5 authored notes preserved with edition guard");
+            for(String future:new String[]{null,"","1.5-debug","2.0-debug","2.0.1","2.1","3.0"})check(notes(future,personal).equals(List.of(R.string.LumaUpdateWelcomeFuture)),"unauthored release must not borrow old claims");
+        }
+        System.out.println("Startup authored release branch: "+checks+" assertions passed.");
+    }
+}

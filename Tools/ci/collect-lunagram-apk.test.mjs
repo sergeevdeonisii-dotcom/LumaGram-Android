@@ -10,6 +10,35 @@ function badging(edition) {
   return `package: name='org.luma.liquid.web' versionCode='71589' versionName='${expectedArtifact(edition, '79').versionName}'\nnative-code: 'arm64-v8a'\n`;
 }
 
+test('3.0.1 is public-only, upgrades 3.0.0 and cannot relabel a historical APK or provenance', () => {
+  const commit = 'a'.repeat(40);
+  function releaseMetadata(release) {
+    return { schemaVersion: 2, release, sourceCommit: commit, packageName: 'org.luma.liquid.web', architecture: 'arm64-v8a',
+      temporarySigning: true, productionSigningRequired: true,
+      verification: { compiledLibraryEdition: 'public', packagedEdition: 'public', debuggable: false },
+      artifacts: [{ ...expectedArtifact('public', release), sha256: 'b'.repeat(64) }] };
+  }
+  const expected = expectedArtifact('public', '301');
+  assert.deepEqual(expected, { edition: 'public', fileName: 'Lunagram-3.0.1-public-temporary.apk', versionName: '3.0.1',
+    versionCode: 72019, friendsEdition: false, publicEdition: true });
+  assert.deepEqual(expectedEditions('301'), ['public']);
+  assert.throws(() => expectedEditions('301', true));
+  for (const edition of ['full', 'friends', 'personal']) assert.throws(() => expectedArtifact(edition, '301'));
+  validateGeneratedFlag(flags102('public'), 'public', '301');
+  assert.equal(validateOutputMetadata({ applicationId: 'org.luma.liquid.web', elements: [{ versionName: '3.0.1', versionCode: 72019, outputFile: 'app.apk' }] }, 'public', '301'), 'app.apk');
+  validateApkBadging("package: name='org.luma.liquid.web' versionCode='72019' versionName='3.0.1'\nnative-code: 'arm64-v8a'\n", 'public', '301');
+  validateArtifactMetadata(releaseMetadata('301'), '301', commit, ['public']);
+  for (const older of ['206', '210', '300']) {
+    const prior = expectedArtifact('public', older);
+    assert.ok(expected.versionCode > prior.versionCode);
+    validateArtifactMetadata(releaseMetadata(older), older, commit, ['public']);
+    assert.throws(() => validateOutputMetadata({ applicationId: 'org.luma.liquid.web', elements: [{ versionName: prior.versionName, versionCode: prior.versionCode, outputFile: 'app.apk' }] }, 'public', '301'));
+    assert.throws(() => validateApkBadging(`package: name='org.luma.liquid.web' versionCode='${prior.versionCode}' versionName='${prior.versionName}'\nnative-code: 'arm64-v8a'\n`, 'public', '301'));
+    assert.throws(() => validateArtifactMetadata(releaseMetadata(older), '301', commit, ['public']));
+    assert.throws(() => validateArtifactMetadata(releaseMetadata('301'), older, commit, ['public']));
+  }
+});
+
 test('1.0.0 keeps one public version name, a monotonic code and distinct verified editions', () => {
   for (const edition of ['full', 'friends']) {
     const expected = expectedArtifact(edition, '100');

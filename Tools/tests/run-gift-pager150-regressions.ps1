@@ -67,6 +67,33 @@ if($LASTEXITCODE -ne 0){throw 'Extracted gift binder/pager regression failed.'}
 
 $local=Body $sheet 'public StarGiftSheet setLocalPreview('
 if($local -match 'sendRequest\(|ConnectionsManager|TL_payments|toggleShow\(|onBuyPressed\('){throw 'Local binding must have no transaction side effects.'}
+function Assert-UniformGiftUi([string]$parentSource,[string]$sheetSource) {
+    $grid=Body $parentSource 'public void fillItems(ArrayList<UItem> items, UniversalAdapter adapter)'
+    if(!$grid.Contains('final boolean unifiedGifts = true;') -or $grid.Contains('LumaLocalGiftsHeader') -or $grid.Contains('UItem.asHeader(getString(R.string.ProfileGifts))')) {
+        throw 'Both editions must share one mixed gift grid without local/server section headers.'
+    }
+    $factory=Body $parentSource 'private LumaLocalGiftPreview.PagerSource createPreviewPager('
+    $binder=Body $sheetSource 'public StarGiftSheet setLocalPreview('
+    if($factory.Contains('isPersonalEdition') -or $binder.Contains('isPersonalEdition')) {throw 'Both editions must share the native mixed pager and local binder.'}
+    foreach($guard in @('button.setText(getString(R.string.OK), false)', 'button.setOnClickListener(v -> dismiss())', 'this::onMenuPressed')) {
+        if(!$binder.Contains($guard)){throw 'Local preview main button must dismiss; deletion belongs only in the menu.'}
+    }
+    if($binder.Contains('confirmRemove(')){throw 'Local preview main button must dismiss; deletion belongs only in the menu.'}
+}
+Assert-UniformGiftUi $parent $sheet
+$uiControls=@(
+    @{Name='public-split-grid';Target='parent';Old='final boolean unifiedGifts = true;';New='final boolean unifiedGifts = LumaBuildPolicy.isPersonalEdition();';Expected='Both editions must share one mixed gift grid'},
+    @{Name='separate-local-heading';Target='parent';Old='final boolean unifiedGifts = true;';New='final boolean unifiedGifts = true; items.add(UItem.asHeader(getString(R.string.LumaLocalGiftsHeader)));';Expected='Both editions must share one mixed gift grid'},
+    @{Name='direct-delete-button';Target='sheet';Old='button.setOnClickListener(v -> dismiss());';New='button.setOnClickListener(v -> LumaLocalGiftPreview.confirmRemove(fragment, gift));';Expected='deletion belongs only in the menu'}
+)
+foreach($control in $uiControls) {
+    $before=if($control.Target -eq 'parent'){$parent}else{$sheet};$mutant=$before.Replace($control.Old,$control.New)
+    if($mutant -eq $before){throw "Gift UI negative control not applied: $($control.Name)"}
+    $caught=$false
+    try {if($control.Target -eq 'parent'){Assert-UniformGiftUi $mutant $sheet}else{Assert-UniformGiftUi $parent $mutant}}
+    catch {if(!$_.Exception.Message.Contains($control.Expected)){throw};$caught=$true}
+    if(!$caught){throw "Gift UI negative control missed: $($control.Name)"}
+}
 $nativeSaved=Body $sheet 'public StarGiftSheet set(TL_stars.SavedStarGift savedStarGift, StarsController.IGiftsList list)'
 if($nativeSaved.IndexOf('instanceof LumaLocalGifts.LocalSavedGift') -lt 0 -or
     $nativeSaved.IndexOf('instanceof LumaLocalGifts.LocalSavedGift') -gt $nativeSaved.IndexOf('myProfile =')){throw 'Marker binding must branch before normal owned gift setup.'}
@@ -107,6 +134,8 @@ foreach($guard in @('previewGeneration != profilePreviewGeneration','profilePrev
 }
 
 $negatives=@(
+    @{Name='public-pager-denied';Old='if (pageList != list || dialogId <= 0 || dialogId != localPinsOwner) return null;';New='if (!LumaBuildPolicy.isPersonalEdition() || pageList != list || dialogId <= 0 || dialogId != localPinsOwner) return null;';Expected='mixed pager available in both editions'},
+    @{Name='public-native-binder-denied';Old='if (fragment == null || gift == null';New='if (!LumaBuildPolicy.isPersonalEdition() || fragment == null || gift == null';Expected='native local binder available in both editions'},
     @{Name='input-marker';Old='if (localPreviewGift != null || savedStarGift instanceof LumaLocalGifts.LocalSavedGift) return null;';New='';Expected='private/static input conversion fails closed'},
     @{Name='owner-epoch';Old='epoch == localPreviewEpoch && owner > 0';New='owner > 0';Expected='epoch invalidation closes owner view'},
     @{Name='uncleared-transaction';Old='savedStarGift = null;';New='';Expected='transaction identities cleared'},
@@ -127,5 +156,5 @@ foreach($control in $negatives) {
     $ErrorActionPreference=$preference
     if($code -eq 0 -or !$result.Contains($control.Expected)){throw "Negative control missed defect: $($control.Name)"}
 }
-Write-Output 'PASS: mixed local/server UI order, server-only upgrade indices, local action guards, queued roll/swipe, expiry-preserved data, stored metadata and owner epoch; seven negative controls.'
+Write-Output 'PASS: public+personal mixed local/server UI order, single grid, menu-only deletion, server-only upgrade indices, local action guards, queued roll/swipe, expiry-preserved data, stored metadata and owner epoch; nine executable and three UI-contract negative controls.'
 Write-Output "Test artifacts: $run"

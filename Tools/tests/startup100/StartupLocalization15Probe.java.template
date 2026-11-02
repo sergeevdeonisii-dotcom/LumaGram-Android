@@ -11,7 +11,9 @@ public final class StartupLocalization15Probe {
         "LumaUpdateWelcomeName", "LumaUpdateWelcomeVersion", "LumaUpdateWelcomeChanges",
         "LumaUpdateWelcomeContinue", "LumaUpdateWelcomeRoundCamera", "LumaUpdateWelcomeRoundSettings",
         "LumaUpdateWelcomeVerification", "LumaUpdateWelcomeNumberValue", "LumaUpdateWelcomePersonalGifts",
-        "LumaUpdateWelcomeFuture"
+        "LumaUpdateWelcomeFuture", "LunagramWelcome20Feed", "LunagramWelcome20Swipe",
+        "LunagramWelcome20Audio", "LunagramWelcome20Video", "LunagramWelcome20Atmosphere",
+        "LunagramWelcome20Tools", "LunagramWelcome20Fixes"
     };
     private static int checks;
 
@@ -41,7 +43,7 @@ public final class StartupLocalization15Probe {
                     check(!expected.startsWith("LOC_ERR"), "Error placeholder: " + key);
                 }
 
-                // Old layout: all ten resources exist for Android, including
+                // Old layout: resources exist for Android, including
                 // the R.id->name bindings, but only in excluded notes XML.
                 // Remove them solely from the generated localization table.
                 Map<String, String> standaloneOnly = new HashMap<>(generated);
@@ -70,7 +72,7 @@ public final class StartupLocalization15Probe {
             String name = node.getAttribute("name");
             // Match TelegramStringsTask's XML-string normalization.
             String value = node.getTextContent().replace("\\n", "\n").replace("\\", "").replace("&lt;", "<");
-            if (name.startsWith("LumaUpdateWelcome")) {
+            if (name.startsWith("LumaUpdateWelcome") || name.startsWith("Lunagram")) {
                 check(!result.containsKey(name), "Duplicate startup localization: " + name);
             }
             result.put(name, value);

@@ -18,6 +18,9 @@ public final class R {
                 LumaUpdateWelcomeName=20, LumaUpdateWelcomeVersion=21, LumaUpdateWelcomeChanges=22,
                 LumaUpdateWelcomeContinue=23, LumaUpdateWelcomeRoundCamera=24, LumaUpdateWelcomeRoundSettings=25,
                 LumaUpdateWelcomeVerification=26, LumaUpdateWelcomeNumberValue=27,
-                LumaUpdateWelcomePersonalGifts=28, LumaUpdateWelcomeFuture=29;
+                LumaUpdateWelcomePersonalGifts=28, LumaUpdateWelcomeFuture=29,
+                LunagramWelcome20Feed=30, LunagramWelcome20Swipe=31, LunagramWelcome20Audio=32,
+                LunagramWelcome20Video=33, LunagramWelcome20Atmosphere=34, LunagramWelcome20Tools=35,
+                LunagramWelcome20Fixes=36;
     }
 }

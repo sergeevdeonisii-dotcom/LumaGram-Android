@@ -1,0 +1,188 @@
+import java.util.*;
+
+/** Actual production navigation/measurement/binding methods, modeled Android host. */
+public final class LunagramSettingsBugfix20Probe {
+    static int checks;
+    static void check(boolean ok,String why) { checks++;if(!ok)throw new AssertionError(why); }
+    static final class LunagramExperienceSettings { static boolean visible=true;static boolean feedVisible(int account){return visible;} }
+    static final class Pager {
+        int position, rebuilds;int getCurrentPosition(){return position;}
+        void setPosition(int value){position=value;} void rebuild(boolean animate){rebuilds++;}
+    }
+    static final class Tabs { boolean feedShown;void setViewVisible(Object tab,boolean visible,boolean animate){feedShown=visible;} }
+    static final class Animator { boolean visible;int calls;void setValue(boolean value,boolean animate){visible=value;calls++;} }
+    static final class Fragments {
+        final TreeMap<Integer,Object> values=new TreeMap<>();int size(){return values.size();}
+        int keyAt(int index){return new ArrayList<>(values.keySet()).get(index);}
+    }
+    static final class Nav {
+        static final int TABS_COUNT=5,POSITION_CHATS=0,POSITION_FEED=1,INDEX_FEED=1,INDEX_SETTINGS=3;
+        int currentAccount, selected, drops;
+        boolean feedTabVisible=true,dialogsTabsVisible=true;
+        Pager viewPager=new Pager();Tabs tabsView=new Tabs();Object[] tabs=new Object[6];
+        Animator animatorTabsVisible=new Animator();Fragments fragmentsArr=new Fragments();
+        void dropFragmentAtPosition(int key){fragmentsArr.values.remove(key);drops++;}
+        void selectTab(int position,boolean animate){selected=position;}
+        /* NAV_METHODS */
+    }
+    static final class Context {}
+    static class View { int width,height;int getWidth(){return width;}int getHeight(){return height;} }
+    static final class AndroidUtilities {
+        static final class Point { int x=1000,y=1400; }
+        static final Point displaySize=new Point();
+        static boolean tablet,isInMultiwindow;static float density=1;
+        static boolean isTablet(){return tablet;}static int getMinTabletSide(){return 720;}
+        static boolean isSmallTablet(){return false;}static int getTabletLeftFragmentSize(int width,int left,int right){return Math.max(320,width*35/100);}
+        static int dp(int value){return value;}
+    }
+    static final class MeasureSpec { static int getSize(int spec){return spec & 0x3fffffff;} }
+    static final class MessageOwner { int date,id;Object peer_id=new Object();From from_id=new From(); }
+    static final class From { long user_id; }
+    static class TextPaint { float getTextSize(){return 16;}Object getFontMetricsInt(){return null;} }
+    static final class Emoji {static CharSequence replaceEmoji(CharSequence text,Object metrics,boolean create,int[] only){return text;}}
+    static final class MessagesController {static MessagesController getInstance(int account){return new MessagesController();}TLRPC.User getUser(long id){return null;}}
+    static final class MessageObject {
+        static final int TYPE_TEXT=0,TYPE_EMOJIS=1,TYPE_ARTICLE=2;
+        MessageOwner messageOwner;boolean preview,forceUpdate,layoutCreated,isBotPendingDraft;int parentWidth,layoutWidth,resets,currentAccount,type,generatedWithMinSize,layoutParentWidth;
+        float generatedWithDensity=1,generatedWithFontSize=16;CharSequence messageText="Test",caption;
+        MessageObject(int account,MessageOwner owner,boolean layout,boolean media){currentAccount=account;messageOwner=owner;layoutCreated=layout;layoutWidth=generatedWithMinSize=AndroidUtilities.isTablet()?720:1000;}
+        long getDialogId(){return -42;}int getId(){return messageOwner.id;}
+        static int dp(int value){return AndroidUtilities.dp(value);}
+        void generateLayout(Object from){layoutCreated=true;layoutWidth=generatedWithMinSize=getParentWidth();generatedWithDensity=AndroidUtilities.density;generatedWithFontSize=Theme.chat_msgTextPaint.getTextSize();}
+        boolean isFromUser(){return false;}static Object getMedia(MessageOwner owner){return null;}boolean allowsBigEmoji(){return false;}
+        CharSequence replaceAnimatedEmoji(CharSequence text,Object metrics){return text;}void replaceEmojiToLottieFrame(CharSequence text,int[] only){}
+        void checkEmojiOnly(int[] only){}void checkBigAnimatedEmoji(){}void setType(){}void generateCaption(){}
+        /* MESSAGE_WIDTH_METHODS */
+    }
+    static class ChatMessageCell {
+        MessageObject current,currentMessageObject,messageObjectToSet;int measured,parentHeight,parentWidth,contentDraws;
+        boolean isArticle,isSideMenuEnabled,isSideMenued,drawAvatar;
+        ChatMessageCell(Context context,int account,boolean hasParent,Object chat,Object resources){}
+        int getParentWidth(){return 1000;}
+        void setParentViewSize(int width,int height){parentWidth=width;parentHeight=height;}
+        MessageObject getMessageObject(){return current;}
+        void setMessageObject(MessageObject message,Object group,boolean a,boolean b,boolean c){current=currentMessageObject=message;message.checkLayout();}
+        protected void onMeasure(int width,int height){measured=MeasureSpec.getSize(width);}
+        /* NATIVE_DRAW_GUARD */
+        /* NATIVE_HOST_METHODS */
+        /* NATIVE_HOST_CONSTRAINTS */
+        static int dp(int value){return value;}Resources getResources(){return new Resources();}
+    }
+    static class Resources {Configuration getConfiguration(){return new Configuration();}}
+    static class Configuration {static final int ORIENTATION_LANDSCAPE=2;int orientation=2;}
+    static class ChatActivity {static final int SIDE_MENU_WIDTH=64;}
+    static final class TLRPC { static final class Chat{}static final class User{}static final class TL_messageMediaGame{} }
+    static final class Controller { TLRPC.Chat getChat(long id){return new TLRPC.Chat();} }
+    static final class LunagramStreamerMode {
+        static boolean enabled;static boolean isEnabled(int account){return enabled;}
+        static String hiddenName(boolean chat){return "Hidden";}static String displayName(int account,TLRPC.Chat chat){return "Channel";}
+    }
+    static final class LocaleController {
+        static String formatString(int id,Object...args){return Arrays.toString(args);}
+        static String formatDateTime(int date,boolean year){return Integer.toString(date);}
+    }
+    static final class R { static final class string { static final int LunagramFeedChannelFallback=1,LunagramFeedOrigin=2; } }
+    static final class Theme { static final int key_windowBackgroundWhiteBlueText=1;static TextPaint chat_msgTextPaint=new TextPaint(),chat_msgGameTextPaint=new TextPaint(); }
+    static final class ProfileSearchCell {
+        String title;void setData(Object chat,Object encrypted,String title,String subtitle,boolean a,boolean b){this.title=title;}
+        void setContentDescription(String text){}
+    }
+    static final class TextView { void setTextColor(int color){} }
+    static final class BlurredBackgroundSourceRenderNode {
+        int width,height,updates;void setSize(int width,int height){this.width=width;this.height=height;}
+        void updateDisplayListIfNeeded(){updates++;}
+    }
+    static final class LunagramFeedActivity {
+        int currentAccount;Object resourceProvider;
+        View list=new View(),fragmentView=new View();BlurredBackgroundSourceRenderNode glassSource=new BlurredBackgroundSourceRenderNode();
+        Controller getMessagesController(){return new Controller();}int getThemedColor(int key){return 0;}
+        /* FEED_CELL */
+        /* GLASS_GETTER */
+        final class PostView {
+            final ChatMessageCell message=new FeedMessageCell(new Context());
+            final ProfileSearchCell origin=new ProfileSearchCell();
+            final TextView react=new TextView(),open=new TextView();MessageObject post;
+            /* POST_BIND */
+        }
+    }
+    public static void main(String[] args) {
+        for(boolean visible:new boolean[]{true,false}) {
+            Nav nav=new Nav();nav.feedTabVisible=visible;
+            check(nav.getFragmentsCount()==(visible?5:4),"page count reflects hidden feed");
+            int[] expected=visible?new int[]{0,1,2,3,3,4}:new int[]{0,-1,1,2,2,3};
+            for(int index=0;index<6;index++)check(nav.indexToPosition(index)==expected[index],"stable tab identity after removal");
+            for(int logical=0;logical<5;logical++) {
+                if(!visible&&logical==1) { check(nav.logicalToPosition(logical)==-1,"feed cannot be selected while hidden");continue; }
+                int position=nav.logicalToPosition(logical);
+                check(position>=0&&position<nav.getFragmentsCount(),"bounded page index");
+                check(nav.positionToLogical(position)==logical,"round trip page identity");
+                nav.viewPager.position=position;nav.dialogsTabsVisible=false;nav.updateTabsVisibility(false);
+                check(nav.animatorTabsVisible.visible==(logical!=0),"Chats search suppression never leaks to other tabs");
+            }
+        }
+        for(int cycle=0;cycle<100;cycle++)for(int logical=0;logical<5;logical++) {
+            Nav nav=new Nav();nav.viewPager.position=logical;
+            for(int i=0;i<5;i++)nav.fragmentsArr.values.put(i,new Object());
+            Object chats=nav.fragmentsArr.values.get(0);LunagramExperienceSettings.visible=false;nav.syncFeedVisibility();
+            check(nav.viewPager.position==(logical==1?0:logical==0?0:logical-1),"hide preserves current peer tab or returns Feed toChats");
+            check(nav.drops==4&&nav.fragmentsArr.size()==1&&nav.fragmentsArr.values.get(0)==chats,"old shifted fragments disposed; Chats preserved");
+            check(!nav.tabsView.feedShown&&!nav.feedTabVisible&&nav.viewPager.rebuilds==1,"one UI rebuild when hiding");
+            nav.syncFeedVisibility();check(nav.viewPager.rebuilds==1,"unchanged preference does not rebuild");
+            LunagramExperienceSettings.visible=true;nav.syncFeedVisibility();
+            check(nav.viewPager.position==(logical==1?0:logical),"reenable restores position mapping");
+            check(nav.tabsView.feedShown&&nav.getFragmentsCount()==5,"settings can reenable Feed");
+        }
+        for(boolean tablet:new boolean[]{false,true})for(int width:new int[]{160,240,320,360,680,1000,1400}) {
+            AndroidUtilities.tablet=tablet;
+            LunagramFeedActivity feed=new LunagramFeedActivity();feed.list.width=width+16;feed.list.height=700;
+            LunagramFeedActivity.PostView post=feed.new PostView();
+            for(int bind=0;bind<100;bind++) {
+                MessageOwner owner=new MessageOwner();owner.id=bind;
+                MessageObject original=new MessageObject(0,owner,true,true);post.bind(original);
+                post.message.onMeasure(width,0);
+                check(post.message.current!=original&&post.message.current.messageOwner==original.messageOwner,"presentation clone, no mutation of source metadata");
+                check(!original.preview&&original.parentWidth==0&&original.layoutParentWidth==0&&original.layoutWidth==(tablet?720:1000),"original message untouched");
+                check(!post.message.current.preview&&post.message.current.layoutParentWidth==width,"normal drawing with actual available cell width");
+                check(post.message.current.layoutWidth==width,"same-width recycled binds never retain screen-width layout");
+                int drawn=post.message.contentDraws;post.message.drawContent(false);
+                check(post.message.contentDraws==drawn+1,"native normal draw entry paints content on EVERY bind");
+                check(!post.message.current.checkLayout(),"tablet/phone checks never regenerate against global screen width");
+                check(post.message.getHostTabletSide()==Math.min(720,width),"opt-in split/tablet width constrains native branches");
+                check(post.message.photoConstraint()==(int)(Math.min(720,width)*.7f),"actual native photo branch bounded by feed host");
+                check(post.message.linkConstraint()==Math.min(720,width)-80,"actual native link branch bounded by feed host");
+                check(post.message.reactionConstraint()==Math.min(720,width)-80,"actual native reaction branch bounded by feed host");
+                check(post.message.getGroupPhotosWidth()==width,"measured feed pane is never subtracted twice on tablet");
+            }
+            for(int resized:new int[]{width+80,width,width+160,width}) {
+                post.message.onMeasure(resized,0);
+                check(post.message.current.layoutWidth==resized&&post.message.current.layoutParentWidth==resized,"resize regenerates text/media constraint");
+                check(!post.message.current.checkLayout(),"resized layout remains bound to host rather than tablet screen");
+                check(post.message.photoConstraint()==(int)(Math.min(720,resized)*.7f),"resize updates native media constraint");
+            }
+            LunagramStreamerMode.enabled=true;post.bind(new MessageObject(0,new MessageOwner(),true,true));
+            check(post.origin.title.equals("Hidden"),"feed origin keeps local streamer mask");LunagramStreamerMode.enabled=false;
+            check(feed.getGlassSource()==null,"unmeasured glass does not record empty node");
+            feed.fragmentView.width=width;feed.fragmentView.height=700;
+            check(feed.getGlassSource()==feed.glassSource&&feed.glassSource.updates==1,"populate child before aggregate draws it");
+            check(feed.glassSource.width==width&&feed.glassSource.height==700,"glass source has feed viewport dimensions");
+        }
+        AndroidUtilities.tablet=false;
+        MessageObject normal=new MessageObject(0,new MessageOwner(),true,true);
+        ChatMessageCell nativeCell=new ChatMessageCell(new Context(),0,true,null,null);nativeCell.setMessageObject(normal,null,false,false,false);
+        check(nativeCell.getHostTabletSide()==720&&nativeCell.photoConstraint()==504,"normal native message retains tablet photo sizing");
+        check(nativeCell.linkConstraint()==640&&nativeCell.reactionConstraint()==640,"normal native link/reaction sizing unchanged");
+        AndroidUtilities.tablet=true;check(nativeCell.getGroupPhotosWidth()==650,"normal tablet pane deduction unchanged");AndroidUtilities.tablet=false;
+        nativeCell.currentMessageObject=null;nativeCell.messageObjectToSet=new MessageObject(0,new MessageOwner(),true,true);nativeCell.messageObjectToSet.setLayoutParentWidth(240);
+        check(nativeCell.getHostTabletSide()==240,"pending presentation object also constrains host");
+        check(normal.getParentWidth()==1000,"default native width unchanged");
+        normal.preview=true;normal.parentWidth=222;
+        check(normal.getParentWidth()==222,"existing native special preview width unchanged");
+        normal.setLayoutParentWidth(330);normal.generateLayout(null);
+        check(normal.getParentWidth()==330&&!normal.checkLayout(),"explicit width independent of special preview");
+        normal.setLayoutParentWidth(330);check(normal.layoutCreated,"same width setter is idempotent");
+        normal.setLayoutParentWidth(-1);check(normal.getParentWidth()==222&&!normal.layoutCreated,"negative/zero clears opt-in and invalidates");
+        normal.preview=false;normal.generateLayout(null);AndroidUtilities.density=2;
+        check(normal.checkLayout(),"density change still invalidates native layout");AndroidUtilities.density=1;
+        System.out.println("PASS actual extracted nav/feed methods: "+checks+" modeled host checks");
+    }
+}

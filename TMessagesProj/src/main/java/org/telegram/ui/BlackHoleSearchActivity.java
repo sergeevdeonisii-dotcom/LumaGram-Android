@@ -44,6 +44,7 @@ public final class BlackHoleSearchActivity extends BaseFragment {
                 R.string.LiquidGlassInputSize, R.string.LiquidGlassWallpaperRefraction, R.string.LiquidGlassAdaptiveColor,
                 R.string.LiquidGlassSeparateColors, R.string.LiquidGlassColorStrength, R.string.LiquidGlassColorTransition);
         group(3, R.string.TextAnimationSettingsTitle, R.string.TextAnimationEnable, R.string.LumaAutomaticMessageStyle);
+        group(6, R.string.LufTitle, R.string.LufTitle, R.string.LufFamily, R.string.LufWeight);
         if (LumaBuildPolicy.allowsBuiltInUpdates()) {
             group(4, R.string.LumaUpdatesTitle, R.string.LumaUpdatesTitle, R.string.LumaUpdateCheckNow);
         }
@@ -104,6 +105,7 @@ public final class BlackHoleSearchActivity extends BaseFragment {
         else if (destination == 3) screen = new TextAnimationSettingsActivity();
         else if (destination == 4) screen = new LumaUpdateActivity();
         else if (destination == 5) screen = new RoundVideoSettingsActivity();
+        else if (destination == 6) screen = new LunagramTypographyActivity();
         else if (destination >= 201) screen = new BlackHoleToolsActivity(destination - 200);
         else screen = ExperimentalFeaturesActivity.forSection(destination);
         screen.setCurrentAccount(currentAccount); presentFragment(screen);

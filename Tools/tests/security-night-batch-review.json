@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-14",
+  "reviewer": "independent security and local-workspace stream",
+  "candidate": "2.1.0 public test candidate; source review, not a signed APK attestation",
+  "result": "No remaining release-blocking issue identified in the sampled new-function paths after the fixes below. One existing low-severity provider issue remains reported. This is not a complete security certification.",
+  "scope": {
+    "reviewed": [
+      "Owner/login-epoch/account selection, lock/vault/protected-message and expiry boundaries in local workspace, media tools, local labels, text tools, reader, link preferences and speech",
+      "Private intermediate exports and late save/share/scan callbacks",
+      "FileProvider paths, backup exclusions and sampled exported-provider behavior",
+      "Public updater download/redirect/hash/package/edition/certificate and installer revalidation paths",
+      "Billing auth, private bot consent, PKCE recovery, bearer identity, bounded HTTP DTOs and sanitized errors",
+      "206 and 210 test workflows, 210 builder/collector, local temporary-index export and local signing/verifier wrappers"
+    ],
+    "notPerformed": [
+      "No production requests, external pentest, real payment, deployment, release publication or credential output",
+      "No Android device/emulator UI, recipient-app URI access, real Android Keystore or platform TTS test",
+      "No complete audit of upstream Telegram, third-party SDKs, vendor native archives or every exported component",
+      "No signing, APK installation or final candidate verification in this review"
+    ]
+  },
+  "fixedFindings": [
+    {
+      "id": "EXPORT-PRIVATE-STORAGE",
+      "severity": "medium",
+      "status": "fixed-in-source-and-host-tested",
+      "location": "TMessagesProj/src/main/java/org/telegram/messenger/LumaChatExportManager.java:285; LumaAccountExportManager.java:165",
+      "scenario": "Plaintext intermediate exports in external cache could be accessible to another storage-authorized app on older Android before an explicit save/share.",
+      "fix": "Internal cache only, no external fallback; two narrow export cache FileProvider paths. Existing user-authorized Downloads copies are not deleted.",
+      "regression": "Actual exporters produce private intermediate output; forbidden external fallback and storage mutants are rejected."
+    },
+    {
+      "id": "EXPORT-LOGIN-GENERATION",
+      "severity": "medium",
+      "status": "fixed-in-source-and-host-tested",
+      "location": "TMessagesProj/src/main/java/org/telegram/messenger/LumaExportSession.java; ui/Components/LumaChatExportSheet.java:129; ui/LumaAccountExportActivity.java",
+      "scenario": "An owner-ID-only check could accept an old completion after logout and relogin as the same owner, or apply an old dialog-scan reply to a new account session.",
+      "fix": "Immutable owner plus login epoch, guarded scan generation/lifecycle and save/share callbacks; completed data remains readable after paid access expires.",
+      "regression": "Queued completion after logout, new owner and same-owner relogin; expired entitlement with valid identity can still read completed exports."
+    },
+    {
+      "id": "LOCAL-EDITOR-NATIVE-SELECTION",
+      "severity": "medium",
+      "status": "fixed-and-independently-rechecked",
+      "location": "TMessagesProj/src/main/java/org/telegram/ui/LunagramWorkspaceActivity.java:282; ui/Components/LunagramAliasSheet.java:51; ui/Components/LunagramTextSelectionGuard.java",
+      "scenario": "Native Copy/Cut/Share or keyboard context actions could bypass custom-button checks after owner, account, lock or protected context changed while an editor remained open.",
+      "fix": "Native selection/insertion ActionMode and onTextContextMenuItem recheck immutable session/context; invalid editors are cleared and actions consumed.",
+      "regression": "Exercise both custom buttons and native/keyboard context actions after same-owner relogin, account switch and lock. Device interaction remains untested."
+    },
+    {
+      "id": "WORKSPACE-STALE-DRAFT-PREVIEW",
+      "severity": "medium",
+      "status": "fixed-and-independently-rechecked",
+      "location": "TMessagesProj/src/main/java/org/telegram/ui/LunagramWorkspaceActivity.java:226; ui/Components/ChatActivityEnterView.java:11259",
+      "scenario": "Comparing only a String, or obtaining the revision token only at Apply, could overwrite a draft changed and reverted while its saved-version preview was open, including formatting-only changes.",
+      "fix": "Capture one immutable composer Apply token before preview. Do not rebase on resume; clear it on destruction. Actual composer revision, identity/context and span/quote state are checked before mutation.",
+      "regression": "Change/revert plain text or mutate formatting during preview; stale restore, Undo and Redo must be denied."
+    },
+    {
+      "id": "COMPOSER-PROTECTED-CONTEXT",
+      "severity": "medium",
+      "status": "fixed-and-source-rechecked",
+      "location": "TMessagesProj/src/main/java/org/telegram/ui/Components/ChatActivityEnterView.java; ui/Components/LunagramTextToolsSheet.java",
+      "scenario": "The composer tools overload originally lacked the same dynamic lock/vault/no-forward predicate as message tools, including native Copy.",
+      "fix": "Ordinary-composer predicate includes passcode, vault and parent peer no-forwards; the tools sheet and native actions retain that live predicate.",
+      "regression": "Open ordinary composer tools, then lock or protect the peer before Copy/Apply; deny without auto-send or draft destruction."
+    },
+    {
+      "id": "COMPOSER-MUTABLE-QUOTE-STATE",
+      "severity": "low",
+      "status": "fixed-and-source-rechecked",
+      "location": "TMessagesProj/src/main/java/org/telegram/ui/Components/ChatActivityEnterView.java:11240",
+      "scenario": "QuoteSpan can change its collapse flag on the same mutable span instance without a text-change delegate. A shallow span snapshot alone does not detect that change.",
+      "fix": "A value fingerprint of quote start/end/collapse state is captured and compared before Apply/Undo/Redo.",
+      "regression": "Mutate the same QuoteSpan instance without a delegate; stale Apply/Undo is rejected. This does not claim deep cloning every upstream custom span class."
+    },
+    {
+      "id": "MEDIA-BOOKMARK-CORRUPTION",
+      "severity": "medium",
+      "status": "fixed-and-independently-host-tested",
+      "location": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramMediaTools.java:274",
+      "scenario": "Silently dropping malformed, foreign-owner or excess stored bookmark rows could overwrite the remaining user data on the next save.",
+      "fix": "Nonempty malformed or foreign rows and more than 64 entries fail closed; no partial recovery/truncation is persisted.",
+      "regression": "Corrupt, foreign and 65-row fixtures preserve the stored blob and reject the mutation."
+    },
+    {
+      "id": "MEDIA-BOOKMARK-LOGOUT-FENCE",
+      "severity": "medium",
+      "status": "fixed-and-independently-host-tested",
+      "location": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramMediaTools.java:288; UserConfig.java:475",
+      "scenario": "A validated old-session write could race logout cleanup without a shared synchronization boundary.",
+      "fix": "Synchronized store operations and logout barrier, captured owner/epoch and explicit-owner encrypted writes; expiry does not block reading/deleting previously owned bookmarks.",
+      "regression": "Controlled logout/relogin and queued callbacks cannot mutate the new owner's store."
+    },
+    {
+      "id": "LINK-PREFERENCE-OWNER-CAPTURE",
+      "severity": "medium",
+      "status": "fixed-and-source-rechecked",
+      "location": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramLinkSettings.java:55",
+      "scenario": "An implicit-owner encryption overload could recapture a new owner between the access check and preference write.",
+      "fix": "State captures owner once; explicit-owner encrypted write plus session checks and a logout synchronization barrier.",
+      "regression": "Switch owner or relogin between state capture and save; the old state must not write into the new account."
+    },
+    {
+      "id": "LINK-PREVIEW-PRIVACY-BOUNDARY",
+      "severity": "medium",
+      "status": "fixed-and-source-rechecked",
+      "location": "TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java:14789",
+      "scenario": "A queued link parse could dispatch after preview opt-out completed, and the previous editing exception could bypass the opt-out while editing an existing message.",
+      "fix": "Final preview dispatch is serialized with the preference toggle. Search, queued parse, final dispatch and callback check session/lock/selection/opt-out, including editing. Existing Telegram eligibility rules remain separate.",
+      "regression": "Disable preview before a queued dispatch and while editing; no new preview request may start afterward. Already-sent network requests cannot be retroactively unsent."
+    }
+  ],
+  "remainingFindings": [
+    {
+      "id": "CALL-SOUND-PROVIDER",
+      "severity": "low",
+      "status": "reported-not-changed",
+      "location": "TMessagesProj/src/main/AndroidManifest.xml:718; java/org/telegram/messenger/voip/CallNotificationSoundProvider.java:60",
+      "scenario": "An exported provider invokes startRingtoneAndVibration during a read while VoIPService exists without validating the exact requested URI/call state. A local app may cause an unintended sound side effect; no demonstrated data theft or universal DND bypass.",
+      "nextStep": "Add exact URI and eligible incoming-call state validation and platform caller fixtures while preserving system ringtone access. Do not simply make the provider private or impose a permission that breaks Android's contract."
+    }
+  ],
+  "verifiedBoundaries": {
+    "ownedDataAfterExpiry": "Workspace and labels preserve encrypted data; existing view/export/delete or clearing remains available with valid identity/context. Paid new mutations and new media operations are gated. No automatic erasure on expiry.",
+    "boundedStorage": "Workspace: schema v1, 128 entries, 256 KiB UTF-8, strict types/keys/IDs and no trailing JSON. Labels: bounded versioned metadata, 256 aliases plus 256 proxy labels, validated Unicode/control/bidi handling. No plaintext encryption fallback or untrusted import added.",
+    "mediaFiles": "Canonical FileLoader-resolved app-owned downloaded paths only; reject partial/encrypted/busy/original attach files. Recheck on the FileLoader queue before deleting an exact local cached file. Image clipboard uses a confirmed private copy and temporary URI grant; hashing and copies are bounded and session-cancellable.",
+    "aliasIdentity": "ChatActivity.getLunagramChatAlias excludes Streamer, thread and non-default modes. ChatAvatarContainer keeps the real group/channel title in subtitle when an alias is used. Proxy labels retain the actual address in subtitle and never mutate connection credentials or the global proxy identity.",
+    "speech": "Explicit confirmation, bounded chunks, installed non-network voice only, live access checks, 250 ms privacy poll and initialization timeout. Close cancels callbacks, clears chunks and independently attempts stop and shutdown. ChatActivity closes on pause and destruction.",
+    "updater": "Public install revalidates expected SHA-256, own versioned path, package/edition/newer version and installed signing identity. HTTPS/authority/allowlisted host and public DNS checks apply to redirects. Cleanup targets only exact owned version/staging filenames. Android package installer remains the final signature authority.",
+    "backup": "allowBackup=false plus explicit cloud/device-transfer exclusions. FileProvider is non-exported and URI-grant based; the new export paths are narrow.",
+    "billing": "User ID hints are not authentication. Private bot consent, PKCE verifier, server bearer identity, expiry and durable rate limits bind operations. Price/tier/date/owner values cannot be supplied by the Android client to activate entitlement. Bodies/DTOs are bounded; errors are sanitized.",
+    "ci210": "Exact owner repository/test branch and commit; pinned actions; read-only permissions; credential-free checks/SDK provisioning precede build-only API credentials. Disposable signing key, private generated files, exact upload list and three-day retention; no production signer or publish step.",
+    "localPrepare210": "Explicit application/test/CI path set, temporary GIT_INDEX_FILE restored in finally, no main-index staging or checkout. Reject large/reparse/forbidden-type and suspicious credential-pattern files without printing matches. Frozen raw hashes and Git blobs identify the separate CI tree. No push occurs in this helper.",
+    "localSigner210": "Expected source commit, metadata/hash/manifest/DEX checks before key access; fixed production certificate; unchanged non-signature ZIP payload after signing; no overwrite and receipt last. Passwords use unique environment names, captured tool output and finally cleanup. No secret values were read by the review/self-tests.",
+    "localVerifier210": "Original worktree HEAD is separate from ciSourceCommit. Frozen source hashes, exported Git blobs, signing receipt and APK hashes are rechecked; compiled resource copies and edition policy are checked. Historical freezes are not relabelled. Actual APK verification is pending the candidate build."
+  },
+  "verification": [
+    {
+      "suite": "Independent local billing/auth/HTTP/bot/scaffold plus collector",
+      "commandScope": "Node --max-old-space-size=128 --test --test-concurrency=1; live-auth, live-http, live-http-v2, bot-webhook, billing, cloudflare-scaffold and collect-lunagram-apk test files",
+      "result": "130 tests PASS; no production requests"
+    },
+    {
+      "suite": "Independent 206 and 210 workflow contracts",
+      "result": "17 non-shell tests PASS. Two actual-shell checks initially failed with spawnSync bash ENOENT, then were explicitly excluded with --test-skip-pattern=actual shell parses. They remain for Linux CI; not recorded as passing locally."
+    },
+    {
+      "suite": "Independent 210 wrapper offline parsing",
+      "result": "Prepare/sign/verify PowerShell AST PASS; signer metadata 1 positive plus 25 negatives, policy 1 positive plus 11 negatives PASS; verifier identity 3 positive plus 10 negatives PASS. No preparation, key access, signing or full verifier execution."
+    },
+    {
+      "suite": "Independent media runtime/policy rerun",
+      "result": "9927 policy checks, 54 actual extracted-runtime checks, 6 compiled negative controls and 42 EN/RU keys PASS",
+      "artifact": "Tools/tests/.runs/media-tools/83991430e6e04dbbacd2d434617e6e35"
+    },
+    {
+      "suite": "Workspace final host/native-API compilation",
+      "result": "126 real-model/store/catalog/source checks, 12 actual extracted navigation checks and 7 compiled negative controls PASS; 45 EN/RU keys. Eight actual Java sources compile against cached Android 36; both resource files compile with aapt2.",
+      "artifacts": [
+        "Tools/tests/.runs/workspace/31049e1b16cf4a8d8f9c29b613461db0",
+        "Tools/tests/.runs/workspace-api/9a7b4afbb429484594bd7db0c566436e",
+        "Tools/tests/.runs/workspace-resources-e50e7ff27f454fc09f27c5e67a13a0df"
+      ],
+      "qualification": "Workspace author tests plus separate peer read-only review. Host encryption fixture is AES-GCM but not Android Keystore. API compilation is not device execution."
+    },
+    {
+      "suite": "Prior export security verification retained",
+      "result": "69 host checks, 4 compiled and 4 UI source-contract negatives; six-source Android 36 API compilation PASS",
+      "artifact": "Tools/tests/export-security/security-review-20261013.json"
+    }
+  ],
+  "limitationsAndFollowup": [
+    "Legacy FileProvider external-path/root-path mappings are broad. Non-exported grant-based access prevents a direct blanket read; no new exploit was demonstrated. Narrowing them needs compatibility testing of every existing share path, not a blanket removal.",
+    "Legacy usesCleartextTraffic=true serves the embedded browser. Billing/updater enforce separate HTTPS policies; this review does not assert all Telegram/browser traffic is HTTPS.",
+    "The generic downloader resolves DNS for validation and HttpURLConnection resolves again. This is not a formally pinned-DNS SSRF boundary; public updater hosts are fixed and the APK remains hash/signature checked. No DNS-rebinding exploit was exercised.",
+    "Installed Android TTS engines receive user-confirmed text. A non-network voice flag is a platform/provider declaration, not proof that a malicious engine cannot access the network. Real stop/shutdown latency and engine behavior need device testing.",
+    "Clipboard recipients can retain copies after an authorized export. Clearing/revoking a later grant cannot retract content already copied by another app.",
+    "A user-authorized Downloads save already in progress is preserved across logout; stale callbacks cannot start another save/share.",
+    "Archive extraction in account export processes internally generated archives, not a new public ZIP import. Arbitrary external import was not added or certified.",
+    "Temporary-index prepare can leave a new local test ref if a later final consistency check fails. Stop and inspect that exact ref/freeze outcome; do not automatically overwrite it or the user's original index.",
+    "The export-path credential detector is a guard, not a universal secret scanner. Application API identifiers and trusted pre-existing repository contents have separate intentional build semantics.",
+    "Vendor native archives have not been source-audited here. ZIP/ELF LOAD alignment does not erase existing RELRO warnings or prove compatibility on every 16 KiB device.",
+    "Real camera startup latency/FPS, Android URI permissions, native keyboard actions, font/RTL layout and navigation remain device acceptance items. Host assertions and API compilation cannot prove them.",
+    "Workspace/export runners remain Windows/local JSON-jar dependent and are not advertised as part of Linux CI. The CI test list explicitly contains only its portable suites."
+  ]
+}

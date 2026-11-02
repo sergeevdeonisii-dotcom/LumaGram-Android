@@ -1,0 +1,61 @@
+import java.util.*;
+public final class CameraRoutingPolicyTest {
+    static int checks;
+    static void check(boolean value, String description) { checks++; if (!value) throw new AssertionError(description); }
+    static boolean isUsingCamera2Implementation() { /* ACTUAL_ROUTING_BODY */ }
+    static int getRequestedRecordingFrameRate() { /* ACTUAL_FPS_BODY */ }
+    static boolean advertisedPair(Set<Set<String>> groups, String firstName, String secondName) {
+        Candidate first = new Candidate(firstName), second = new Candidate(secondName);
+        Manager cameraManager = new Manager(groups);
+        /* ACTUAL_ADVERTISED_QUERY */
+        // The real controller replaces the selected specs when finding a size pair.
+        // Keep these reassignments: compiling the production query here catches
+        // accidental capture of mutable first/second locals.
+        first = new Candidate("replacement-first"); second = new Candidate("replacement-second");
+        return advertised;
+    }
+    static final class Candidate { final String id; Candidate(String id) { this.id = id; } }
+    static final class Manager {
+        final Set<Set<String>> groups;
+        Manager(Set<Set<String>> groups) { this.groups = groups; }
+        Set<Set<String>> getConcurrentCameraIds() { return groups; }
+    }
+    public static void main(String[] args) {
+        for (int sdk : new int[]{21, 29, 30, 31, 36}) {
+            Build.VERSION.SDK_INT = sdk;
+            for (boolean explicit : new boolean[]{false, true}) {
+                SharedSettings.roundVideoCamera2Enabled.enabled = explicit;
+                for (boolean fast : new boolean[]{false, true}) {
+                    LumaRoundVideoCamera.fast = fast;
+                    check(isUsingCamera2Implementation() == (explicit || sdk >= 30 && fast), "release/legacy/API routing");
+                    LumaRoundVideoQuality.selected = 0;
+                    check(getRequestedRecordingFrameRate() == (explicit ? 30 : 60), "auto-routing preserves recorder default");
+                    for (int selected : new int[]{30, 60}) {
+                        LumaRoundVideoQuality.selected = selected;
+                        check(getRequestedRecordingFrameRate() == selected, "selected FPS survives every route");
+                    }
+                }
+            }
+        }
+        Set<Set<String>> pairs = new HashSet<>();
+        pairs.add(new HashSet<>(Arrays.asList("front", "back")));
+        check(advertisedPair(pairs, "front", "back"), "advertised original IDs survive mutable size-spec replacement");
+        check(advertisedPair(pairs, "back", "front"), "advertisement is facing-order independent");
+        check(!advertisedPair(pairs, "front", "missing"), "both original IDs must belong to the same advertised pair");
+        check(!advertisedPair(Collections.emptySet(), "front", "back"), "unadvertised pair keeps ordinary fallback");
+        System.out.println("PASS " + checks + " extracted production release routing and FPS-preservation checks");
+    }
+}
+final class Build { static final class VERSION { static int SDK_INT; } }
+final class SharedSettings {
+    static final Toggle roundVideoCamera2Enabled = new Toggle();
+    static final class Toggle { boolean enabled; boolean get() { return enabled; } }
+    static final class FrameRate { int getValue() { return 30; } }
+    static FrameRate getRoundVideoFrameRate() { return new FrameRate(); }
+}
+final class LumaRoundVideoCamera { static boolean fast; static boolean isFastSwitchEnabled() { return fast; } }
+final class LumaRoundVideoQuality {
+    static final int HIGH_FRAME_RATE = 60;
+    static int selected;
+    static int getPreferredFrameRate(int fallback) { return selected > 0 ? selected : fallback; }
+}

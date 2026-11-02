@@ -1,0 +1,40 @@
+/** Actual ActionBar width selection and glass-menu drawing branch; modeled views, no pixel QA. */
+public final class ActionModeGlassProbe {
+    static int checks;
+    static void check(boolean ok,String label){checks++;if(!ok)throw new AssertionError(label);}
+    public static void main(String[] args){
+        for(float density:new float[]{1,1.5f,2.75f})for(int widthDp:new int[]{320,393,600,840})for(int actionHeight:new int[]{48,56}){
+            Bar b=new Bar();b.density=density;b.width=b.dp(widthDp);b.actionHeight=b.dp(actionHeight);b.height=b.actionHeight+b.dp(24);b.menu=new ActionBarMenu();b.actionMode=new ActionBarMenu();
+            b.menu.itemsWidth=b.dp(48);b.menu.x=b.width-b.dp(34);b.menu.y=b.height-b.actionHeight/2f;
+            b.checkMenuItemsWidth();b.drawMenu(new Canvas());int diameter=b.dp(46)+2*b.dp(6);
+            check(b.glassDrawableMenu.right-b.glassDrawableMenu.left==diameter&&b.glassDrawableMenu.left==Math.round(b.menu.x-diameter/2f)&&b.glassDrawableMenu.top==Math.round(b.menu.y-diameter/2f),"normal avatar circle remains centered and unchanged");
+            for(int count=1;count<=5;count++){
+                b.actionModeVisible=true;b.actionMode.itemsWidth=count*b.dp(48)-(count-1)*2*b.dp(5);b.actionMode.x=b.actionMode.y=Float.NaN;b.checkMenuItemsWidth();b.glassDrawableMenu.draws=0;b.drawMenu(new Canvas());
+                int expectedWidth=Math.max(b.dp(46),b.actionMode.itemsWidth-2*b.dp(1))+2*b.dp(6);
+                check(b.glassDrawableMenu.left==b.width-expectedWidth&&b.glassDrawableMenu.right==b.width,"selection glass uses active action group not hidden avatar");
+                check(b.glassDrawableMenu.draws==1&&b.glassDrawableMenu.bottom-b.glassDrawableMenu.top==diameter,"selection capsule height and draw count unchanged");
+                check(b.glassDrawableMenu.alpha==255,"active selection glass preserves opacity");
+            }
+            b.actionMode.itemsWidth=0;b.checkMenuItemsWidth();b.glassDrawableMenu.draws=0;b.drawMenu(new Canvas());check(b.glassDrawableMenu.draws==0,"empty selection cannot retain avatar glass");
+            b.actionMode.itemsWidth=b.dp(48);b.actionMode.x=b.width-b.dp(90);b.actionMode.y=b.dp(40);b.checkMenuItemsWidth();b.drawMenu(new Canvas());
+            check(b.glassDrawableMenu.left==Math.round(b.actionMode.x-diameter/2f)&&b.glassDrawableMenu.top==Math.round(b.actionMode.y-diameter/2f),"both exclusive coordinates come from active menu");
+            b.actionModeVisible=false;b.checkMenuItemsWidth();b.drawMenu(new Canvas());check(b.glassDrawableMenu.left==Math.round(b.menu.x-diameter/2f)&&b.glassDrawableMenu.top==Math.round(b.menu.y-diameter/2f),"closing selection restores normal avatar anchor");
+            b.menu.x=b.menu.y=Float.NaN;b.menu.itemsWidth=b.dp(124);b.checkMenuItemsWidth();b.drawMenu(new Canvas());check(b.glassDrawableMenu.left==b.width-Math.max(b.dp(46),b.menu.itemsWidth-2*b.dp(1))-2*b.dp(6),"nonexclusive normal menu capsule unchanged");
+            b.doNotDrawGlassMenu=true;b.glassDrawableMenu.draws=0;b.drawMenu(new Canvas());check(b.glassDrawableMenu.draws==0,"suppressed menu glass remains suppressed");b.doNotDrawGlassMenu=false;
+            b.glassOnlyBack=true;b.drawMenu(new Canvas());check(b.glassDrawableMenu.draws==0,"back-only glass does not gain menu capsule");
+        }
+        System.out.println("PASS "+checks+" actual action-mode glass geometry assertions across densities/phone/tablet/landscape sizes; no screenshot claim");
+    }
+    static class Bar {
+        float density=1,searchFactor;int width,height,actionHeight,forcedMenuWidth,forcedMenuMinWidth;boolean actionModeVisible,hasForcedMenuWidth,hasForcedMenuMinWidth,glassOnlyBack,doNotDrawGlassMenu,isAnimationsAllowed;
+        ActionBarMenu menu,actionMode;View backButtonImageView;Drawable glassDrawableMenu=new Drawable();Factor animatorMenuItemsWidth=new Factor(),animatorHasMenuItems=new Factor();
+        int dp(float v){return (int)Math.ceil(v*density);}int getWidth(){return width;}int getHeight(){return height;}int getCurrentActionBarHeight(){return actionHeight;}float getActionModeFactor(){return actionModeVisible?1:0;}
+        @@WIDTH_METHOD@@
+        void drawMenu(Canvas canvas){@@DRAW_PREFIX@@ @@DRAW_BRANCH@@}
+    }
+    static class ActionBarMenu{int itemsWidth;float x=Float.NaN,y=Float.NaN;int getItemsWidth(){return itemsWidth;}float getExclusiveItemCenterXInParent(){return x;}float getExclusiveItemCenterYInParent(){return y;}}
+    static class Factor{float value;float getToFactor(){return value;}float getFactor(){return value;}float getFloatValue(){return value;}void animateTo(float v){value=v;}void forceFactor(float v){value=v;}void setValue(boolean v,boolean animated){value=v?1:0;}}
+    static class Drawable{int left,top,right,bottom,alpha,draws;void setBounds(int l,int t,int r,int b){left=l;top=t;right=r;bottom=b;}void setAlpha(int a){alpha=a;}void draw(Canvas c){draws++;}}
+    static class View{static final int VISIBLE=0;int getVisibility(){return VISIBLE;}}
+    static class Canvas{}
+}

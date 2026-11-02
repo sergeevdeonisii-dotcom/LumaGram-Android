@@ -3,7 +3,7 @@ package org.telegram.messenger;
 import java.util.HashMap;
 import java.util.Map;
 import org.telegram.utils.settings.SharedSettings;
-import org.telegram.utils.camera.roundvideo.RoundVideoSession;
+import org.telegram.utils.recorder.round.RoundVideoSession;
 
 /** Exercises actual preference getters; billing authority and physical camera are explicit test inputs. */
 public final class RoundAccess150Test {

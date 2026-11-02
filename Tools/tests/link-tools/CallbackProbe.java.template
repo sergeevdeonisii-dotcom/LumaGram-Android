@@ -1,0 +1,46 @@
+package org.telegram.messenger;
+import java.util.*;
+import java.util.function.BooleanSupplier;
+public final class CallbackProbe {
+    static int checks;static void check(boolean ok,String label){checks++;if(!ok)throw new AssertionError(label);}
+    static class Activity {boolean finishing;boolean isFinishing(){return finishing;}}
+    static class Host {Activity activity=new Activity();int account;boolean paused;Activity getParentActivity(){return activity;}int getCurrentAccount(){return account;}boolean isPaused(){return paused;}}
+    static class Preview {
+        int currentAccount,waitingForWebpageId=5,myId=5;long dialog_id=55;boolean isFinished;Object currentEncryptedChat,editingMessageObject;
+        LunagramMediaAccess.Session lunagramPreviewSession=LunagramMediaAccess.forAccount(0);
+        boolean worker(){return !(@@WORKER@@);}
+        boolean dispatch(){return !(@@DISPATCH@@);}
+        boolean callback(){return !(@@CALLBACK@@);}
+    }
+    static class Links {
+        Host host=new Host();int account;LunagramMediaAccess.Session session=LunagramMediaAccess.forAccount(0);BooleanSupplier contextValid=()->true;
+        @@LINK_VALID@@
+    }
+    static class TextToSpeech {int stops,shutdowns;boolean throwStop;void stop(){stops++;if(throwStop)throw new IllegalStateException();}void shutdown(){shutdowns++;}}
+    static class AlertDialog {boolean showing=true;Runnable dismiss;boolean isShowing(){return showing;}void dismiss(){showing=false;if(dismiss!=null)dismiss.run();}}
+    static class AndroidUtilities {static int cancellations;static void cancelRunOnUIThread(Runnable r){cancellations++;}}
+    static class Speech {
+        Host host=new Host();int account;boolean closed;LunagramMediaAccess.Session session=LunagramMediaAccess.forAccount(0);BooleanSupplier contextValid=()->true;
+        TextToSpeech engine=new TextToSpeech();AlertDialog dialog=new AlertDialog();Runnable privacyTick=()->{},prepareTimeout=()->{};List<String> chunks=new ArrayList<>(Arrays.asList("one","two"));
+        @@SPEECH_VALID@@
+        @@SPEECH_CLOSE@@
+    }
+    public static void main(String[] args){
+        for(int change=0;change<8;change++){
+            AccessTest.reset();Preview p=new Preview();check(p.worker()&&p.dispatch()&&p.callback(),"Current preview accepted");
+            switch(change){case 0:UserConfig.owners[0]++;break;case 1:LunagramSubscriptionClient.epochs[0]++;break;case 2:SharedConfig.appLocked=true;break;case 3:SharedConfig.isWaitingForPasscodeEnter=true;break;case 4:UserConfig.selectedAccount=1;break;case 5:p.isFinished=true;break;case 6:LunagramLinkSettings.setPreviewDisabled(0,55,true);break;case 7:p.waitingForWebpageId++;break;}
+            check(!p.callback(),"Preview callback invalidated "+change);
+            if(change<7){check(!p.worker(),"Queued parse invalidated "+change);check(!p.dispatch(),"Final dispatch invalidated "+change);}
+        }
+        AccessTest.reset();Preview p=new Preview();LunagramLinkSettings.setPreviewDisabled(0,55,true);p.editingMessageObject=new Object();check(!p.worker()&&!p.dispatch()&&!p.callback(),"Per-chat privacy also blocks edit preview");LunagramLinkSettings.setPreviewDisabled(0,55,false);check(p.worker()&&p.dispatch()&&p.callback(),"Explicit preview re-enable permits editing");SharedConfig.appLocked=true;check(!p.dispatch(),"Lock also blocks edit preview");
+        for(int change=0;change<9;change++){
+            AccessTest.reset();Links l=new Links();Speech s=new Speech();check(l.valid()&&s.valid(),"Current UI operation accepted");
+            switch(change){case 0:UserConfig.owners[0]++;break;case 1:LunagramSubscriptionClient.epochs[0]++;break;case 2:UserConfig.selectedAccount=1;break;case 3:LunagramSubscriptionAccess.paid=false;break;case 4:l.contextValid=s.contextValid=()->false;break;case 5:l.host.activity.finishing=s.host.activity.finishing=true;break;case 6:l.host.activity=s.host.activity=null;break;case 7:s.closed=true;break;case 8:s.host.paused=true;break;}
+            check(!s.valid(),"Speech denies stale UI "+change);if(change<7)check(!l.valid(),"Links deny stale UI "+change);
+        }
+        AccessTest.reset();Speech s=new Speech();TextToSpeech engine=s.engine;AlertDialog dialog=s.dialog;Speech captured=s;dialog.dismiss=()->captured.close();
+        s.close();check(s.closed&&s.engine==null&&s.dialog==null&&s.chunks.isEmpty(),"Speech clears retained resources");check(engine.stops==1&&engine.shutdowns==1&&!dialog.showing,"Speech releases engine and dialog");s.close();check(engine.stops==1&&engine.shutdowns==1,"Speech close is idempotent under dismiss recursion");
+        s=new Speech();engine=s.engine;engine.throwStop=true;s.close();check(engine.shutdowns==1,"Speech shutdown still runs if stop throws");
+        System.out.println("PASS actual preview/UI/speech callbacks "+checks+" checks (Android boundaries modeled)");
+    }
+}

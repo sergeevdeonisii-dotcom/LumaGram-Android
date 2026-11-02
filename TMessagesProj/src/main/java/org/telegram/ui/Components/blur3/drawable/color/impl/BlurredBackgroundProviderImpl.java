@@ -98,7 +98,7 @@ public class BlurredBackgroundProviderImpl {
     public static BlurredBackgroundProvider messageMenuBackground(Theme.ResourcesProvider resourcesProvider) {
         return new BlurredBackgroundProviderBuilder(resourcesProvider)
                 .setBackgroundColor((r, isDark) -> {
-                    if (!LiteMode.isEnabled(LiteMode.FLAG_CHAT_BLUR)) {
+                    if (!LiteMode.isEnabled(LiteMode.FLAG_CHAT_BLUR) && !LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS)) {
                         return Theme.getColor(Theme.key_actionBarDefaultSubmenuBackground);
                     }
                     return Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuBackground), isDark ? 0.85f : 0.825f);

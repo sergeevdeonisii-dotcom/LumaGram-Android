@@ -47,7 +47,7 @@ public class Text {
     public Text(CharSequence text, float textSizeDp, Typeface typeface) {
         paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         paint.setTextSize(dp(textSizeDp));
-        paint.setTypeface(typeface);
+        paint.setTypeface(org.telegram.messenger.LunagramTypography.resolve(typeface));
         setText(text);
     }
 

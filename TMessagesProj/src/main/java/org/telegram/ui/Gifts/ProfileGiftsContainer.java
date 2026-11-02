@@ -639,7 +639,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                 return;
             final int displayCount = Math.max(0, list.totalCount) + localGifts.size();
             final int spanCount = Math.max(1, displayCount == 0 ? 3 : Math.min(3, displayCount));
-            final boolean unifiedGifts = LumaBuildPolicy.isPersonalEdition();
+            final boolean unifiedGifts = true;
             if (parent.list == list && parent.canFilterHidden()) {
                 final boolean allGiftsHidden = parent.areAllGiftsHidden();
                 items.add(UItem.asButton(
@@ -647,21 +647,6 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
                     allGiftsHidden ? R.drawable.msg_message : R.drawable.menu_hide_gift,
                     getString(allGiftsHidden ? R.string.LumaShowAllGifts : R.string.LumaHideAllGifts)
                 ).setSpanCount(UItem.MAX_SPAN_COUNT));
-            }
-            if (!unifiedGifts && !localGifts.isEmpty()) {
-                // Column changes are queued below. Full-width rows must follow
-                // the current layout manager until that queued change runs.
-                items.add(UItem.asHeader(getString(R.string.LumaLocalGiftsHeader)).setSpanCount(UItem.MAX_SPAN_COUNT));
-                for (int pinnedPass = 1; pinnedPass >= 0; pinnedPass--) {
-                    for (LumaLocalGifts.LocalSavedGift gift : localGifts) {
-                        if (parent.isGiftPinnedLocally(gift) != (pinnedPass == 1)) continue;
-                        UItem localItem = GiftSheet.GiftCell.Factory.asStarGift(0, gift, true, false, false)
-                                .setReordering(false);
-                        localItem.object2 = parent.isGiftPinnedLocally(gift);
-                        items.add(localItem);
-                    }
-                }
-                if (!list.gifts.isEmpty()) items.add(UItem.asHeader(getString(R.string.ProfileGifts)).setSpanCount(UItem.MAX_SPAN_COUNT));
             }
             if (list != null) {
                 int spanCountLeft = spanCount;
@@ -1704,6 +1689,15 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
         }
     }
 
+    // Distance from the bottom of root to the top of the visible gifts button, for bulletins
+    public int getButtonBulletinOffset(View root) {
+        if (root == null || buttonContainer == null || buttonContainer.getVisibility() != View.VISIBLE || buttonContainer.getAlpha() <= 0) return 0;
+        final int[] rootLocation = new int[2], buttonLocation = new int[2];
+        root.getLocationInWindow(rootLocation);
+        buttonContainer.getLocationInWindow(buttonLocation);
+        return Math.max(0, (int) ((rootLocation[1] + root.getHeight() - buttonLocation[1]) * buttonContainer.getAlpha()));
+    }
+
     public int getBottomOffset() {
         float ty = buttonContainer.getTranslationY();
         ty -= -buttonContainer.getTop() + Math.max(dp(240), visibleHeight) - dp(buttonContainerHeightDp) - 1;
@@ -2103,7 +2097,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
     }
 
     private LumaLocalGiftPreview.PagerSource createPreviewPager(StarsController.GiftsList pageList) {
-        if (!LumaBuildPolicy.isPersonalEdition() || pageList != list || dialogId <= 0 || dialogId != localPinsOwner) return null;
+        if (pageList != list || dialogId <= 0 || dialogId != localPinsOwner) return null;
         ProfilePreviewPager pager = new ProfilePreviewPager(pageList);
         previewPagers.add(new WeakReference<>(pager));
         return pager;
@@ -2213,7 +2207,7 @@ public class ProfileGiftsContainer extends FrameLayout implements NotificationCe
             final TL_stars.SavedStarGift gift = list.gifts.get(i);
             final TLRPC.Document doc = gift.gift.getDocument();
             if (doc == null) continue;
-            giftsIds.add(doc.id);
+            if (!giftsIds.add(doc.id)) continue; // same dedup as getLastEmojis(), so the hash follows what's shown
             hash = Objects.hash(hash, doc.id);
             giftsCount++;
         }

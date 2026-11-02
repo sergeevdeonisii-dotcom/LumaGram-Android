@@ -2893,6 +2893,13 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
             o.dismiss();
             onSubItemClick(4);
         });
+        o.addIf(LunagramMediaToolsSheet.canShow(messageObject), R.drawable.msg_settings, getString(R.string.LunagramMediaToolsTitle), () -> {
+            final BaseFragment host = LaunchActivity.getLastFragment();
+            if (host == null || host.getCurrentAccount() != messageObject.currentAccount) return;
+            o.dismiss();
+            dismiss();
+            LunagramMediaToolsSheet.show(host, messageObject);
+        });
         if (castAvailable) {
             castItem = o.add();
             castItem.setTextAndIcon(getString(R.string.VideoPlayerChromecast), R.drawable.menu_video_chromecast);

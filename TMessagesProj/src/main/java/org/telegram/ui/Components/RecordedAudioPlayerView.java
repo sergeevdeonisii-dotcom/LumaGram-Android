@@ -207,14 +207,14 @@ public class RecordedAudioPlayerView extends View {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-        final float h = dp(32);
+        final float h = getMeasuredHeight();
         backgroundRect.set(0, (getMeasuredHeight() - h) / 2f, getMeasuredWidth(), (getMeasuredHeight() + h) / 2f);
     }
 
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
-        final float h = dp(32);
+        final float h = getHeight();
         backgroundRect.set(0, (getHeight() - h) / 2f, getWidth(), (getHeight() + h) / 2f);
     }
 
@@ -235,7 +235,7 @@ public class RecordedAudioPlayerView extends View {
 
         canvas.save();
         clipPath.rewind();
-        clipPath.addRoundRect(rect, dp(8), dp(8), Path.Direction.CW);
+        clipPath.addRoundRect(rect, rect.height() / 2f, rect.height() / 2f, Path.Direction.CW);
         canvas.clipPath(clipPath);
 
         canvas.drawRect(rect.left, rect.top, left - dp(1.33f), rect.bottom, darkerBackgroundPaint);

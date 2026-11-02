@@ -1,0 +1,618 @@
+{
+  "schemaVersion": 1,
+  "version": "2.1.0",
+  "versionCode": 71909,
+  "status": "source-integrated-test-candidate",
+  "expectedCounts": {
+    "text": 7,
+    "reading": 3,
+    "links": 6,
+    "workspace": 8,
+    "media": 6
+  },
+  "evidenceLimits": {
+    "nativeDeviceVisualTested": false,
+    "physicalPlayerClipboardTested": false,
+    "productionPublished": false,
+    "notIncluded": [
+      "3D cat completion",
+      "60 FPS camera/device proof",
+      "A–B loop in arbitrary PhotoViewer videos"
+    ],
+    "testScope": "Host logic and modeled lifecycle guards plus cached Android API compilation; compiled TL assets and APK remain release-verifier work."
+  },
+  "commonRules": [
+    "New operations require fresh owner-scoped Ultra access; current account/epoch/passcode/context rechecked at effect boundaries.",
+    "Workspace/labels/bookmarks are encrypted owner-scoped private data; existing saved data remains readable/removable after expiry, subject to privacy guards.",
+    "No new permission, automatic sending, mass messaging or protected-content bypass."
+  ],
+  "primaryResearch": [
+    {
+      "name": "Nagram",
+      "url": "https://github.com/NextAlone/Nagram",
+      "inspiration": "Undo/redo and combining messages; not a claim of implementation parity."
+    },
+    {
+      "name": "NekoX history in Nagram",
+      "url": "https://github.com/NextAlone/Nagram/blob/main/README.NekoX.md",
+      "inspiration": "Text replacement, link previews, proxy remarks and pack lists."
+    },
+    {
+      "name": "Cherrygram",
+      "url": "https://github.com/arsLan4k1390/Cherrygram",
+      "inspiration": "Local media tools and QR; most workspace/reading tools are original local additions."
+    }
+  ],
+  "features": [
+    {
+      "number": 1,
+      "module": "text",
+      "id": "text_history",
+      "title": "Отмена и возврат ввода",
+      "entitlement": "TEXT_TOOLS",
+      "entry": "Меню чата → Инструменты Lunagram → Инструменты черновика",
+      "limits": "24 снимка только в памяти текущей сессии; форматирование и позиция сохраняются; смена контекста очищает историю.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramTextHistory.java",
+          "token": "public Entry<T> undo()"
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/ChatActivityEnterView.java",
+          "token": "showLunagramTextTools()"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "module": "text",
+      "id": "keyboard_layout",
+      "title": "Исправление раскладки RU/EN",
+      "entitlement": "TEXT_TOOLS",
+      "entry": "Инструменты черновика или сообщения → Исправить раскладку",
+      "limits": "Два направления одной функции; предпросмотр, не перевод, не отправка.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramTextTools.java",
+          "token": "keyboardLayout("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramTextToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "module": "text",
+      "id": "literal_replace",
+      "title": "Поиск и замена",
+      "entitlement": "TEXT_TOOLS",
+      "entry": "Инструменты текста → Найти и заменить",
+      "limits": "Точные совпадения с учётом регистра, без regex; результат подтверждается.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramTextTools.java",
+          "token": "public static Replacement replace("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramTextToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "module": "text",
+      "id": "whitespace_cleanup",
+      "title": "Очистка пробелов",
+      "entitlement": "TEXT_TOOLS",
+      "entry": "Инструменты текста → Убрать лишние пробелы",
+      "limits": "Одна функция нормализации пробелов с сохранением абзацев; не несколько искусственных пунктов.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramTextTools.java",
+          "token": "normalizeWhitespace("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramTextToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "module": "text",
+      "id": "text_statistics",
+      "title": "Статистика текста",
+      "entitlement": "TEXT_TOOLS",
+      "entry": "Инструменты текста → Статистика текста",
+      "limits": "Слова, строки, UTF-8/UTF-16 и кодовые точки; составной эмодзи не считается одним символом автоматически.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramTextTools.java",
+          "token": "public static Statistics statistics("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramTextToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "module": "text",
+      "id": "text_comparison",
+      "title": "Сравнение двух текстов",
+      "entitlement": "TEXT_TOOLS",
+      "entry": "Инструменты текста → Сравнить два текста",
+      "limits": "Изменённый фрагмент между общими началом и концом, не полноценный построчный diff.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramTextTools.java",
+          "token": "public static Comparison compare("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramTextToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "module": "text",
+      "id": "combine_messages",
+      "title": "Объединение сообщений в черновик",
+      "entitlement": "TEXT_TOOLS",
+      "entry": "Выделить несколько сообщений → Копировать → Объединить в черновик",
+      "limits": "Предпросмотр и подтверждение; исходные сообщения не меняются, автоотправки нет.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramTextTools.java",
+          "token": "public static String combine("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java",
+          "token": "LunagramTextTools.combine(texts)"
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "module": "reading",
+      "id": "reader",
+      "title": "Режим чтения",
+      "entitlement": "READING_TOOLS",
+      "entry": "Инструменты сообщения → Режим чтения",
+      "limits": "Поиск и переход по абзацам входят в один режим; доступ только к разрешённому исходному тексту.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/LunagramReaderActivity.java",
+          "token": "private void navigate("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java",
+          "token": "new LunagramReaderActivity(account, text, valid)"
+        }
+      ]
+    },
+    {
+      "number": 9,
+      "module": "reading",
+      "id": "text_to_speech",
+      "title": "Прочитать вслух",
+      "entitlement": "READING_TOOLS",
+      "entry": "Инструменты сообщения → Прочитать вслух",
+      "limits": "Нужен установленный Android TTS с голосом, помеченным офлайн; поведение стороннего движка не гарантируется. Останавливается при выходе.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramSpeechSheet.java",
+          "token": "private void speakNext()"
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java",
+          "token": "LunagramSpeechSheet.show(this, text.toString(), valid)"
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "module": "reading",
+      "id": "feed_word_filter",
+      "title": "Сворачивание постов по словам",
+      "entitlement": "READING_TOOLS",
+      "entry": "Лента → меню → Свернуть посты по словам",
+      "limits": "До 16 фраз по 80 символов, только в текущем открытии ленты; ничего не удаляется.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramFeedFilter.java",
+          "token": "class LunagramFeedFilter"
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/LunagramFeedActivity.java",
+          "token": "private void showLocalFilter()"
+        }
+      ]
+    },
+    {
+      "number": 11,
+      "module": "links",
+      "id": "tracking_cleanup",
+      "title": "Очистка tracking-параметров",
+      "entitlement": "LINK_TOOLS",
+      "entry": "Инструменты сообщения → Ссылки и копирование → Убрать метки отслеживания",
+      "limits": "Предпросмотр; подписанные/авторизационные URL не переписываются; сайт не открывается.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramLinkTools.java",
+          "token": "public static Cleaned clean("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramLinkToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 12,
+      "module": "links",
+      "id": "url_inspection",
+      "title": "Проверка адреса ссылки",
+      "entitlement": "LINK_TOOLS",
+      "entry": "Ссылки и копирование → Проверить адрес ссылки",
+      "limits": "Показывает реальный ASCII-хост, протокол и подозрительные элементы; это не проверка репутации и не гарантия безопасности.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramLinkTools.java",
+          "token": "public static Inspection inspect("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramLinkToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 13,
+      "module": "links",
+      "id": "per_chat_no_preview",
+      "title": "Превью ссылок по чатам",
+      "entitlement": "LINK_TOOLS",
+      "entry": "Меню чата → Инструменты Lunagram → Выключить/включить превью ссылок",
+      "limits": "Только свои новые сообщения на устройстве; исходящие сетевые callbacks повторно проверяют аккаунт/настройку.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramLinkSettings.java",
+          "token": "setPreviewDisabled("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java",
+          "token": "previewDisabled(currentAccount, dialog_id)"
+        }
+      ]
+    },
+    {
+      "number": 14,
+      "module": "links",
+      "id": "text_qr",
+      "title": "QR из текста",
+      "entitlement": "LINK_TOOLS",
+      "entry": "Ссылки и копирование → QR-код из текста",
+      "limits": "До 1024 байт UTF-8; локальный просмотр, не автоматическая отправка или публикация.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramLinkToolsSheet.java",
+          "token": "private void qr("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramLinkToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 15,
+      "module": "links",
+      "id": "citation_copy",
+      "title": "Копирование с источником",
+      "entitlement": "LINK_TOOLS",
+      "entry": "Ссылки и копирование → Скопировать с источником",
+      "limits": "Предпросмотр; только когда исходному сообщению разрешено копирование; буфер системный.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramLinkToolsSheet.java",
+          "token": "private void citationPreview()"
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramLinkToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 16,
+      "module": "links",
+      "id": "sticker_list_transfer",
+      "title": "Перенос списка наборов",
+      "entitlement": "LINK_TOOLS",
+      "entry": "Настройки стикеров/эмодзи → кнопка Перенос списка наборов",
+      "limits": "До 500 ссылок; не перенос аккаунта, не архив масок, без автоустановки. Каждый набор открывается отдельно.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramStickerList.java",
+          "token": "class LunagramStickerList"
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/StickersActivity.java",
+          "token": "R.string.LulStickerList"
+        }
+      ]
+    },
+    {
+      "number": 17,
+      "module": "workspace",
+      "id": "text_templates",
+      "title": "Локальные шаблоны",
+      "entitlement": "LOCAL_WORKSPACE",
+      "entry": "Инструменты Lunagram → Локальные инструменты → Шаблоны текста",
+      "limits": "Явное сохранение; предпросмотр замены черновика, без автоотправки.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/LunagramWorkspaceActivity.java",
+          "token": "Kind.TEMPLATE"
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/LunagramWorkspaceActivity.java",
+          "token": "public static void open("
+        }
+      ]
+    },
+    {
+      "number": 18,
+      "module": "workspace",
+      "id": "bookmark_collections",
+      "title": "Коллекции закладок",
+      "entitlement": "LOCAL_WORKSPACE",
+      "entry": "Из сообщения → Локальные инструменты → Коллекции закладок",
+      "limits": "Сохраняется ссылка на ID сообщения и подпись, не скрытая копия текста.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramWorkspaceModel.java",
+          "token": "BOOKMARK"
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/LunagramWorkspaceActivity.java",
+          "token": "public static void open("
+        }
+      ]
+    },
+    {
+      "number": 19,
+      "module": "workspace",
+      "id": "personal_checklists",
+      "title": "Личные чек-листы",
+      "entitlement": "LOCAL_WORKSPACE",
+      "entry": "Локальные инструменты → Личные чек-листы",
+      "limits": "Задачи и отметки только локальные; привязка к сообщению необязательна.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/LunagramWorkspaceActivity.java",
+          "token": "Kind.CHECKLIST"
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/LunagramWorkspaceActivity.java",
+          "token": "public static void open("
+        }
+      ]
+    },
+    {
+      "number": 20,
+      "module": "workspace",
+      "id": "draft_versions",
+      "title": "Версии черновика",
+      "entitlement": "LOCAL_WORKSPACE",
+      "entry": "Локальные инструменты → Версии черновика",
+      "limits": "Только явное сохранение; нет фонового перехвата ввода, изменившийся черновик не перезаписывается молча.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/LunagramWorkspaceActivity.java",
+          "token": "Kind.DRAFT"
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/LunagramWorkspaceActivity.java",
+          "token": "public static void open("
+        }
+      ]
+    },
+    {
+      "number": 21,
+      "module": "workspace",
+      "id": "saved_searches",
+      "title": "Сохранённые поиски",
+      "entitlement": "LOCAL_WORKSPACE",
+      "entry": "Локальные инструменты → Сохранённые поиски",
+      "limits": "Сохраняется запрос до 512 символов; запуск явно открывает поиск текущего чата.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/LunagramWorkspaceActivity.java",
+          "token": "Kind.SEARCH"
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/LunagramWorkspaceActivity.java",
+          "token": "public static void open("
+        }
+      ]
+    },
+    {
+      "number": 22,
+      "module": "workspace",
+      "id": "reading_marker",
+      "title": "Продолжить чтение",
+      "entitlement": "LOCAL_WORKSPACE",
+      "entry": "Из сообщения → Локальные инструменты → Продолжить чтение",
+      "limits": "Одна метка на чат; не меняет серверный статус прочтения Telegram.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramWorkspaceModel.java",
+          "token": "Kind.MARKER"
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/LunagramWorkspaceActivity.java",
+          "token": "public static void open("
+        }
+      ]
+    },
+    {
+      "number": 23,
+      "module": "workspace",
+      "id": "chat_alias",
+      "title": "Локальные названия групп/каналов",
+      "entitlement": "LOCAL_WORKSPACE",
+      "entry": "Меню чата → Инструменты Lunagram → Локальное название чата",
+      "limits": "До 256 названий по 80 символов; настоящее имя видно отдельно; не для личных чатов, без серверного переименования.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramLocalLabels.java",
+          "token": "public static String alias("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java",
+          "token": "LunagramAliasSheet.show(this, dialog_id"
+        }
+      ]
+    },
+    {
+      "number": 24,
+      "module": "workspace",
+      "id": "proxy_labels",
+      "title": "Имена и группы прокси",
+      "entitlement": "LOCAL_WORKSPACE",
+      "entry": "Настройки прокси → кнопка информации → Локальные название и группа",
+      "limits": "До 256 подписей; метаданные владельца, не пароль/адрес подключения; выбранный прокси и ссылки не изменяются.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramLocalLabels.java",
+          "token": "public static Session forProxy("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/ProxyListActivity.java",
+          "token": "LunagramAliasSheet.showProxy("
+        }
+      ]
+    },
+    {
+      "number": 25,
+      "module": "media",
+      "id": "single_cache_removal",
+      "title": "Очистка копии одного вложения",
+      "entitlement": "MEDIA_TOOLS",
+      "entry": "Инструменты медиа → Удалить загруженную копию",
+      "limits": "С подтверждением; только безопасная копия FileLoader, не исходящий оригинал, активный файл, зашифрованный или защищённый контент.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramMediaTools.java",
+          "token": "public static Job removeDownloadedCopy("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramMediaToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 26,
+      "module": "media",
+      "id": "file_inspection",
+      "title": "Сведения о файле и SHA-256",
+      "entitlement": "MEDIA_TOOLS",
+      "entry": "Инструменты медиа → Сведения о файле → SHA-256",
+      "limits": "Только уже загруженный файл; SHA до 128 MiB на отменяемой очереди. Это одна функция инспекции.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramMediaTools.java",
+          "token": "public static Job metadata("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramMediaToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 27,
+      "module": "media",
+      "id": "photo_clipboard",
+      "title": "Фото в буфер обмена",
+      "entitlement": "MEDIA_TOOLS",
+      "entry": "Инструменты медиа → Фото в буфер",
+      "limits": "Обычное фото JPEG/PNG/WebP до 20 MiB; отдельная временная копия и scoped URI, предупреждение о системном буфере; не секретное/TTL/защищённое.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramMediaTools.java",
+          "token": "public static Job copyPhoto("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramMediaToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 28,
+      "module": "media",
+      "id": "timestamp_bookmarks",
+      "title": "Закладки времени",
+      "entitlement": "MEDIA_TOOLS",
+      "entry": "Инструменты медиа → Закладки времени / Добавить закладку",
+      "limits": "Голосовые, музыка и кружки; до 64 меток аккаунта. Переход только в уже открытом проигрывателе, без autoplay.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramMediaTools.java",
+          "token": "public static synchronized void addBookmark("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramMediaToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    },
+    {
+      "number": 29,
+      "module": "media",
+      "id": "ab_loop",
+      "title": "Повтор A–B",
+      "entitlement": "MEDIA_TOOLS",
+      "entry": "Инструменты медиа или меню аудиоплеера → Повтор A–B",
+      "limits": "Голосовые, музыка и кружки в активном плеере; минимум 1 секунда; не обычный PhotoViewer-видеоплеер.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramMediaTools.java",
+          "token": "public static void setLoop("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/AudioPlayerAlert.java",
+          "token": "LunagramMediaToolsSheet.show(host, messageObject)"
+        }
+      ]
+    },
+    {
+      "number": 30,
+      "module": "media",
+      "id": "sleep_timer",
+      "title": "Таймер остановки",
+      "entitlement": "MEDIA_TOOLS",
+      "entry": "Инструменты медиа → Таймер остановки",
+      "limits": "5/15/30/60/120 минут либо конец текущей записи; без alarm/service, не запускает медиа, сбрасывается при смене/очистке плеера.",
+      "evidence": [
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/messenger/LunagramMediaTools.java",
+          "token": "public static void setSleep("
+        },
+        {
+          "path": "TMessagesProj/src/main/java/org/telegram/ui/Components/LunagramMediaToolsSheet.java",
+          "token": "public static void show("
+        }
+      ]
+    }
+  ]
+}

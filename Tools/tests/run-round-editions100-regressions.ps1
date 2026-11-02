@@ -31,7 +31,7 @@ foreach ($path in @(
     'org/telegram/messenger/camera/CameraSession.java',
     'org/telegram/messenger/camera/Camera2Session.java',
     'org/telegram/ui/Components/InstantCameraView.java',
-    'org/telegram/utils/camera/roundvideo/RoundVideoCameraController.java')) {
+    'org/telegram/utils/recorder/round/RoundVideoCameraController.java')) {
     $source = [IO.File]::ReadAllText((Join-Path $repo ('TMessagesProj/src/main/java/' + $path)))
     if (!$source.Contains('LumaRoundVideoStabilization.getMode()')) { throw "Recorder bypasses normalized stabilization policy: $path" }
     if ($source.Contains('getInt(LumaRoundVideoStabilization.PREFERENCE_KEY')) { throw "Recorder reads unrestricted stabilization preference: $path" }

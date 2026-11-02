@@ -1,7 +1,7 @@
 package android.content.pm;
 
 public class PackageManager {
-    public static final int GET_SIGNING_CERTIFICATES = 1, GET_SIGNATURES = 2;
+    public static final int GET_SIGNING_CERTIFICATES = 1, GET_SIGNATURES = 2, GET_META_DATA = 128;
     public static int installedVersion = 71439;
     public static int archiveVersion = 71500;
     public PackageInfo getPackageInfo(String name, int flags) { return info(name, installedVersion); }

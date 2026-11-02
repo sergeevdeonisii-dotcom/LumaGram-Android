@@ -57,11 +57,12 @@ public final class LunagramFeatureGuards150Test {
         check(before.equals(LumaAccountData.preferences(0).getAll()), "denied writes and effective getters never erase stored account data");
         check(globalBefore.equals(MessagesController.getGlobalMainSettings().getAll()), "denied global config keeps preferences");
         denied(() -> BlackHoleSettings.apply(0, java.util.Collections.singletonMap("format.style", 1)), "import requires own tier");
-        LunagramSubscriptionAccess.setTier(0, Tier.PRO);
         Map<String,Object> mixed = new HashMap<>(); mixed.put("rating.level", 12); mixed.put("ghost.enabled", true);
-        check(BlackHoleSettings.missingAccess(0, mixed) == LunagramFeatureCatalog.Feature.GHOST, "profile discloses missing feature tier");
+        check(BlackHoleSettings.missingAccess(0, mixed) != null, "free account discloses missing paid feature before import");
         denied(() -> BlackHoleSettings.apply(0, mixed), "whole import preflight before writes");
         check(LumaStarRating.getLevel(0) == 88, "rejected import cannot partially change level");
+        LunagramSubscriptionAccess.setTier(0, Tier.PRO);
+        check(BlackHoleSettings.missingAccess(0, mixed) == null, "recognized former Pro includes every Ultra import feature");
         BlackHoleSettings.apply(0, java.util.Collections.singletonMap("rating.level", 89));
         check(LumaAccountData.preferences(0).getBoolean("luma_ghost_mode_enabled_", false), "unrelated subset import doesn't overwrite disabled effective ghost setting");
         LunagramSubscriptionAccess.setTier(0, Tier.ULTRA);

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="LunagramAliasTitle">Локальное название чата</string>
+    <string name="LunagramAliasInfo">Только на этом устройстве и аккаунте. Настоящее название группы или канала остаётся видимым. В Telegram ничего не переименовывается.</string>
+    <string name="LunagramAliasRealName">Настоящее название: %1$s</string>
+    <string name="LunagramLabelName">Локальное название (до 80 символов)</string>
+    <string name="LunagramLabelOriginal">Исходное название</string>
+    <string name="LunagramLabelPreview">Предпросмотр:\n%1$s</string>
+    <string name="LunagramLabelClear">Убрать подпись</string>
+    <string name="LunagramProxyLabels">Локальные название и группа</string>
+    <string name="LunagramProxyGroup">Группа (необязательно, до 40 символов)</string>
+    <string name="LunagramProxyLabelsInfo">Личные подписи для этого аккаунта. Не меняют выбранный прокси, подключение и ссылки для отправки. Чтобы убрать подпись, очисти оба поля.</string>
+    <string name="LunagramProxyConnection">Настройки подключения</string>
+    <string name="LunagramLabelsUnavailable">Подписи недоступны. Разблокируй приложение и снова открой экран в исходном аккаунте. Сохранённые подписи не заменены.</string>
+    <string name="LunagramLabelsInvalid">До 80 символов в названии и 40 в группе, без переносов строк и скрытых знаков направления текста.</string>
+    <string name="LunagramLabelsLimit">Можно сохранить до 256 названий чатов и 256 подписей прокси. Сначала убери старую подпись.</string>
+</resources>

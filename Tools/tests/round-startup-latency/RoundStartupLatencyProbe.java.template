@@ -1,0 +1,157 @@
+import java.util.*;
+import java.io.IOException;
+
+public final class RoundStartupLatencyProbe {
+    static int checks;
+    static void check(boolean value, String label) {
+        checks++;
+        if (!value) throw new AssertionError(label);
+    }
+    static final class Diagnostics { void log(String text) {} }
+    static final class Handler {
+        final List<Runnable> pending = new ArrayList<>();
+        final Set<Runnable> delayed = new HashSet<>();
+        void post(Runnable r) { pending.add(r); }
+        void postDelayed(Runnable r, long ms) { delayed.add(r); }
+        void removeCallbacks(Runnable r) { delayed.remove(r); pending.remove(r); }
+        void drain() { while (!pending.isEmpty()) pending.remove(0).run(); }
+    }
+    static final class RoundVideoCodecRecorder {
+        boolean started, fail;
+        int calls;
+        Runnable audio, video;
+        boolean isStarted() { return started; }
+        long getTimeOriginNs() { return 123_456_789L; }
+        void startRecording(Runnable audio, Runnable video) {
+            calls++;
+            if (fail) throw new IllegalStateException("codec failed");
+            started = true; this.audio = audio; this.video = video;
+        }
+    }
+    static final class RoundVideoGlProcessor {
+        int arms; long origin, frameSequence;
+        void startRecording(long timeOrigin) { arms++; origin = timeOrigin; }
+        long getCameraFrameSequence() { return frameSequence; }
+        boolean hasFirstFrame() { return frameSequence > 0; }
+        void onCameraSessionConfigured() {}
+    }
+    static final class CameraInfo { CameraInfo(Object... values) {} }
+    static final class CameraDevice { String getId() { return "camera"; } }
+    static final class CameraAccessException extends Exception {}
+    static final class LunagramFeatureCatalog { enum Feature { ROUND_VIDEO_PORTRAIT } }
+    static final class MediaAccess { boolean canUse(LunagramFeatureCatalog.Feature feature) { return true; } }
+    static final class RoundVideoBokeh {
+        interface Listener { void onReady(); void onUnavailable(); }
+        final Listener listener; int closes;
+        RoundVideoBokeh(CameraDevice device, Object surface, Handler handler, MediaAccess access, Listener listener) { this.listener = listener; }
+        void open() throws CameraAccessException {}
+        void close() { closes++; }
+    }
+    static final class Callback {
+        int starts;
+        void onRecordingStarted() { starts++; }
+        void onConfigured(CameraInfo info, boolean cameraSwitch) {}
+    }
+    static final class Controller {
+        boolean active = true, stopping, session = true;
+        int errors;
+        RoundVideoCodecRecorder recorder = new RoundVideoCodecRecorder(), commonStartRecorder;
+        RoundVideoGlProcessor glProcessor = new RoundVideoGlProcessor();
+        Handler cameraHandler = new Handler();
+        final Runnable commonStartTimeoutRunnable = () -> {};
+        final Callback callback = new Callback();
+        final Diagnostics diagnostics = new Diagnostics();
+        static final long COMMON_START_TIMEOUT_MS = 3000;
+        long segmentStartedNs;
+        int captureGeneration, fallbacks;
+        CameraDevice cameraDevice = new CameraDevice();
+        MediaAccess mediaAccess = new MediaAccess();
+        Object recordingSurface, activeFacing, selectedFacing, requestedFacing;
+        Object activeCameraResolution, activeFrameRate, previewSize, recordingSize;
+        RoundVideoBokeh bokehSession;
+        boolean bokehActive, bokehRejected, notifySwitchCompletion, awaitingSwitchPreviewFrame;
+        void createCaptureSession() { fallbacks++; startRecordingWhenSessionReady(); }
+        void switchCameraIfNeeded(Object facing) {}
+        boolean hasCaptureSession() { return session; }
+        long elapsedMs(long start) { return 0; }
+        void reportError(Exception e) { errors++; }
+        /* CONTROLLER_METHODS */
+    }
+    public static void main(String[] args) {
+        for (int mask = 0; mask < 32; mask++) {
+            Controller p = new Controller();
+            p.active = (mask & 1) != 0;
+            p.stopping = (mask & 2) != 0;
+            p.session = (mask & 4) != 0;
+            RoundVideoCodecRecorder rec = p.recorder;
+            if ((mask & 8) == 0) p.recorder = null;
+            rec.started = (mask & 16) != 0;
+            p.startRecordingWhenSessionReady();
+            boolean allowed = p.active && !p.stopping && p.session && p.recorder != null && (mask & 16) == 0;
+            check(rec.calls == (allowed ? 1 : 0), "startup lifecycle mask " + mask);
+            check(p.cameraHandler.delayed.size() == (allowed ? 1 : 0), "bounded startup mask " + mask);
+            check(p.glProcessor.arms == 0 && p.callback.starts == 0, "no fabricated audio/video readiness " + mask);
+        }
+        Controller p = new Controller();
+        p.startRecordingWhenSessionReady();
+        p.startRecordingWhenSessionReady();
+        check(p.recorder.calls == 1, "session plus first-frame hooks start recorder exactly once");
+        check(p.commonStartRecorder == p.recorder, "timeout belongs to current recorder");
+        p.recorder.audio.run();
+        check(p.glProcessor.arms == 0, "audio callback stays serialized on camera owner");
+        p.cameraHandler.drain();
+        check(p.glProcessor.arms == 1 && p.glProcessor.origin == 123_456_789L,
+                "GL preserves exact recorder A/V time origin after actual audio input");
+        check(p.callback.starts == 0 && p.cameraHandler.delayed.size() == 1,
+                "recording UI waits for submitted video and retains startup deadline");
+        p.recorder.video.run(); p.cameraHandler.drain();
+        check(p.callback.starts == 1 && p.commonStartRecorder == null && p.cameraHandler.delayed.isEmpty(),
+                "submitted video starts UI and clears deadline");
+        for (int mode = 0; mode < 5; mode++) {
+            p = new Controller(); p.startRecordingWhenSessionReady();
+            RoundVideoCodecRecorder old = p.recorder;
+            RoundVideoGlProcessor gl = p.glProcessor;
+            if (mode == 0) p.active = false;
+            if (mode == 1) p.stopping = true;
+            if (mode == 2) p.recorder = new RoundVideoCodecRecorder();
+            if (mode == 3) p.session = false;
+            if (mode == 4) p.glProcessor = null;
+            old.audio.run(); p.cameraHandler.drain();
+            check(gl.arms == 0, "late audio cannot arm canceled/replaced/unconfigured GL " + mode);
+            if (mode < 3) {
+                old.video.run(); p.cameraHandler.drain();
+                check(p.callback.starts == 0, "late video cannot revive canceled/replaced recording " + mode);
+            }
+            p.cancelCommonStartWait();
+            check(p.commonStartRecorder == null && p.cameraHandler.delayed.isEmpty(), "cancel clears timer " + mode);
+        }
+        p = new Controller(); p.recorder.fail = true;
+        p.startRecordingWhenSessionReady();
+        check(p.errors == 1 && p.commonStartRecorder == null && p.cameraHandler.delayed.isEmpty(),
+                "codec startup error removes pending common-start timeout");
+        p = new Controller();
+        p.createBokehSession(p.cameraDevice);
+        RoundVideoBokeh bokeh = p.bokehSession;
+        bokeh.listener.onReady();
+        check(p.recorder.calls == 0 && p.commonStartRecorder == null && p.cameraHandler.delayed.size() == 1,
+                "configured but silent bokeh has only its no-frame timer, not an overlapping A/V timer");
+        Runnable noFrame = p.cameraHandler.delayed.iterator().next();
+        p.cameraHandler.delayed.remove(noFrame); noFrame.run();
+        check(bokeh.closes == 1 && p.bokehRejected && p.fallbacks == 1,
+                "silent bokeh closes and falls back once");
+        check(p.recorder.calls == 1 && p.commonStartRecorder == p.recorder && p.cameraHandler.delayed.size() == 1,
+                "regular fallback receives its full independent A/V start deadline");
+        p.recorder.audio.run(); p.cameraHandler.drain();
+        p.recorder.video.run(); p.cameraHandler.drain();
+        check(p.callback.starts == 1 && p.cameraHandler.delayed.isEmpty(), "bokeh recovery reaches actual synchronized recording");
+        p = new Controller(); p.glProcessor.frameSequence = 1;
+        p.createBokehSession(p.cameraDevice); p.bokehSession.listener.onReady();
+        check(p.recorder.calls == 1, "bokeh with a real image can start A/V immediately");
+        p = new Controller(); p.createBokehSession(p.cameraDevice);
+        p.active = false; p.bokehSession.listener.onReady();
+        noFrame = p.cameraHandler.delayed.iterator().next();
+        p.cameraHandler.delayed.remove(noFrame); noFrame.run();
+        check(p.recorder.calls == 0 && p.fallbacks == 0, "late bokeh readiness and fallback cannot restart a canceled recording");
+        System.out.println("PASS: " + checks + " extracted controller startup/lifecycle checks; mocked HAL/audio, not device timing.");
+    }
+}

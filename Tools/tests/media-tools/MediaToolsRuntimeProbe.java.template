@@ -1,0 +1,123 @@
+import org.telegram.messenger.LunagramFeatureCatalog;
+import org.telegram.messenger.LunagramMediaToolsPolicy;
+import java.io.File;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ConcurrentHashMap;
+
+/** Actual extracted controller guards/store/player methods; Android collaborators are modeled. */
+public class MediaToolsRuntimeProbe {
+    private static final String BOOKMARK_KEY = "lunagram_media_bookmarks_v1";
+    @@METHODS@@
+    @@PLAYBACK@@
+
+    static int checks;
+    static void ok(boolean value,String why){checks++;if(!value)throw new AssertionError(why);}
+    interface Task { void run() throws Exception; }
+    static void rejects(Task task,String why)throws Exception{boolean failed=false;try{task.run();}catch(Exception expected){failed=true;}ok(failed,why);}
+    static MessageObject message(){return new MessageObject();}
+    static void reset(){resetPlayback();UserConfig.selectedAccount=0;UserConfig.owner=100;LunagramSubscriptionClient.epoch=1;LunagramMediaAccess.paid=true;BlackHoleVault.locked=false;MessagesController.protectedPeer=false;BlackHolePrivateData.saved="";MediaController.playing=message();MediaController.position=10000;MediaController.seekCount=MediaController.pauseCount=MediaController.unexpectedAdvance=0;MediaController.reenter=false;SystemClock.now=1000;}
+    public static void main(String[] args)throws Exception{
+        reset(); Session session=new Session(MediaController.playing);
+        ok(session.current()&&session.paid(),"current paid session");
+        LunagramMessageAccess.allowed=false;ok(!session.current(),"shared copy/passcode boundary rejects");LunagramMessageAccess.allowed=true;
+        UserConfig.selectedAccount=1;ok(!session.current()&&!session.paid(),"selected account rejects");UserConfig.selectedAccount=0;
+        UserConfig.owner++;ok(!session.current(),"owner replacement rejects");UserConfig.owner--;
+        LunagramSubscriptionClient.epoch++;ok(!session.current(),"epoch rejects");LunagramSubscriptionClient.epoch--;
+        session.message.document.id++;ok(!session.current(),"changed document rejects");session.message.document.id--;
+        session.message.photo.id++;ok(!session.current(),"changed photo rejects");session.message.photo.id--;
+        session.message.messageOwner.noforwards=true;ok(!session.current(),"protected message rejects");session.message.messageOwner.noforwards=false;
+        MessagesController.protectedPeer=true;ok(!session.current(),"protected peer rejects");MessagesController.protectedPeer=false;
+        session.message.secret=true;ok(!session.current(),"secret media rejects");session.message.secret=false;
+        session.message.media.ttl_seconds=1;ok(!session.current(),"TTL rejects");session.message.media.ttl_seconds=0;
+        BlackHoleVault.locked=true;ok(!session.current(),"locked vault rejects");BlackHoleVault.locked=false;
+        LunagramMediaAccess.paid=false;ok(session.current()&&!session.paid(),"expired identity separate from paid");
+        rejects(()->session.require(true),"paid mutation rejects expiry");session.require(false);LunagramMediaAccess.paid=true;
+        Job job=new Job();job.check(session);job.cancel();rejects(()->job.check(session),"cancelled job rejects");
+
+        addBookmark(session);ok(bookmarks(session).equals(Arrays.asList(10000L)),"save timestamp");
+        addBookmark(session);ok(bookmarks(session).size()==1,"no duplicate timestamp");
+        MediaController.position=2000;addBookmark(session);ok(bookmarks(session).equals(Arrays.asList(2000L,10000L)),"sort timestamps");
+        LunagramMediaAccess.paid=false;ok(bookmarks(session).size()==2,"read after expiry");
+        rejects(()->addBookmark(session),"cannot create after expiry");
+        ok(seekBookmark(session,2000)&&MediaController.seekCount==1,"saved timestamp seek after expiry");
+        ok(MediaController.pauseCount==0,"timestamp never starts playback");
+        removeBookmark(session,2000);ok(bookmarks(session).equals(Arrays.asList(10000L)),"remove after expiry");
+        String before=BlackHolePrivateData.saved;UserConfig.selectedAccount=1;rejects(()->removeBookmark(session,10000),"switched account cannot remove");ok(before.equals(BlackHolePrivateData.saved),"rejected mutation preserves store");UserConfig.selectedAccount=0;
+        MediaController.playing=message();MediaController.playing.id=99;ok(!seekBookmark(session,10000),"no autoplay another media");
+        reset();final Session full=new Session(MediaController.playing);
+        for(int i=0;i<64;i++){MediaController.position=i*1000;addBookmark(full);}
+        MediaController.position=65000;rejects(()->addBookmark(full),"bounded64 bookmark store");
+        ok(bookmarks(full).size()==64,"full store preserved");
+        String intact=BlackHolePrivateData.saved;
+        BlackHolePrivateData.saved="bad row";rejects(()->addBookmark(full),"corrupt data not overwritten");ok(BlackHolePrivateData.saved.equals("bad row"),"corrupt bytes preserved");
+        BlackHolePrivateData.saved=new LunagramMediaToolsPolicy.Bookmark(0,999,-1000,1,20,0).encode();rejects(()->removeBookmark(full,0),"foreign owner data rejected");
+        BlackHolePrivateData.saved=intact+new LunagramMediaToolsPolicy.Bookmark(0,100,-1000,1,20,99999).encode()+"\n";rejects(()->removeBookmark(full,0),"oversized store not truncated");
+        BlackHolePrivateData.saved=intact;
+
+        reset();final Session play=new Session(MediaController.playing);
+        setLoop(play,2000,5000);ok(hasLoop(play),"loop configured");
+        ok(onPlayback(play.message,5000,120000,false)&&MediaController.position==2000,"actual controller loop seek");
+        MediaController.reenter=true;SystemClock.now+=1000;
+        ok(onPlayback(play.message,120000,120000,true),"loop end handles reentrant callback");
+        ok(MediaController.seekCount==2,"reentrant seek once");ok(MediaController.unexpectedAdvance==0,"reentrant player never advances");MediaController.reenter=false;
+        LunagramMediaAccess.paid=false;SystemClock.now+=1000;
+        ok(!onPlayback(play.message,5000,120000,false)&&MediaController.seekCount==2&&!hasLoop(play),"expired loop stops before effect");
+        LunagramMediaAccess.paid=true;setLoop(play,2000,5000);NotificationCenter.fireAccount();ok(!hasLoop(play),"account event cancels while paused");
+        setSleep(play,0,true);MediaController.reenter=true;
+        ok(onPlayback(play.message,120000,120000,true)&&MediaController.pauseCount==1,"end timer pauses exactly once");
+        ok(!hasSleep(play),"timer cleared after pause");ok(MediaController.unexpectedAdvance==0,"reentrant pause never advances");MediaController.reenter=false;
+        setSleep(play,5,false);ok(AndroidUtilities.pending.size()==1,"one deadline callback");
+        setSleep(play,15,false);ok(AndroidUtilities.pending.size()==1,"replace deadline callback");
+        stopSleep(play);ok(AndroidUtilities.pending.isEmpty(),"cancel deadline callback");
+        setSleep(play,5,false);Runnable late=AndroidUtilities.pending.get(0);resetPlayback();late.run();ok(MediaController.pauseCount==1,"late cancelled callback no effect");
+        setSleep(play,5,false);LunagramSubscriptionClient.epoch++;AndroidUtilities.fire();ok(MediaController.pauseCount==1,"stale timer no effect");
+        LunagramSubscriptionClient.epoch--;setSleep(play,5,false);MediaController.playing=message();MediaController.playing.id++;AndroidUtilities.fire();ok(MediaController.pauseCount==1,"timer never pauses other message");
+        reset();Session tick=new Session(MediaController.playing);setSleep(tick,5,false);SystemClock.now+=300000;AndroidUtilities.fire();ok(MediaController.pauseCount==1&&!hasSleep(tick),"deadline pauses current player");
+
+        File owned=new File(args[0],"owned.bin");java.nio.file.Files.write(owned.toPath(),new byte[]{1});
+        FileLoader.Instance=new FileLoader[]{new FileLoader(),new FileLoader()};
+        ok(!FileLoader.isFileBusyForLunagramTools(owned),"idle file");
+        FileLoader.Instance[1].uploadOperationPaths.put(owned.getAbsolutePath(),new Object());ok(FileLoader.isFileBusyForLunagramTools(owned),"cross-account upload busy");FileLoader.Instance[1].uploadOperationPaths.clear();
+        FileLoader.Instance[1].loadOperationPathsUI.put(owned.getName(),new Object());ok(FileLoader.isFileBusyForLunagramTools(owned),"queued download busy");FileLoader.Instance[1].loadOperationPathsUI.clear();
+        FileLoader.Instance[1].loadOperationPaths.put("different-key",new FileLoadOperation(owned));ok(FileLoader.isFileBusyForLunagramTools(owned),"resolved target download busy");
+        ok(FileLoader.isFileBusyForLunagramTools(null),"unknown file fail closed");
+        System.out.println("PASS extracted media runtime: "+checks+" assertions (owner/epoch/expiry/cancel/bookmarks/player/deadline/file busy)");
+    }
+    static class TLRPC {
+        static class MessageMedia{int ttl_seconds;Photo photo;}
+        static class TL_messageMediaDocument extends MessageMedia{}
+        static class TL_messageMediaPhoto extends MessageMedia{}
+        static class Document{long id=20;}
+        static class Photo{long id=30;}
+        static class Message{boolean noforwards;int ttl;}
+    }
+    static class MessageObject {
+        TLRPC.Message messageOwner=new TLRPC.Message();TLRPC.Document document=new TLRPC.Document();TLRPC.Photo photo=new TLRPC.Photo();
+        TLRPC.MessageMedia media=new TLRPC.TL_messageMediaDocument();int currentAccount,id=1,audioPlayerDuration=120;long dialog=-1000;boolean secret;
+        MessageObject(){media.photo=photo;}
+        int getId(){return id;}long getDialogId(){return dialog;}TLRPC.Document getDocument(){return document;}
+        static TLRPC.MessageMedia getMedia(TLRPC.Message message){return MediaController.playing==null?new TLRPC.TL_messageMediaDocument():MediaController.playing.media;}
+        boolean isSecretMedia(){return secret;}boolean isSending(){return false;}boolean isEditing(){return false;}boolean isSendError(){return false;}boolean canForwardMessage(){return true;}
+        boolean isVoice(){return true;}boolean isMusic(){return false;}boolean isRoundVideo(){return false;}double getDuration(){return 120;}
+    }
+    static class UserConfig{static int selectedAccount,MAX_ACCOUNT_COUNT=4;static long owner=100;static UserConfig getInstance(int account){return new UserConfig();}long getClientUserId(){return owner;}}
+    static class LunagramSubscriptionClient{static long epoch=1;static long accountEpoch(int account){return epoch;}}
+    static class LunagramMediaAccess{static boolean paid=true;static Session forAccount(int account){return new Session();}static class Session{boolean isCurrent(){return true;}boolean canUse(LunagramFeatureCatalog.Feature feature){return paid;}}}
+    static class DialogObject{static boolean isEncryptedDialog(long dialog){return dialog==Long.MIN_VALUE;}}
+    static class LunagramMessageAccess{static boolean allowed=true;static boolean canUse(int account,MessageObject message){return allowed;}}
+    static class BlackHoleVault{static boolean locked;static boolean blocks(int a,long d){return locked;}}
+    static class MessagesController{static boolean protectedPeer;static MessagesController getInstance(int a){return new MessagesController();}boolean isPeerNoForwards(long d){return protectedPeer;}}
+    static class BlackHolePrivateData{static String saved="";static String read(int account,String key,String fallback){return saved;}static void write(int account,long owner,String key,String text){if(owner!=UserConfig.owner)throw new IllegalStateException();saved=text;}}
+    static class SystemClock{static long now=1000;static long elapsedRealtime(){return now;}}
+    static class AndroidUtilities{static ArrayList<Runnable>pending=new ArrayList<>();static void runOnUIThread(Runnable r,long delay){pending.add(r);}static void cancelRunOnUIThread(Runnable r){pending.remove(r);}static void fire(){ArrayList<Runnable>copy=new ArrayList<>(pending);pending.clear();for(Runnable r:copy)r.run();}}
+    static class NotificationCenter{interface NotificationCenterDelegate{void run(int id,int account,Object...args);}static int activeAccountChanged=1;static NotificationCenterDelegate delegate;static NotificationCenter getGlobalInstance(){return new NotificationCenter();}void addObserver(NotificationCenterDelegate d,int id){delegate=d;}void removeObserver(NotificationCenterDelegate d,int id){if(delegate==d)delegate=null;}static void fireAccount(){if(delegate!=null)delegate.run(1,0);}}
+    static class MediaController{static MessageObject playing;static long position;static int seekCount,pauseCount,unexpectedAdvance;static boolean reenter;static MediaController getInstance(){return new MediaController();}MessageObject getPlayingMessageObject(){return playing;}long getProgressMs(MessageObject m){return position;}boolean seekToProgressMs(MessageObject m,long p){position=p;seekCount++;if(reenter&&!onPlayback(m,120000,120000,true))unexpectedAdvance++;return true;}void pauseMessage(MessageObject m,boolean smooth){pauseCount++;if(reenter&&!onPlayback(m,120000,120000,true))unexpectedAdvance++;}}
+    static class FileLoadOperation{File target;FileLoadOperation(File f){target=f;}File getCacheFileFinal(){return target;}}
+    static class FileLoader{
+        static FileLoader[] Instance;
+        ConcurrentHashMap<String,Object>loadOperationPathsUI=new ConcurrentHashMap<>(),uploadOperationPaths=new ConcurrentHashMap<>(),uploadOperationPathsEnc=new ConcurrentHashMap<>();
+        ConcurrentHashMap<String,FileLoadOperation>loadOperationPaths=new ConcurrentHashMap<>();
+        @@BUSY@@
+    }
+}

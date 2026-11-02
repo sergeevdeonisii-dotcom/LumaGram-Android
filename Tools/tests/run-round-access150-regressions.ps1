@@ -17,10 +17,10 @@ function Block([string]$text,[string]$signature) {
     }
     throw "Unclosed production block: $signature"
 }
-$session=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/camera/roundvideo/RoundVideoSession.java'))
+$session=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/recorder/round/RoundVideoSession.java'))
 $enums=@('OutputResolution','CameraResolution','CameraFacing','FrameRate') | ForEach-Object { Block $session ('public enum '+$_) }
 $generated=Join-Path $run 'RoundVideoSession.java'
-[IO.File]::WriteAllText($generated,"package org.telegram.utils.camera.roundvideo; public final class RoundVideoSession {`n"+($enums-join "`n")+"`n}",[Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText($generated,"package org.telegram.utils.recorder.round; public final class RoundVideoSession {`n"+($enums-join "`n")+"`n}",[Text.UTF8Encoding]::new($false))
 $build=Join-Path $run 'BuildConfig.java'
 [IO.File]::WriteAllText($build,'package org.telegram.messenger; public final class BuildConfig { public static final boolean DEBUG_VERSION=false,LUMA_FRIENDS_EDITION=false,LUMA_PUBLIC_EDITION=false; }',[Text.UTF8Encoding]::new($false))
 $sources=@('messenger/LumaRoundVideoQuality.java','messenger/LumaRoundVideoStabilization.java','messenger/LumaRoundVideoCamera.java','messenger/LumaBuildPolicy.java','utils/settings/SharedSettings.java','utils/settings/EnumSetting.java','utils/settings/IntSetting.java','utils/settings/BooleanSetting.java') | ForEach-Object { Join-Path $repo ('TMessagesProj/src/main/java/org/telegram/'+$_) }

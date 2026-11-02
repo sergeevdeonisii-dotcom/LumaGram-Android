@@ -39,6 +39,13 @@ public final class LunagramSubscriptionAccess {
         return LunagramFeatureCatalog.includes(tier, feature);
     }
 
+    public static boolean hasActiveSubscription(int account) {
+        Entry entry = entry(account);
+        if (entry == null) return false;
+        request(entry, false);
+        synchronized (LOCK) { return tier(entry) != LunagramFeatureCatalog.Tier.FREE; }
+    }
+
     public static void refresh(int account) {
         if (LumaBuildPolicy.isPersonalEdition()) return;
         Entry entry = entry(account);
@@ -222,6 +229,7 @@ public final class LunagramSubscriptionAccess {
             }
         }
         if (changed) {
+            Utilities.globalQueue.postRunnable(() -> LunagramMessageReminders.onAccessChanged(entry.account));
             MessagesController.getInstance(entry.account).setLumaGhostModeEnabled(LumaGhostMode.shouldSuppressActivity(entry.account));
             DownloadController.getInstance(entry.account).checkAutodownloadSettings();
             NotificationCenter.getInstance(entry.account).postNotificationName(NotificationCenter.lunagramSubscriptionChanged);

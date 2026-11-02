@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="LutTextToolsTitle">Text tools</string>
+    <string name="LutReadingTitle">Reader</string>
+    <string name="LutUndo">Undo typing</string>
+    <string name="LutRedo">Redo typing</string>
+    <string name="LutLayoutRu">Fix keyboard layout → Russian</string>
+    <string name="LutLayoutEn">Fix keyboard layout → English</string>
+    <string name="LutReplace">Find and replace</string>
+    <string name="LutWhitespace">Clean up whitespace</string>
+    <string name="LutStatistics">Text statistics</string>
+    <string name="LutCompare">Compare two texts</string>
+    <string name="LutPreview">Preview</string>
+    <string name="LutPlainTextHint">Review and edit before applying. The result is plain text. Nothing is sent automatically.</string>
+    <string name="LutApplyDraft">Apply to draft</string>
+    <string name="LutFind">Find</string>
+    <string name="LutReplaceWith">Replace with</string>
+    <string name="LutLiteralHint">Replaces all exact matches. Case-sensitive; regular expressions are not used.</string>
+    <string name="LutFindRequired">Enter text to find</string>
+    <string name="LutNoMatches">No matches</string>
+    <string name="LutTooLong">This tool supports up to 65,536 UTF-16 units of valid Unicode text. Shorten the text and try again.</string>
+    <string name="LutDraftChanged">The draft or chat changed while the tool was open. Your current draft was kept. Reopen the tool to continue.</string>
+    <string name="LutStatisticsBody">Unicode code points: %1$d\nWords: %2$d\nLines: %3$d\nUTF-16 units: %4$d\nUTF-8 bytes: %5$d\n\nA combined emoji can contain several code points.</string>
+    <string name="LutSecondText">Second text</string>
+    <string name="LutCompareHint">The first text is the message or draft you opened. Enter the second text below.</string>
+    <string name="LutCompareLegend">Deleted text is crossed out; added text is underlined. Shows the changed section between a shared beginning and end.</string>
+    <string name="LutIdentical">The texts are identical.</string>
+    <string name="LutPrevious">Previous</string>
+    <string name="LutNext">Next</string>
+    <string name="LutEmpty">Empty text</string>
+    <string name="LutMatchPosition">Match %1$d of %2$d</string>
+    <string name="LutParagraphPosition">Paragraph %1$d of %2$d</string>
+    <string name="LutCombine">Combine into draft</string>
+</resources>

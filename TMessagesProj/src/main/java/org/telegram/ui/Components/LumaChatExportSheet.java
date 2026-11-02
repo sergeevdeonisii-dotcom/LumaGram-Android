@@ -16,6 +16,7 @@ import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LumaChatExportManager;
+import org.telegram.messenger.LunagramMediaAccess;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.UserObject;
 import org.telegram.tgnet.TLRPC;
@@ -31,7 +32,7 @@ public final class LumaChatExportSheet {
     }
 
     public static void show(ChatActivity chatActivity) {
-        if (chatActivity == null || chatActivity.getParentActivity() == null) {
+        if (chatActivity == null || chatActivity.isFinished || chatActivity.getParentActivity() == null) {
             return;
         }
         if (chatActivity.getCurrentEncryptedChat() != null) {
@@ -49,6 +50,7 @@ public final class LumaChatExportSheet {
             return;
         }
 
+        final LunagramMediaAccess.Session identity = LunagramMediaAccess.forAccount(chatActivity.getCurrentAccount());
         CharSequence[] choices = new CharSequence[] {
             tr("PDF — красивый документ с фотографиями", "PDF - styled document with photos"),
             tr("HTML + JSON — без медиа", "HTML + JSON - no media"),
@@ -64,6 +66,7 @@ public final class LumaChatExportSheet {
             "Choose a format. PDF is styled like a chat with bubbles, dates, photos and page numbers. HTML + JSON is saved as a ZIP for viewing and processing."
         ));
         builder.setItems(choices, (dialog, which) -> {
+            if (!identity.isCurrent() || chatActivity.isFinished) return;
             int outputFormat = which == 0
                 ? LumaChatExportManager.OUTPUT_PDF
                 : LumaChatExportManager.OUTPUT_ARCHIVE;
@@ -99,7 +102,7 @@ public final class LumaChatExportSheet {
         manager[0] = new LumaChatExportManager(options, new LumaChatExportManager.Listener() {
             @Override
             public void onProgress(LumaChatExportManager.Progress progress) {
-                if (!progressDialog.isShowing()) {
+                if (chatActivity.isFinished || !manager[0].canReadCompletedExport() || !progressDialog.isShowing()) {
                     return;
                 }
                 progressDialog.setProgress(progress.getPercent());
@@ -123,7 +126,7 @@ public final class LumaChatExportSheet {
             @Override
             public void onComplete(File output, LumaChatExportManager.Progress finalProgress) {
                 dismiss(progressDialog);
-                if (chatActivity.getParentActivity() == null) {
+                if (chatActivity.isFinished || !manager[0].canReadCompletedExport() || chatActivity.getParentActivity() == null) {
                     //noinspection ResultOfMethodCallIgnored
                     output.delete();
                     return;
@@ -136,12 +139,18 @@ public final class LumaChatExportSheet {
                     output.getName(),
                     pdf ? "application/pdf" : "application/zip",
                     uri -> {
+                        if (chatActivity.isFinished || !manager[0].canReadCompletedExport()) {
+                            // Only our temporary duplicate is removed. A save already authorized
+                            // by the user remains theirs even after logout or subscription expiry.
+                            output.delete();
+                            return;
+                        }
                         if (uri != null && "content".equalsIgnoreCase(uri.getScheme())) {
                             // MediaStore owns the saved copy; discard the private cache duplicate.
                             //noinspection ResultOfMethodCallIgnored
                             output.delete();
                         }
-                        showComplete(chatActivity, uri, output, finalProgress, pdf);
+                        showComplete(chatActivity, manager[0], uri, output, finalProgress, pdf);
                     }
                 );
             }
@@ -152,7 +161,7 @@ public final class LumaChatExportSheet {
                 if (error != null) {
                     FileLog.e(error);
                 }
-                showError(chatActivity, message);
+                if (manager[0].canReadCompletedExport()) showError(chatActivity, message);
             }
 
             @Override
@@ -216,12 +225,13 @@ public final class LumaChatExportSheet {
 
     private static void showComplete(
         ChatActivity chatActivity,
+        LumaChatExportManager manager,
         Uri savedUri,
         File output,
         LumaChatExportManager.Progress finalProgress,
         boolean pdf
     ) {
-        if (chatActivity.getParentActivity() == null) {
+        if (chatActivity.isFinished || !manager.canReadCompletedExport() || chatActivity.getParentActivity() == null) {
             return;
         }
         String details = tr(
@@ -243,13 +253,15 @@ public final class LumaChatExportSheet {
         builder.setTitle(pdf ? tr("PDF готов", "PDF ready") : tr("Чат скачан", "Chat exported"));
         builder.setMessage(details);
         builder.setPositiveButton(tr("Поделиться", "Share"),
-            (dialog, which) -> share(chatActivity, savedUri, output, pdf));
+            (dialog, which) -> share(chatActivity, manager, savedUri, output, pdf));
         builder.setNegativeButton("OK", null);
         chatActivity.showDialog(builder.create());
     }
 
-    private static void share(ChatActivity chatActivity, Uri savedUri, File output, boolean pdf) {
-        if (chatActivity.getParentActivity() == null) {
+    private static void share(ChatActivity chatActivity, LumaChatExportManager manager, Uri savedUri, File output, boolean pdf) {
+        if (chatActivity.isFinished || !manager.canReadCompletedExport() || chatActivity.getParentActivity() == null) {
+            // A stale dialog must never grant a new external read permission.
+            output.delete();
             return;
         }
         try {
@@ -281,6 +293,7 @@ public final class LumaChatExportSheet {
             if (Build.VERSION.SDK_INT >= 24) {
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             }
+            if (!manager.canReadCompletedExport()) return;
             chatActivity.getParentActivity().startActivityForResult(
                 Intent.createChooser(intent, pdf
                     ? tr("Поделиться PDF", "Share PDF")

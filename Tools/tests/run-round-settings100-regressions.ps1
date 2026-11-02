@@ -23,7 +23,7 @@ $production=@(
     'messenger/LumaRoundVideoQuality.java', 'messenger/LumaRoundVideoStabilization.java',
     'messenger/LumaBuildPolicy.java', 'utils/settings/SharedSettings.java',
     'utils/settings/EnumSetting.java', 'utils/settings/IntSetting.java', 'utils/settings/BooleanSetting.java',
-    'utils/camera/roundvideo/RoundVideoSession.java', 'ui/RoundVideoSettingsActivity.java',
+    'utils/recorder/round/RoundVideoSession.java', 'ui/RoundVideoSettingsActivity.java',
     'messenger/LumaRoundVideoCamera.java'
 ) | ForEach-Object { Join-Path $root $_ }
 $hashes=@($production|ForEach-Object{(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash})

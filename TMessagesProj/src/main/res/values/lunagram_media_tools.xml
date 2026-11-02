@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="LunagramMediaToolsTitle">Media tools</string>
+    <string name="LunagramMediaInspect">File information</string>
+    <string name="LunagramMediaRemoveCache">Remove downloaded copy</string>
+    <string name="LunagramMediaRemoveInfo">Remove only this downloaded file from the app cache? The message stays in the chat. To open it again, download it again. Sent originals and files in use are not removed.</string>
+    <string name="LunagramMediaRemoved">Downloaded copy removed. The message is unchanged.</string>
+    <string name="LunagramMediaDeleteUnavailable">Cannot remove this file: it may be in use, outside the app cache, or an original. Stop playback and try again.</string>
+    <string name="LunagramMediaCopyPhoto">Copy photo to clipboard</string>
+    <string name="LunagramMediaClipboardInfo">Copy this photo to the system clipboard? The app you paste into can read it. The temporary copy is cleaned after an hour while Lunagram runs, or on a later copy. Up to 20 MiB; protected and disappearing media are excluded.</string>
+    <string name="LunagramMediaPhoto">Photo</string>
+    <string name="LunagramMediaPhotoCopied">Photo copied to the system clipboard</string>
+    <string name="LunagramMediaBookmarks">Saved timestamps</string>
+    <string name="LunagramMediaAddBookmark">Save current timestamp</string>
+    <string name="LunagramMediaBookmarksEmpty">No saved timestamps for this media. Start this voice message, music track or round video, then choose Save current timestamp. Nothing starts automatically.</string>
+    <string name="LunagramMediaBookmarkSaved">Timestamp saved on this device</string>
+    <string name="LunagramMediaBookmarkRemoved">Timestamp removed</string>
+    <string name="LunagramMediaBookmarkFailed">Cannot save or read timestamps. The account may have changed, encrypted storage may be unavailable, or the 64-timestamp limit was reached.</string>
+    <string name="LunagramMediaSeek">Go to timestamp</string>
+    <string name="LunagramMediaSeekInfo">Moves the current player to this timestamp without starting playback. Saved timestamps remain available after Ultra expires.</string>
+    <string name="LunagramMediaStartFirst">First open this voice message, music track or round video in the player. No playback is started for you.</string>
+    <string name="LunagramMediaLoop">Repeat A–B</string>
+    <string name="LunagramMediaLoopInfo">Repeat a section of the current voice message, music track or round video. Enter mm:ss or h:mm:ss. Stops when media or account changes.</string>
+    <string name="LunagramMediaLoopStart">Start A · mm:ss</string>
+    <string name="LunagramMediaLoopEnd">End B · mm:ss</string>
+    <string name="LunagramMediaLoopInvalid">Use valid timestamps within the media, at least one second apart.</string>
+    <string name="LunagramMediaLoopStarted">A–B repeat enabled for this media</string>
+    <string name="LunagramMediaStopLoop">Turn off A–B repeat</string>
+    <string name="LunagramMediaLoopStopped">A–B repeat off</string>
+    <string name="LunagramMediaSleep">Playback sleep timer</string>
+    <string name="LunagramMediaSleepMinutes">In %1$d min</string>
+    <string name="LunagramMediaSleepEnd">At the end of this media</string>
+    <string name="LunagramMediaSleepStarted">Timer set for this media. Switching media or account cancels it.</string>
+    <string name="LunagramMediaStopSleep">Cancel sleep timer</string>
+    <string name="LunagramMediaSleepStopped">Sleep timer cancelled</string>
+    <string name="LunagramMediaHash">SHA-256</string>
+    <string name="LunagramMediaHashInfo">Calculate a fingerprint of the downloaded file locally. Up to 128 MiB. You can cancel; no file contents are uploaded.</string>
+    <string name="LunagramMediaCalculate">Calculate</string>
+    <string name="LunagramMediaWorking">Working with the downloaded copy…</string>
+    <string name="LunagramMediaUnavailable">Media tools are unavailable. Check the active account and Ultra status, or wait for the current operation to finish.</string>
+    <string name="LunagramMediaFileUnavailable">Cannot read this downloaded copy. Download it first, stop any file transfer, and check the size limit. Originals and protected media are excluded.</string>
+    <string name="LunagramMediaBytes">Size: %1$d bytes</string>
+    <string name="LunagramMediaChannels">%1$d audio channels</string>
+    <string name="LunagramMediaApply">Apply</string>
+</resources>

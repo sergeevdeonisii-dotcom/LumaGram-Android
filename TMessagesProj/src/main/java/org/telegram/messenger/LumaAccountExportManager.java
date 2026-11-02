@@ -161,10 +161,8 @@ public final class LumaAccountExportManager {
                 // finish before a concurrently starting export creates its session.
                 if (terminal.get() || cancelled.get()) return;
                 File privateCache = ApplicationLoader.applicationContext.getCacheDir();
-                File exportCache = ApplicationLoader.applicationContext.getExternalCacheDir();
-                if (exportCache == null) exportCache = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE);
-                if (privateCache == null || exportCache == null) throw new IllegalStateException("No cache directory");
-                outputDir = new File(exportCache, "luma_account_exports");
+                if (privateCache == null) throw new IllegalStateException("No cache directory");
+                outputDir = new File(privateCache, "luma_account_exports");
                 if (!outputDir.exists() && !outputDir.mkdirs() && !outputDir.isDirectory()) throw new IllegalStateException("Could not create output directory");
                 File sessionRoot = new File(privateCache, "luma_account_export_sessions");
                 if (!sessionRoot.exists() && !sessionRoot.mkdirs() && !sessionRoot.isDirectory()) throw new IllegalStateException("Could not create session root");
@@ -301,7 +299,7 @@ public final class LumaAccountExportManager {
             }
             AndroidUtilities.runOnUIThread(() -> {
                 // The UI callback may be queued across a logout/login in the same slot.
-                if (!ownsAccount()) {
+                if (!canReadCompletedExport()) {
                     result.delete();
                     listener.onCancelled();
                 } else {
@@ -564,6 +562,11 @@ public final class LumaAccountExportManager {
 
     private boolean ownsAccount() {
         return session.isCurrent() && LunagramSubscriptionAccess.canUse(config.account, LunagramFeatureCatalog.Feature.CHAT_EXPORT);
+    }
+
+    /** Completed user data remains readable on expiry, but never by a later login. */
+    public boolean canReadCompletedExport() {
+        return session.isCurrent();
     }
 
     private static String initial(String title) {

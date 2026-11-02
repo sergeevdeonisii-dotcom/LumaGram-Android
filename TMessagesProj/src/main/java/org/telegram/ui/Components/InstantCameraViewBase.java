@@ -3,14 +3,22 @@ package org.telegram.ui.Components;
 import android.content.Context;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.os.Build;
 import android.view.TextureView;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ImageReceiver;
+import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LumaRoundVideoCamera;
+import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.utils.settings.SharedSettings;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
+import org.telegram.ui.Components.blur3.drawable.BlurredBackgroundDrawable;
 import org.telegram.ui.Components.blur3.drawable.color.BlurredBackgroundColorProvider;
 
 /** Common UI contract implemented by the legacy and Camera2 round-video views. */
@@ -48,7 +56,7 @@ public abstract class InstantCameraViewBase extends FrameLayout {
             Theme.ResourcesProvider resourcesProvider,
             boolean isNewDesign
     ) {
-        return SharedSettings.roundVideoCamera2Enabled.get()
+        return isUsingCamera2Implementation()
                 ? new InstantCameraView2(context, delegate, resourcesProvider, isNewDesign)
                 : new InstantCameraView(context, delegate, resourcesProvider, isNewDesign);
     }
@@ -56,11 +64,20 @@ public abstract class InstantCameraViewBase extends FrameLayout {
     /** Selects the implementation used by subsequently created views. */
     public static void setUseCamera2Implementation(boolean enabled) {
         SharedSettings.roundVideoCamera2Enabled.set(enabled);
+        if (!enabled) LumaRoundVideoCamera.setFastSwitchEnabled(false);
     }
 
     /** Returns whether subsequently created views use the Camera2 implementation. */
     public static boolean isUsingCamera2Implementation() {
-        return SharedSettings.roundVideoCamera2Enabled.get();
+        return SharedSettings.roundVideoCamera2Enabled.get()
+                || Build.VERSION.SDK_INT >= 30 && LumaRoundVideoCamera.isFastSwitchEnabled();
+    }
+
+    /** Auto-routing the legacy recorder to warm Camera2 must not change its FPS default. */
+    public static int getRequestedRecordingFrameRate() {
+        int fallback = SharedSettings.roundVideoCamera2Enabled.get()
+                ? SharedSettings.getRoundVideoFrameRate().getValue() : LumaRoundVideoQuality.HIGH_FRAME_RATE;
+        return LumaRoundVideoQuality.getPreferredFrameRate(fallback);
     }
 
     /** Sets the host animation callback. */
@@ -108,6 +125,27 @@ public abstract class InstantCameraViewBase extends FrameLayout {
             BlurredBackgroundDrawableViewFactory factory,
             BlurredBackgroundColorProvider colorProvider
     );
+
+    /** Keep both recorder implementations aligned with the existing compact composer. */
+    protected final void updateCameraControlsCapsule(LinearLayout controls) {
+        final boolean compact = LiteMode.isEnabled(LiteMode.FLAG_LIQUID_GLASS);
+        final int configuredHeight = LiteMode.getLiquidGlassInputHeightDp();
+        final int height = compact ? LumaComposerGeometry.cameraControlsHeightDp(configuredHeight) : 56;
+        LayoutParams params = (LayoutParams) controls.getLayoutParams();
+        params.height = AndroidUtilities.dp(height);
+        params.leftMargin = AndroidUtilities.dp(compact ? LumaComposerGeometry.cameraControlsLeftMarginDp(configuredHeight) : 1);
+        controls.setPadding(AndroidUtilities.dp(6), compact ? 0 : AndroidUtilities.dp(6),
+                AndroidUtilities.dp(6), compact ? 0 : AndroidUtilities.dp(6));
+        for (int i = 0; i < controls.getChildCount(); i++) {
+            ViewGroup.LayoutParams child = controls.getChildAt(i).getLayoutParams();
+            child.width = AndroidUtilities.dp(compact ? 48 : 44);
+            child.height = AndroidUtilities.dp(compact ? height : 44);
+        }
+        if (controls.getBackground() instanceof BlurredBackgroundDrawable) {
+            ((BlurredBackgroundDrawable) controls.getBackground()).setRadius(AndroidUtilities.dp(compact
+                    ? LumaComposerGeometry.recordDiameterDp(configuredHeight) / 2f : 21));
+        }
+    }
 
     /** Applies the bottom inset used by the host layout. */
     public abstract void setInternalPadding(int padding);

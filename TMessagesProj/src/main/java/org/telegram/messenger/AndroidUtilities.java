@@ -262,7 +262,7 @@ public class AndroidUtilities {
     public static Typeface bold() {
         if (mediumTypeface == null) {
             if (SharedConfig.useSystemBoldFont && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                mediumTypeface = Typeface.create(null, 500, false);
+                mediumTypeface = LunagramTypography.resolveSystemMedium(Typeface.create(null, 500, false));
             } else {
                 mediumTypeface = getTypeface(TYPEFACE_ROBOTO_MEDIUM);
             }
@@ -1493,7 +1493,7 @@ public class AndroidUtilities {
             return 0;
         }
         try {
-            Bitmap b = Bitmaps.createScaledBitmap(bitmap, 1, 1, true);
+            Bitmap b = Bitmap.createScaledBitmap(bitmap, 1, 1, true);
             if (b != null) {
                 int bitmapColor = b.getPixel(0, 0);
                 if (bitmap != b) {
@@ -2390,6 +2390,11 @@ public class AndroidUtilities {
     }
 
     public static Typeface getTypeface(String assetPath) {
+        return LunagramTypography.resolveAsset(assetPath, getTypefaceForArtwork(assetPath));
+    }
+
+    /** Media editor fonts are content, not app typography. */
+    public static Typeface getTypefaceForArtwork(String assetPath) {
         synchronized (typefaceCache) {
             if (!typefaceCache.containsKey(assetPath)) {
                 try {
@@ -2887,6 +2892,16 @@ public class AndroidUtilities {
                 }
             }
         }
+    }
+
+    public static int getAccountInProduction() {
+        if (UserConfig.getInstance(UserConfig.selectedAccount).isClientActivated() && !ConnectionsManager.getInstance(UserConfig.selectedAccount).isTestBackend())
+            return UserConfig.selectedAccount;
+        for (int i = 0; i < UserConfig.MAX_ACCOUNT_COUNT; ++i) {
+            if (UserConfig.getInstance(i).isClientActivated() && !ConnectionsManager.getInstance(i).isTestBackend())
+                return i;
+        }
+        return UserConfig.selectedAccount;
     }
 
     public static float getPixelsInCM(float cm, boolean isX) {

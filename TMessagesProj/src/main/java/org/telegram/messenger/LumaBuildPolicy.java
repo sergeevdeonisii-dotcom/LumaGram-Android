@@ -35,8 +35,8 @@ public final class LumaBuildPolicy {
         return !BuildConfig.LUMA_FRIENDS_EDITION && !BuildConfig.LUMA_PUBLIC_EDITION;
     }
 
-    /** Neither public nor restricted Friends installs may receive the personal APK feed. */
+    /** Public uses its own pinned feed; restricted Friends installs have no updater. */
     public static boolean allowsBuiltInUpdates() {
-        return !BuildConfig.LUMA_FRIENDS_EDITION && !BuildConfig.LUMA_PUBLIC_EDITION;
+        return !BuildConfig.LUMA_FRIENDS_EDITION;
     }
 }

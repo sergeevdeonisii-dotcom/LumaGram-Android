@@ -140,7 +140,15 @@ public final class LumaStartupReveal extends BottomSheet {
         TextView heading = text(LocaleController.getString(R.string.LumaUpdateWelcomeChanges), 20, true);
         if (Build.VERSION.SDK_INT >= 28) heading.setAccessibilityHeading(true);
         notes.addView(heading);
-        if (LumaStartupRevealPolicy.hasRelease15Notes(BuildConfig.BUILD_VERSION_STRING)) {
+        if (LumaStartupRevealPolicy.hasRelease20Notes(BuildConfig.BUILD_VERSION_STRING)) {
+            addNote(notes, R.string.LunagramWelcome20Feed);
+            addNote(notes, R.string.LunagramWelcome20Swipe);
+            addNote(notes, R.string.LunagramWelcome20Audio);
+            addNote(notes, R.string.LunagramWelcome20Video);
+            addNote(notes, R.string.LunagramWelcome20Atmosphere);
+            addNote(notes, R.string.LunagramWelcome20Tools);
+            addNote(notes, R.string.LunagramWelcome20Fixes);
+        } else if (LumaStartupRevealPolicy.hasRelease15Notes(BuildConfig.BUILD_VERSION_STRING)) {
             addNote(notes, R.string.LumaUpdateWelcomeRoundCamera);
             addNote(notes, R.string.LumaUpdateWelcomeRoundSettings);
             if (LumaBuildPolicy.allowsProfileVerification()) addNote(notes, R.string.LumaUpdateWelcomeVerification);

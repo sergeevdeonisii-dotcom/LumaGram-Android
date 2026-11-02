@@ -13,6 +13,7 @@ import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LumaAccountExportManager;
+import org.telegram.messenger.LunagramMediaAccess;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessagesController;
@@ -67,6 +68,8 @@ public class LumaAccountExportActivity extends BaseFragment {
     private boolean files = true;
     private UniversalRecyclerView listView;
     private LumaAccountExportManager manager;
+    private LunagramMediaAccess.Session screenIdentity;
+    private long dialogScanGeneration;
     private AlertDialog dialogScan;
     private boolean dialogScanCancelled;
     private long dialogScanDeadline;
@@ -80,6 +83,34 @@ public class LumaAccountExportActivity extends BaseFragment {
     private TLRPC.InputPeer dialogScanOffsetPeer;
     private int dialogScanFolderLoaded;
     private boolean dialogScanExcludePinned;
+
+    @Override
+    public boolean onFragmentCreate() {
+        if (screenIdentity == null) screenIdentity = LunagramMediaAccess.forAccount(currentAccount);
+        return screenIdentity.isCurrent() && super.onFragmentCreate();
+    }
+
+    private boolean ownsScreen() {
+        return !isFinished && screenIdentity != null && screenIdentity.isCurrent();
+    }
+
+    @Override
+    public void onFragmentDestroy() {
+        cancelDialogScan();
+        if (manager != null) manager.cancel();
+        super.onFragmentDestroy();
+    }
+
+    private void cancelDialogScan() {
+        dialogScanCancelled = true;
+        dialogScanGeneration++;
+        if (dialogScanRequestId != 0) {
+            getConnectionsManager().cancelRequest(dialogScanRequestId, true);
+            dialogScanRequestId = 0;
+        }
+        if (dialogScan != null) dismiss(dialogScan);
+        dialogScan = null;
+    }
 
     @Override
     public View createView(Context context) {
@@ -102,7 +133,7 @@ public class LumaAccountExportActivity extends BaseFragment {
                 LayoutHelper.MATCH_PARENT, Gravity.FILL));
         actionBar.setAdaptiveBackground(listView);
         getMessagesController().loadRemoteFilters(false, success -> AndroidUtilities.runOnUIThread(() -> {
-            if (listView != null && listView.adapter != null) listView.adapter.update(false);
+            if (ownsScreen() && listView != null && listView.adapter != null) listView.adapter.update(false);
         }));
         return fragmentView = content;
     }
@@ -144,6 +175,7 @@ public class LumaAccountExportActivity extends BaseFragment {
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {
+        if (!ownsScreen()) return;
         boolean handled = true;
         switch (item.id) {
             case ROW_PRIVATE: privateChats = !privateChats; break;
@@ -187,6 +219,7 @@ public class LumaAccountExportActivity extends BaseFragment {
     }
 
     private void startSelection() {
+        if (!ownsScreen()) return;
         if (!privateChats && !bots && !groups && !channels) {
             bulletin(tr("Выберите хотя бы один тип чатов", "Select at least one chat type"));
             return;
@@ -199,7 +232,8 @@ public class LumaAccountExportActivity extends BaseFragment {
     }
 
     private void beginDialogScan() {
-        if (getParentActivity() == null) return;
+        if (!ownsScreen() || getParentActivity() == null) return;
+        cancelDialogScan();
         dialogScanCancelled = false;
         dialogScanDeadline = System.currentTimeMillis() + 5L * 60L * 1000L;
         scannedDialogs.clear();
@@ -214,18 +248,13 @@ public class LumaAccountExportActivity extends BaseFragment {
         dialogScan.setMessage(tr("Загрузка полного списка чатов…", "Loading the complete chat list..."));
         dialogScan.setCancelable(true);
         dialogScan.setCancelDialog(true);
-        dialogScan.setOnCancelListener(dialog -> {
-            dialogScanCancelled = true;
-            if (dialogScanRequestId != 0) {
-                getConnectionsManager().cancelRequest(dialogScanRequestId, true);
-                dialogScanRequestId = 0;
-            }
-        });
+        dialogScan.setOnCancelListener(dialog -> cancelDialogScan());
         dialogScan.show();
         continueDialogScan();
     }
 
     private void continueDialogScan() {
+        if (!ownsScreen()) { cancelDialogScan(); return; }
         if (dialogScanCancelled || dialogScan == null || !dialogScan.isShowing()) return;
         if (dialogScanFolderIndex >= dialogScanFolders.size()) {
             dismiss(dialogScan);
@@ -252,7 +281,7 @@ public class LumaAccountExportActivity extends BaseFragment {
     }
 
     private void requestDialogPage() {
-        if (dialogScanFolderIndex >= dialogScanFolders.size()) return;
+        if (!ownsScreen() || dialogScanCancelled || dialogScanFolderIndex >= dialogScanFolders.size()) return;
         int folderId = dialogScanFolders.get(dialogScanFolderIndex);
         TLRPC.TL_messages_getDialogs request = new TLRPC.TL_messages_getDialogs();
         request.limit = DIALOG_PAGE_SIZE;
@@ -265,11 +294,15 @@ public class LumaAccountExportActivity extends BaseFragment {
             request.flags |= 2;
             request.folder_id = folderId;
         }
+        final long generation = dialogScanGeneration;
         dialogScanRequestId = getConnectionsManager().sendRequest(request, (response, error) ->
-                AndroidUtilities.runOnUIThread(() -> handleDialogPage(response, error)));
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (generation == dialogScanGeneration && ownsScreen()) handleDialogPage(response, error);
+                }));
     }
 
     private void handleDialogPage(org.telegram.tgnet.TLObject response, TLRPC.TL_error error) {
+        if (!ownsScreen()) { cancelDialogScan(); return; }
         dialogScanRequestId = 0;
         if (dialogScanCancelled || dialogScan == null || !dialogScan.isShowing()) return;
         if (error != null || !(response instanceof TLRPC.messages_Dialogs)) {
@@ -413,6 +446,7 @@ public class LumaAccountExportActivity extends BaseFragment {
     }
 
     private void finishSelection() {
+        if (!ownsScreen() || getParentActivity() == null) return;
         ArrayList<LumaAccountExportManager.ChatSpec> chats = collectChats();
         if (chats.isEmpty()) {
             bulletin(tr("Под выбранные условия не найдено чатов", "No chats match the selected options"));
@@ -482,8 +516,12 @@ public class LumaAccountExportActivity extends BaseFragment {
     }
 
     private void startExport(ArrayList<LumaAccountExportManager.ChatSpec> chats) {
+        if (!ownsScreen()) return;
         if (!LunagramFeatureGate.require(this, Feature.CHAT_EXPORT)) return;
         if (getParentActivity() == null) return;
+        final LunagramMediaAccess.Session identity = LunagramMediaAccess.forAccount(currentAccount);
+        if (!identity.isCurrent()) return;
+        final LumaAccountExportManager[] operation = new LumaAccountExportManager[1];
         LumaAccountExportManager.Config config = new LumaAccountExportManager.Config();
         config.account = currentAccount;
         TLRPC.User self = UserConfig.getInstance(currentAccount).getCurrentUser();
@@ -498,13 +536,13 @@ public class LumaAccountExportActivity extends BaseFragment {
         progress.setCancelable(true);
         progress.setCancelDialog(true);
         progress.setOnCancelListener(dialog -> {
-            if (manager != null) manager.cancel();
+            if (operation[0] != null) operation[0].cancel();
         });
 
-        manager = new LumaAccountExportManager(config, new LumaAccountExportManager.Listener() {
+        operation[0] = new LumaAccountExportManager(config, new LumaAccountExportManager.Listener() {
             @Override
             public void onProgress(LumaAccountExportManager.Progress value) {
-                if (!progress.isShowing()) return;
+                if (!ownsScreen() || !identity.isCurrent() || !progress.isShowing()) return;
                 progress.setProgress(value.getPercent());
                 if (value.packaging) {
                     progress.setMessage(tr("Сборка общего ZIP-архива…", "Building the final ZIP archive..."));
@@ -517,8 +555,8 @@ public class LumaAccountExportActivity extends BaseFragment {
             @Override
             public void onComplete(File archive, int exportedChats, int skippedChats, int messages, int mediaFiles) {
                 dismiss(progress);
-                manager = null;
-                if (getParentActivity() == null) {
+                if (manager == operation[0]) manager = null;
+                if (!ownsScreen() || !operation[0].canReadCompletedExport() || !identity.isCurrent() || getParentActivity() == null) {
                     //noinspection ResultOfMethodCallIgnored
                     archive.delete();
                     return;
@@ -529,30 +567,33 @@ public class LumaAccountExportActivity extends BaseFragment {
                             // second plaintext export in the app's private cache.
                             //noinspection ResultOfMethodCallIgnored
                             archive.delete();
-                            showComplete(exportedChats, skippedChats, messages, mediaFiles);
+                            if (ownsScreen() && operation[0].canReadCompletedExport() && identity.isCurrent()) {
+                                showComplete(exportedChats, skippedChats, messages, mediaFiles);
+                            }
                         });
             }
 
             @Override
             public void onError(String message, Throwable error) {
                 dismiss(progress);
-                manager = null;
+                if (manager == operation[0]) manager = null;
                 if (error != null) FileLog.e(error);
-                showError(message);
+                if (ownsScreen() && identity.isCurrent()) showError(message);
             }
 
             @Override
             public void onCancelled() {
                 dismiss(progress);
-                manager = null;
+                if (manager == operation[0]) manager = null;
             }
         });
+        manager = operation[0];
         progress.show();
-        manager.start();
+        operation[0].start();
     }
 
     private void showComplete(int chats, int skipped, int messages, int media) {
-        if (getParentActivity() == null) return;
+        if (!ownsScreen() || getParentActivity() == null) return;
         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), resourceProvider);
         builder.setTitle(tr("Экспорт готов", "Export ready"));
         builder.setMessage(tr(
@@ -563,7 +604,7 @@ public class LumaAccountExportActivity extends BaseFragment {
     }
 
     private void showError(String message) {
-        if (getParentActivity() == null) return;
+        if (!ownsScreen() || getParentActivity() == null) return;
         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), resourceProvider);
         builder.setTitle(tr("Ошибка экспорта", "Export error"));
         builder.setMessage(message);

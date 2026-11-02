@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="LunagramAliasTitle">Local chat name</string>
+    <string name="LunagramAliasInfo">Only on this device and account. The real group or channel name remains visible. Nothing is renamed in Telegram.</string>
+    <string name="LunagramAliasRealName">Real name: %1$s</string>
+    <string name="LunagramLabelName">Local name (up to 80 characters)</string>
+    <string name="LunagramLabelOriginal">Original name</string>
+    <string name="LunagramLabelPreview">Preview:\n%1$s</string>
+    <string name="LunagramLabelClear">Remove label</string>
+    <string name="LunagramProxyLabels">Local name and group</string>
+    <string name="LunagramProxyGroup">Group (optional, up to 40 characters)</string>
+    <string name="LunagramProxyLabelsInfo">Private labels for this account. They do not change the selected proxy, connection details or shared proxy links. Leave both fields empty to remove a label.</string>
+    <string name="LunagramProxyConnection">Connection settings</string>
+    <string name="LunagramLabelsUnavailable">Labels are unavailable. Unlock the app and reopen this screen in the original account. Saved labels have not been replaced.</string>
+    <string name="LunagramLabelsInvalid">Use up to 80 characters for the name and 40 for the group, without line breaks or hidden direction controls.</string>
+    <string name="LunagramLabelsLimit">You can save up to 256 chat names and 256 proxy labels. Remove an old label first.</string>
+</resources>

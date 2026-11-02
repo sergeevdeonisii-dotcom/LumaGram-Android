@@ -5,7 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Pure vocabulary for the public feature tiers. Not a runtime access check.
+ * Pure vocabulary for the free baseline and the single public Ultra plan. Not a runtime access check.
  * Does not read accounts, payments or preferences. The subscription screen may display
  * this distribution; that display never enforces or grants runtime access.
  * The separate owner-bound authority disables paid effects after confirmed expiry while
@@ -38,21 +38,21 @@ public final class LunagramFeatureCatalog {
         USABILITY_FIXES("usability_fixes", Tier.FREE),
         EXISTING_LOCAL_DATA_ACCESS("existing_local_data_access", Tier.FREE),
 
-        ADVANCED_GLASS("advanced_glass", Tier.BASED),
-        AUTOMATIC_MESSAGE_FORMATTING("automatic_message_formatting", Tier.BASED),
+        ADVANCED_GLASS("advanced_glass", Tier.ULTRA),
+        AUTOMATIC_MESSAGE_FORMATTING("automatic_message_formatting", Tier.ULTRA),
 
-        TYPING_MOTION("typing_motion", Tier.STANDARD),
-        SEND_UNDO("send_undo", Tier.STANDARD),
+        TYPING_MOTION("typing_motion", Tier.ULTRA),
+        SEND_UNDO("send_undo", Tier.ULTRA),
 
-        ROUND_VIDEO_CONTROLS("round_video_controls", Tier.PLUS),
+        ROUND_VIDEO_CONTROLS("round_video_controls", Tier.ULTRA),
 
-        LOCAL_NUMBER("local_number", Tier.PRO),
-        LOCAL_LEVEL("local_level", Tier.PRO),
-        LOCAL_VERIFICATION("local_verification", Tier.PRO),
-        LOCAL_NFT("local_nft", Tier.PRO),
-        CHAT_NOTES("chat_notes", Tier.PRO),
-        SETTINGS_PROFILES("settings_profiles", Tier.PRO),
-        SETTINGS_TRANSFER("settings_transfer", Tier.PRO),
+        LOCAL_NUMBER("local_number", Tier.ULTRA),
+        LOCAL_LEVEL("local_level", Tier.ULTRA),
+        LOCAL_VERIFICATION("local_verification", Tier.ULTRA),
+        LOCAL_NFT("local_nft", Tier.ULTRA),
+        CHAT_NOTES("chat_notes", Tier.ULTRA),
+        SETTINGS_PROFILES("settings_profiles", Tier.ULTRA),
+        SETTINGS_TRANSFER("settings_transfer", Tier.ULTRA),
 
         GHOST("ghost", Tier.ULTRA),
         RETAIN_DELETED("retain_deleted", Tier.ULTRA),
@@ -61,7 +61,28 @@ public final class LunagramFeatureCatalog {
         CHAT_VAULT("chat_vault", Tier.ULTRA),
         NOTIFICATION_JOURNAL("notification_journal", Tier.ULTRA),
         CHAT_EXPORT("chat_export", Tier.ULTRA),
-        CHAT_PDF("chat_pdf", Tier.ULTRA);
+        CHAT_PDF("chat_pdf", Tier.ULTRA),
+
+        ROUND_VIDEO_DATE("round_video_date", Tier.ULTRA),
+        ROUND_VIDEO_FILTERS("round_video_filters", Tier.ULTRA),
+        ROUND_VIDEO_PORTRAIT("round_video_portrait", Tier.ULTRA),
+        VOICE_STEREO("voice_stereo", Tier.ULTRA),
+        VOICE_FILTERS("voice_filters", Tier.ULTRA),
+        SWIPE_ACTIONS("swipe_actions", Tier.ULTRA),
+        CHANNEL_FEED("channel_feed", Tier.ULTRA),
+        LUNA_PET("luna_pet", Tier.ULTRA),
+        INTERFACE_SOUNDS("interface_sounds", Tier.ULTRA),
+        CHAT_ATMOSPHERE("chat_atmosphere", Tier.ULTRA),
+        SEND_ANIMATIONS("send_animations", Tier.ULTRA),
+        STREAMER_MODE("streamer_mode", Tier.ULTRA),
+        MESSAGE_REMINDERS("message_reminders", Tier.ULTRA),
+        VIDEO_MEMES("video_memes", Tier.ULTRA),
+
+        TEXT_TOOLS("text_tools", Tier.ULTRA),
+        READING_TOOLS("reading_tools", Tier.ULTRA),
+        LINK_TOOLS("link_tools", Tier.ULTRA),
+        LOCAL_WORKSPACE("local_workspace", Tier.ULTRA),
+        MEDIA_TOOLS("media_tools", Tier.ULTRA);
 
         public final String id;
         private final Tier minimumTier;
@@ -94,6 +115,11 @@ public final class LunagramFeatureCatalog {
         return id == null ? null : TIERS.get(id);
     }
 
+    /** A recognized former paid tier has Ultra content; authority still verifies owner/time. */
+    public static Tier effectiveTier(Tier tier) {
+        return tier == null || tier == Tier.FREE ? tier : Tier.ULTRA;
+    }
+
     public static Feature featureFromId(String id) {
         return id == null ? null : FEATURES.get(id);
     }
@@ -108,7 +134,7 @@ public final class LunagramFeatureCatalog {
 
     /** Pure set membership, not proof of a paid account or permission for a runtime action. */
     public static boolean includes(Tier tier, Feature feature) {
-        return tier != null && feature != null && tier.rank >= feature.minimumTier.rank;
+        return tier != null && feature != null && effectiveTier(tier).rank >= feature.minimumTier.rank;
     }
 
     public static boolean includes(String tierId, String featureId) {

@@ -144,7 +144,7 @@ public class SimpleTextView extends View implements Drawable.Callback {
 
     public SimpleTextView(Context context) {
         super(context);
-        textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        textPaint = org.telegram.messenger.LunagramTypography.textPaint(Paint.ANTI_ALIAS_FLAG);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
     }
 
@@ -300,7 +300,7 @@ public class SimpleTextView extends View implements Drawable.Callback {
     }
 
     public void setTypeface(Typeface typeface) {
-        textPaint.setTypeface(typeface);
+        textPaint.setTypeface(org.telegram.messenger.LunagramTypography.resolve(typeface));
     }
 
     public int getSideDrawablesSize() {
@@ -338,7 +338,10 @@ public class SimpleTextView extends View implements Drawable.Callback {
             }
 
             if ((gravity & Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.CENTER_HORIZONTAL) {
-                offsetX = (width - textWidth) / 2 - (int) layout.getLineLeft(0);
+                // A marquee starts at the first character. Centering an overflowing
+                // line gives it a negative origin and permanently clips its prefix.
+                final int remainingWidth = width - textWidth;
+                offsetX = (scrollNonFitText ? Math.max(0, remainingWidth) : remainingWidth) / 2 - (int) layout.getLineLeft(0);
             } else if ((gravity & Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.LEFT) {
                 if (firstLineLayout != null) {
                     offsetX = -(int) firstLineLayout.getLineLeft(0);

@@ -40,9 +40,13 @@ public final class StartupPolicy100Test {
         for (String name : new String[]{null, "", "1.0.5", "2.0", "2.5", "3.0", "1.5-debug"}) {
             equal(0, LumaStartupRevealPolicy.hasRelease15Notes(name) ? 1 : 0);
         }
+        equal(1, LumaStartupRevealPolicy.hasRelease20Notes("2.0") ? 1 : 0);
+        for (String name : new String[]{null, "", "1.5", "2.0.1", "2.1", "3.0", "2.0-debug"}) {
+            equal(0, LumaStartupRevealPolicy.hasRelease20Notes(name) ? 1 : 0);
+        }
         // Installed-code transitions, not hardcoded visible labels, drive each update's presentation.
         seen = 0;
-        for (int installed : new int[]{71679, 71689, 71699, 71709}) {
+        for (int installed : new int[]{71679, 71689, 71699, 71709, 71809}) {
             equal(LumaStartupRevealPolicy.SHOW_STATIC, LumaStartupRevealPolicy.decide(installed, seen, true, true, false, false));
             // A failed/unattached show must leave the version eligible.
             equal(0, LumaStartupRevealPolicy.canMarkSeen(true, false, true, true, true) ? 1 : 0);

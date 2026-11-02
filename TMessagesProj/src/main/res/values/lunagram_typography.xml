@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="LufTitle">App font</string>
+    <string name="LufFamily">Font family</string>
+    <string name="LufWeight">Weight</string>
+    <string name="LufSystem">Telegram default</string>
+    <string name="LufSans">Sans serif</string>
+    <string name="LufSerif">Serif</string>
+    <string name="LufMono">Monospace</string>
+    <string name="LufCondensed">Condensed</string>
+    <string name="LufNormal">Standard</string>
+    <string name="LufMedium">Medium</string>
+    <string name="LufBold">Bold</string>
+    <string name="LufPreview">Preview</string>
+    <string name="LufPreviewTitle">Lunagram messages</string>
+    <string name="LufPreviewText">Hello! This is how text will look.\nПривет! Текст, цифры 123 и эмодзи 🙂</string>
+    <string name="LufReset">Restore default font</string>
+    <string name="LufInfo">Local font for menus, chat lists and messages. Sent formatting, emoji and code stay unchanged. Web pages and text inside media keep their own fonts.</string>
+    <string name="LufRestart">Saved. The font will apply throughout Lunagram after a full app restart.</string>
+    <string name="LufCurrent">Changes apply after restarting Lunagram. The preview updates immediately.</string>
+</resources>

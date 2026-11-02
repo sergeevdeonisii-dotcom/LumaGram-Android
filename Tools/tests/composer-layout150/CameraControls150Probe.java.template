@@ -1,0 +1,92 @@
+import org.telegram.ui.Components.LumaComposerGeometry;
+
+/** Runs the actual shared camera capsule updater against simulated layout boundaries. */
+public final class CameraControls150Probe {
+    /* ACTUAL_CAMERA_CAPSULE */
+
+    static int assertions;
+    static void check(boolean valid, String message) {
+        assertions++;
+        if (!valid) throw new AssertionError(message);
+    }
+    static final class AndroidUtilities {
+        static float density;
+        static int dp(float value) { return (int) Math.ceil(density * value); }
+    }
+    static final class LiteMode {
+        static final int FLAG_LIQUID_GLASS = 1;
+        static boolean compact;
+        static int height;
+        static boolean isEnabled(int flag) { return compact; }
+        static int getLiquidGlassInputHeightDp() { return height; }
+    }
+    static class ViewGroup {
+        static class LayoutParams { int width, height; }
+    }
+    static final class LayoutParams extends ViewGroup.LayoutParams { int leftMargin; }
+    static final class View {
+        final ViewGroup.LayoutParams params = new ViewGroup.LayoutParams();
+        ViewGroup.LayoutParams getLayoutParams() { return params; }
+    }
+    static final class BlurredBackgroundDrawable {
+        int radius;
+        void setRadius(int value) { radius = value; }
+    }
+    static final class LinearLayout {
+        final LayoutParams params = new LayoutParams();
+        final View[] children = {new View(), new View()};
+        Object background = new BlurredBackgroundDrawable();
+        int left, top, right, bottom;
+        LayoutParams getLayoutParams() { return params; }
+        int getChildCount() { return children.length; }
+        View getChildAt(int index) { return children[index]; }
+        Object getBackground() { return background; }
+        void setPadding(int l, int t, int r, int b) { left = l; top = t; right = r; bottom = b; }
+    }
+    public static void main(String[] args) {
+        CameraControls150Probe owner = new CameraControls150Probe();
+        LinearLayout controls = new LinearLayout();
+        for (float density : new float[]{1f, 1.5f, 2f, 2.625f, 3f, 4f}) {
+            AndroidUtilities.density = density;
+            for (int configured : new int[]{1, 32, 34, 36, 38, 40, 42, 44, 71}) {
+                LiteMode.height = configured;
+                for (boolean compact : new boolean[]{false, true, false, true}) {
+                    LiteMode.compact = compact;
+                    owner.updateCameraControlsCapsule(controls);
+                    int expectedHeight = AndroidUtilities.dp(compact
+                            ? Math.max(48, LumaComposerGeometry.recordDiameterDp(configured) + 12) : 56);
+                    check(controls.params.height == expectedHeight, "real updater applies bounded capsule height");
+                    check(controls.params.leftMargin == AndroidUtilities.dp(compact
+                                    ? 1 + (44 - LumaComposerGeometry.recordDiameterDp(configured)) / 2 : 1),
+                            "real updater applies symmetric compact/stock left inset without accumulated drift");
+                    check(controls.left == AndroidUtilities.dp(6) && controls.right == AndroidUtilities.dp(6),
+                            "horizontal capsule padding remains6");
+                    check(controls.top == (compact ? 0 : AndroidUtilities.dp(6)) && controls.bottom == controls.top,
+                            "compact vertical padding cannot consume native touch height; stock padding is restored");
+                    for (View child : controls.children) {
+                        check(child.params.width == AndroidUtilities.dp(compact ? 48 : 44),
+                                "native horizontal camera slots are48 only for compact mode");
+                        check(child.params.height == (compact ? expectedHeight : AndroidUtilities.dp(44)),
+                                "native compact camera slots take full available height");
+                        if (compact) {
+                            check(child.params.width >= 48 * density && child.params.height >= 48 * density,
+                                    "native child target is at least48x48 at every supported/fallback density");
+                            check(child.params.height + controls.top + controls.bottom <= controls.params.height,
+                                    "actual compact child touch target is fully contained, not clipped by parent");
+                        }
+                    }
+                    BlurredBackgroundDrawable background = (BlurredBackgroundDrawable) controls.background;
+                    check(background.radius == AndroidUtilities.dp(compact
+                                    ? LumaComposerGeometry.recordDiameterDp(configured) / 2f : 21),
+                            "compact radius follows circle diameter and no-liquid radius stays21");
+                }
+            }
+            // Background setup can lag layout; the updater still safely configures native slots.
+            controls.background = null;
+            owner.updateCameraControlsCapsule(controls);
+            check(controls.children[0].params.height == controls.params.height, "no-background layout remains safe");
+            controls.background = new BlurredBackgroundDrawable();
+        }
+        System.out.println("PASS: " + assertions + " extracted camera capsule assertions; simulated Android layout, not device rendering.");
+    }
+}

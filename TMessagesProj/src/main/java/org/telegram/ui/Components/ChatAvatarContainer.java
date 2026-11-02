@@ -53,6 +53,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
+import org.telegram.messenger.LunagramStreamerMode;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -119,6 +120,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
     private int currentConnectionState;
     private CharSequence lastSubtitle;
     private int lastSubtitleColorKey = -1;
+    private boolean subtitleIsOnline;
     private Integer overrideSubtitleColor;
 
     private SharedMediaLayout.SharedMediaPreloader sharedMediaPreloader;
@@ -288,6 +290,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
 
         titleTextView = new SimpleTextConnectedView(context, titleTextLargerCopyView);
         titleTextView.setEllipsizeByGradient(true);
+        titleTextView.setScrollNonFitText(true);
         titleTextView.setTextColor(getThemedColor(Theme.key_actionBarDefaultTitle));
         titleTextView.setTextSize(18);
         titleTextView.setGravity(Gravity.LEFT);
@@ -769,6 +772,8 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         titleTextLargerCopyView.setRightDrawableOutside(titleTextView.getRightDrawableOutside());
         titleTextLargerCopyView.setLeftDrawable(snapshotDrawable(titleTextView.getLeftDrawable()));
         titleTextLargerCopyView.setText(titleTextView.getText());
+        titleTextLargerCopyView.setScrollNonFitText(true);
+        titleTextLargerCopyView.copyScrolling(titleTextView);
         final SimpleTextView titleCopy = titleTextLargerCopyView;
         titleTextLargerCopyView.animate().alpha(0).setDuration(350).setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT).withEndAction(() -> {
             if (this.titleTextLargerCopyView.get() == titleCopy) {
@@ -799,7 +804,8 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                 // this fading view would stop invalidating the real subtitle;
                 // copying only its text would expose the **oo** placeholder.
                 setTypingDrawable(subtitleTextLargerCopyView, snapshotTypingDrawable(),
-                    externalAvatarMode || currentTypingDrawable == statusDrawables[5]);
+                    externalAvatarMode || currentTypingDrawable == statusDrawables[5],
+                    currentTypingDrawable == statusDrawables[4]);
             }
             subtitleTextLargerCopyView.setText(subtitleTextView.getText());
         } else if (animatedSubtitleTextView != null) {
@@ -1042,10 +1048,14 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
     }
 
     public void setTitle(CharSequence value, boolean scam, boolean fake, boolean verified, boolean premium, TLRPC.EmojiStatus emojiStatus, boolean animated) {
+        value = LunagramStreamerMode.displayName(currentAccount, value,
+                parentFragment != null && parentFragment.getCurrentChat() != null);
         if (value != null) {
             value = Emoji.replaceEmoji(value, titleTextView.getPaint().getFontMetricsInt(), false);
         }
-        titleTextView.setText(value);
+        if (titleTextView.setText(value)) {
+            titleTextView.resetScrolling();
+        }
         rightDrawableIsScam = false;
         if (scam || fake) {
             rightDrawableIsScam = true;
@@ -1171,10 +1181,10 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                     // edge of the full-width view and visually splits the animation
                     // from labels such as "recording voice".
                     statusDrawables[type].setColor(getThemedColor(Theme.key_chat_status));
-                    setTypingDrawable(subtitleTextView, statusDrawables[type], true);
+                    setTypingDrawable(subtitleTextView, statusDrawables[type], true, type == 4);
                 } else {
                     statusDrawables[type].setColor(getThemedColor(Theme.key_chat_status));
-                    setTypingDrawable(subtitleTextView, statusDrawables[type], false);
+                    setTypingDrawable(subtitleTextView, statusDrawables[type], false, false);
                 }
                 currentTypingDrawable = statusDrawables[type];
                 for (int a = 0; a < statusDrawables.length; a++) {
@@ -1190,7 +1200,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             }
         } else {
             currentTypingDrawable = null;
-            setTypingDrawable(subtitleTextView, null, false);
+            setTypingDrawable(subtitleTextView, null, false, false);
             for (int a = 0; a < statusDrawables.length; a++) {
                 if (statusDrawables[a] != null) {
                     statusDrawables[a].stop();
@@ -1199,7 +1209,17 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         }
     }
 
-    private static void setTypingDrawable(SimpleTextView target, Drawable drawable, boolean inline) {
+    private static String getTypingDrawableGap(int type) {
+        // The recording dot has no moving overhang and already includes a 2dp
+        // side inset. Keep a small font-relative gap; wider animations need more room.
+        return type == 4 ? "\u2009" : "\u2002";
+    }
+
+    private static void setTypingDrawable(SimpleTextView target, Drawable drawable, boolean inline, boolean roundVideo) {
+        // Center the dot optically against lowercase status text, not the full
+        // font line box. Apply to the host so bitmap fade copies cannot clip it.
+        // Always reset the offset when recording ends or the header mode changes.
+        target.setLeftDrawableTopPadding(inline && roundVideo ? dp(1) : 0);
         // Detach the old slot before attaching the new one: both SimpleTextView
         // setters clear their old drawable's callback, including the same icon
         // being moved from one slot to the other.
@@ -1293,6 +1313,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         }
 
         subtitleIsThinkingBot = false;
+        subtitleIsOnline = false;
         CharSequence printString = MessagesController.getInstance(currentAccount).getPrintingString(parentFragment.getDialogId(), parentFragment.getThreadId(), false);
         if (printString == null && UserObject.isBotForum(user)) {
             //if (BotForumHelper.getInstance(currentAccount).isThinking(user.id, (int) parentFragment.getTopicId())) {
@@ -1383,7 +1404,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                 if (count > 0) {
                     newSubtitle = LocaleController.formatPluralString("messages", count, count);
                 } else {
-                    newSubtitle = LocaleController.formatString(R.string.TopicProfileStatus, chat.title);
+                    newSubtitle = LocaleController.formatString(R.string.TopicProfileStatus, LunagramStreamerMode.displayName(currentAccount, chat));
                 }
             } else if (chat != null) {
                 TLRPC.ChatFull info = parentFragment.getCurrentChatInfo();
@@ -1411,11 +1432,12 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                 } else if (user.bot && user.bot_active_users != 0) {
                     newStatus = LocaleController.formatPluralStringComma("BotUsers", user.bot_active_users, ',');
                 } else if (user.bot) {
-                    newStatus = getString(R.string.Bot);
+                    newStatus = UserObject.getBotStatus(user);
                 } else {
                     isOnline[0] = false;
                     newStatus = LocaleController.formatUserStatus(currentAccount, user, isOnline, allowShorterStatus ? statusMadeShorter : null);
                     useOnlineColor = isOnline[0];
+                    subtitleIsOnline = isOnline[0];
                 }
                 newSubtitle = newStatus;
             } else {
@@ -1456,19 +1478,27 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             } else if (externalAvatarMode && type != null && type >= 0 && type < statusDrawables.length) {
                 // Reserve an inline slot for the animated typing/recording icon so
                 // icon and label are centered as one compact group.
-                newSubtitle = TYPING_DRAWABLE_PLACEHOLDER + " " + newSubtitle;
+                // Keep moving icons clear at the far end of their cycle, but
+                // avoid the same oversized gap after the stationary video dot.
+                newSubtitle = TYPING_DRAWABLE_PLACEHOLDER + getTypingDrawableGap(type) + newSubtitle;
             }
             useOnlineColor = true;
             // A network/connection label temporarily owns the subtitle. Keep
             // updating the cached text, but do not prepend its recording icon.
             setTypingAnimation(lastSubtitle == null);
         }
+        // A local alias never conceals the actual peer name. Streamer mode is
+        // deliberately excluded by getLunagramChatAlias, so this cannot unmask it.
+        if (chat != null && !TextUtils.isEmpty(parentFragment.getLunagramChatAlias())) {
+            CharSequence realName = AndroidUtilities.removeRTL(AndroidUtilities.removeDiacritics(chat.title));
+            newSubtitle = TextUtils.isEmpty(newSubtitle) ? realName : TextUtils.concat(realName, " · ", newSubtitle);
+        }
         lastSubtitleColorKey = useOnlineColor ? Theme.key_chat_status : Theme.key_actionBarDefaultSubtitle;
         if (lastSubtitle == null) {
             if (subtitleTextView != null) {
                 subtitleTextView.setText(newSubtitle);
                 if (overrideSubtitleColor == null) {
-                    subtitleTextView.setTextColor(getThemedColor(lastSubtitleColorKey));
+                    subtitleTextView.setTextColor(getSubtitleTextColor(lastSubtitleColorKey));
                     subtitleTextView.setTag(lastSubtitleColorKey);
                 } else {
                     subtitleTextView.setTextColor(overrideSubtitleColor);
@@ -1476,7 +1506,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             } else {
                 animatedSubtitleTextView.setText(newSubtitle, animated);
                 if (overrideSubtitleColor == null) {
-                    animatedSubtitleTextView.setTextColor(getThemedColor(lastSubtitleColorKey));
+                    animatedSubtitleTextView.setTextColor(getSubtitleTextColor(lastSubtitleColorKey));
                     animatedSubtitleTextView.setTag(lastSubtitleColorKey);
                 } else {
                     animatedSubtitleTextView.setTextColor(overrideSubtitleColor);
@@ -1789,7 +1819,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                     if (overrideSubtitleColor != null) {
                         subtitleTextView.setTextColor(overrideSubtitleColor);
                     } else if (lastSubtitleColorKey >= 0) {
-                        subtitleTextView.setTextColor(getThemedColor(lastSubtitleColorKey));
+                        subtitleTextView.setTextColor(getSubtitleTextColor(lastSubtitleColorKey));
                         subtitleTextView.setTag(lastSubtitleColorKey);
                     }
                 } else if (animatedSubtitleTextView != null) {
@@ -1798,7 +1828,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                     if (overrideSubtitleColor != null) {
                         animatedSubtitleTextView.setTextColor(overrideSubtitleColor);
                     } else if (lastSubtitleColorKey >= 0) {
-                        animatedSubtitleTextView.setTextColor(getThemedColor(lastSubtitleColorKey));
+                        animatedSubtitleTextView.setTextColor(getSubtitleTextColor(lastSubtitleColorKey));
                         animatedSubtitleTextView.setTag(lastSubtitleColorKey);
                     }
                 }
@@ -1872,13 +1902,23 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         return Theme.getColor(key, resourcesProvider);
     }
 
+    private int getSubtitleTextColor(int key) {
+        // Online presence has its own lavender treatment in the light theme.
+        // Typing/recording also use chat_status, so the color key alone is insufficient.
+        final boolean dark = resourcesProvider != null ? resourcesProvider.isDark() : Theme.isCurrentThemeDark();
+        if (subtitleIsOnline && key == Theme.key_chat_status && !dark) {
+            return 0xffb39ddb;
+        }
+        return getThemedColor(key);
+    }
+
     /** Rebind cached chat labels when glass or day/night settings change while away. */
     public void updateChatTextColors() {
         titleTextView.setTextColor(getThemedColor(Theme.key_actionBarDefaultTitle));
         final int subtitleKey = lastSubtitle != null || lastSubtitleColorKey < 0
             ? Theme.key_actionBarDefaultSubtitle : lastSubtitleColorKey;
         final int subtitleColor = overrideSubtitleColor != null
-            ? overrideSubtitleColor : getThemedColor(subtitleKey);
+            ? overrideSubtitleColor : getSubtitleTextColor(subtitleKey);
         if (subtitleTextView != null) {
             subtitleTextView.setTextColor(subtitleColor);
         }
@@ -1888,6 +1928,9 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
     }
 
     public void updateColors() {
+        if (titleTextView != null) {
+            updateChatTextColors();
+        }
         if (currentTypingDrawable != null) {
             currentTypingDrawable.setColor(getThemedColor(Theme.key_chat_status));
         }

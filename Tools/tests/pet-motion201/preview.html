@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LunaPet: production motion inspection</title>
+<style>
+body{margin:24px;background:#151515;color:#eee;font:16px system-ui,sans-serif;max-width:1200px}h1{font-size:24px}p{max-width:80ch;line-height:1.45;color:#bbb}button{padding:10px 16px;background:#343434;color:white;border:1px solid #555;border-radius:8px;margin:0 6px 8px 0}button:focus-visible,input:focus-visible{outline:2px solid #bfa6ee}canvas{display:block;width:min(100%,1100px);height:auto;margin:12px 0;border:1px solid #555}input{width:min(100%,900px)}output{display:block;min-height:2em}label{display:block;margin-top:14px}.note{color:#d5bde8}
+</style>
+<h1>LunaPet — проверка текущего 2D-котика</h1>
+<p>Реальные PNG, координаты manifest и трасса production Java. Сверху — увеличение ×2.5, снизу — размер 56dp. Это не 3D и не 60 новых поз в секунду. Переход «булочка ↔ ходьба» остаётся ограничен отсутствующими кадрами вставания.</p>
+<button id="play">Пауза</button><button data-pose="WALK">Ходьба</button><button data-pose="LOOK">Взгляд</button><button data-pose="ROLL">Перекат</button><button data-pose="ROLL_IN">Игра с мячом</button><button id="theme">Светлый фон</button>
+<output id="info">Загрузка…</output>
+<canvas id="large" width="1100" height="245" aria-label="Увеличенная текущая анимация кота"></canvas>
+<canvas id="native" width="440" height="98" style="width:440px;max-width:100%" aria-label="Кот в размере интерфейса"></canvas>
+<label>Время <input id="seek" type="range" min="0" max="4500" value="0"></label>
+<p class="note">Проверять отдельно: связь шага с расстоянием; точку выпуска мяча; отсутствие второго толчка без лапы; правильное направление вставания после игры. Этот просмотр не измеряет FPS Android.</p>
+<script type="module">
+const root='../../../TMessagesProj/src/main/assets/lunapet/';
+const [manifest, trace]=await Promise.all([fetch(root+'ginger-tabby.json').then(r=>r.json()),fetch('../.runs/pet-motion201-preview/trace.json').then(r=>r.json())]);
+const frames=[];
+for(const clip of manifest.clips){
+ const img=new Image();img.src=root+clip.asset;await img.decode();
+ // Android uses inSampleSize2, then integer source-rectangle scaling.
+ const decoded=document.createElement('canvas');decoded.width=decoded.height=Math.ceil(img.width/2);decoded.getContext('2d').drawImage(img,0,0,decoded.width,decoded.height);
+ for(let i=0;i<16;i++){
+  const a=clip.frames[i],c=i%4,r=Math.floor(i/4),q=a.sourceRect??{left:Math.floor(img.width*c/4),top:Math.floor(img.height*r/4),right:Math.floor(img.width*(c+1)/4),bottom:Math.floor(img.height*(r+1)/4)};
+  const l=Math.floor(q.left*decoded.width/img.width),t=Math.floor(q.top*decoded.height/img.height),rr=Math.floor(q.right*decoded.width/img.width),b=Math.floor(q.bottom*decoded.height/img.height);
+  const bitmap=document.createElement('canvas');bitmap.width=rr-l;bitmap.height=b-t;bitmap.getContext('2d').drawImage(decoded,l,t,rr-l,b-t,0,0,rr-l,b-t);
+  frames.push({bitmap,x:a.anchorX/(q.right-q.left),y:a.anchorY/(q.right-q.left),height:(q.bottom-q.top)/(q.right-q.left)});
+ }
+}
+const big=document.querySelector('#large'),small=document.querySelector('#native'),seek=document.querySelector('#seek'),info=document.querySelector('#info');
+let playing=true,light=false,index=0,origin=performance.now(),base=0;
+function draw(canvas,state,zoom){
+ const g=canvas.getContext('2d');g.setTransform(zoom,0,0,zoom,0,0);g.fillStyle=light?'#faf9f6':'#141218';g.fillRect(0,0,440,98);
+ g.fillStyle=light?'#e7e7ed':'#27232e';g.beginPath();g.roundRect(20,58,400,36,18);g.fill();
+ g.strokeStyle=light?'#cac7cd':'#625970';g.lineWidth=.5;g.stroke();
+ g.save();g.beginPath();g.rect(20,0,400,80);g.clip();
+ function drawBall(){if(state.ballVisible){
+  g.save();g.translate(state.ballX,58-state.ballHeight-state.ballRadius);g.rotate(state.ballTurn*Math.PI/180);g.fillStyle='#529bdb';g.beginPath();g.arc(0,0,state.ballRadius,0,Math.PI*2);g.fill();
+  g.strokeStyle='#96c6ec';g.lineWidth=Math.max(.7,state.ballRadius*.12);for(let i=0;i<2;i++){g.beginPath();g.ellipse(0,0,state.ballRadius*.6,state.ballRadius*.78,0,0,Math.PI*2);g.stroke();g.rotate(65*Math.PI/180);}
+  // Restore before the highlight so its placement matches the native renderer.
+  g.rotate(-65*Math.PI/180);g.fillStyle='#c3e0f6';g.beginPath();g.arc(-state.ballRadius*.3,-state.ballRadius*.4,state.ballRadius*.2,0,Math.PI*2);g.fill();g.restore();
+ }}
+ g.save();
+ g.translate(state.x,58-state.bounce);g.scale(state.facing,1);
+ const f=frames[state.frame],size=56,left=-f.x*size,top=-f.y*size,height=f.height*size,bottom=top+height;
+ if(!state.tail||state.frame<16||state.frame>=32)g.drawImage(f.bitmap,left,top,size,height);
+ else for(let row=0;row<12;row++){
+  const y0=top+height*row/12,y1=top+height*(row+1)/12;
+  const dx0=state.tail*size*.012*Math.max(0,y0)/Math.max(1,bottom),dx1=state.tail*size*.012*Math.max(0,y1)/Math.max(1,bottom);
+  const sy=row*f.bitmap.height/12,sh=f.bitmap.height/12;
+  g.save();g.transform(size/f.bitmap.width,0,(dx1-dx0)/sh,height/f.bitmap.height,left+dx0-(dx1-dx0)/sh*sy,top);
+  g.beginPath();g.rect(0,sy,f.bitmap.width,sh+.01);g.clip();g.drawImage(f.bitmap,0,0);g.restore();
+ }
+ g.restore();drawBall();g.restore();
+}
+function render(){const state=trace.samples[index];draw(big,state,2.5);draw(small,state,1);seek.value=index;info.textContent=`${(state.t/1000).toFixed(2)}s · ${state.pose} · исходная поза ${state.frame} · x=${state.x.toFixed(2)} · 2D`}
+function jump(i){index=Math.max(0,Math.min(trace.samples.length-1,i));base=trace.samples[index].t;origin=performance.now();render()}
+document.querySelector('#play').onclick=e=>{playing=!playing;e.target.textContent=playing?'Пауза':'Воспроизвести';base=trace.samples[index].t;origin=performance.now()};
+document.querySelector('#theme').onclick=e=>{light=!light;e.target.textContent=light?'Тёмный фон':'Светлый фон';render()};
+document.querySelectorAll('[data-pose]').forEach(b=>b.onclick=()=>jump(Math.max(0,trace.samples.findIndex(s=>s.pose===b.dataset.pose)-15)));
+seek.oninput=()=>jump(Number(seek.value));
+function tick(now){if(playing){index=Math.floor(((base+Math.max(0,now-origin))%75000)*60/1000);render()}requestAnimationFrame(tick)}
+render();requestAnimationFrame(tick);
+</script>

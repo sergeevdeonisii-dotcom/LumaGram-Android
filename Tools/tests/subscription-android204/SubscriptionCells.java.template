@@ -1,0 +1,96 @@
+package org.telegram.ui;
+
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+/** Only collaborators are modeled. Both nested cells below are copied verbatim at run time. */
+public final class SubscriptionCells {
+    /* ACTUAL_FEATURE_CELL */
+    /* ACTUAL_PERIOD_CELL */
+    /* ACTUAL_HEADER_STATUS_CELL */
+}
+
+final class StatusLabels { /* ACTUAL_HEADER_LABELS */ }
+final class FeatureLabels { /* ACTUAL_FEATURE_LABELS */ }
+
+final class AndroidUtilities {
+    static float density = 1;
+    static int dp(float value) { return (int) Math.ceil(density * value); }
+    static Typeface bold() { return Typeface.create("sans-serif", Typeface.BOLD); }
+}
+final class LocaleController { static boolean isRTL; }
+final class LayoutHelper {
+    static final int MATCH_PARENT = -1, WRAP_CONTENT = -2;
+    static FrameLayout.LayoutParams createFrame(int width, float height, int gravity,
+            float left, float top, float right, float bottom) {
+        FrameLayout.LayoutParams value = new FrameLayout.LayoutParams(width < 0 ? width : AndroidUtilities.dp(width),
+                height < 0 ? (int) height : AndroidUtilities.dp(height), gravity);
+        value.setMargins(AndroidUtilities.dp(left), AndroidUtilities.dp(top), AndroidUtilities.dp(right), AndroidUtilities.dp(bottom));
+        return value;
+    }
+}
+final class Theme {
+    interface Colorable { void updateColors(); }
+    interface ResourcesProvider { }
+    static final int key_windowBackgroundWhiteBlackText = 0, key_windowBackgroundWhiteGrayText = 1,
+            key_windowBackgroundWhiteGrayIcon = 2, key_listSelector = 3, key_dialogTextBlack = 4,
+            key_dialogTextGray2 = 5, key_dialogRadioBackground = 6, key_dialogRadioBackgroundChecked = 7;
+    static final Paint dividerPaint = new Paint();
+    static int getColor(int key, ResourcesProvider provider) {
+        return key == key_listSelector ? Color.TRANSPARENT : key == key_windowBackgroundWhiteBlackText || key == key_dialogTextBlack
+                ? 0xff171717 : 0xff666666;
+    }
+    static Drawable createRoundRectDrawable(int radius, int color) { return new ColorDrawable(color); }
+    static Drawable createSelectorDrawable(int color, int style) { return new ColorDrawable(color); }
+}
+final class RadioButton extends View {
+    private boolean checked;
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    RadioButton(Context context) { super(context); }
+    void setSize(int size) { }
+    void setColor(int unchecked, int checked) { }
+    void setChecked(boolean value, boolean animated) { checked = value; }
+    boolean isChecked() { return checked; }
+    @Override protected void onDraw(Canvas canvas) {
+        paint.setColor(0xff9988ff);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(AndroidUtilities.dp(2));
+        canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, AndroidUtilities.dp(9), paint);
+        if (checked) {
+            paint.setStyle(Paint.Style.FILL);
+            canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, AndroidUtilities.dp(5), paint);
+        }
+    }
+}
+final class RecyclerView {
+    static final class LayoutParams extends ViewGroup.MarginLayoutParams {
+        LayoutParams(int width, int height) { super(width, height); }
+    }
+}
+final class R { static final class drawable { static final int msg_arrowright = android.R.drawable.ic_media_next; } }
+final class RecyclerListView { }
+final class UniversalAdapter { }
+final class UniversalRecyclerView { }
+final class UItem {
+    int id, intValue, iconResId;
+    CharSequence text, subtext;
+    static UItem ofFactory(Class<?> factory) { return new UItem(); }
+    abstract static class UItemFactory<T extends View> {
+        static void setup(UItemFactory<?> factory) { }
+        public abstract T createView(Context context, RecyclerListView listView, int account, int classGuid, Theme.ResourcesProvider provider);
+        public abstract void bindView(View view, UItem item, boolean divider, UniversalAdapter adapter, UniversalRecyclerView listView);
+    }
+}

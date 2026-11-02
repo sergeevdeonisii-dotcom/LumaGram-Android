@@ -1,0 +1,135 @@
+import java.util.*;
+
+/** Actual container and extracted transition/cell lifecycle bodies. Modeled Android, no pixel/FPS claim. */
+public final class OutgoingLifecycleProbe {
+    static int checks;
+    static void check(boolean ok,String name){checks++;if(!ok)throw new AssertionError(name);}
+    public static void main(String[]args){cellOwnership();containerLifecycle();textLifecycle();voiceLifecycle();System.out.println("PASS "+checks+" actual outgoing lifecycle/ownership assertions; no device render claim");}
+    static MessageEnterTransitionContainer container(){NotificationCenter.instance.jobs.clear();return new MessageEnterTransitionContainer(new ViewGroup(new Context()),0);}
+    static void cellOwnership(){
+        ChatMessageCell c=new ChatMessageCell();Object old=new Object(),next=new Object();
+        c.beginEnterTransition(old);check(c.ownsEnterTransition(old)&&c.enterTransitionInProgress,"cell begins with explicit owner");
+        c.beginEnterTransition(next);c.finishEnterTransition(old);check(c.ownsEnterTransition(next)&&c.enterTransitionInProgress,"old transition cannot clear new cell owner");
+        c.finishEnterTransition(next);check(!c.enterTransitionInProgress&&!c.ownsEnterTransition(next),"current owner clears own flag");
+        c.beginEnterTransition(old);c.setEnterTransitionInProgress(false);check(!c.ownsEnterTransition(old)&&!c.enterTransitionInProgress,"legacy reset revokes old owner");
+        int invalidations=c.invalidations;c.finishEnterTransition(old);check(c.invalidations==invalidations,"stale owner cleanup does not invalidate recycled cell");
+    }
+    static void containerLifecycle(){
+        MessageEnterTransitionContainer c=container();DummyTransition first=new DummyTransition(c),second=new DummyTransition(c),third=new DummyTransition(c);
+        first.selfCancelOnDraw=true;c.onDraw(new Canvas());check(first.draws==1&&second.draws==1&&third.draws==1,"self-removing transition cannot skip next draw");
+        c.cancelAll();check(!c.isRunning()&&second.cancels==1&&third.cancels==1&&c.getVisibility()==View.GONE,"cancelAll handles removal during iteration");
+        c.cancelAll();check(second.cancels==1&&third.cancels==1,"empty cancelAll idempotent");
+        DummyTransition a=new DummyTransition(c);a.cancel();check(!NotificationCenter.instance.jobs.isEmpty(),"last transition schedules idle hide");
+        DummyTransition b=new DummyTransition(c);NotificationCenter.instance.flush();check(c.isRunning()&&c.getVisibility()==View.VISIBLE,"new active transition survives stale idle hide");
+        c.onDetachedFromWindow();check(!c.isRunning()&&b.cancels==1&&NotificationCenter.instance.jobs.isEmpty(),"container detach cancels all work and idle hides");
+    }
+    static void textLifecycle(){
+        MessageEnterTransitionContainer c=container();ChatActivityEnterView input=new ChatActivityEnterView();ChatActivity chat=new ChatActivity();ChatMessageCell a=new ChatMessageCell(),b=new ChatMessageCell();
+        TextMessageEnterTransition old=new TextMessageEnterTransition(c,a,input,chat),next=new TextMessageEnterTransition(c,b,input,chat);
+        old.start();next.start();input.edit.setAlpha(.25f);chat.replyName.setAlpha(.3f);chat.replyObject.setAlpha(.4f);
+        old.animator.value=.75f;old.tick(old.animator);check(input.edit.alpha==.25f,"older update cannot change newer composer alpha");
+        int releases=AnimatedEmojiSpan.releases;old.finish();check(input.running&&input.edit.alpha==.25f&&chat.replyName.alpha==.3f&&chat.replyObject.alpha==.4f,"older completion cannot reset newer composer or reply UI");
+        check(!a.enterTransitionInProgress&&b.enterTransitionInProgress&&c.isTextTransitionOwner(next),"old finish clears only its own cell");
+        check(old.notificationsLocker.unlocks==1&&AnimatedEmojiSpan.releases==releases+1,"text cleanup releases owned resources once");
+        old.cancel();old.finish();old.start();check(old.notificationsLocker.unlocks==1&&AnimatedEmojiSpan.releases==releases+1&&old.animator.starts==1,"text finished cancel and start are idempotent");
+        next.animator.value=.7f;next.tick(next.animator);check(input.edit.alpha==.7f,"current text owner controls composer alpha");
+        next.cancel();check(!input.running&&input.edit.alpha==1&&chat.replyName.alpha==1&&chat.replyObject.alpha==1&&!b.enterTransitionInProgress&&!c.isRunning(),"current text completion restores live UI");
+        check(next.animator.cancels==1&&next.notificationsLocker.unlocks==1,"animator callback and explicit finish cannot double cleanup");
+        c=container();ChatMessageCell reused=new ChatMessageCell();TextMessageEnterTransition stale=new TextMessageEnterTransition(c,reused,input,chat);reused.message=new MessageObject();TextMessageEnterTransition current=new TextMessageEnterTransition(c,reused,input,chat);
+        stale.cancel();check(reused.ownsEnterTransition(current)&&reused.enterTransitionInProgress&&reused.params.lastDrawingBackgroundRect.sets==0,"recycled cell with new owner is untouched by stale finish");current.cancel();
+        for(int invalid=0;invalid<8;invalid++){
+            c=container();ChatMessageCell cell=new ChatMessageCell();chat=new ChatActivity();TextMessageEnterTransition t=new TextMessageEnterTransition(c,cell,new ChatActivityEnterView(),chat);t.start();check(t.isValid(),"fresh text transition valid");
+            switch(invalid){case 0:cell.message=new MessageObject();break;case 1:cell.attached=false;break;case 2:t.session.current=false;break;case 3:chat.current=false;break;case 4:SharedConfig.animations=false;break;case 5:AndroidUtilities.scale=0;break;case 6:cell.beginEnterTransition(new Object());break;case 7:cell.message.stableId++;break;}
+            check(!t.isValid(),"text stale owner/session/lifecycle/motion is invalid");t.animator.value=.5f;t.tick(t.animator);check(t.finished&&!c.isRunning()&&t.notificationsLocker.unlocks==1,"invalid text update cancels and cleans owned resources");
+            t.onDraw(new Canvas());check(t.draws==0,"finished text never draws");SharedConfig.animations=true;AndroidUtilities.scale=1;
+        }
+        TextMessageEnterTransition partial=new TextMessageEnterTransition();partial.cancel();partial.cancel();check(partial.notificationsLocker.unlocks==0,"partially prepared constructor never unlocks unowned resources");
+    }
+    static void voiceLifecycle(){
+        MessageEnterTransitionContainer c=container();ChatActivityEnterView.RecordCircle circle=new ChatActivityEnterView.RecordCircle();ChatMessageCell oldCell=new ChatMessageCell(),newCell=new ChatMessageCell();
+        VoiceMessageEnterTransition old=new VoiceMessageEnterTransition(c,oldCell,circle),next=new VoiceMessageEnterTransition(c,newCell,circle);old.start();next.start();old.finish();
+        check(circle.skipDraw&&circle.voiceEnterTransitionInProgress&&newCell.enterTransitionInProgress&&c.isVoiceTransitionOwner(next),"old voice finish cannot restore newer recording circle");
+        next.cancel();check(!circle.skipDraw&&!circle.voiceEnterTransitionInProgress&&!newCell.enterTransitionInProgress&&!c.isRunning(),"current voice cleanup restores both record flags");
+        int invalidations=circle.invalidations;next.cancel();next.finish();next.start();check(circle.invalidations==invalidations&&next.animator.starts==1&&next.animator.cancels==1,"voice cleanup idempotent");
+        for(int invalid=0;invalid<6;invalid++){
+            c=container();ChatMessageCell cell=new ChatMessageCell();VoiceMessageEnterTransition t=new VoiceMessageEnterTransition(c,cell,new ChatActivityEnterView.RecordCircle());t.start();check(t.isValid(),"fresh voice valid");
+            switch(invalid){case 0:cell.message=new MessageObject();break;case 1:cell.attached=false;break;case 2:SharedConfig.animations=false;break;case 3:AndroidUtilities.scale=0;break;case 4:cell.beginEnterTransition(new Object());break;case 5:cell.message.stableId++;break;}
+            check(!t.isValid(),"voice rebound/detach/motion/ownership invalid");t.tick(t.animator);check(t.finished&&!c.isRunning(),"invalid voice update cancels");t.onDraw(new Canvas());check(t.draws==0,"finished voice never draws");SharedConfig.animations=true;AndroidUtilities.scale=1;
+        }
+        c=container();TextMessageEnterTransition text=new TextMessageEnterTransition(c,new ChatMessageCell(),new ChatActivityEnterView(),new ChatActivity());VoiceMessageEnterTransition voice=new VoiceMessageEnterTransition(c,new ChatMessageCell(),new ChatActivityEnterView.RecordCircle());
+        c.onDetachedFromWindow();check(text.finished&&voice.finished&&!c.isRunning()&&text.notificationsLocker.unlocks==1,"container detach cancels text and voice with cleanup");
+        for(float radius:new float[]{-10,0,.001f,1,10}){c=container();VoiceMessageEnterTransition t=new VoiceMessageEnterTransition(c,new ChatMessageCell(),new ChatActivityEnterView.RecordCircle());t.radiusDraw(radius);check(radius>0?t.radiusDraws==1&&!t.finished:t.radiusDraws==0&&t.finished,"invalid voice radius cancels before division");t.cancel();}
+    }
+
+    @@CONTAINER@@
+    static class TextMessageEnterTransition implements MessageEnterTransitionContainer.Transition{
+        boolean active,finished;LunagramMediaAccess.Session session;ChatMessageCell messageView;MessageObject currentMessageObject;ChatActivity chatActivity;ChatActivityEnterView enterView;MessageEnterTransitionContainer container;ValueAnimator animator;final NotificationsLocker notificationsLocker=new NotificationsLocker();Object animatedEmojiStack=new Object();float progress;int draws,messageId;
+        TextMessageEnterTransition(){}
+        TextMessageEnterTransition(MessageEnterTransitionContainer c,ChatMessageCell cell,ChatActivityEnterView input,ChatActivity chat){container=c;messageView=cell;currentMessageObject=cell.getMessageObject();messageId=currentMessageObject.stableId;enterView=input;chatActivity=chat;session=new LunagramMediaAccess.Session();animator=new ValueAnimator();animator.ended=()->finish();active=true;c.addTransition(this);cell.beginEnterTransition(this);input.getEditField().setAlpha(0);input.setTextTransitionIsRunning(true);}
+        @@TEXT_START@@
+        @@TEXT_VALID@@
+        @@TEXT_FINISH@@
+        @@TEXT_CANCEL@@
+        void tick(ValueAnimator valueAnimator){ChatActivityEnterView chatActivityEnterView=enterView;@@TEXT_UPDATE@@}
+        public void onDraw(Canvas canvas){@@TEXT_DRAW_GUARD@@draws++;}
+    }
+    static class VoiceMessageEnterTransition implements MessageEnterTransitionContainer.Transition{
+        boolean finished;ChatMessageCell messageView;MessageObject currentMessageObject;MessageEnterTransitionContainer container;ValueAnimator animator;ChatActivityEnterView.RecordCircle recordCircle;float progress;int draws,messageId,radiusDraws;
+        VoiceMessageEnterTransition(MessageEnterTransitionContainer c,ChatMessageCell cell,ChatActivityEnterView.RecordCircle circle){container=c;messageView=cell;currentMessageObject=cell.getMessageObject();messageId=currentMessageObject.stableId;recordCircle=circle;animator=new ValueAnimator();animator.ended=()->finish();c.addTransition(this);cell.beginEnterTransition(this);if(circle!=null){circle.skipDraw=true;circle.voiceEnterTransitionInProgress=true;}}
+        @@VOICE_START@@
+        @@VOICE_VALID@@
+        @@VOICE_FINISH@@
+        @@VOICE_CANCEL@@
+        void tick(ValueAnimator valueAnimator){@@VOICE_UPDATE@@}
+        public void onDraw(Canvas canvas){@@VOICE_DRAW_GUARD@@draws++;}
+        void radiusDraw(float toRadius){@@VOICE_RADIUS_GUARD@@radiusDraws++;check(Float.isFinite(1/toRadius),"voice division finite after radius guard");}
+    }
+
+    static class ChatMessageCell extends View {
+        private Object enterTransitionOwner;boolean enterTransitionInProgress;MessageObject message=new MessageObject();final TransitionParams params=new TransitionParams();boolean attached=true;
+        ChatMessageCell(){super(new Context());}
+        @@CELL_SET@@
+        @@CELL_BEGIN@@
+        @@CELL_OWNS@@
+        @@CELL_FINISH@@
+        MessageObject getMessageObject(){return message;}boolean isAttachedToWindow(){return attached;}TransitionParams getTransitionParams(){return params;}
+        int getBackgroundDrawableLeft(){return 1;}int getBackgroundDrawableTop(){return 2;}int getBackgroundDrawableRight(){return 3;}int getBackgroundDrawableBottom(){return 4;}
+    }
+    static class TransitionParams{final Rect lastDrawingBackgroundRect=new Rect();}
+    static class Rect{int sets;void set(int a,int b,int c,int d){sets++;}}
+    static class MessageObject{int stableId=1;}
+    static class ChatActivity{boolean current=true;final View replyName=new View(new Context()),replyObject=new View(new Context());boolean canAnimateLunagramIncomingMessages(){return current;}View getReplyNameTextView(){return replyName;}View getReplyObjectTextView(){return replyObject;}}
+    static class ChatActivityEnterView extends View{final View edit=new View(new Context());boolean running;int writes;ChatActivityEnterView(){super(new Context());}View getEditField(){return edit;}void setTextTransitionIsRunning(boolean value){running=value;writes++;}static class RecordCircle extends View{boolean skipDraw,voiceEnterTransitionInProgress;RecordCircle(){super(new Context());}}}
+    static class Session{boolean current=true;boolean isCurrent(){return current;}}
+    static class LunagramMediaAccess{static class Session extends OutgoingLifecycleProbe.Session{}}
+    static class NotificationsLocker{int unlocks;void unlock(){unlocks++;}}
+    static class AnimatedEmojiSpan{static int releases;static void release(Object a,Object b){releases++;}}
+    static class Bitmap{boolean recycled;void recycle(){recycled=true;}boolean isRecycled(){return recycled;}}
+    static class SharedConfig{static boolean animations=true;static boolean animationsEnabled(){return animations;}}
+    static class AndroidUtilities{static float scale=1;static float getAnimatorDurationScale(){return scale;}}
+    static class ApplicationLoader{static boolean mainInterfacePaused;}
+    static class UserConfig{static int selectedAccount;}
+    static class Build{static class VERSION{static int SDK_INT=35;}}
+    static class ValueAnimator {
+        static boolean enabled=true;boolean running;int cancels,starts;Runnable ended;float value;
+        static boolean areAnimatorsEnabled(){return enabled;}void start(){running=true;starts++;}boolean isRunning(){return running;}boolean isStarted(){return running;}
+        void cancel(){cancels++;running=false;if(ended!=null)ended.run();}void end(){running=false;if(ended!=null)ended.run();}Object getAnimatedValue(){return value;}
+    }
+    static class DummyTransition implements MessageEnterTransitionContainer.Transition{
+        final MessageEnterTransitionContainer container;int draws,cancels;boolean selfCancelOnDraw;
+        DummyTransition(MessageEnterTransitionContainer c){container=c;c.addTransition(this);}
+        public void onDraw(Canvas c){draws++;if(selfCancelOnDraw)cancel();}public void cancel(){cancels++;container.removeTransition(this);}
+    }
+    static class Context{}
+    static class Canvas{}
+    static class View {
+        static final int GONE=8,VISIBLE=0;final Context context;int visibility=VISIBLE,invalidations,alphaWrites;float alpha=1;boolean attached=true;
+        View(Context c){context=c;}Context getContext(){return context;}void setVisibility(int v){visibility=v;}int getVisibility(){return visibility;}void invalidate(){invalidations++;}
+        protected void onDraw(Canvas c){}protected void onDetachedFromWindow(){attached=false;}boolean isAttachedToWindow(){return attached;}void setAlpha(float v){alpha=v;alphaWrites++;}
+    }
+    static class ViewGroup extends View{ViewGroup(Context c){super(c);}}
+    static class NotificationCenter {
+        static final NotificationCenter instance=new NotificationCenter();final ArrayList<Runnable>jobs=new ArrayList<>();static NotificationCenter getInstance(int a){return instance;}
+        void removeDelayed(Runnable r){jobs.removeIf(v->v==r);}void doOnIdle(Runnable r){jobs.add(r);}void flush(){ArrayList<Runnable>copy=new ArrayList<>(jobs);jobs.clear();for(Runnable r:copy)r.run();}
+    }
+}

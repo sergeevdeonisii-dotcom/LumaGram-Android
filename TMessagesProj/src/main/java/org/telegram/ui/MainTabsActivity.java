@@ -44,6 +44,7 @@ import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.Emoji;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LunagramExperienceSettings;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
@@ -80,6 +81,7 @@ import org.telegram.ui.Components.blur3.source.BlurredBackgroundSourceRenderNode
 import org.telegram.ui.Components.chat.ViewPositionWatcher;
 import org.telegram.ui.Components.glass.GlassTabView;
 import org.telegram.ui.Stories.recorder.HintView2;
+import org.telegram.ui.Wallet.WalletActivity;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -89,20 +91,34 @@ import me.vkryl.android.animator.FactorAnimator;
 
 public class MainTabsActivity extends ViewPagerActivity implements NotificationCenter.NotificationCenterDelegate, FactorAnimator.Target {
 
-    public static final int TABS_COUNT = 4;
-    private static final int POSITION_CHATS = 0;
-    private static final int POSITION_CONTACTS = 1;
-    private static final int POSITION_CALLS_OR_SETTINGS = 2;
-    private static final int POSITION_PROFILE = 3;
+    public static final int TABS_COUNT = 5;
+    private static final int POSITION_CALLS = 0;
+    private static final int POSITION_CHATS = 1;
+    private static final int POSITION_FEED = 2;
+    private static final int POSITION_SETTINGS = 3;
+    private static final int POSITION_PROFILE = 4;
 
     private static final int INDEX_CHATS = 0;
-    private static final int INDEX_CONTACTS = 1;
-    private static final int INDEX_SETTINGS = 2;
-    private static final int INDEX_CALLS = 3;
-    private static final int INDEX_PROFILE = 4;
+    private static final int INDEX_FEED = 1;
+    private static final int INDEX_CONTACTS = 2;
+    private static final int INDEX_SETTINGS = 3;
+    private static final int INDEX_CALLS = 4;
+    private static final int INDEX_PROFILE = 5;
 
-    private static int indexToPosition(int index) {
-        return index > 2 ? index - 1 : index;
+    private boolean feedTabVisible = true;
+    private boolean dialogsTabsVisible = true;
+    private int logicalToPosition(int logical) {
+        if (!feedTabVisible && logical == POSITION_FEED) return -1;
+        return logical - (!feedTabVisible && logical > POSITION_FEED ? 1 : 0);
+    }
+    private int positionToLogical(int position) { return position + (!feedTabVisible && position >= POSITION_FEED ? 1 : 0); }
+    private int indexToPosition(int index) {
+        if (index == INDEX_CHATS) return logicalToPosition(POSITION_CHATS);
+        if (index == INDEX_FEED) return logicalToPosition(POSITION_FEED);
+        if (index == INDEX_CALLS) return logicalToPosition(POSITION_CALLS);
+        if (index == INDEX_SETTINGS) return logicalToPosition(POSITION_SETTINGS);
+        if (index == INDEX_PROFILE) return logicalToPosition(POSITION_PROFILE);
+        return -1;
     }
 
     private static final int ANIMATOR_ID_TABS_VISIBLE = 0;
@@ -116,6 +132,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     private UpdateLayoutWrapper updateLayoutWrapper;
     private FrameLayout tabsViewWrapper;
     private MainTabsLayout tabsView;
+    private android.widget.ImageView bottomSearchCircle;
+    private BlurredBackgroundDrawable bottomSearchBackground;
     private BlurredBackgroundDrawable tabsViewBackground;
     private View fadeView;
 
@@ -235,7 +253,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         return ColorUtils.blendARGB(
                 getThemedColor(Theme.key_windowBackgroundGray),
                 getThemedColor(Theme.key_windowBackgroundWhite),
-                viewPager != null ? viewPager.getPositionVisibility(0) : 1);
+                viewPager != null ? viewPager.getPositionVisibility(logicalToPosition(POSITION_CHATS)) : 1);
     }
 
     private boolean tabletLayout;
@@ -271,6 +289,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     @Override
     public void onResume() {
         super.onResume();
+        syncFeedVisibility();
+        updateTabsVisibility(false);
         blur3_updateColors();
         checkContactsTabBadge();
         checkUnreadCount(true);
@@ -308,29 +328,34 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         tabsView = new MainTabsLayout(context, resourceProvider);
         tabsView.setClipChildren(false);
         tabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4));
-        tabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));
+        tabsView.setMaxWidth(dp(368 + DialogsActivity.MAIN_TABS_MARGIN * 2));
 
-        tabs = new GlassTabView[5];
+        tabs = new GlassTabView[6];
         tabs[INDEX_CHATS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CHATS, R.string.MainTabsChats);
+        tabs[INDEX_FEED] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.ARTICLE, R.string.LunagramFeed);
         tabs[INDEX_CONTACTS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CONTACTS, R.string.MainTabsContacts);
         tabs[INDEX_SETTINGS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.SETTINGS, R.string.Settings);
         tabs[INDEX_CALLS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CALLS, R.string.MainTabsCalls);
         tabs[INDEX_PROFILE] = GlassTabView.createAvatar(context, resourceProvider, currentAccount, R.string.MainTabsProfile);
         tabs[INDEX_CHATS].setOnLongClickListener(this::openFoldersSelector);
+        tabs[INDEX_FEED].setOnLongClickListener(this::openFeedSelector);
         tabs[INDEX_CONTACTS].setOnLongClickListener(this::openContactsSelector);
         tabs[INDEX_CALLS].setOnLongClickListener(this::openCallsSelector);
         tabs[INDEX_PROFILE].setOnLongClickListener(this::openAccountSelector);
 
         tabsView.addTabToIgnoreClick(tabs[INDEX_CHATS]);
+        tabsView.addTabToIgnoreClick(tabs[INDEX_FEED]);
         tabsView.addTabToIgnoreClick(tabs[INDEX_CONTACTS]);
         tabsView.addTabToIgnoreClick(tabs[INDEX_PROFILE]);
         tabsView.addTabToIgnoreClick(tabs[INDEX_CALLS]);
 
-        for (int index = 0; index < tabs.length; index++) {
+        for (int index : new int[] { INDEX_CALLS, INDEX_CHATS, INDEX_FEED, INDEX_SETTINGS, INDEX_PROFILE }) {
             final GlassTabView view = tabs[index];
 
-            final int position = indexToPosition(index);
+            final int tabIndex = index;
             tabs[index].setOnClickListener(v -> {
+                final int position = indexToPosition(tabIndex);
+                if (position < 0) return;
                 if (viewPager.isManualScrolling() || viewPager.isTouch()) {
                     return;
                 }
@@ -351,6 +376,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             tabsView.setViewVisible(view, true, false);
         }
         checkUi_callTabVisible(getUserConfig().showCallsTab, false);
+        tabsView.setViewVisible(tabs[INDEX_FEED], feedTabVisible, false);
 
         selectTab(viewPager.getCurrentPosition(), false);
 
@@ -381,7 +407,32 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
         tabsViewWrapper = new FrameLayout(context);
         tabsViewWrapper.setOnClickListener(v -> {});
-        tabsViewWrapper.addView(tabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
+        tabsViewWrapper.addView(tabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS, Gravity.BOTTOM | Gravity.RIGHT, 74, 0, 4, 0));
+        android.widget.ImageView searchCircle = bottomSearchCircle = new android.widget.ImageView(context);
+        searchCircle.setImageResource(R.drawable.outline_header_search);
+        searchCircle.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+        searchCircle.setColorFilter(getThemedColor(Theme.key_glass_defaultIcon));
+        bottomSearchBackground = iBlur3FactoryGlass.create(searchCircle, BlurredBackgroundProviderImpl.mainTabs(resourceProvider));
+        bottomSearchBackground.setRadius(dp(DialogsActivity.MAIN_TABS_HEIGHT / 2f));
+        bottomSearchBackground.setThickness(dp(14));
+        bottomSearchBackground.setIntensity(0.94f);
+        searchCircle.setBackground(bottomSearchBackground);
+        searchCircle.setContentDescription(getString(R.string.Search));
+        org.telegram.ui.Components.ScaleStateListAnimator.apply(searchCircle);
+        searchCircle.setOnClickListener(v -> {
+            BaseFragment current = getCurrentVisibleFragment();
+            if (current instanceof DialogsActivity) {
+                ((DialogsActivity) current).openLunagramSearch();
+            } else {
+                selectTab(logicalToPosition(POSITION_CHATS), true);
+                viewPager.scrollToPosition(logicalToPosition(POSITION_CHATS));
+                AndroidUtilities.runOnUIThread(() -> {
+                    BaseFragment chats = getCurrentVisibleFragment();
+                    if (chats instanceof DialogsActivity) ((DialogsActivity) chats).openLunagramSearch();
+                }, 350);
+            }
+        });
+        tabsViewWrapper.addView(searchCircle, LayoutHelper.createFrame(DialogsActivity.MAIN_TABS_HEIGHT, DialogsActivity.MAIN_TABS_HEIGHT, Gravity.LEFT | Gravity.BOTTOM, 8, 0, 0, DialogsActivity.MAIN_TABS_MARGIN));
         tabsViewWrapper.setClipToPadding(false);
         contentView.addView(tabsViewWrapper, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM));
 
@@ -431,6 +482,38 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         o.setScrimViewBackground(bg);
         o.show();
         return true;
+    }
+
+    public boolean openFeedSelector(View anchor) {
+        if (getContext() == null || getParentActivity() == null) return false;
+        ItemOptions.makeOptions(this, anchor)
+                .add(R.drawable.msg_archive_hide, getString(R.string.LunagramFeedHideTab),
+                        () -> LunagramExperienceSettings.setFeedVisible(currentAccount, false))
+                .setBlur(true).show();
+        return true;
+    }
+
+    private void syncFeedVisibility() {
+        boolean visible = LunagramExperienceSettings.feedVisible(currentAccount);
+        if (visible == feedTabVisible) return;
+        int logical = viewPager == null ? POSITION_CHATS : positionToLogical(viewPager.getCurrentPosition());
+        for (int position = fragmentsArr.size() - 1; position >= 0; position--) {
+            int key = fragmentsArr.keyAt(position);
+            if (key != POSITION_CHATS) dropFragmentAtPosition(key);
+        }
+        feedTabVisible = visible;
+        if (tabsView != null) tabsView.setViewVisible(tabs[INDEX_FEED], visible, false);
+        if (viewPager != null) {
+            int target = logical == POSITION_FEED && !visible ? POSITION_CHATS : logicalToPosition(logical);
+            viewPager.setPosition(Math.max(0, target));
+            viewPager.rebuild(false);
+            selectTab(viewPager.getCurrentPosition(), false);
+        }
+        updateTabsVisibility(false);
+    }
+
+    private void updateTabsVisibility(boolean animated) {
+        animatorTabsVisible.setValue(viewPager == null || viewPager.getCurrentPosition() != POSITION_CHATS || dialogsTabsVisible, animated);
     }
 
     public boolean openCallsSelector(View anchor) {
@@ -726,6 +809,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     @Override
     protected void onViewPagerScrollEnd() {
+        updateTabsVisibility(true);
         if (tabsView != null) {
             selectTab(viewPager.getCurrentPosition(), true);
             setGestureSelectedOverride(0, false);
@@ -734,12 +818,12 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
         if (viewPager != null) {
             final int currentPosition = viewPager.getCurrentPosition();
-            if (currentPosition != POSITION_CALLS_OR_SETTINGS && dropCallsFragmentAfterPageScroll) {
-                dropFragmentAtPosition(POSITION_CALLS_OR_SETTINGS);
+            if (currentPosition != logicalToPosition(POSITION_CALLS) && dropCallsFragmentAfterPageScroll) {
+                dropFragmentAtPosition(logicalToPosition(POSITION_CALLS));
                 dropCallsFragmentAfterPageScroll = false;
             }
-            if (currentPosition != POSITION_PROFILE) {
-                dropFragmentAtPosition(POSITION_PROFILE);
+            if (currentPosition != logicalToPosition(POSITION_PROFILE)) {
+                dropFragmentAtPosition(logicalToPosition(POSITION_PROFILE));
             }
             if (pendingFolderId != null && currentPosition == POSITION_CHATS && dialogsActivity != null) {
                 dialogsActivity.scrollToFolder(pendingFolderId);
@@ -769,7 +853,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     @Override
     protected int getFragmentsCount() {
-        return TABS_COUNT;
+        return feedTabVisible ? TABS_COUNT : TABS_COUNT - 1;
     }
 
     @Override
@@ -808,19 +892,15 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     @Override
     protected BaseFragment createBaseFragmentAt(int position) {
-        if (position == POSITION_CONTACTS) {
+        position = positionToLogical(position);
+        if (position == POSITION_FEED) {
+            return new LunagramFeedActivity(currentAccount);
+        } else if (position == POSITION_CALLS) {
             Bundle args = new Bundle();
-            args.putBoolean("needPhonebook", true);
             args.putBoolean("needFinishFragment", false);
             args.putBoolean("hasMainTabs", true);
-            return new ContactsActivity(args);
-        } else if (position == POSITION_CALLS_OR_SETTINGS) {
-            if (getUserConfig().showCallsTab) {
-                Bundle args = new Bundle();
-                args.putBoolean("needFinishFragment", false);
-                args.putBoolean("hasMainTabs", true);
-                return new CallLogActivity(args);
-            }
+            return new CallLogActivity(args);
+        } else if (position == POSITION_SETTINGS) {
             Bundle args = new Bundle();
             args.putBoolean("hasMainTabs", true);
             return new SettingsActivity(args);
@@ -960,6 +1040,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.notificationsCountUpdated || id == NotificationCenter.updateInterfaces) {
+            if (id == NotificationCenter.updateInterfaces) syncFeedVisibility();
             checkUnreadCount(fragmentView != null && fragmentView.isAttachedToWindow());
         } else if (id == NotificationCenter.appUpdateLoading) {
             if (updateLayout != null) {
@@ -995,12 +1076,12 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         } else if (id == NotificationCenter.callTabsVisibleToggled) {
             final boolean callTabsVisible = getUserConfig().showCallsTab;
             checkUi_callTabVisible(callTabsVisible, true);
-            if (viewPager != null && viewPager.getCurrentPosition() == POSITION_CALLS_OR_SETTINGS) {
+            if (viewPager != null && viewPager.getCurrentPosition() == logicalToPosition(POSITION_CALLS)) {
                 viewPager.scrollToPosition(POSITION_CHATS);
                 selectTab(POSITION_CHATS, true);
                 dropCallsFragmentAfterPageScroll = true;
             } else {
-                dropFragmentAtPosition(POSITION_CALLS_OR_SETTINGS);
+                dropFragmentAtPosition(logicalToPosition(POSITION_CALLS));
             }
         } else if (id == NotificationCenter.mainUserInfoChanged) {
             if (tabs != null && tabs[INDEX_PROFILE] != null) {
@@ -1015,6 +1096,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     @Override
     public boolean onFragmentCreate() {
+        feedTabVisible = LunagramExperienceSettings.feedVisible(currentAccount);
         observersGroup = NotificationCenter.getInstance(currentAccount)
             .createObserversGroup(this)
             .add(NotificationCenter.fileLoaded)
@@ -1059,7 +1141,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         }
 
         final float animatedPosition = viewPager.getPositionAnimated();
-        final float isProfile = 1f - MathUtils.clamp(Math.abs(POSITION_PROFILE - animatedPosition), 0, 1);
+        final float isProfile = 1f - MathUtils.clamp(Math.abs(logicalToPosition(POSITION_PROFILE) - animatedPosition), 0, 1);
         final float hide = 1f - AndroidUtilities.getNavigationBarThirdButtonsFactor(0, 1f, navigationBarHeight);
         float alpha = (1f - isProfile * hide) * animatorTabsVisible.getFloatValue();
         if (tabletLayout) {
@@ -1081,16 +1163,19 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         final float scale = lerp(0.85f, 1f, factor);
 
         tabsViewWrapper.setTranslationY(lerp(hiddenY, normalY, factor));
-        tabsView.setClickable(factor > 1);
-        tabsView.setEnabled(factor > 1);
+        tabsView.setClickable(factor > .99f);
+        tabsView.setEnabled(factor > .99f);
         tabsView.setAlpha(factor);
         tabsView.setVisibility(factor > 0 ? View.VISIBLE : View.GONE);
+        bottomSearchCircle.setAlpha(factor);
+        bottomSearchCircle.setVisibility(factor > 0 ? View.VISIBLE : View.GONE);
+        bottomSearchCircle.setEnabled(factor > .99f);
     }
 
     private void checkUi_callTabVisible(boolean callTabsVisible, boolean animated) {
         if (tabsView != null) {
-            tabsView.setViewVisible(tabs[INDEX_SETTINGS], !callTabsVisible, animated);
-            tabsView.setViewVisible(tabs[INDEX_CALLS], callTabsVisible, animated);
+            tabsView.setViewVisible(tabs[INDEX_SETTINGS], true, animated);
+            tabsView.setViewVisible(tabs[INDEX_CALLS], true, animated);
         }
     }
 
@@ -1101,6 +1186,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         ThemeDescription.ThemeDescriptionDelegate cellDelegate = this::blur3_updateColors;
         themeDescriptions.add(new ThemeDescription(null, 0, null, null, null, cellDelegate, Theme.key_windowBackgroundWhite));
         themeDescriptions.add(new ThemeDescription(null, 0, null, null, null, cellDelegate, Theme.key_dialogBackground));
+        themeDescriptions.add(new ThemeDescription(null, 0, null, null, null, cellDelegate, Theme.key_glass_targetMainTabs));
+        themeDescriptions.add(new ThemeDescription(null, 0, null, null, null, cellDelegate, Theme.key_glass_defaultIcon));
 
         return themeDescriptions;
     }
@@ -1110,7 +1197,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     private class MainTabsActivityControllerImpl implements MainTabsActivityController {
         @Override
         public void setTabsVisible(boolean visible) {
-            animatorTabsVisible.setValue(visible, true);
+            dialogsTabsVisible = visible;
+            updateTabsVisibility(true);
         }
     }
 
@@ -1217,6 +1305,11 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         blur3_updateFadeColors();
         if (tabsViewBackground != null) {
             tabsViewBackground.updateColors();
+        }
+        if (bottomSearchBackground != null) bottomSearchBackground.updateColors();
+        if (bottomSearchCircle != null) {
+            bottomSearchCircle.setColorFilter(getThemedColor(Theme.key_glass_defaultIcon));
+            bottomSearchCircle.invalidate();
         }
         blur3_invalidateBlur();
         if (fadeView != null) {

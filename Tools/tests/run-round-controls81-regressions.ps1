@@ -43,8 +43,8 @@ $generated=Join-Path (Split-Path $classes) 'CameraRates81Test.java'
 if($LASTEXITCODE -ne 0){throw 'Camera rate-selection compilation failed.'}
 & $java -Xmx128m -cp $classes org.telegram.messenger.CameraRates81Test
 if($LASTEXITCODE -ne 0){throw 'Camera rate-selection regressions failed.'}
-$modern=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/camera/roundvideo/RoundVideoCameraController.java'))
-$session=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/camera/roundvideo/RoundVideoSession.java'))
+$modern=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/recorder/round/RoundVideoCameraController.java'))
+$session=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/recorder/round/RoundVideoSession.java'))
 $methods=@('private FrameRatePlan resolveFrameRate(', 'private FrameRatePlan resolveLowerFrameRate(', 'private static boolean supportsFrameDuration(',
     'private static Range<Integer> findBestFpsRange(', 'private static Size[] filterSizesForFrameRate(',
     'private static OutputPair chooseOutputPair(', 'private static OutputPair chooseTierPair(',
@@ -73,7 +73,7 @@ $configured=Method $modern 'public void onConfigured('
 if($configured.IndexOf('submitRepeatingRequest();') -gt $configured.IndexOf('notifySwitchCompletion = false;')) {
     throw 'A rejected capture request must not consume camera-switch completion.'
 }
-$gl=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/camera/roundvideo/RoundVideoGlProcessor.java'))
+$gl=[IO.File]::ReadAllText((Join-Path $repo 'TMessagesProj/src/main/java/org/telegram/utils/recorder/round/RoundVideoGlProcessor.java'))
 foreach($guard in @('overlayRenderer.setHorizon(', 'horizonLock.correction(frontCamera, cameraTimestampRealtime ? timestamp : 0L)',
     'previewGate = new LumaRoundVideoQuality.FrameGate(targetFps, sourceFps)', 'gate.accept(timestamp, frontCamera ? 1 : 0)',
     'overlayRenderer.renderRawCameraToOutput(textureId, textureMatrix, outputSize, outputSize)',

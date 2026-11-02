@@ -1,0 +1,133 @@
+import java.util.*;
+import org.telegram.messenger.LunagramIncomingAnimation;
+import org.telegram.messenger.LunagramSendEffectGeometry;
+
+/** Production queue/math/helper and cell wrappers; Android drawing calls are recorded, not rendered. */
+public final class IncomingAnimationProbe {
+    static int checks;
+    static void check(boolean ok, String label) { checks++; if (!ok) throw new AssertionError(label); }
+    static void near(float actual, float expected, String label) { check(Float.isFinite(actual) && Math.abs(actual-expected)<.0002f,label); }
+    public static void main(String[] args) {
+        queue(); geometry(); letters(); material(); wrappers();
+        System.out.println("PASS "+checks+" incoming queue, geometry, draw-helper and actual cell-wrapper assertions; no device/pixel/FPS claim");
+    }
+    static void queue() {
+        LunagramIncomingAnimation q = new LunagramIncomingAnimation();
+        for(int id:new int[]{Integer.MIN_VALUE,-1,0}) { q.register(id,0); check(!q.consume(id,0),"invalid message IDs rejected"); }
+        q.register(1,100);
+        check(q.consume(1,100),"fresh arrival consumed");
+        check(!q.consume(1,100),"arrival consumed once");
+        q.register(2,200);q.register(2,1399);
+        check(!q.consume(2,1400),"duplicate does not refresh TTL");
+        q.register(3,2000);check(q.consume(3,3199),"arrival valid until TTL boundary");
+        q.register(3,4000);check(!q.consume(3,5200),"arrival expires at TTL boundary");
+        q.register(4,6000);check(!q.consume(4,5999),"clock rollback invalidates pending arrival");
+        for(int id=1;id<=LunagramIncomingAnimation.MAX_PENDING+4;id++)q.register(id,7000);
+        for(int id=1;id<=4;id++)check(!q.consume(id,7000),"pending queue evicts oldest");
+        for(int id=5;id<=LunagramIncomingAnimation.MAX_PENDING+4;id++)check(q.consume(id,7000),"pending queue retains bounded newest IDs");
+        q.register(8,8000);q.clear();check(!q.consume(8,8000),"pause clear removes pending IDs");
+        q.register(9,9000);q.register(10,10200);check(!q.consume(9,10200)&&q.consume(10,10200),"register prunes expired entries");
+    }
+    static void geometry() {
+        check(LunagramIncomingAnimation.duration(1)==460&&LunagramIncomingAnimation.duration(2)==420&&LunagramIncomingAnimation.duration(3)==540,"bounded effect-specific duration");
+        for(float p:new float[]{Float.NaN,Float.NEGATIVE_INFINITY,-1,0,.001f,.25f,.5f,.9f,1,2,Float.POSITIVE_INFINITY}) {
+            near(LunagramIncomingAnimation.progress(p),LunagramSendEffectGeometry.clamp(p),"incoming progress matches shared clamp");
+            float v=LunagramIncomingAnimation.eased(p);check(Float.isFinite(v)&&v>=0&&v<=1,"finite eased progress");
+        }
+        near(LunagramIncomingAnimation.eased(0),0,"layout easing starts at offset");near(LunagramIncomingAnimation.eased(1),1,"layout easing ends at native position");
+        float previous=0;
+        for(int step=0;step<=1000;step++){float now=LunagramIncomingAnimation.eased(step/1000f);check(now>=previous,"layout easing monotone");previous=now;}
+    }
+    static void letters() {
+        String[] values={"", "hello", "a\u0301b", "\uD83D\uDE00x", "\uD83D\uDC69\u200D\uD83D\uDCBBz", "\uD83C\uDDE7\uD83C\uDDFEz", "\uD83D\uDC4D\uD83C\uDFFD!", "abc\r\ndef", "مرحبا بالعالم", "שלום 123", "one\ntwo"};
+        for(String text:values) {
+            MessageObject message=new MessageObject(text);LunagramIncomingMessageEffect effect=new LunagramIncomingMessageEffect(message,1,null);StaticLayout layout=new StaticLayout(text);
+            int[] stops=LunagramSendEffectGeometry.boundaries(text);
+            for(int i=0;i<=99;i++) {
+                float p=i/100f;effect.setProgress(p);Canvas c=new Canvas();effect.clipText(c,layout);
+                int expected=LunagramSendEffectGeometry.revealEnd(stops,Math.min(1,p/.9f));
+                check(c.clips==1&&c.clipEnd==expected,"letters use grapheme-safe shared reveal");
+                check(c.clipStart==0,"letters reveal starts at text origin");
+                check(c.clipEnd==0||c.clipEnd==text.length()||!Character.isLowSurrogate(text.charAt(c.clipEnd)),"letters never split surrogate pair");
+                check(message.messageText.equals(text)&&layout.getText()==text,"draw helper never mutates text");
+            }
+            effect.setProgress(1);Canvas done=new Canvas();effect.clipText(done,layout);check(done.clips==0,"completed letters do not clip");
+            check(effect.matches(message)&&!effect.matches(new MessageObject(text)),"effect belongs to exact message object");
+        }
+        SpanText text=new SpanText("ABCDE",1,4);LunagramIncomingMessageEffect spanEffect=new LunagramIncomingMessageEffect(new MessageObject(text),1,null);
+        spanEffect.setProgress(.40f);Canvas spanCanvas=new Canvas();spanEffect.clipText(spanCanvas,new StaticLayout(text));
+        check(spanCanvas.clipEnd==4,"replacement span revealed as one indivisible unit");
+        Canvas noLayout=new Canvas();spanEffect.clipText(noLayout,null);check(noLayout.clips==0,"missing layout safe");
+        for(int effectId:new int[]{0,2,3}){Canvas c=new Canvas();new LunagramIncomingMessageEffect(new MessageObject("abc"),effectId,null).clipText(c,new StaticLayout("abc"));check(c.clips==0,"non-letter effects preserve text clipping");}
+    }
+    static void material() {
+        for(int effectId:new int[]{2,3}) for(int step=0;step<=100;step++) {
+            float p=step/100f;ChatMessageCell cell=new ChatMessageCell();LunagramIncomingMessageEffect effect=new LunagramIncomingMessageEffect(new MessageObject("hello"),effectId,null);effect.setProgress(p);
+            Canvas c=new Canvas();int save=c.save();boolean body=effect.beginDraw(c,cell,true);
+            if(effectId==2){check(body,"drop keeps body draw path");near(c.firstTranslateY,LunagramSendEffectGeometry.dropY(p),"drop matches outgoing trajectory");near(c.lastScale,LunagramSendEffectGeometry.dropScale(p),"drop matches outgoing scale");check(c.lastAlpha==(int)(255*Math.min(1,p/.16f)),"drop alpha bounded onset");}
+            else {check(body==(LunagramSendEffectGeometry.arrival(p)>0),"plane body waits until arrival");check(c.drawableDraws==(p<.60f?1:0),"plane only drawn during flight phase");}
+            c.restoreToCount(save);check(c.depth==0,"caller can restore all helper layers");
+            check(c.finite,"helper coordinates remain finite");
+        }
+        LunagramIncomingMessageEffect plane=new LunagramIncomingMessageEffect(new MessageObject("x"),3,null);plane.setProgress(.2f);Canvas c=new Canvas();int save=c.save();check(!plane.beginDraw(c,new ChatMessageCell(),false)&&c.drawableDraws==0,"outbound path never duplicates plane");c.restoreToCount(save);check(c.depth==0,"early plane frame canvas balanced");
+        for(float p:new float[]{Float.NaN,Float.NEGATIVE_INFINITY,Float.POSITIVE_INFINITY})for(int id:new int[]{1,2,3}){LunagramIncomingMessageEffect effect=new LunagramIncomingMessageEffect(new MessageObject("x"),id,null);effect.setProgress(p);Canvas v=new Canvas();int s=v.save();effect.beginDraw(v,new ChatMessageCell(),true);v.restoreToCount(s);check(v.finite&&v.depth==0,"invalid progress is clamped safely");}
+    }
+    static void wrappers() {
+        ActualCell cell=new ActualCell();cell.currentMessageObject=new MessageObject("hello");
+        LunagramIncomingMessageEffect drop=new LunagramIncomingMessageEffect(cell.currentMessageObject,2,null);drop.setProgress(.4f);cell.setLunagramIncomingEffect(drop);cell.nestedOutbound=true;
+        Canvas c=new Canvas();cell.drawInternal(c);check(c.depth==0&&!cell.drawingLunagramIncoming&&cell.bodyDraws==1&&cell.outboundDraws==1,"cell wrapper balances nested drawing");check(c.scales==1,"nested outbound content not transformed twice");
+        cell.throwBody=true;c=new Canvas();boolean thrown=false;try{cell.drawInternal(c);}catch(IllegalStateException expected){thrown=true;}check(thrown&&c.depth==0&&!cell.drawingLunagramIncoming,"cell wrapper restores canvas on draw failure");cell.throwBody=false;
+        cell.alpha=.2f;cell.scaleX=.5f;cell.scaleY=.7f;cell.translationY=30;cell.transitionParams.messageEntering=true;cell.setLunagramIncomingEffect(null);
+        check(cell.alpha==1&&cell.scaleX==1&&cell.scaleY==1&&cell.translationY==0&&!cell.transitionParams.messageEntering,"effect cleanup restores native cell presentation");
+        cell.setLunagramIncomingEffect(drop);cell.currentMessageObject=new MessageObject("different");c=new Canvas();cell.drawInternal(c);check(cell.lunagramIncomingEffect==null&&c.scales==0,"recycled cell discards old effect before drawing");
+        LunagramIncomingMessageEffect plane=new LunagramIncomingMessageEffect(cell.currentMessageObject,3,null);plane.setProgress(.2f);cell.setLunagramIncomingEffect(plane);int before=cell.bodyDraws;c=new Canvas();cell.drawInternal(c);check(cell.bodyDraws==before&&c.drawableDraws==1&&c.depth==0,"early plane cell frame has no premature bubble");
+        c=new Canvas();cell.drawOutboundsContent(c);check(c.depth==0&&c.drawableDraws==0,"external outbound wrapper avoids duplicate flight icon");
+    }
+    @@HELPER@@
+    static class ActualCell extends ChatMessageCell {
+        private LunagramIncomingMessageEffect lunagramIncomingEffect;
+        private boolean drawingLunagramIncoming;
+        MessageObject currentMessageObject;
+        boolean throwBody,nestedOutbound;
+        int bodyDraws,outboundDraws;
+        @@SET_EFFECT@@
+        @@HAS_EFFECT@@
+        @@DRAW_INTERNAL@@
+        @@DRAW_OUTBOUND@@
+        void drawInternalContent(Canvas c){bodyDraws++;if(throwBody)throw new IllegalStateException("fixture draw failure");if(nestedOutbound)drawOutboundsContent(c);}
+        void drawOutboundsContentInternal(Canvas c){outboundDraws++;}
+    }
+    static class MessageObject {final CharSequence messageText;MessageObject(CharSequence text){messageText=text;}}
+    static class ChatMessageCell {
+        float alpha=1,scaleX=1,scaleY=1,translationY;final Transition transitionParams=new Transition();final Context context=new Context();
+        int getBackgroundDrawableLeft(){return 20;}int getBackgroundDrawableRight(){return 240;}int getBackgroundDrawableTop(){return 10;}int getWidth(){return 300;}int getHeight(){return 90;}
+        Context getContext(){return context;}void setAlpha(float v){alpha=v;}void setScaleX(float v){scaleX=v;}void setScaleY(float v){scaleY=v;}void setTranslationY(float v){translationY=v;}void invalidate(){}
+    }
+    static class Transition{boolean messageEntering;}
+    static class Context{Resources getResources(){return new Resources();}}
+    static class Resources{Drawable getDrawable(int id){return new Drawable();}}
+    static class Drawable{int alpha;Drawable mutate(){return this;}void setColorFilter(PorterDuffColorFilter f){}void setBounds(int a,int b,int c,int d){}void setAlpha(int value){alpha=value;check(value>=0&&value<=255,"plane alpha bounded");}void draw(Canvas c){c.drawableDraws++;}}
+    static class PorterDuff{enum Mode{SRC_IN}}
+    static class PorterDuffColorFilter{PorterDuffColorFilter(int c,PorterDuff.Mode m){}}
+    static class R{static class drawable{static final int msg_send=1;}}
+    static class Theme{interface ResourcesProvider{}static final int key_chat_messagePanelSend=1;static int getColor(int k,ResourcesProvider p){return 0xff336699;}}
+    static class AndroidUtilities{static int dp(float v){return Math.round(v);}static float dpf2(float v){return v;}}
+    static class CubicBezierInterpolator{static final CubicBezierInterpolator EASE_OUT_QUINT=new CubicBezierInterpolator();float getInterpolation(float t){return 1-(float)Math.pow(1-t,5);}}
+    static class Path{int start,end;void reset(){start=end=0;}}
+    static class StaticLayout{final CharSequence text;StaticLayout(CharSequence t){text=t;}CharSequence getText(){return text;}void getSelectionPath(int start,int end,Path p){check(start>=0&&end>=start&&end<=text.length(),"selection path indices bounded");p.start=start;p.end=end;}}
+    abstract static class ReplacementSpan{}
+    interface Spanned extends CharSequence{<T>T[]getSpans(int start,int end,Class<T>type);int getSpanEnd(Object span);}
+    static class SpanText implements Spanned {
+        final String text;final int start,end;final ReplacementSpan span=new ReplacementSpan(){};SpanText(String t,int s,int e){text=t;start=s;end=e;}
+        public int length(){return text.length();}public char charAt(int i){return text.charAt(i);}public CharSequence subSequence(int s,int e){return text.subSequence(s,e);}
+        public <T>T[]getSpans(int s,int e,Class<T>type){T[]v=(T[])java.lang.reflect.Array.newInstance(type,e>start&&s<end?1:0);if(v.length>0)v[0]=type.cast(span);return v;}public int getSpanEnd(Object v){return end;}
+    }
+    static class Canvas {
+        int depth,clips,clipStart,clipEnd,scales,lastAlpha=-1,drawableDraws,translates;float firstTranslateY,lastScale=1;boolean finite=true;
+        int save(){return depth++;}void restoreToCount(int count){check(count>=0&&count<=depth,"valid canvas restore token");depth=count;}
+        void translate(float x,float y){if(translates++==0)firstTranslateY=y;finite&=Float.isFinite(x)&&Float.isFinite(y);}
+        void scale(float x,float y,float cx,float cy){scales++;lastScale=x;finite&=Float.isFinite(x)&&Float.isFinite(y)&&Float.isFinite(cx)&&Float.isFinite(cy);}
+        void rotate(float a){finite&=Float.isFinite(a);}int saveLayerAlpha(float a,float b,float c,float d,int alpha){check(alpha>=0&&alpha<=255,"layer alpha bounded");lastAlpha=alpha;return depth++;}
+        void clipPath(Path path){clips++;clipStart=path.start;clipEnd=path.end;}
+    }
+}

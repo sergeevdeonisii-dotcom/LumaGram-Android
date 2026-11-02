@@ -40,6 +40,7 @@ if(!$SkipNegativeControls) {
         @{Name='history-not-access';Class='LunagramSubscriptionAccess';Before='current(entry) && !entry.authorizationRevoked && entry.lease != null';After='current(entry) && entry.lease != null'},
         @{Name='shared-observation';Class='LunagramSubscriptionClient';Before='requireCurrentObservation(state);';After='/* broken shared admission */'},
         @{Name='persisted-observation';Class='LunagramSubscriptionClient';Before='requireNotOlder(state, stored);';After='/* broken durable admission */'}
+        @{Name='reminder-transition';Class='LunagramSubscriptionAccess';Before='Utilities.globalQueue.postRunnable(() -> LunagramMessageReminders.onAccessChanged(entry.account));';After='/* missing queued reminder transition */'}
     )
     foreach($mutation in $mutations) {
         $original=Join-Path $repo ('TMessagesProj/src/main/java/org/telegram/messenger/'+$mutation.Class+'.java')
@@ -57,7 +58,7 @@ if(!$SkipNegativeControls) {
         [IO.File]::WriteAllLines((Join-Path $dir 'expected-failure.txt'),[string[]]$negativeOutput)
         if($negativeExit -eq 0 -or ($negativeOutput -join "`n") -notmatch 'AssertionError') {throw "Negative control did not fail behaviorally: $($mutation.Name)"}
     }
-    Write-Host 'PASS: eleven independently compiled negative controls reject broken offline, revoke, restoring, privacy, expiry, owner and durable-admission guards.'
+    Write-Host 'PASS: twelve independently compiled negative controls reject broken offline, revoke, restoring, privacy, expiry, owner, durable-admission and reminder-transition guards.'
 }
 if($AndroidJar) {
     if(!(Test-Path -LiteralPath $AndroidJar)){throw 'Android SDK jar does not exist.'}

@@ -25,7 +25,7 @@ public class BuildVars {
     public static boolean CHECK_UPDATES = true;
     public static boolean NO_SCOPED_STORAGE = Build.VERSION.SDK_INT <= 29;
     public static String BUILD_VERSION_STRING = BuildConfig.BUILD_VERSION_STRING;
-    public static final String TELEGRAM_BASE_VERSION = "12.10.6";
+    public static final String TELEGRAM_BASE_VERSION = "13.1.1";
     /** Optional built-in channel; users can override it in Settings > Luma Updates. */
     public static String LUMA_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/sergeevdeonisii-dotcom/LumaGram-Android/main/updates/latest.json";
 

@@ -745,6 +745,25 @@ public class FileLoader extends BaseController {
         return fileName != null && loadOperationPathsUI.containsKey(fileName);
     }
 
+    /** Read-only cross-account check. Destructive callers must run on getFileLoaderQueue(). */
+    public static boolean isFileBusyForLunagramTools(File file) {
+        if (file == null) return true;
+        try {
+            File canonical = file.getCanonicalFile();
+            for (FileLoader loader : Instance) {
+                if (loader == null) continue;
+                if (loader.loadOperationPathsUI.containsKey(file.getName()) || loader.loadOperationPaths.containsKey(file.getName())) return true;
+                for (String path : loader.uploadOperationPaths.keySet()) if (canonical.equals(new File(path).getCanonicalFile())) return true;
+                for (String path : loader.uploadOperationPathsEnc.keySet()) if (canonical.equals(new File(path).getCanonicalFile())) return true;
+                for (FileLoadOperation operation : loader.loadOperationPaths.values()) {
+                    File target = operation.getCacheFileFinal();
+                    if (target != null && canonical.equals(target.getCanonicalFile())) return true;
+                }
+            }
+            return false;
+        } catch (Exception unavailable) { return true; }
+    }
+
     public float getBufferedProgressFromPosition(final float position, final String fileName) {
         if (TextUtils.isEmpty(fileName)) {
             return 0;
@@ -1169,6 +1188,14 @@ public class FileLoader extends BaseController {
             loadOperationPathsUI.put(fileName, uiObject);
         }
         fileLoaderQueue.postRunnable(runnable);
+    }
+
+    // Holds the stream open for a player that is about to be created, so the first requests
+    // go out while the viewer is built; the player's own stream joins the same operation.
+    private static final FileLoadOperationStream pendingPlayerStream = () -> {};
+
+    public void startVideoStream(TLRPC.Document document, Object parentObject) {
+        fileLoaderQueue.postRunnable(() -> loadFileInternal(document, null, null, null, null, parentObject, null, 0, FileStreamLoadOperation.getStreamPrioriy(document), pendingPlayerStream, 0, false, 0));
     }
 
     protected FileLoadOperation loadStreamFile(final FileLoadOperationStream stream, final TLRPC.Document document, final ImageLocation location, final Object parentObject, final long offset, final boolean priority, int loadingPriority) {

@@ -131,6 +131,10 @@ public class ActionBarMenuItem extends FrameLayout {
 
         }
 
+        /** Called after the search container's own fade has actually completed. */
+        public void onSearchCollapseFinished() {
+        }
+
         public void onTextChanged(EditText editText) {
         }
 
@@ -972,16 +976,30 @@ public class ActionBarMenuItem extends FrameLayout {
             }
             searchContainerAnimator.setDuration(150);
             searchContainerAnimator.addListener(new AnimatorListenerAdapter() {
+                private boolean cancelled;
+
+                @Override
+                public void onAnimationCancel(Animator animation) {
+                    cancelled = true;
+                }
+
                 @Override
                 public void onAnimationEnd(Animator animation) {
+                    if (cancelled || searchContainerAnimator != animation || searchContainer.getTag() != null) {
+                        return;
+                    }
                     searchContainer.setAlpha(0);
                     for (int i = 0; i < menuIcons.size(); i++) {
                         menuIcons.get(i).setAlpha(1f);
                     }
                     searchContainer.setVisibility(View.GONE);
+                    searchContainerAnimator = null;
+                    if (listener != null) {
+                        listener.onSearchCollapseFinished();
+                    }
                 }
             });
-            searchContainerAnimator.start();
+            final AnimatorSet closingAnimator = searchContainerAnimator;
 
             searchField.clearFocus();
             setVisibility(VISIBLE);
@@ -997,6 +1015,11 @@ public class ActionBarMenuItem extends FrameLayout {
             }
             if (listener != null) {
                 listener.onSearchCollapse();
+            }
+            // Order matters when system animations are disabled: completion
+            // may be synchronous, but must still follow onSearchCollapse().
+            if (searchContainerAnimator == closingAnimator && searchContainer.getTag() == null) {
+                closingAnimator.start();
             }
             if (openKeyboard) {
                 AndroidUtilities.hideKeyboard(searchField);
@@ -2416,6 +2439,7 @@ public class ActionBarMenuItem extends FrameLayout {
         public CharSequence text;
         public boolean dismiss, needCheck;
         public View viewToSwipeBack;
+        private Utilities.Callback0Return<View> swipeBackViewFactory;
         public int textSizeDp;
 
         private View view;
@@ -2512,6 +2536,10 @@ public class ActionBarMenuItem extends FrameLayout {
                 layoutParams.width = LayoutHelper.MATCH_PARENT;
                 layoutParams.height = AndroidUtilities.dp(48);
                 cell.setLayoutParams(layoutParams);
+                if (swipeBackViewFactory != null) {
+                    viewToSwipeBack = swipeBackViewFactory.run();
+                    swipeBackViewFactory = null;
+                }
                 int swipeBackIndex = parent.popupLayout.addViewToSwipeBack(viewToSwipeBack);
                 cell.openSwipeBackLayout = () -> {
                     if (parent.popupLayout.getSwipeBack() != null) {
@@ -2607,6 +2635,11 @@ public class ActionBarMenuItem extends FrameLayout {
     }
     public Item lazilyAddSwipeBackItem(int icon, Drawable iconDrawable, String text, View viewToSwipeBack) {
         return putLazyItem(Item.asSwipeBackItem(icon, iconDrawable, text, viewToSwipeBack));
+    }
+    public Item lazilyAddSwipeBackItem(int icon, Drawable iconDrawable, String text, Utilities.Callback0Return<View> viewFactory) {
+        Item item = Item.asSwipeBackItem(icon, iconDrawable, text, null);
+        item.swipeBackViewFactory = viewFactory;
+        return putLazyItem(item);
     }
     public Item lazilyAddSubItem(int id, int icon, CharSequence text) {
         return lazilyAddSubItem(id, icon, null, text, true, false);

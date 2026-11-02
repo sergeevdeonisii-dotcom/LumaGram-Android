@@ -9,9 +9,9 @@ import org.telegram.messenger.LumaRoundVideoStabilization;
 import org.telegram.messenger.MessagesController;
 import org.telegram.ui.RoundSettingsUiProbe;
 import org.telegram.ui.RoundSettingsNavigationProbe;
-import org.telegram.utils.camera.roundvideo.RoundVideoSession;
-import org.telegram.utils.camera.roundvideo.RoundVideoSession.OutputResolution;
-import org.telegram.utils.camera.roundvideo.RoundVideoSession.FrameRate;
+import org.telegram.utils.recorder.round.RoundVideoSession;
+import org.telegram.utils.recorder.round.RoundVideoSession.OutputResolution;
+import org.telegram.utils.recorder.round.RoundVideoSession.FrameRate;
 
 public final class RoundSettings100Test {
     private static int assertions;

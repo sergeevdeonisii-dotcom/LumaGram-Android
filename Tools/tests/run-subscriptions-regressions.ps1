@@ -23,17 +23,21 @@ if ($advanced -lt 0 -or $subscription -le $advanced -or $support -le $subscripti
 if ($settings -notmatch 'case LUNAGRAM_SUBSCRIPTION_ROW:\s*\{\s*BaseFragment screen = new LunagramSubscriptionActivity\(\);\s*screen.setCurrentAccount\(currentAccount\);\s*presentSettingFragment\(screen\)') {
     throw 'Subscription navigation must retain the selected Telegram account and native settings navigation.'
 }
-foreach ($required in @('UItem.asRadio2(', '.setChecked(plan == selectedPlan)',
+foreach ($required in @('private final Plan selectedPlan = Plan.ULTRA;', 'FeatureCell.Factory.of(', 'UItem.asCustomShadow(subscriptionHeader)',
         'PaymentMethod.TELEGRAM_STARS', 'PaymentMethod.CRYPTO_BOT_USDT', 'PaymentMethod.TON',
         'LunagramSubscriptionClient.purchaseUrl(selectedPlan, selectedPeriod)', 'client.isAuthenticated()',
-        'LunagramSubscriptionAccessInfo', 'LunagramSubscriptionUnavailableInfo', 'LunagramSubscriptionConnectToActivate',
+        'LunagramSubscriptionUltraIntro', 'LunagramSubscriptionUnavailableInfo', 'LunagramSubscriptionConnectToActivate',
         'field.setSaveEnabled(false)', 'IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS',
         'IME_FLAG_NO_PERSONALIZED_LEARNING', 'field.setText("")', 'Theme.key_windowBackgroundGray')) {
     if (!$screen.Contains($required)) { throw "Missing UI safety/native/accessibility guard: $required" }
 }
-if (($screen + $catalog) -match '(?i)https?://|ton://|tg://|SharedPreferences|FileLog|System\.out|android\.util\.Log|sendRequest\(|startActivity\(|setPremium\(|\.setSubscription\(') {
+if (($screen + $catalog) -match '(?i)ton://|tg://|SharedPreferences|FileLog|System\.out|android\.util\.Log|sendRequest\(|startActivity\(|setPremium\(|\.setSubscription\(') {
     throw 'Subscription UI must delegate trusted links/private sessions to the client, never log codes or grant Telegram entitlements.'
 }
+foreach($url in [regex]::Matches($screen + $catalog,'https?://[^"\s]+')) {
+    if($url.Value -ne 'https://t.me/CryptoBot?start='){throw 'Only the fixed, allowlisted CryptoBot payload prefix may be parsed in the screen.'}
+}
+if($screen.Contains('ROW_SELECT_PLAN') -or $screen.Contains('UItem.asRadio2(')){throw 'Removed tier picker must not return.'}
 if ($screen -match 'LumaGhostMode|BlackHoleVault|LunagramSubscriptionAccess\.canUse') {
     throw 'Selecting a plan must not itself mutate runtime access or privacy settings; the authority owns access.'
 }
@@ -42,13 +46,16 @@ New-Item -ItemType Directory -Path $run -Force | Out-Null
 if ($Aapt2 -and !(Test-Path -LiteralPath $Aapt2)) { throw 'The provided Android resource compiler does not exist.' }
 foreach ($locale in @('values', 'values-ru')) {
     $strings = [IO.File]::ReadAllText((Join-Path $repo "TMessagesProj/src/main/res/$locale/strings.xml"))
-    foreach ($key in ([regex]::Matches($screen + $settings, 'R\.string\.(LunagramSubscription\w+)') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)) {
-        if (!$strings.Contains('name="' + $key + '"')) { throw "Missing $locale subscription resource: $key" }
+    foreach($dedicated in Get-ChildItem -LiteralPath (Join-Path $repo "TMessagesProj/src/main/res/$locale") -Filter 'lunagram_*.xml') {
+        $strings += [IO.File]::ReadAllText($dedicated.FullName)
+    }
+    foreach ($key in ([regex]::Matches($screen + $settings, 'R\.string\.((?:LunagramSubscription|LulPlan)\w+)') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)) {
+        if ([regex]::Matches($strings,'name="'+[regex]::Escape($key)+'"').Count -ne 1) { throw "Missing/duplicate $locale subscription resource: $key" }
     }
     if ($Aapt2) {
         # Compile the new resources independently: upstream strings include legacy
         # formatting handled by the full Gradle resource merge, outside this probe.
-        $selected = [regex]::Matches($strings, '<string name="LunagramSubscription\w+"[^>]*>.*?</string>', 'Singleline')
+        $selected = [regex]::Matches($strings, '<string name="(?:LunagramSubscription|LulPlan)\w+"[^>]*>.*?</string>', 'Singleline')
         $names = @($selected | ForEach-Object { [regex]::Match($_.Value, 'name="([^"]+)"').Groups[1].Value })
         if ($selected.Count -lt 48 -or (@($names | Sort-Object -Unique).Count -ne $names.Count)) { throw "Missing or duplicate subscription resources in $locale" }
         $resourceDir = Join-Path $run "res/$locale"

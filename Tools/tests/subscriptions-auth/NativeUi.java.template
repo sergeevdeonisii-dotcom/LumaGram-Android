@@ -17,6 +17,31 @@ public final class LocaleController {
 package org.telegram.messenger.browser;
 public final class Browser {
     public static void openUrl(android.content.Context context,String url,boolean allowCustom) {}
+    public static boolean openAsInternalIntent(android.content.Context context,String url) { return true; }
+}
+// FILE: org/telegram/messenger/MessagesController.java
+package org.telegram.messenger;
+public final class MessagesController {
+    public void openByUserName(String username,org.telegram.ui.ActionBar.BaseFragment fragment,int type) {}
+    public UserNameResolver getUserNameResolver() { return null; }
+    public org.telegram.tgnet.TLRPC.User getUser(long id) { return null; }
+    public boolean checkCanOpenChat(android.os.Bundle args,org.telegram.ui.ActionBar.BaseFragment fragment) { return true; }
+}
+// FILE: org/telegram/messenger/UserNameResolver.java
+package org.telegram.messenger;
+public final class UserNameResolver {
+    public interface Callback { void run(Long peerId); }
+    public Runnable resolve(String username,String referrer,boolean force,Callback callback) { return null; }
+}
+// FILE: org/telegram/tgnet/TLRPC.java
+package org.telegram.tgnet;
+public final class TLRPC {
+    public static final class User { public long id; public boolean bot,deleted; }
+}
+// FILE: org/telegram/ui/ChatActivity.java
+package org.telegram.ui;
+public final class ChatActivity extends org.telegram.ui.ActionBar.BaseFragment {
+    public ChatActivity(android.os.Bundle args) {}
 }
 // FILE: org/telegram/ui/ActionBar/Theme.java
 package org.telegram.ui.ActionBar;
@@ -49,7 +74,10 @@ public class BaseFragment {
     public void onFragmentDestroy() {}
     public android.view.View createView(android.content.Context context) { return null; }
     public android.app.Activity getParentActivity() { return null; }
+    public org.telegram.messenger.MessagesController getMessagesController() { return null; }
     public void finishFragment() {}
+    public void setCurrentAccount(int account) { currentAccount=account; }
+    public boolean presentFragment(BaseFragment fragment) { return true; }
     public android.app.Dialog showDialog(android.app.Dialog dialog) { return dialog; }
     public android.app.Dialog showDialog(android.app.Dialog dialog,android.app.Dialog.OnDismissListener listener) { return dialog; }
 }

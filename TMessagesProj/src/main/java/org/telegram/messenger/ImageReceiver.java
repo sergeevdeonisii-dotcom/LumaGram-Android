@@ -226,6 +226,10 @@ public class ImageReceiver implements NotificationCenter.NotificationCenterDeleg
     public final static int DEFAULT_CROSSFADE_DURATION = 150;
 
     private int currentAccount;
+    private boolean lunagramPeerAvatar;
+    private static final ThreadLocal<Paint> lunagramAvatarPaints = new ThreadLocal<Paint>() {
+        @Override protected Paint initialValue() { return new Paint(Paint.ANTI_ALIAS_FLAG); }
+    };
     private View parentView;
     private Runnable parentRunnable;
 
@@ -513,6 +517,8 @@ public class ImageReceiver implements NotificationCenter.NotificationCenterDeleg
 
     }
 
+    public void setLunagramPeerAvatar(boolean peerAvatar) { lunagramPeerAvatar = peerAvatar; }
+
     public static File getAvatarLocalFile(int currentAccount, TLObject obj) {
         try {
             final String ext = "jpg";
@@ -570,6 +576,11 @@ public class ImageReceiver implements NotificationCenter.NotificationCenterDeleg
     }
 
     public void setImage(ImageLocation mediaLocation, String mediaFilter, ImageLocation imageLocation, String imageFilter, ImageLocation thumbLocation, String thumbFilter, Drawable thumb, long size, String ext, Object parentObject, int cacheType) {
+        lunagramPeerAvatar = parentObject instanceof TLRPC.User || parentObject instanceof TLRPC.Chat
+                || imageLocation != null && imageLocation.photoPeer != null
+                || thumbLocation != null && thumbLocation.photoPeer != null
+                || mediaLocation != null && mediaLocation.photoPeer != null
+                || thumb instanceof AvatarDrawable;
         if (allowLoadingOnAttachedOnly && !attachedToWindow) {
             if (setImageBackup == null) {
                 setImageBackup = new SetImageBackup();
@@ -878,6 +889,7 @@ public class ImageReceiver implements NotificationCenter.NotificationCenterDeleg
     }
 
     public void setImageBitmap(Drawable bitmap) {
+        lunagramPeerAvatar = bitmap instanceof AvatarDrawable || bitmap instanceof VectorAvatarThumbDrawable;
         ImageLoader.getInstance().cancelLoadingForImageReceiver(this, true);
 
         if (crossfadeWithOldImage) {
@@ -1880,6 +1892,27 @@ public class ImageReceiver implements NotificationCenter.NotificationCenterDeleg
     }
 
     public boolean draw(Canvas canvas, BackgroundThreadDrawHolder backgroundThreadDrawHolder) {
+        if ((backgroundThreadDrawHolder == null ? lunagramPeerAvatar : backgroundThreadDrawHolder.lunagramPeerAvatar)
+                && LunagramStreamerMode.isEnabled(currentAccount)) {
+            float x = backgroundThreadDrawHolder == null ? imageX : backgroundThreadDrawHolder.imageX;
+            float y = backgroundThreadDrawHolder == null ? imageY : backgroundThreadDrawHolder.imageY;
+            float w = backgroundThreadDrawHolder == null ? imageW : backgroundThreadDrawHolder.imageW;
+            float h = backgroundThreadDrawHolder == null ? imageH : backgroundThreadDrawHolder.imageH;
+            float alpha = backgroundThreadDrawHolder == null ? overrideAlpha : backgroundThreadDrawHolder.overrideAlpha;
+            if (!isVisible || canvas == null || w <= 0 || h <= 0 || alpha <= 0) return true;
+            Paint lunagramAvatarPaint = lunagramAvatarPaints.get();
+            float radius = Math.min(w, h) / 2f;
+            float cx = x + w / 2f, cy = y + h / 2f;
+            // Generic silhouette contains no identity-derived initials or color.
+            lunagramAvatarPaint.setColor(0xff6b879e);
+            lunagramAvatarPaint.setAlpha((int) (255 * alpha));
+            canvas.drawCircle(cx, cy, radius, lunagramAvatarPaint);
+            lunagramAvatarPaint.setColor(Color.WHITE);
+            lunagramAvatarPaint.setAlpha((int) (220 * alpha));
+            canvas.drawCircle(cx, cy - radius * .28f, radius * .25f, lunagramAvatarPaint);
+            canvas.drawOval(cx - radius * .47f, cy + radius * .05f, cx + radius * .47f, cy + radius * .62f, lunagramAvatarPaint);
+            return true;
+        }
         boolean result = false;
         if (gradientBitmap != null && currentImageKey != null) {
             canvas.save();
@@ -3323,6 +3356,7 @@ public class ImageReceiver implements NotificationCenter.NotificationCenterDeleg
         holder.imageW = imageW;
         holder.imageH = imageH;
         holder.overrideAlpha = overrideAlpha;
+        holder.lunagramPeerAvatar = lunagramPeerAvatar;
         return holder;
     }
 
@@ -3347,6 +3381,7 @@ public class ImageReceiver implements NotificationCenter.NotificationCenterDeleg
     }
 
     public static class BackgroundThreadDrawHolder {
+        private boolean lunagramPeerAvatar;
         public boolean animationNotReady;
         public float overrideAlpha;
         public long time;
