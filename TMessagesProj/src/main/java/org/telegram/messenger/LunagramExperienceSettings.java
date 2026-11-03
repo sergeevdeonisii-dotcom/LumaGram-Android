@@ -13,11 +13,6 @@ public final class LunagramExperienceSettings {
         LumaAccountData.preferences(account).edit().putString("experience.planLabel", normalizePlanLabel(value)).apply();
         NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_NAME);
     }
-    public static int planLabelColor(int account) { return LumaAccountData.preferences(account).getInt("experience.planLabelColor", 0xffb9a0ff); }
-    public static void setPlanLabelColor(int account, int value) {
-        LumaAccountData.preferences(account).edit().putInt("experience.planLabelColor", value | 0xff000000).apply();
-        NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_NAME);
-    }
     public static boolean searchButtonOnRight(int account) { return LumaAccountData.preferences(account).getBoolean("experience.searchButtonOnRight", false); }
     public static void setSearchButtonOnRight(int account, boolean value) {
         LumaAccountData.preferences(account).edit().putBoolean("experience.searchButtonOnRight", value).apply();

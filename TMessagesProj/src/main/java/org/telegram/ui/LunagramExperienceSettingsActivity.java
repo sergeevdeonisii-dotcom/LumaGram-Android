@@ -25,7 +25,6 @@ import org.telegram.ui.Cells.TextCheckCell;
 import org.telegram.ui.Cells.TextDetailCell;
 import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.LayoutHelper;
-import org.telegram.ui.Components.Paint.ColorPickerBottomSheet;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalRecyclerView;
@@ -98,7 +97,6 @@ public final class LunagramExperienceSettingsActivity extends BaseFragment imple
             items.add(TextDetailCell.Factory.of(12, text(R.string.LunagramIncomingEffectTitle), incomingNames()[LunagramExperienceSettings.incomingEffect(currentAccount)]));
             items.add(UItem.asCheck(13, text(R.string.LunagramShowPlanInDialogsHeader)).setChecked(LunagramExperienceSettings.showPlanInDialogsHeader(currentAccount)));
             items.add(TextDetailCell.Factory.of(15, text(R.string.LunagramPlanHeaderLabel), LunagramExperienceSettings.planLabel(currentAccount)));
-            items.add(TextDetailCell.Factory.of(16, text(R.string.LunagramPlanHeaderColor), String.format(java.util.Locale.ROOT, "#%06X", LunagramExperienceSettings.planLabelColor(currentAccount) & 0x00ffffff)));
             items.add(TextDetailCell.Factory.of(17, text(R.string.LunagramSearchCircleSide), text(LunagramExperienceSettings.searchButtonOnRight(currentAccount) ? R.string.LunagramSearchCircleRight : R.string.LunagramSearchCircleLeft)));
             items.add(UItem.asCheck(14, text(R.string.LunagramShowDialogQuickActions)).setChecked(LunagramExperienceSettings.showDialogQuickActions(currentAccount)));
             items.add(UItem.asCheck(10, text(R.string.LunagramFeedShowTab)).setChecked(LunagramExperienceSettings.feedVisible(currentAccount)));
@@ -142,15 +140,6 @@ public final class LunagramExperienceSettingsActivity extends BaseFragment imple
         if (feature != null && !LunagramFeatureGate.require(this, feature)) return;
         if (item.id == 15) {
             editPlanHeaderLabel();
-        } else if (item.id == 16) {
-            ColorPickerBottomSheet picker = new ColorPickerBottomSheet(getParentActivity(), null)
-                    .setColor(LunagramExperienceSettings.planLabelColor(currentAccount))
-                    .setColorListener(color -> {
-                        if (!currentOwner()) return;
-                        LunagramExperienceSettings.setPlanLabelColor(currentAccount, color);
-                        list.adapter.update(false);
-                    });
-            picker.show();
         } else if (item.id == 17) {
             String[] sides = { text(R.string.LunagramSearchCircleLeft), text(R.string.LunagramSearchCircleRight) };
             int selected = LunagramExperienceSettings.searchButtonOnRight(currentAccount) ? 1 : 0;

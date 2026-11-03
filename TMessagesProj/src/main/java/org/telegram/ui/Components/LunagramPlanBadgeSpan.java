@@ -3,6 +3,7 @@ package org.telegram.ui.Components;
 import static org.telegram.messenger.AndroidUtilities.dp;
 
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.text.style.ReplacementSpan;
@@ -12,15 +13,13 @@ import androidx.annotation.Nullable;
 
 /** Compact rounded label used for the optional Lunagram plan badge in the dialogs header. */
 public final class LunagramPlanBadgeSpan extends ReplacementSpan {
-    private final int color;
     private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint outlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF bounds = new RectF();
 
-    public LunagramPlanBadgeSpan(int color) {
-        this.color = color | 0xff000000;
-        fillPaint.setColor((this.color & 0x00ffffff) | 0x26000000);
-        outlinePaint.setColor((this.color & 0x00ffffff) | 0x66000000);
+    public LunagramPlanBadgeSpan() {
+        fillPaint.setColor(Color.WHITE);
+        outlinePaint.setColor(0x33000000);
         outlinePaint.setStyle(Paint.Style.STROKE);
         outlinePaint.setStrokeWidth(dp(0.8f));
     }
@@ -45,7 +44,7 @@ public final class LunagramPlanBadgeSpan extends ReplacementSpan {
         canvas.drawRoundRect(bounds, radius, radius, outlinePaint);
 
         final int originalColor = paint.getColor();
-        paint.setColor(color);
+        paint.setColor(Color.BLACK);
         canvas.drawText(text, start, end, left, baseline, paint);
         paint.setColor(originalColor);
     }

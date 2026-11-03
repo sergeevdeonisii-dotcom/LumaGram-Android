@@ -11826,7 +11826,6 @@
     <string name="LunagramShowPlanInDialogsHeader">Show plan name beside Lunagram in the chat list</string>
     <string name="LunagramPlanHeaderLabel">Plan label text</string>
     <string name="LunagramPlanHeaderLabelHint">Ultra, PRO, PRO+ (up to 8 characters)</string>
-    <string name="LunagramPlanHeaderColor">Plan label color</string>
     <string name="LunagramSearchCircleSide">Search button side</string>
     <string name="LunagramSearchCircleLeft">Left</string>
     <string name="LunagramSearchCircleRight">Right</string>
