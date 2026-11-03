@@ -222,8 +222,8 @@ public final class LunagramExperienceSettingsActivity extends BaseFragment imple
         AlertDialog dialog = new AlertDialog.Builder(getParentActivity())
                 .setTitle(text(R.string.LunagramPlanHeaderLabel))
                 .setView(content)
-                .setNegativeButton(R.string.Cancel, null)
-                .setPositiveButton(R.string.OK, (d, which) -> {
+                .setNegativeButton(text(R.string.Cancel), null)
+                .setPositiveButton(text(R.string.OK), (d, which) -> {
                     if (!currentOwner()) return;
                     LunagramExperienceSettings.setPlanLabel(currentAccount, input.getText().toString());
                     if (list != null) list.adapter.update(false);
