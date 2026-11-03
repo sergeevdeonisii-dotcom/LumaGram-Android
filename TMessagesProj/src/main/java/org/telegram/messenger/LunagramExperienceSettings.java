@@ -4,7 +4,48 @@ package org.telegram.messenger;
 public final class LunagramExperienceSettings {
     private LunagramExperienceSettings() { }
     public static boolean showPlanInDialogsHeader(int account) { return LumaAccountData.preferences(account).getBoolean("experience.showPlanInDialogsHeader", true); }
-    public static void setShowPlanInDialogsHeader(int account, boolean value) { LumaAccountData.preferences(account).edit().putBoolean("experience.showPlanInDialogsHeader", value).apply(); }
+    public static void setShowPlanInDialogsHeader(int account, boolean value) {
+        LumaAccountData.preferences(account).edit().putBoolean("experience.showPlanInDialogsHeader", value).apply();
+        NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_NAME);
+    }
+    public static String planLabel(int account) { return normalizePlanLabel(LumaAccountData.preferences(account).getString("experience.planLabel", "Ultra")); }
+    public static void setPlanLabel(int account, String value) {
+        LumaAccountData.preferences(account).edit().putString("experience.planLabel", normalizePlanLabel(value)).apply();
+        NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_NAME);
+    }
+    public static int planLabelColor(int account) { return LumaAccountData.preferences(account).getInt("experience.planLabelColor", 0xffb9a0ff); }
+    public static void setPlanLabelColor(int account, int value) {
+        LumaAccountData.preferences(account).edit().putInt("experience.planLabelColor", value | 0xff000000).apply();
+        NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_NAME);
+    }
+    public static boolean searchButtonOnRight(int account) { return LumaAccountData.preferences(account).getBoolean("experience.searchButtonOnRight", false); }
+    public static void setSearchButtonOnRight(int account, boolean value) {
+        LumaAccountData.preferences(account).edit().putBoolean("experience.searchButtonOnRight", value).apply();
+        NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_ALL);
+    }
+    private static String normalizePlanLabel(String value) {
+        if (value == null || value.isEmpty()) return "Ultra";
+        StringBuilder label = new StringBuilder(8);
+        int count = 0;
+        boolean previousWasSpace = true;
+        for (int offset = 0; offset < value.length() && count < 8;) {
+            int codePoint = value.codePointAt(offset);
+            offset += Character.charCount(codePoint);
+            if (Character.isWhitespace(codePoint)) {
+                if (!previousWasSpace) {
+                    label.append(' ');
+                    previousWasSpace = true;
+                    count++;
+                }
+            } else if (Character.isLetterOrDigit(codePoint) || codePoint == '+' || codePoint == '.' || codePoint == '-') {
+                label.appendCodePoint(codePoint);
+                previousWasSpace = false;
+                count++;
+            }
+        }
+        while (label.length() > 0 && label.charAt(label.length() - 1) == ' ') label.setLength(label.length() - 1);
+        return label.length() == 0 ? "Ultra" : label.toString();
+    }
     public static boolean showDialogQuickActions(int account) { return LumaAccountData.preferences(account).getBoolean("experience.showDialogQuickActions", true); }
     public static void setShowDialogQuickActions(int account, boolean value) { LumaAccountData.preferences(account).edit().putBoolean("experience.showDialogQuickActions", value).apply(); }
     public static boolean swipeEnabled(int account) { return allowed(account, LunagramFeatureCatalog.Feature.SWIPE_ACTIONS) && LumaAccountData.preferences(account).getBoolean("experience.swipe", true); }

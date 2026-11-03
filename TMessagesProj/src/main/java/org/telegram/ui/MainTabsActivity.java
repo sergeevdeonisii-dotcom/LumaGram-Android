@@ -134,6 +134,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     private MainTabsLayout tabsView;
     private android.widget.ImageView bottomSearchCircle;
     private BlurredBackgroundDrawable bottomSearchBackground;
+    private boolean bottomSearchPositionKnown;
+    private boolean bottomSearchPositionRight;
     private BlurredBackgroundDrawable tabsViewBackground;
     private View fadeView;
 
@@ -405,6 +407,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
         contentView.addView(fadeView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 0, Gravity.BOTTOM));
 
+        bottomSearchPositionKnown = false;
         tabsViewWrapper = new FrameLayout(context);
         tabsViewWrapper.setOnClickListener(v -> {});
         tabsViewWrapper.addView(tabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS, Gravity.BOTTOM | Gravity.RIGHT, 74, 0, 4, 0));
@@ -433,6 +436,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             }
         });
         tabsViewWrapper.addView(searchCircle, LayoutHelper.createFrame(DialogsActivity.MAIN_TABS_HEIGHT, DialogsActivity.MAIN_TABS_HEIGHT, Gravity.LEFT | Gravity.BOTTOM, 8, 0, 0, DialogsActivity.MAIN_TABS_MARGIN));
+        updateBottomSearchPosition();
         tabsViewWrapper.setClipToPadding(false);
         contentView.addView(tabsViewWrapper, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM));
 
@@ -461,6 +465,31 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         } else {
             tabs[INDEX_CHATS].setCounter(null, false, animated);
         }
+    }
+
+    private void updateBottomSearchPosition() {
+        if (bottomSearchCircle == null || bottomSearchCircle.getLayoutParams() == null) return;
+        final boolean onRight = LunagramExperienceSettings.searchButtonOnRight(currentAccount);
+        if (bottomSearchPositionKnown && bottomSearchPositionRight == onRight) return;
+        bottomSearchPositionKnown = true;
+        bottomSearchPositionRight = onRight;
+
+        if (tabsView != null && tabsView.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            final FrameLayout.LayoutParams tabsParams = (FrameLayout.LayoutParams) tabsView.getLayoutParams();
+            final int leftMargin = dp(onRight ? 4 : 74);
+            final int rightMargin = dp(onRight ? 74 : 4);
+            if (tabsParams.leftMargin != leftMargin || tabsParams.rightMargin != rightMargin) {
+                tabsParams.leftMargin = leftMargin;
+                tabsParams.rightMargin = rightMargin;
+                tabsView.setLayoutParams(tabsParams);
+            }
+        }
+        final FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) bottomSearchCircle.getLayoutParams();
+        params.gravity = (onRight ? Gravity.RIGHT : Gravity.LEFT) | Gravity.BOTTOM;
+        params.leftMargin = onRight ? 0 : dp(8);
+        params.rightMargin = onRight ? dp(8) : 0;
+        params.bottomMargin = dp(DialogsActivity.MAIN_TABS_MARGIN);
+        bottomSearchCircle.setLayoutParams(params);
     }
 
     public boolean openContactsSelector(View anchor) {
@@ -1040,7 +1069,10 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.notificationsCountUpdated || id == NotificationCenter.updateInterfaces) {
-            if (id == NotificationCenter.updateInterfaces) syncFeedVisibility();
+            if (id == NotificationCenter.updateInterfaces) {
+                syncFeedVisibility();
+                updateBottomSearchPosition();
+            }
             checkUnreadCount(fragmentView != null && fragmentView.isAttachedToWindow());
         } else if (id == NotificationCenter.appUpdateLoading) {
             if (updateLayout != null) {

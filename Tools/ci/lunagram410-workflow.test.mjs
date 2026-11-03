@@ -21,7 +21,7 @@ const manifest = `E: manifest (line=1)
     E: activity (line=10)
       A: android:name(0x01010003)="org.telegram.ui.LaunchActivity"
 `;
-const badging = "package: name='org.luma.liquid.web' versionCode='72049' versionName='4.1.0'\nnative-code: 'arm64-v8a'\n";
+const badging = "package: name='org.luma.liquid.web' versionCode='72059' versionName='4.1.0'\nnative-code: 'arm64-v8a'\n";
 function metadata() {
   return { schemaVersion: 2, release: '410', sourceCommit: commit, packageName: 'org.luma.liquid.web', architecture: 'arm64-v8a',
     temporarySigning: true, productionSigningRequired: true,
@@ -29,13 +29,13 @@ function metadata() {
     artifacts: [{ ...expectedArtifact('public', '410'), sha256: 'b'.repeat(64) }] };
 }
 
-test('410 is exactly one public 4.1.0/72049 APK, never a personal pair or a historical relabel', () => {
+test('410 is exactly one public 4.1.0/72059 APK, never a personal pair or a historical relabel', () => {
   assert.deepEqual(expectedEditions('410'), ['public']);
   assert.throws(() => expectedEditions('410', true));
   for (const edition of ['full', 'friends', 'personal', '', null]) assert.throws(() => expectedArtifact(edition, '410'));
   const expected = expectedArtifact('public', '410');
-  assert.deepEqual(expected, { edition: 'public', fileName: 'Lunagram-4.1.0-public-temporary.apk', versionName: '4.1.0', versionCode: 72049, friendsEdition: false, publicEdition: true });
-  const output = { applicationId: 'org.luma.liquid.web', elements: [{ versionName: '4.1.0', versionCode: 72049, outputFile: 'app.apk' }] };
+  assert.deepEqual(expected, { edition: 'public', fileName: 'Lunagram-4.1.0-public-temporary.apk', versionName: '4.1.0', versionCode: 72059, friendsEdition: false, publicEdition: true });
+  const output = { applicationId: 'org.luma.liquid.web', elements: [{ versionName: '4.1.0', versionCode: 72059, outputFile: 'app.apk' }] };
   assert.equal(validateOutputMetadata(output, 'public', '410'), 'app.apk');
   validateApkBadging(badging, 'public', '410');
   for (const stale of [badging.replace('72049', '72009'), badging.replace('4.1.0', '3.0.0'), badging.replace('72049', '71869'), badging.replace('4.1.0', '2.0.6'), badging + 'application-debuggable\n', badging.replace("'arm64-v8a'", "'arm64-v8a' 'x86_64'")]) {
@@ -101,7 +101,7 @@ test('only API credentials reach build; exact temporary outputs uploaded for thr
 
 test('builder has exact edition/version, bounded resources, pinned SDK and own-file secret cleanup', () => {
   for (const value of ['source_commit', 'GITHUB_SHA', 'git diff --quiet', 'git diff --cached --quiet',
-    "'-PAPP_VERSION_NAME=4.1.0'", "'-PAPP_VERSION_CODE=7204'", "'-PlumaFriendsEdition=false'", "'-PlumaPublicEdition=true'",
+    "'-PAPP_VERSION_NAME=4.1.0'", "'-PAPP_VERSION_CODE=7205'", "'-PlumaFriendsEdition=false'", "'-PlumaPublicEdition=true'",
     '-Xmx4g', '--no-parallel --max-workers=2', 'CMAKE_BUILD_PARALLEL_LEVEL=2',
     "'platforms;android-36'", "'build-tools;36.0.0'", "'ndk;27.2.12479018'", "'cmake;3.22.1'",
     'mktemp -d "$RUNNER_TEMP/lunagram410-signing.XXXXXX"', 'trap cleanup EXIT', "trap 'exit 143' TERM HUP",
@@ -111,7 +111,7 @@ test('builder has exact edition/version, bounded resources, pinned SDK and own-f
   assert.ok(build.includes('git check-ignore -q local-luma.properties'));
   const standalone = fs.readFileSync(new URL('../../TMessagesProj_AppStandalone/build.gradle', import.meta.url), 'utf8');
   assert.ok(standalone.includes('output.versionCodeOverride = defaultConfig.versionCode * 10 + variant.productFlavors.get(0).abiVersionCode'));
-  assert.equal(7204 * 10 + Number(standalone.match(/abiVersionCode = (\d+)/)?.[1]), 72049);
+  assert.equal(7205 * 10 + Number(standalone.match(/abiVersionCode = (\d+)/)?.[1]), 72059);
 });
 
 test('all focused tests are credential-free and explicitly portable, with no historical broad suite', () => {
@@ -180,6 +180,6 @@ test('410 upgrades delivered 300 and runs recording-dot, feed and search regress
     assert.ok(!/Join-Path \$JavaHome 'bin\/(java|javac)\.exe'/.test(runner), name);
   }
   const properties = fs.readFileSync(new URL('../../gradle.properties', import.meta.url), 'utf8');
-  assert.match(properties, /^APP_VERSION_CODE=7204$/m);
+  assert.match(properties, /^APP_VERSION_CODE=7205$/m);
   assert.match(properties, /^APP_VERSION_NAME=4\.1\.0$/m);
 });

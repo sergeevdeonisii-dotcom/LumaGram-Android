@@ -58,7 +58,6 @@ import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextPaint;
 import android.text.TextUtils;
-import android.text.style.ForegroundColorSpan;
 import android.util.LongSparseArray;
 import android.util.Property;
 import android.util.StateSet;
@@ -5660,9 +5659,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         SpannableStringBuilder title = new SpannableStringBuilder(brand);
         if (org.telegram.messenger.LunagramExperienceSettings.showPlanInDialogsHeader(currentAccount)
                 && org.telegram.messenger.LunagramSubscriptionAccess.hasActiveSubscription(currentAccount)) {
-            title.append(" Ultra");
-            int start = brand.length() + 1;
-            title.setSpan(new ForegroundColorSpan(Color.rgb(185, 160, 255)), start, title.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            title.append(' ');
+            int start = title.length();
+            title.append(org.telegram.messenger.LunagramExperienceSettings.planLabel(currentAccount));
+            title.setSpan(new org.telegram.ui.Components.LunagramPlanBadgeSpan(
+                    org.telegram.messenger.LunagramExperienceSettings.planLabelColor(currentAccount)),
+                    start, title.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
         actionBar.setTitle(title, statusDrawable);
         if (actionBar.getTitleTextView() != null) actionBar.getTitleTextView().setRightDrawableTopPadding(dp(1));
@@ -10639,6 +10641,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             updateProxyButton(false, false);
         } else if (id == NotificationCenter.updateInterfaces) {
             Integer mask = (Integer) args[0];
+            if ((mask & MessagesController.UPDATE_MASK_NAME) != 0) {
+                updateDialogsHeaderTitle();
+            }
             updateVisibleRows(mask);
             if (filterTabsView != null && filterTabsView.getVisibility() == View.VISIBLE && (mask & MessagesController.UPDATE_MASK_READ_DIALOG_MESSAGE) != 0) {
                 filterTabsView.checkTabsCounter();

@@ -15849,6 +15849,9 @@ public class ChatActivity extends BaseFragment implements
                     showHint = true;
                 }
 
+                final boolean compactEmojiReply = messageObjectToReply.type == MessageObject.TYPE_EMOJIS;
+                replyObjectTextView.setTextSize(compactEmojiReply ? 12 : 14);
+                replyObjectTextView.setText(null);
                 CharSequence replyObjectText = null;
                 CharSequence sourceText = null;
                 ArrayList<TLRPC.MessageEntity> entities = messageObjectToReply != null && messageObjectToReply.messageOwner != null ? messageObjectToReply.messageOwner.entities : null;
@@ -15885,8 +15888,11 @@ public class ChatActivity extends BaseFragment implements
                 } else if (messageObjectToReply.messageOwner.media instanceof TLRPC.TL_messageMediaGame) {
                     replyObjectText = Emoji.replaceEmoji(messageObjectToReply.messageOwner.media.game.title, replyObjectTextView.getPaint().getFontMetricsInt(), false);
                     sourceText = messageObjectToReply.messageOwner.media.game.title;
-                } else if (messageObjectToReply.messageText != null || messageObjectToReply.caption != null) {
-                    CharSequence mess = new SpannableStringBuilder(messageObjectToReply.caption != null ? messageObjectToReply.caption : messageObjectToReply.messageText);
+                } else if (messageObjectToReply.messageText != null || messageObjectToReply.caption != null
+                        || messageObjectToReply.messageOwner != null && !TextUtils.isEmpty(messageObjectToReply.messageOwner.message)) {
+                    CharSequence source = messageObjectToReply.caption != null ? messageObjectToReply.caption
+                            : messageObjectToReply.messageText != null ? messageObjectToReply.messageText : messageObjectToReply.messageOwner.message;
+                    CharSequence mess = new SpannableStringBuilder(source);
                     mess = FormattedDateSpan.restoreFormatedDateEntities(mess);
                     sourceText = mess;
                     if (mess.length() > 150) {
@@ -15905,6 +15911,9 @@ public class ChatActivity extends BaseFragment implements
                     }
 
                     replyObjectTextView.setText(AnimatedEmojiSpan.cloneSpans(replyObjectText, -1, replyObjectTextView.getPaint().getFontMetricsInt()));
+                }
+                if (compactEmojiReply) {
+                    replyObjectTextView.setTextSize(14);
                 }
                 updateBottomOverlay();
             } else if (messageObjectsToForward != null) {
