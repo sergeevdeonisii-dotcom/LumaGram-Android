@@ -38,7 +38,7 @@ test('410 is exactly one public 4.1.0/72059 APK, never a personal pair or a hist
   const output = { applicationId: 'org.luma.liquid.web', elements: [{ versionName: '4.1.0', versionCode: 72059, outputFile: 'app.apk' }] };
   assert.equal(validateOutputMetadata(output, 'public', '410'), 'app.apk');
   validateApkBadging(badging, 'public', '410');
-  for (const stale of [badging.replace('72049', '72009'), badging.replace('4.1.0', '3.0.0'), badging.replace('72049', '71869'), badging.replace('4.1.0', '2.0.6'), badging + 'application-debuggable\n', badging.replace("'arm64-v8a'", "'arm64-v8a' 'x86_64'")]) {
+  for (const stale of [badging.replace('72059', '72009'), badging.replace('4.1.0', '3.0.0'), badging.replace('72059', '71869'), badging.replace('4.1.0', '2.0.6'), badging + 'application-debuggable\n', badging.replace("'arm64-v8a'", "'arm64-v8a' 'x86_64'")]) {
     assert.throws(() => validateApkBadging(stale, 'public', '410'));
   }
 });
