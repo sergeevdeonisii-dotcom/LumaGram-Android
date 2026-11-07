@@ -374,13 +374,16 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
                 viewPager.scrollToPosition(position);
             });
 
+            view.setDrawSelectedBackground(false);
             tabsView.addView(tabs[index]);
             tabsView.setViewVisible(view, true, false);
         }
         checkUi_callTabVisible(getUserConfig().showCallsTab, false);
         tabsView.setViewVisible(tabs[INDEX_FEED], feedTabVisible, false);
+        updateTabPagePositions();
 
         selectTab(viewPager.getCurrentPosition(), false);
+        updateTabSelectorPosition();
 
         iBlur3SourceColor.setColor(getThemedColor(Theme.key_windowBackgroundWhite));
 
@@ -533,12 +536,16 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             if (key != POSITION_CHATS) dropFragmentAtPosition(key);
         }
         feedTabVisible = visible;
-        if (tabsView != null) tabsView.setViewVisible(tabs[INDEX_FEED], visible, false);
+        if (tabsView != null) {
+            tabsView.setViewVisible(tabs[INDEX_FEED], visible, false);
+            updateTabPagePositions();
+        }
         if (viewPager != null) {
             int target = logical == POSITION_FEED && !visible ? POSITION_CHATS : logicalToPosition(logical);
             viewPager.setPosition(Math.max(0, target));
             viewPager.rebuild(false);
             selectTab(viewPager.getCurrentPosition(), false);
+            updateTabSelectorPosition();
         }
         updateTabsVisibility(false);
     }
@@ -843,6 +850,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         updateTabsVisibility(true);
         if (tabsView != null) {
             selectTab(viewPager.getCurrentPosition(), true);
+            tabsView.setActiveTabPagePosition(viewPager.getCurrentPosition());
             setGestureSelectedOverride(0, false);
         }
         blur3_invalidateBlur();
@@ -870,6 +878,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
         if (tabsView != null) {
             final float position = viewPager.getPositionAnimated();
+            tabsView.setActiveTabPagePosition(position);
             setGestureSelectedOverride(position, isDragByGesture);
             if (isDragByGesture) {
                 selectTab(Math.round(position), true);
@@ -974,6 +983,21 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             tabs[index].setGestureSelectedOverride(visibility, allow);
         }
         tabsView.invalidate();
+    }
+
+    private void updateTabPagePositions() {
+        if (tabsView == null || tabs == null) return;
+        for (int index = 0; index < tabs.length; index++) {
+            if (tabs[index] != null) {
+                tabsView.setTabPagePosition(tabs[index], indexToPosition(index));
+            }
+        }
+    }
+
+    private void updateTabSelectorPosition() {
+        if (tabsView != null && viewPager != null) {
+            tabsView.setActiveTabPagePosition(viewPager.getPositionAnimated());
+        }
     }
 
 

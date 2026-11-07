@@ -7,6 +7,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -26,7 +27,9 @@ import org.telegram.ui.Components.AnimatedLinearLayout;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.glass.GlassTabView;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import me.vkryl.android.animator.BoolAnimator;
@@ -170,6 +173,93 @@ public class MainTabsLayout extends AnimatedLinearLayout {
 
     private int[] tabsLeftPos;
 
+    private final Map<View, Integer> tabPagePositions = new HashMap<>();
+    private final Paint activeTabSelectorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF activeTabSelectorBounds = new RectF();
+    private float activeTabPagePosition;
+    private float activeTabCenterX;
+    private float activeTabWidth;
+    private boolean hasActiveTabPagePosition;
+    private boolean hasActiveTabSelectorBounds;
+
+    public void setTabPagePosition(View tab, int pagePosition) {
+        if (tab == null) return;
+        if (pagePosition < 0) {
+            tabPagePositions.remove(tab);
+        } else {
+            tabPagePositions.put(tab, pagePosition);
+        }
+        updateActiveTabSelectorBounds();
+        invalidate();
+    }
+
+    public void setActiveTabPagePosition(float pagePosition) {
+        if (Float.isNaN(pagePosition) || Float.isInfinite(pagePosition)) return;
+        activeTabPagePosition = pagePosition;
+        hasActiveTabPagePosition = true;
+        updateActiveTabSelectorBounds();
+        invalidate();
+    }
+
+    private void updateActiveTabSelectorBounds() {
+        hasActiveTabSelectorBounds = false;
+        if (!hasActiveTabPagePosition || getWidth() <= 0 || getHeight() <= 0) return;
+
+        View leftTab = null;
+        View rightTab = null;
+        float leftPosition = Float.NEGATIVE_INFINITY;
+        float rightPosition = Float.POSITIVE_INFINITY;
+        float leftCenter = 0f;
+        float rightCenter = 0f;
+        float leftWidth = 0f;
+        float rightWidth = 0f;
+
+        for (int i = 0; i < getChildCount(); i++) {
+            final View child = getChildAt(i);
+            final Integer position = tabPagePositions.get(child);
+            if (!(child instanceof GlassTabView) || position == null || child.getParent() != this
+                    || child.getVisibility() != View.VISIBLE || !isViewVisible(child)) {
+                continue;
+            }
+
+            final float width = ((GlassTabView) child).getSelectorVisualWidth();
+            if (width <= 0f || Float.isNaN(width) || Float.isInfinite(width)) continue;
+            final float center = child.getX() + width / 2f;
+            if (position <= activeTabPagePosition && position > leftPosition) {
+                leftTab = child;
+                leftPosition = position;
+                leftCenter = center;
+                leftWidth = width;
+            }
+            if (position >= activeTabPagePosition && position < rightPosition) {
+                rightTab = child;
+                rightPosition = position;
+                rightCenter = center;
+                rightWidth = width;
+            }
+        }
+
+        if (leftTab == null) {
+            leftTab = rightTab;
+            leftPosition = rightPosition;
+            leftCenter = rightCenter;
+            leftWidth = rightWidth;
+        }
+        if (rightTab == null) {
+            rightTab = leftTab;
+            rightPosition = leftPosition;
+            rightCenter = leftCenter;
+            rightWidth = leftWidth;
+        }
+        if (leftTab == null || rightTab == null) return;
+
+        final float progress = rightPosition == leftPosition ? 0f : Math.max(0f, Math.min(1f,
+                (activeTabPagePosition - leftPosition) / (rightPosition - leftPosition)));
+        activeTabCenterX = lerp(leftCenter, rightCenter, progress);
+        activeTabWidth = lerp(leftWidth, rightWidth, progress);
+        hasActiveTabSelectorBounds = activeTabWidth > 0f;
+    }
+
 
     private int visibleChildCount;
     private int biggestTabTextWidth;
@@ -246,6 +336,7 @@ public class MainTabsLayout extends AnimatedLinearLayout {
             final float width = entry.getRectF().width();
             ((GlassTabView) entry.item.view).setVisualWidth(width);
         }
+        updateActiveTabSelectorBounds();
     }
 
 
@@ -309,6 +400,20 @@ public class MainTabsLayout extends AnimatedLinearLayout {
 
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
+        if (!drawCustomSelector && hasActiveTabSelectorBounds) {
+            final float top = getPaddingTop();
+            final float bottom = getHeight() - getPaddingBottom();
+            final float height = bottom - top;
+            if (height > 0f) {
+                activeTabSelectorPaint.setColor(Theme.multAlpha(
+                        Theme.getColor(Theme.key_glass_tabSelected, resourcesProvider), 0.13f));
+                activeTabSelectorBounds.set(activeTabCenterX - activeTabWidth / 2f, top,
+                        activeTabCenterX + activeTabWidth / 2f, bottom);
+                final float radius = height / 2f;
+                canvas.drawRoundRect(activeTabSelectorBounds, radius, radius, activeTabSelectorPaint);
+            }
+        }
+
         if (drawCustomSelector) {
             final float x = animatedLongSelectedViewCenterX + animatedLongSelectedViewOffsetX;
             final float sWidth = getInterpolatedWidthByX(x, this);
