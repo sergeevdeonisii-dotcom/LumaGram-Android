@@ -15899,7 +15899,15 @@ public class ChatActivity extends BaseFragment implements
                         MediaDataController.addTextStyleRuns(entities, sourceText, (Spannable) replyObjectText);
                     }
 
-                    replyObjectTextView.setText(AnimatedEmojiSpan.cloneSpans(replyObjectText, -1, replyObjectTextView.getPaint().getFontMetricsInt()));
+                    // Emoji-only messages use enlarged emoji spans in the chat bubble. Keep
+                    // their reply preview within the fixed 18dp subtitle row instead of
+                    // carrying the bubble-sized spans into the composer panel.
+                    replyObjectTextView.setText(AnimatedEmojiSpan.cloneSpans(
+                            replyObjectText,
+                            -1,
+                            replyObjectTextView.getPaint().getFontMetricsInt(),
+                            compactEmojiReply ? 0.65f : 1.0f
+                    ));
                 }
                 if (compactEmojiReply) {
                     replyObjectTextView.setTextSize(14);
