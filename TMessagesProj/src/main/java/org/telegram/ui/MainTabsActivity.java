@@ -339,10 +339,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         tabs[INDEX_SETTINGS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.SETTINGS, R.string.Settings);
         tabs[INDEX_CALLS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CALLS, R.string.MainTabsCalls);
         tabs[INDEX_PROFILE] = GlassTabView.createAvatar(context, resourceProvider, currentAccount, R.string.MainTabsProfile);
-        tabs[INDEX_CHATS].setOnLongClickListener(this::openFoldersSelector);
         tabs[INDEX_FEED].setOnLongClickListener(this::openFeedSelector);
         tabs[INDEX_CONTACTS].setOnLongClickListener(this::openContactsSelector);
-        tabs[INDEX_CALLS].setOnLongClickListener(this::openCallsSelector);
         tabs[INDEX_PROFILE].setOnLongClickListener(this::openAccountSelector);
 
         tabsView.addTabToIgnoreClick(tabs[INDEX_CHATS]);
@@ -413,7 +411,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         bottomSearchPositionKnown = false;
         tabsViewWrapper = new FrameLayout(context);
         tabsViewWrapper.setOnClickListener(v -> {});
-        tabsViewWrapper.addView(tabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS, Gravity.BOTTOM | Gravity.RIGHT, 74, 0, 4, 0));
+        tabsViewWrapper.addView(tabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS, Gravity.BOTTOM | Gravity.RIGHT, 64, 0, 14, 0));
         android.widget.ImageView searchCircle = bottomSearchCircle = new android.widget.ImageView(context);
         searchCircle.setImageResource(R.drawable.outline_header_search);
         searchCircle.setScaleType(android.widget.ImageView.ScaleType.CENTER);
@@ -479,8 +477,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
         if (tabsView != null && tabsView.getLayoutParams() instanceof FrameLayout.LayoutParams) {
             final FrameLayout.LayoutParams tabsParams = (FrameLayout.LayoutParams) tabsView.getLayoutParams();
-            final int leftMargin = dp(onRight ? 4 : 74);
-            final int rightMargin = dp(onRight ? 74 : 4);
+            final int leftMargin = dp(onRight ? 14 : 64);
+            final int rightMargin = dp(onRight ? 64 : 14);
             final int gravity = Gravity.BOTTOM | (onRight ? Gravity.RIGHT : Gravity.LEFT);
             if (tabsParams.leftMargin != leftMargin || tabsParams.rightMargin != rightMargin || tabsParams.gravity != gravity) {
                 tabsParams.leftMargin = leftMargin;
