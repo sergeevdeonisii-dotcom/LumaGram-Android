@@ -22,6 +22,7 @@ function Extract-Method([string]$source, [string]$signature, [switch]$Optional) 
     throw "Unclosed production method: $signature"
 }
 $header = Read-Source 'TMessagesProj/src/main/java/org/telegram/ui/Components/ChatAvatarContainer.java'
+$statusColorSupport = $header.Contains('private int getSubtitleTextColor(')
 $typing = Read-Source 'TMessagesProj/src/main/java/org/telegram/ui/Components/LumaTypingAnimator.java'
 $simple = Read-Source 'TMessagesProj/src/main/java/org/telegram/ui/ActionBar/SimpleTextView.java'
 $methods = @(
@@ -38,6 +39,12 @@ $methods = @(
     (Extract-Method $header 'protected void onAttachedToWindow()'),
     (Extract-Method $header 'protected void onDetachedFromWindow()'),
     (Extract-Method $header 'private void updateCurrentConnectionState()'),
+    (Extract-Method $header 'private int getThemedColor(int key)' -Optional),
+    (Extract-Method $header 'private boolean isDarkTheme()' -Optional),
+    (Extract-Method $header 'private int getTypingStatusColor()' -Optional),
+    (Extract-Method $header 'private static double contrastRatio(' -Optional),
+    (Extract-Method $header 'private static double relativeLuminance(' -Optional),
+    (Extract-Method $header 'private static double linear(' -Optional),
     (Extract-Method $header 'private int getSubtitleTextColor(' -Optional),
     (Extract-Method $typing 'private static boolean isEmojiLike(')
 ) -join "`n"
@@ -71,7 +78,18 @@ public final class ChatHeaderRegressionTest extends HeaderBase {
     static float density=1;
     static int dp(float value) { return (int)Math.ceil(value*density); }
     static final class Gravity { static final int CENTER_HORIZONTAL=1, LEFT=3; }
-    static final class Theme { static final int key_chat_status=1,key_actionBarDefaultTitle=2,key_actionBarDefaultSubtitle=3; static boolean isCurrentThemeDark(){return false;} }
+    static final class Theme {
+        static final int key_chat_status=1,key_actionBarDefaultTitle=2,key_actionBarDefaultSubtitle=3,key_actionBarDefault=4,key_windowBackgroundWhiteGrayText8=5;
+        static boolean dark;
+        static boolean isCurrentThemeDark(){return dark;}
+        static int getColor(int key, ResourcesProvider provider){
+            boolean isDark=provider!=null?provider.isDark():dark;
+            if(key==key_chat_status)return isDark?0xff83aaff:0xff69a7e8;
+            if(key==key_actionBarDefault)return isDark?0xff171717:0xffffffff;
+            if(key==key_windowBackgroundWhiteGrayText8)return isDark?0xffaaaaaa:0xff707579;
+            return isDark?0xffffffff:0xff000000;
+        }
+    }
     static final class ResourcesProvider { boolean isDark(){return false;} }
     static final class CubicBezierInterpolator { static final Object EASE_OUT_QUINT=new Object(); }
     static final class FileLog { static void e(Exception e) { throw new AssertionError(e); } }
@@ -159,19 +177,35 @@ public final class ChatHeaderRegressionTest extends HeaderBase {
     Widget animatedSubtitleTextView,avatarImageView=new Widget(),communityItem,starBgItem,starFgItem;
     AtomicReference<SimpleTextView> titleTextLargerCopyView=new AtomicReference<>(),subtitleTextLargerCopyView=new AtomicReference<>();
     StatusDrawable[] statusDrawables=new StatusDrawable[6];StatusDrawable currentTypingDrawable;
-    boolean subtitleIsThinkingBot,subtitleIsOnline,externalAvatarMode,avatarImageIsHidden,glassMode,allowDrawStories,clipChildren=true;
+    static final int LIGHT_ONLINE_STATUS_COLOR=0xff76549c;
+    boolean subtitleIsThinkingBot,subtitleIsOnline,subtitleIsLastSeen,subtitleIsTyping,externalAvatarMode,avatarImageIsHidden,glassMode,allowDrawStories,clipChildren=true;
     ResourcesProvider resourcesProvider;
     int currentAccount,currentConnectionState,largerWidth,subtitleRefreshes,leftPadding=8,rightAvatarPadding,lastSubtitleColorKey=3;Integer overrideSubtitleColor;
     CharSequence lastSubtitle;Parent parentFragment=new Parent();BoolAnimator animatorTimeVisible=new BoolAnimator();
     AttachedDrawable emojiStatusDrawable,botVerificationDrawable;
     ChatHeaderRegressionTest(){for(int i=0;i<6;i++)statusDrawables[i]=new StatusDrawable();}
     Object getResources(){return new Object();} Object getContext(){return new Object();}
-    int getThemedColor(int k){return k;}void removeView(Widget v){}void addView(Widget v){}void setClipChildren(boolean b){clipChildren=b;}
+    void removeView(Widget v){}void addView(Widget v){}void setClipChildren(boolean b){clipChildren=b;}
     void requestLayout(){}void checkActionBar(boolean b){}
     void updateSubtitle(boolean b){subtitleRefreshes++;setTypingAnimation(MessagesController.type!=null&&lastSubtitle==null);CharSequence t=MessagesController.type==null?"offline":externalAvatarMode?TYPING_DRAWABLE_PLACEHOLDER+" recording":"recording";if(lastSubtitle==null)subtitleTextView.setText(t);else lastSubtitle=t;}
     // PRODUCTION_METHODS
     public static void main(String[] args) {
         ChatHeaderRegressionTest h=new ChatHeaderRegressionTest();
+        // STATUS_COLOR_TESTS_START
+        Theme.dark=false;h.resourcesProvider=null;h.subtitleIsOnline=true;
+        check(h.getSubtitleTextColor(Theme.key_chat_status)==LIGHT_ONLINE_STATUS_COLOR,"light online status uses the coordinated lavender color");
+        h.subtitleIsOnline=false;h.subtitleIsTyping=true;
+        check(h.getSubtitleTextColor(Theme.key_chat_status)==Theme.getColor(Theme.key_windowBackgroundWhiteGrayText8,null),"light typing status uses readable gray");
+        h.subtitleIsTyping=false;h.subtitleIsLastSeen=true;
+        check(h.getSubtitleTextColor(Theme.key_actionBarDefaultSubtitle)==Theme.getColor(Theme.key_windowBackgroundWhiteGrayText8,null),"light last-seen status uses readable gray");
+        h.lastSubtitle="custom subtitle";
+        check(h.getSubtitleTextColor(Theme.key_actionBarDefaultSubtitle)==Theme.getColor(Theme.key_actionBarDefaultSubtitle,null),"custom subtitle keeps its regular theme color");
+        Theme.dark=true;h.lastSubtitle=null;h.subtitleIsLastSeen=false;h.subtitleIsTyping=true;
+        check(h.getSubtitleTextColor(Theme.key_chat_status)==Theme.getColor(Theme.key_chat_status,null),"dark typing status keeps the dark theme color");
+        h.subtitleIsTyping=false;h.subtitleIsOnline=true;
+        check(h.getSubtitleTextColor(Theme.key_chat_status)==Theme.getColor(Theme.key_chat_status,null),"dark online status keeps the dark theme color");
+        Theme.dark=false;h.subtitleIsOnline=false;
+        // STATUS_COLOR_TESTS_END
         MessagesController.type=1;h.setTypingAnimation(true);
         check(h.currentTypingDrawable.getCallback()==h.subtitleTextView,"normal recording icon callback");
         h.externalAvatarMode=true;h.setTypingAnimation(true);
@@ -306,6 +340,12 @@ public final class ChatHeaderRegressionTest extends HeaderBase {
     }
 }
 '@
+if ($statusColorSupport -and $header -notmatch 'private static final int LIGHT_ONLINE_STATUS_COLOR\s*=\s*0xff76549c\s*;') {
+    throw 'Light online status must retain the reviewed lavender color.'
+}
+if (-not $statusColorSupport) {
+    $harness = [regex]::Replace($harness, '(?s)\s*// STATUS_COLOR_TESTS_START.*?// STATUS_COLOR_TESTS_END', '')
+}
 if ($Baseline) {
     # Legacy code has no extracted geometry/snapshot-cleanup helpers. Its
     # original assertions still execute unchanged and reproduce the callback
