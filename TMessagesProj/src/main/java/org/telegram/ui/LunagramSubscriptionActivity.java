@@ -1121,7 +1121,6 @@ public final class LunagramSubscriptionActivity extends BaseFragment {
             case SETTINGS_TRANSFER:
             case CHAT_VAULT:
             case ROUND_VIDEO_FILTERS:
-            case SWIPE_ACTIONS:
             case CHANNEL_FEED:
             case STREAMER_MODE:
             case LINK_TOOLS:
@@ -1157,6 +1156,7 @@ public final class LunagramSubscriptionActivity extends BaseFragment {
             case EMERGENCY:
             case ROUND_VIDEO_DATE:
             case SEND_ANIMATIONS:
+            case SWIPE_ACTIONS:
             case READING_TOOLS:
                 return 0xff55b86a;
             default:

@@ -130,7 +130,7 @@ public final class SubscriptionScreen150Probe {
             }
             static final class Factory {
                 static UItem of(int id,int color,int icon,String title,String info) {
-                    UItem item=UItem.asButton(id,title);item.type="feature";item.value=info;item.icon=icon;return item;
+                    UItem item=UItem.asButton(id,title);item.type="feature";item.value=info;item.icon=icon;item.color=color;return item;
                 }
             }
     }
@@ -149,7 +149,7 @@ public final class SubscriptionScreen150Probe {
     static final class UItem {
         String type;
         String text, value;
-        int id, icon;
+        int id, icon, color;
         boolean checked, enabled=true;
         private UItem(String type, CharSequence text) { this.type=type; this.text=text==null?null:text.toString(); }
         static UItem asShadow(CharSequence text) { return new UItem("shadow",text); }
@@ -471,6 +471,7 @@ public final class SubscriptionScreen150Probe {
                     Feature feature=Feature.values()[item.id-Screen.FEATURE_ROW_START];
                     check(LunagramFeatureCatalog.includes(plan.id,feature.id)&&!LunagramFeatureCatalog.isBaselineFree(feature),"feature row belongs to selected tier");
                     check(item.text.equals(getString(screen.featureResource(feature)))&&item.value.equals(getString(screen.featureSummaryResource(feature))),"localized native feature row + brief");
+                    if (feature == Feature.SWIPE_ACTIONS) check(item.color == 0xff55b86a,"swipe actions keeps its established green feature color");
                     featureRows++;
                     check(periodSelectors==1,"simple purchase controls precede the feature catalog");
                     check(featureIcons.add(item.icon),"each feature has a distinct native icon");
