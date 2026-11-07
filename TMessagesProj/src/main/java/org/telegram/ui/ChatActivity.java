@@ -15881,7 +15881,9 @@ public class ChatActivity extends BaseFragment implements
                         || messageObjectToReply.messageOwner != null && !TextUtils.isEmpty(messageObjectToReply.messageOwner.message)) {
                     CharSequence source = messageObjectToReply.caption != null ? messageObjectToReply.caption
                             : messageObjectToReply.messageText != null ? messageObjectToReply.messageText : messageObjectToReply.messageOwner.message;
-                    CharSequence mess = new SpannableStringBuilder(source);
+                    // Emoji-only messages carry bubble-sized emoji spans. Rebuild their
+                    // preview from plain text so it can receive the compact row metrics below.
+                    CharSequence mess = new SpannableStringBuilder(compactEmojiReply ? source.toString() : source);
                     mess = FormattedDateSpan.restoreFormatedDateEntities(mess);
                     sourceText = mess;
                     if (mess.length() > 150) {
@@ -15899,15 +15901,7 @@ public class ChatActivity extends BaseFragment implements
                         MediaDataController.addTextStyleRuns(entities, sourceText, (Spannable) replyObjectText);
                     }
 
-                    // Emoji-only messages use enlarged emoji spans in the chat bubble. Keep
-                    // their reply preview within the fixed 18dp subtitle row instead of
-                    // carrying the bubble-sized spans into the composer panel.
-                    replyObjectTextView.setText(AnimatedEmojiSpan.cloneSpans(
-                            replyObjectText,
-                            -1,
-                            replyObjectTextView.getPaint().getFontMetricsInt(),
-                            compactEmojiReply ? 0.65f : 1.0f
-                    ));
+                    replyObjectTextView.setText(AnimatedEmojiSpan.cloneSpans(replyObjectText, -1, replyObjectTextView.getPaint().getFontMetricsInt()));
                 }
                 if (compactEmojiReply) {
                     replyObjectTextView.setTextSize(14);
