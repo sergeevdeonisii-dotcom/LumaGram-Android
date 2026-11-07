@@ -478,9 +478,11 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             final FrameLayout.LayoutParams tabsParams = (FrameLayout.LayoutParams) tabsView.getLayoutParams();
             final int leftMargin = dp(onRight ? 4 : 74);
             final int rightMargin = dp(onRight ? 74 : 4);
-            if (tabsParams.leftMargin != leftMargin || tabsParams.rightMargin != rightMargin) {
+            final int gravity = Gravity.BOTTOM | (onRight ? Gravity.RIGHT : Gravity.LEFT);
+            if (tabsParams.leftMargin != leftMargin || tabsParams.rightMargin != rightMargin || tabsParams.gravity != gravity) {
                 tabsParams.leftMargin = leftMargin;
                 tabsParams.rightMargin = rightMargin;
+                tabsParams.gravity = gravity;
                 tabsView.setLayoutParams(tabsParams);
             }
         }

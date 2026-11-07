@@ -999,7 +999,6 @@ public final class LunagramSubscriptionActivity extends BaseFragment {
             case VOICE_FILTERS: return R.string.LunagramSubscriptionFeatureVoiceFilters;
             case SWIPE_ACTIONS: return R.string.LunagramSubscriptionFeatureSwipeActions;
             case CHANNEL_FEED: return R.string.LunagramSubscriptionFeatureFeed;
-            case LUNA_PET: return R.string.LunagramSubscriptionFeaturePet;
             case INTERFACE_SOUNDS: return R.string.LunagramSubscriptionFeatureSounds;
             case CHAT_ATMOSPHERE: return R.string.LunagramSubscriptionFeatureAtmosphere;
             case SEND_ANIMATIONS: return R.string.LunagramSubscriptionFeatureSendAnimations;
@@ -1055,7 +1054,6 @@ public final class LunagramSubscriptionActivity extends BaseFragment {
             case VOICE_FILTERS: return R.string.LunagramSubscriptionInfoVoiceFilters;
             case SWIPE_ACTIONS: return R.string.LunagramSubscriptionInfoSwipeActions;
             case CHANNEL_FEED: return R.string.LunagramSubscriptionInfoFeed;
-            case LUNA_PET: return R.string.LunagramSubscriptionInfoPet;
             case INTERFACE_SOUNDS: return R.string.LunagramSubscriptionInfoSounds;
             case CHAT_ATMOSPHERE: return R.string.LunagramSubscriptionInfoAtmosphere;
             case SEND_ANIMATIONS: return R.string.LunagramSubscriptionInfoSendAnimations;
@@ -1100,7 +1098,6 @@ public final class LunagramSubscriptionActivity extends BaseFragment {
             case VOICE_FILTERS: return R.drawable.msg_voice_unmuted;
             case SWIPE_ACTIONS: return R.drawable.msg_reorder;
             case CHANNEL_FEED: return R.drawable.msg_folders_channels;
-            case LUNA_PET: return R.drawable.msg_emoji_cat;
             case INTERFACE_SOUNDS: return R.drawable.msg_voice_speaker;
             case CHAT_ATMOSPHERE: return R.drawable.msg_palette;
             case SEND_ANIMATIONS: return R.drawable.msg_send;
@@ -1117,12 +1114,53 @@ public final class LunagramSubscriptionActivity extends BaseFragment {
     }
 
     private int featureColor(Feature feature) {
-        switch (feature.ordinal() % 5) {
-            case 0: return 0xff617cff;
-            case 1: return 0xff31b9d0;
-            case 2: return 0xffb659ff;
-            case 3: return 0xfff38b31;
-            default: return 0xff55b86a;
+        // Keep the established palette stable when catalog entries are removed or reordered.
+        switch (feature) {
+            case AUTOMATIC_MESSAGE_FORMATTING:
+            case LOCAL_LEVEL:
+            case SETTINGS_TRANSFER:
+            case CHAT_VAULT:
+            case ROUND_VIDEO_FILTERS:
+            case SWIPE_ACTIONS:
+            case CHANNEL_FEED:
+            case STREAMER_MODE:
+            case LINK_TOOLS:
+                return 0xff617cff;
+            case TYPING_MOTION:
+            case LOCAL_VERIFICATION:
+            case GHOST:
+            case NOTIFICATION_JOURNAL:
+            case ROUND_VIDEO_PORTRAIT:
+            case MESSAGE_REMINDERS:
+            case LOCAL_WORKSPACE:
+                return 0xff31b9d0;
+            case SEND_UNDO:
+            case LOCAL_NFT:
+            case RETAIN_DELETED:
+            case CHAT_EXPORT:
+            case VOICE_STEREO:
+            case INTERFACE_SOUNDS:
+            case VIDEO_MEMES:
+            case MEDIA_TOOLS:
+                return 0xffb659ff;
+            case ROUND_VIDEO_CONTROLS:
+            case CHAT_NOTES:
+            case EDIT_RETENTION:
+            case CHAT_PDF:
+            case VOICE_FILTERS:
+            case CHAT_ATMOSPHERE:
+            case TEXT_TOOLS:
+                return 0xfff38b31;
+            case ADVANCED_GLASS:
+            case LOCAL_NUMBER:
+            case SETTINGS_PROFILES:
+            case EMERGENCY:
+            case ROUND_VIDEO_DATE:
+            case SEND_ANIMATIONS:
+            case READING_TOOLS:
+                return 0xff55b86a;
+            default:
+                return 0xff617cff;
         }
     }
 

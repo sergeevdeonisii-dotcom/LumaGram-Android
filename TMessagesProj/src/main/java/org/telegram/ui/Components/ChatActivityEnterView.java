@@ -658,7 +658,6 @@ public class ChatActivityEnterView extends FrameLayout implements
     private ImageView lunagramVoiceFilterButton;
     private boolean lunagramVoiceFilterBusy;
     private int lunagramVoiceFilter;
-    public LunagramPetView lunagramPetView;
     @Nullable
     protected VideoTimelineView videoTimelineView;
     @SuppressWarnings("FieldCanBeLocal")
@@ -6086,10 +6085,6 @@ public class ChatActivityEnterView extends FrameLayout implements
         messageEditText.setInputType(commonInputType = (messageEditText.getInputType() | EditorInfo.TYPE_TEXT_FLAG_CAP_SENTENCES | EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE));
         updateFieldHint(false);
         messageEditText.setSingleLine(false);
-        if (isChat && lunagramPetView == null) {
-            lunagramPetView = new LunagramPetView(getContext(), currentAccount);
-            lunagramPetView.bindComposer(messageEditText);
-        }
         messageEditText.setMaxLines(6);
         messageEditText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
         messageEditText.setGravity(Gravity.BOTTOM);
@@ -6888,7 +6883,6 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     public void onDestroy() {
         clearLunagramTextHistory();
-        if (lunagramPetView != null) lunagramPetView.dispose();
         destroyed = true;
         recordUiToken.invalidate();
         cancelRunningRecordUiAnimation();
@@ -8461,13 +8455,11 @@ public class ChatActivityEnterView extends FrameLayout implements
         }
         if (!pending.messages.isEmpty()) {
             LunagramInterfaceSounds.play(pending.account, LunagramInterfaceSounds.SEND);
-            if (!destroyed && pending.account == currentAccount && pending.dialogId == dialog_id && lunagramPetView != null) lunagramPetView.onMessageSent();
         }
     }
 
     private void notifyLunagramMessageSent() {
         LunagramInterfaceSounds.play(currentAccount, LunagramInterfaceSounds.SEND);
-        if (lunagramPetView != null) lunagramPetView.onMessageSent();
     }
 
     private void detachPendingDelayedSends() {
@@ -9583,7 +9575,6 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     protected void updateRecordInterface(int recordState, boolean animated) {
-        if (lunagramPetView != null) lunagramPetView.setRecording(recordState == RECORD_STATE_ENTER || recordState == RECORD_STATE_PREPARING);
         final boolean changesUi = recordingAudioVideo ? recordInterfaceState != 1
                 : recordInterfaceState != 0 && !(recordIsCanceled && recordState == RECORD_STATE_PREPARING);
         final long recordAnimationEpoch = changesUi ? recordUiToken.begin() : recordUiToken.current();
@@ -15451,13 +15442,18 @@ public class ChatActivityEnterView extends FrameLayout implements
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int wasHeight = textFieldContainer.getMeasuredHeight();
         updateEditingComposerLayout();
+        final TLRPC.User composerUser = parentFragment == null ? null : parentFragment.getCurrentUser();
+        final boolean botComposer = editingMessageObject == null && composerUser != null && composerUser.bot;
+        final int composerMaxLines = botComposer ? 3 : 6;
+        if (messageEditText != null && messageEditText.getMaxLines() != composerMaxLines) {
+            messageEditText.setMaxLines(composerMaxLines);
+        }
         if (editingMessageObject != null) {
             // Editing owns the left emoji gutter, including caption and paid resend edits.
         } else if (botCommandsMenuButton != null && botCommandsMenuButton.getTag() != null) {
             botCommandsMenuButton.measure(widthMeasureSpec, heightMeasureSpec);
             final int botMenuButtonWidth = botCommandsMenuButton.getMeasuredWidth();
-            // The menu and attachment are separate controls. Reserve both before
-            // the text, including when the bot menu expands or the IME changes.
+            // Keep the original gap after the separate bot menu and attachment controls.
             final int botMenuTextOffset = 80;
             ((MarginLayoutParams) emojiButton.getLayoutParams()).leftMargin = dp(10) + botMenuButtonWidth;
             if (deleteRichDraftButton != null) {

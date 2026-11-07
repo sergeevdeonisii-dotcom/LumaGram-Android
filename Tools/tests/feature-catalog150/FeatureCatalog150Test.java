@@ -40,7 +40,7 @@ public final class FeatureCatalog150Test {
         add(expected, Tier.ULTRA, "local_number", "local_level", "local_verification", "local_nft", "chat_notes", "settings_profiles", "settings_transfer");
         add(expected, Tier.ULTRA, "ghost", "retain_deleted", "edit_retention", "emergency", "chat_vault", "notification_journal", "chat_export", "chat_pdf");
         add(expected, Tier.ULTRA, "round_video_date", "round_video_filters", "round_video_portrait", "voice_stereo", "voice_filters",
-                "swipe_actions", "channel_feed", "luna_pet", "interface_sounds", "chat_atmosphere", "send_animations",
+                "swipe_actions", "channel_feed", "interface_sounds", "chat_atmosphere", "send_animations",
                 "streamer_mode", "message_reminders", "video_memes");
         add(expected, Tier.ULTRA, "text_tools", "reading_tools", "link_tools", "local_workspace", "media_tools");
         Map<String, Tier> actual = LunagramFeatureCatalog.minimumTiers();
@@ -49,13 +49,15 @@ public final class FeatureCatalog150Test {
         for (Feature feature : Feature.values()) {
             if (LunagramFeatureCatalog.isBaselineFree(feature)) baselineCount++; else paidCount++;
         }
-        check(baselineCount == 4 && paidCount == 39, "four free baseline capabilities and all thirty-nine Ultra groups");
+        check(baselineCount == 4 && paidCount == 38, "four free baseline capabilities and all thirty-eight Ultra groups");
         check(Feature.TELEGRAM_BASELINE.ordinal() == 0 && Feature.CHAT_PDF.ordinal() == 23
                 && Feature.ROUND_VIDEO_DATE.ordinal() == 24, "new features append without shifting existing native row IDs");
-        check(Feature.VIDEO_MEMES.ordinal() == 37 && Feature.TEXT_TOOLS.ordinal() == 38
-                && Feature.READING_TOOLS.ordinal() == 39 && Feature.LINK_TOOLS.ordinal() == 40
-                && Feature.LOCAL_WORKSPACE.ordinal() == 41 && Feature.MEDIA_TOOLS.ordinal() == 42,
-                "five productivity groups append after every previous feature ID");
+        check(Feature.VIDEO_MEMES.ordinal() == 36 && Feature.TEXT_TOOLS.ordinal() == 37
+                && Feature.READING_TOOLS.ordinal() == 38 && Feature.LINK_TOOLS.ordinal() == 39
+                && Feature.LOCAL_WORKSPACE.ordinal() == 40 && Feature.MEDIA_TOOLS.ordinal() == 41,
+                "LunaPet is removed while remaining productivity feature IDs stay stable");
+        check(LunagramFeatureCatalog.featureFromId("luna_pet") == null,
+                "removed LunaPet ID cannot appear as a paid capability");
         for (Tier tier : Tier.values()) {
             check(LunagramFeatureCatalog.tierFromId(tier.id) == tier, "stable tier ID");
             for (Feature feature : Feature.values()) {

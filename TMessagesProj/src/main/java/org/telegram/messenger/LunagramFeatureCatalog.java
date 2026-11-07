@@ -70,7 +70,6 @@ public final class LunagramFeatureCatalog {
         VOICE_FILTERS("voice_filters", Tier.ULTRA),
         SWIPE_ACTIONS("swipe_actions", Tier.ULTRA),
         CHANNEL_FEED("channel_feed", Tier.ULTRA),
-        LUNA_PET("luna_pet", Tier.ULTRA),
         INTERFACE_SOUNDS("interface_sounds", Tier.ULTRA),
         CHAT_ATMOSPHERE("chat_atmosphere", Tier.ULTRA),
         SEND_ANIMATIONS("send_animations", Tier.ULTRA),

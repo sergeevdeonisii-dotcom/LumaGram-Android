@@ -77,6 +77,7 @@ import me.vkryl.android.animator.FactorAnimator;
 public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.Target, NotificationCenter.NotificationCenterDelegate {
 
     private static final int ANIMATOR_ID_TIME_ITEM_VISIBLE = 0;
+    private static final int LIGHT_ONLINE_STATUS_COLOR = 0xff76549c;
     private static final String TYPING_DRAWABLE_PLACEHOLDER = "**oo**";
     private final BoolAnimator animatorTimeVisible = new BoolAnimator(ANIMATOR_ID_TIME_ITEM_VISIBLE, this, CubicBezierInterpolator.EASE_OUT_QUINT, 320);
 
@@ -121,6 +122,8 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
     private CharSequence lastSubtitle;
     private int lastSubtitleColorKey = -1;
     private boolean subtitleIsOnline;
+    private boolean subtitleIsLastSeen;
+    private boolean subtitleIsTyping;
     private Integer overrideSubtitleColor;
 
     private SharedMediaLayout.SharedMediaPreloader sharedMediaPreloader;
@@ -1113,6 +1116,10 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
 
     public void setSubtitle(CharSequence value) {
         setTypingAnimation(false);
+        subtitleIsOnline = false;
+        subtitleIsLastSeen = false;
+        subtitleIsTyping = false;
+        lastSubtitleColorKey = Theme.key_actionBarDefaultSubtitle;
         if (lastSubtitle == null) {
             if (subtitleTextView != null) {
                 subtitleTextView.setText(value);
@@ -1121,6 +1128,14 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             }
         } else {
             lastSubtitle = value;
+        }
+        if (lastSubtitle == null && overrideSubtitleColor == null) {
+            int subtitleColor = getSubtitleTextColor(Theme.key_actionBarDefaultSubtitle);
+            if (subtitleTextView != null) {
+                subtitleTextView.setTextColor(subtitleColor);
+            } else if (animatedSubtitleTextView != null) {
+                animatedSubtitleTextView.setTextColor(subtitleColor);
+            }
         }
         checkActionBar(true);
     }
@@ -1180,10 +1195,10 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                     // of the text layout. A separate left drawable stays at the
                     // edge of the full-width view and visually splits the animation
                     // from labels such as "recording voice".
-                    statusDrawables[type].setColor(getThemedColor(Theme.key_chat_status));
+                    statusDrawables[type].setColor(getTypingStatusColor());
                     setTypingDrawable(subtitleTextView, statusDrawables[type], true, type == 4);
                 } else {
-                    statusDrawables[type].setColor(getThemedColor(Theme.key_chat_status));
+                    statusDrawables[type].setColor(getTypingStatusColor());
                     setTypingDrawable(subtitleTextView, statusDrawables[type], false, false);
                 }
                 currentTypingDrawable = statusDrawables[type];
@@ -1288,6 +1303,9 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         }
         TLRPC.User user = parentFragment.getCurrentUser();
         TLRPC.Chat chat = parentFragment.getCurrentChat();
+        subtitleIsOnline = false;
+        subtitleIsLastSeen = false;
+        subtitleIsTyping = false;
         boolean showSavedMessagesHint = (
             UserObject.isUserSelf(user) &&
             parentFragment.getChatMode() == ChatActivity.MODE_DEFAULT &&
@@ -1313,7 +1331,6 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         }
 
         subtitleIsThinkingBot = false;
-        subtitleIsOnline = false;
         CharSequence printString = MessagesController.getInstance(currentAccount).getPrintingString(parentFragment.getDialogId(), parentFragment.getThreadId(), false);
         if (printString == null && UserObject.isBotForum(user)) {
             //if (BotForumHelper.getInstance(currentAccount).isThinking(user.id, (int) parentFragment.getTopicId())) {
@@ -1438,6 +1455,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                     newStatus = LocaleController.formatUserStatus(currentAccount, user, isOnline, allowShorterStatus ? statusMadeShorter : null);
                     useOnlineColor = isOnline[0];
                     subtitleIsOnline = isOnline[0];
+                    subtitleIsLastSeen = !isOnline[0];
                 }
                 newSubtitle = newStatus;
             } else {
@@ -1473,6 +1491,9 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             }
             newSubtitle = printString;
             Integer type = MessagesController.getInstance(currentAccount).getPrintingStringType(parentFragment.getDialogId(), parentFragment.getThreadId());
+            // The activity can publish the status text before its icon type arrives.
+            // Keep the text in the neutral typing color during that short race too.
+            subtitleIsTyping = true;
             if (type != null && type == 5) {
                 newSubtitle = Emoji.replaceEmoji(newSubtitle, getSubtitlePaint().getFontMetricsInt(), false);
             } else if (externalAvatarMode && type != null && type >= 0 && type < statusDrawables.length) {
@@ -1902,12 +1923,47 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         return Theme.getColor(key, resourcesProvider);
     }
 
+    private boolean isDarkTheme() {
+        return resourcesProvider != null ? resourcesProvider.isDark() : Theme.isCurrentThemeDark();
+    }
+
+    private int getTypingStatusColor() {
+        int statusColor = getThemedColor(Theme.key_chat_status);
+        if (isDarkTheme() || contrastRatio(statusColor, getThemedColor(Theme.key_actionBarDefault)) >= 4.5) {
+            return statusColor;
+        }
+        return getThemedColor(Theme.key_windowBackgroundWhiteGrayText8);
+    }
+
+    private static double contrastRatio(int first, int second) {
+        double a = relativeLuminance(first);
+        double b = relativeLuminance(second);
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    }
+
+    private static double relativeLuminance(int color) {
+        double red = linear((color >>> 16) & 0xff);
+        double green = linear((color >>> 8) & 0xff);
+        double blue = linear(color & 0xff);
+        return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    }
+
+    private static double linear(int channel) {
+        double value = channel / 255.0;
+        return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+    }
+
     private int getSubtitleTextColor(int key) {
-        // Online presence has its own lavender treatment in the light theme.
-        // Typing/recording also use chat_status, so the color key alone is insufficient.
-        final boolean dark = resourcesProvider != null ? resourcesProvider.isDark() : Theme.isCurrentThemeDark();
-        if (subtitleIsOnline && key == Theme.key_chat_status && !dark) {
-            return 0xffb39ddb;
+        if (!isDarkTheme()) {
+            if (subtitleIsOnline && key == Theme.key_chat_status) {
+                return LIGHT_ONLINE_STATUS_COLOR;
+            }
+            if (lastSubtitle == null && subtitleIsLastSeen && key == Theme.key_actionBarDefaultSubtitle) {
+                return getThemedColor(Theme.key_windowBackgroundWhiteGrayText8);
+            }
+            if (subtitleIsTyping && key == Theme.key_chat_status) {
+                return getTypingStatusColor();
+            }
         }
         return getThemedColor(key);
     }
@@ -1932,7 +1988,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             updateChatTextColors();
         }
         if (currentTypingDrawable != null) {
-            currentTypingDrawable.setColor(getThemedColor(Theme.key_chat_status));
+            currentTypingDrawable.setColor(getTypingStatusColor());
         }
         if (emojiStatusDefaultDrawable != null) {
             emojiStatusDefaultDrawable.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_profile_verifiedBackground), PorterDuff.Mode.MULTIPLY));

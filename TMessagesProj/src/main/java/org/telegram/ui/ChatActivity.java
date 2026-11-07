@@ -1161,11 +1161,6 @@ public class ChatActivity extends BaseFragment implements
     private final LunagramSwipeGesture lunagramSwipeGesture = new LunagramSwipeGesture();
     private LunagramSwipeMenu lunagramSwipeMenu;
     private org.telegram.ui.Components.LunagramChatAtmosphere lunagramAtmosphere;
-    private final int[] lunagramInputLocation = new int[2];
-    private final int[] lunagramContentLocation = new int[2];
-    private final RectF lunagramPetRailBounds = new RectF();
-    private boolean lunagramPetOnRail;
-    private float lunagramPetRailLeft = Float.NaN, lunagramPetRailRight = Float.NaN;
 
     public static Pattern publicMsgUrlPattern;
     public static Pattern voiceChatUrlPattern;
@@ -9577,11 +9572,6 @@ public class ChatActivity extends BaseFragment implements
         ViewCompat.setOnApplyWindowInsetsListener(fragmentView, this::onApplyWindowInsets);
         Timer.finish(t);
         lunagramAtmosphere = new org.telegram.ui.Components.LunagramChatAtmosphere(currentAccount, dialog_id);
-        if (chatActivityEnterView.lunagramPetView != null && chatActivityEnterView.lunagramPetView.getParent() == null) {
-            chatActivityEnterView.lunagramPetView.setClickable(false);
-            chatActivityEnterView.lunagramPetView.setFocusable(false);
-            contentView.addView(chatActivityEnterView.lunagramPetView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 80, Gravity.TOP | Gravity.LEFT));
-        }
         return fragmentView;
     }
 
@@ -12689,8 +12679,7 @@ public class ChatActivity extends BaseFragment implements
         }
         final int oldPaddingTop = chatListView.getPaddingTop();
         final int oldPaddingBottom = chatListView.getPaddingBottom();
-        // LunaPet lives in the overlay: showing it must not move the last message
-        // or change the scroll position when the keyboard/recording state changes.
+        // Keep conversation padding independent of transient composer and recording UI.
         chatListViewPaddingsAnimator.setPaddings(paddingTop, paddingBottom, !chatListView.fastScrollAnimationRunning);
         if (oldPaddingTop != chatListView.getPaddingTop() || oldPaddingBottom != chatListView.getPaddingBottom()) {
             invalidateMergedVisibleBlurredPositionsAndSources(
@@ -18583,7 +18572,6 @@ public class ChatActivity extends BaseFragment implements
         @Override
         protected void dispatchDraw(Canvas canvas) {
             chatActivityEnterView.checkAnimation();
-            updateLunagramPetPlacement();
             updateChatListViewTopPadding();
             if (invalidateMessagesVisiblePart || (chatListItemAnimator != null && chatListItemAnimator.isRunning())) {
                 invalidateMessagesVisiblePart = false;
@@ -22832,7 +22820,6 @@ public class ChatActivity extends BaseFragment implements
         } else if (id == NotificationCenter.updateInterfaces) {
             int updateMask = (Integer) args[0];
             if (updateMask == MessagesController.UPDATE_MASK_ALL) {
-                if (chatActivityEnterView != null && chatActivityEnterView.lunagramPetView != null) chatActivityEnterView.lunagramPetView.refresh();
                 if (fragmentView != null) fragmentView.invalidate();
             }
             if ((updateMask & MessagesController.UPDATE_MASK_NAME) != 0 || (updateMask & MessagesController.UPDATE_MASK_CHAT_NAME) != 0 || (updateMask & MessagesController.UPDATE_MASK_EMOJI_STATUS) != 0) {
@@ -30734,10 +30721,6 @@ public class ChatActivity extends BaseFragment implements
     public void onResume() {
         super.onResume();
         if (lunagramAtmosphere != null) { lunagramAtmosphere.refresh(currentAccount, dialog_id); lunagramAtmosphere.setPaused(false); }
-        if (chatActivityEnterView != null && chatActivityEnterView.lunagramPetView != null) {
-            chatActivityEnterView.lunagramPetView.refresh();
-            chatActivityEnterView.lunagramPetView.setPaused(false);
-        }
         if (org.telegram.messenger.BlackHoleVault.blocks(currentAccount, dialog_id)) {
             if (fragmentView != null) fragmentView.setVisibility(View.INVISIBLE);
             BlackHoleToolsActivity vault = new BlackHoleToolsActivity(BlackHoleToolsActivity.VAULT, dialog_id);
@@ -30963,11 +30946,6 @@ public class ChatActivity extends BaseFragment implements
         if (lunagramSpeech != null) { lunagramSpeech.close(); lunagramSpeech = null; }
         lunagramSwipeGesture.cancel();
         if (lunagramAtmosphere != null) lunagramAtmosphere.setPaused(true);
-        if (chatActivityEnterView != null && chatActivityEnterView.lunagramPetView != null) {
-            chatActivityEnterView.lunagramPetView.setPaused(true);
-            chatActivityEnterView.lunagramPetView.setAlpha(0f);
-        }
-        setLunagramPetOnRail(false);
         super.onPause();
         if (org.telegram.messenger.BlackHoleVault.contains(currentAccount, dialog_id) && fragmentView != null)
             fragmentView.setVisibility(View.INVISIBLE);
@@ -34304,65 +34282,6 @@ public class ChatActivity extends BaseFragment implements
             }
         }
         MediaController.saveFile(path, getParentActivity(), messageObject.isVideo() ? 1 : 0, null, null);
-    }
-
-    private boolean isLunagramPetVisible() {
-        return lunagramPetOnRail && isLunagramPetHostAvailable();
-    }
-
-    private void setLunagramPetOnRail(boolean visible) {
-        if (lunagramPetOnRail == visible) return;
-        lunagramPetOnRail = visible;
-        // An overlay visibility change never reserves space in the conversation.
-    }
-
-    private boolean isLunagramPetHostAvailable() {
-        return chatActivityEnterView != null && chatActivityEnterView.lunagramPetView != null
-                && LunagramExperienceSettings.pet(currentAccount) != 0 && !isPaused()
-                && chatActivityEnterView.getVisibility() == View.VISIBLE && !isInPreviewMode()
-                && !chatActivityEnterView.isRecordingUiVisible() && !chatActivityEnterView.hasAudioToSend()
-                && bottomViewsVisibilityController.getCurrentPriorityContainerId() == MESSAGE_INPUT_CONTAINER;
-    }
-
-    private void updateLunagramPetPlacement() {
-        if (chatActivityEnterView == null || chatActivityEnterView.lunagramPetView == null) {
-            setLunagramPetOnRail(false);
-            return;
-        }
-        final org.telegram.ui.Components.LunagramPetView pet = chatActivityEnterView.lunagramPetView;
-        if (!isLunagramPetHostAvailable() || contentView == null || chatInputViewsContainer == null
-                || !contentView.isAttachedToWindow() || !chatInputViewsContainer.isAttachedToWindow()
-                || !chatInputViewsContainer.getPetRailBounds(lunagramPetRailBounds)) {
-            pet.setPaused(true);
-            pet.setAlpha(0f);
-            setLunagramPetOnRail(false);
-            return;
-        }
-        chatInputViewsContainer.getLocationInWindow(lunagramInputLocation);
-        contentView.getLocationInWindow(lunagramContentLocation);
-        final float offsetX = lunagramInputLocation[0] - lunagramContentLocation[0];
-        final float offsetY = lunagramInputLocation[1] - lunagramContentLocation[1];
-        final float railLeft = lunagramPetRailBounds.left + offsetX;
-        final float railRight = lunagramPetRailBounds.right + offsetX;
-        final int overlayHeight = pet.getMeasuredHeight() > 0 ? pet.getMeasuredHeight() : dp(80);
-        final float y = lunagramPetRailBounds.top + offsetY - overlayHeight + dp(pet.getFloorOffsetDp());
-        if (railLeft < 0 || railRight > contentView.getWidth() || railRight <= railLeft
-                || y < (actionBar != null ? actionBar.getBottom() : 0) || y + overlayHeight > contentView.getHeight()) {
-            pet.setPaused(true);
-            pet.setAlpha(0f);
-            setLunagramPetOnRail(false);
-            return;
-        }
-        if (railLeft != lunagramPetRailLeft || railRight != lunagramPetRailRight) {
-            pet.setRailBounds(railLeft, railRight);
-            lunagramPetRailLeft = railLeft;
-            lunagramPetRailRight = railRight;
-        }
-        pet.setTranslationX(0f);
-        pet.setTranslationY(y - pet.getTop());
-        pet.setAlpha(1f);
-        pet.setPaused(false);
-        setLunagramPetOnRail(true);
     }
 
     private int[] lunagramSwipeActions(MessageObject message) {

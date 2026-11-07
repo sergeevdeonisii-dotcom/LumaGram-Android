@@ -5662,7 +5662,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             title.append(' ');
             int start = title.length();
             title.append(org.telegram.messenger.LunagramExperienceSettings.planLabel(currentAccount));
-            title.setSpan(new org.telegram.ui.Components.LunagramPlanBadgeSpan(),
+            title.setSpan(new org.telegram.ui.Components.LunagramPlanBadgeSpan(
+                            org.telegram.messenger.LunagramExperienceSettings.planLabelColor(currentAccount)),
                     start, title.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
         actionBar.setTitle(title, statusDrawable);

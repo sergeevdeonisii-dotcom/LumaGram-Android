@@ -36,11 +36,6 @@ if($LASTEXITCODE -ne 0){throw 'Pet pure model compilation failed'}
 if($LASTEXITCODE -ne 0){throw 'Pet pure model regression failed'}
 $mutations=@(
     @('identity-slot','"luma_user_" + userId','"luma_user_" + account','slot reuse isolates identity'),
-    @('pet-system-motion','SharedConfig.animationsEnabled() && AndroidUtilities.getAnimatorDurationScale() > 0','SharedConfig.animationsEnabled()','system reduced motion pet'),
-    @('pet-static-finish','if (ends > now) return allowed ? NEXT_FRAME : ends - now;','if (ends > now) return allowed ? NEXT_FRAME : NO_CALLBACK;','static happy gets final redraw'),
-    @('pet-hidden-timer','!disposed && !recording && !paused && !ApplicationLoader.mainInterfacePaused','!disposed && !recording && !ApplicationLoader.mainInterfacePaused','paused pet cannot schedule work'),
-    @('pet-pause-idempotence','if (paused == value) return;','/* removed pause idempotence */','unchanged compositor setters do not restart scheduler or invalidate'),
-    @('pet-rail-idempotence','if (explicitRail && Float.compare(nextLeft, railLeft) == 0 && Float.compare(nextRight, railRight) == 0) return;','/* removed rail idempotence */','unchanged compositor setters do not restart scheduler or invalidate'),
     @('sound-owner','owner != UserConfig.getInstance(account).getClientUserId()','false','queued owner guard'),
     @('sound-ringer','manager.getRingerMode() != AudioManager.RINGER_MODE_NORMAL','false','ringer mode guard'),
     @('sound-background','if (ApplicationLoader.mainInterfacePaused || owner','if (owner','queued foreground guard'),
@@ -54,7 +49,7 @@ $mutations=@(
 )
 foreach($m in $mutations){if(!$template.Contains($m[1])){throw "Missing mutation anchor: $($m[0])"};Run-Probe $m[0] ($template.Replace($m[1],$m[2])) $m[3]}
 $activity=[IO.File]::ReadAllText((Join-Path $base 'org/telegram/ui/LunagramExperienceSettingsActivity.java'))
-foreach($pair in @(@('petNames',2),@('soundNames',5),@('sendNames',4),@('incomingNames',4),@('atmosphereNames',5),@('intensityNames',3))){
+foreach($pair in @(@('soundNames',5),@('sendNames',4),@('incomingNames',4),@('atmosphereNames',5),@('intensityNames',3))){
     $body=[regex]::Match($activity,'private String\[\] '+$pair[0]+'\(\) \{ return names\(([^)]+)\); \}').Groups[1].Value
     if([regex]::Matches($body,'R\.string\.').Count -ne $pair[1]){throw "Settings labels mismatch enum: $($pair[0])"}
 }
@@ -64,9 +59,9 @@ if(!$outgoingNames -or $incomingNames -ne $outgoingNames){throw 'Incoming and ou
 foreach($required in @('if (!swipeOnly)', 'if (dialogId != 0)', 'if (LunagramSwipeGesture.validOrder(order))', 'screen.setCurrentAccount(currentAccount)', 'list.adapter.update(false)')){if(!$activity.Contains($required)){throw "Settings UI contract missing: $required"}}
 foreach($required in @('case 4: case 12: return Feature.SEND_ANIMATIONS;', 'TextDetailCell.Factory.of(12, text(R.string.LunagramIncomingEffectTitle), incomingNames()[LunagramExperienceSettings.incomingEffect(currentAccount)])', 'else if (item.id == 12) LunagramExperienceSettings.setIncomingEffect(currentAccount, index);', 'if (!currentOwner() || index < 0 || index >= names.length || !LunagramFeatureGate.require(this, feature)) return;')){if(!$activity.Contains($required)){throw "Incoming settings UI contract missing: $required"}}
 $chat=[IO.File]::ReadAllText((Join-Path $base 'org/telegram/ui/ChatActivity.java'))
-foreach($required in @('lunagramAtmosphere.setPaused(true)', 'lunagramAtmosphere.setPaused(false)', 'lunagramAtmosphere.refresh(currentAccount, dialog_id)', 'chatActivityEnterView.lunagramPetView.getParent() == null', 'bottomViewsVisibilityController.getCurrentPriorityContainerId() == MESSAGE_INPUT_CONTAINER', 'pet.setAlpha(0f)', 'y < (actionBar != null ? actionBar.getBottom() : 0)', 'chatInputViewsContainer.getPetRailBounds(lunagramPetRailBounds)', 'pet.getFloorOffsetDp()', 'pet.setPaused(true)', 'pet.setPaused(false)')){if(!$chat.Contains($required)){throw "Chat attachment contract missing: $required"}}
-if($chat.Contains('isLunagramPetVisible() ? dp(50) : 0') -or $chat.Contains('paddingBottom + petSpace')){throw 'Pet must never reserve message-list padding'}
+foreach($required in @('lunagramAtmosphere.setPaused(true)', 'lunagramAtmosphere.setPaused(false)', 'lunagramAtmosphere.refresh(currentAccount, dialog_id)')){if(!$chat.Contains($required)){throw "Chat atmosphere contract missing: $required"}}
+if($chat -match 'LunagramPetView|lunagramPetView|getPetRailBounds|isLunagramPetVisible|petSpace'){throw 'Disabled LunaPet must not be mounted or reserve chat layout space'}
 $composer=[IO.File]::ReadAllText((Join-Path $base 'org/telegram/ui/Components/ChatActivityEnterView.java'))
-foreach($required in @('lunagramPetView.dispose()', 'lunagramPetView.bindComposer(messageEditText)', 'lunagramPetView.setRecording(')){if(!$composer.Contains($required)){throw "Composer lifecycle contract missing: $required"}}
-Write-Output 'PASS source integration contracts: settings enums/account routing, pet overlay/no reserved padding/disposal, atmosphere pause/refresh'
+if($composer -match 'LunagramPetView|lunagramPetView'){throw 'Disabled LunaPet must not be connected to the message composer'}
+Write-Output 'PASS source integration contracts: settings enums/account routing, LunaPet disabled, atmosphere pause/refresh'
 Write-Output "Results: $run"

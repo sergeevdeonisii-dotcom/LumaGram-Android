@@ -66,19 +66,8 @@ $replyFixture = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'composer-layout
 foreach ($entry in $replyMethods.GetEnumerator()) { $replyFixture = $replyFixture.Replace("/* $($entry.Key) */", $entry.Value) }
 $replyProbe = Join-Path $run 'ReplyPreview150Probe.java'
 [IO.File]::WriteAllText($replyProbe, $replyFixture, [Text.UTF8Encoding]::new($false))
-$petMethods = [ordered]@{
-    ACTUAL_PET_HOST = (Method $chat 'private boolean isLunagramPetHostAvailable()')
-    ACTUAL_PET_VISIBLE = (Method $chat 'private boolean isLunagramPetVisible()')
-    ACTUAL_PET_ON_RAIL = (Method $chat 'private void setLunagramPetOnRail(boolean visible)')
-    ACTUAL_PET_PLACEMENT = (Method $chat 'private void updateLunagramPetPlacement()').Replace('org.telegram.ui.Components.LunagramPetView', 'PetView')
-    ACTUAL_PET_RAIL = (Method $inputContainer 'public boolean getPetRailBounds(RectF out)')
-}
-$petFixture = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'composer-layout150/PetMount150Probe.java.template'))
-foreach ($entry in $petMethods.GetEnumerator()) { $petFixture = $petFixture.Replace("/* $($entry.Key) */", $entry.Value) }
-$petProbe = Join-Path $run 'PetMount150Probe.java'
-[IO.File]::WriteAllText($petProbe, $petFixture, [Text.UTF8Encoding]::new($false))
 $production = @((Join-Path $sourceRoot 'Components/LumaComposerGeometry.java'), (Join-Path $sourceRoot 'Components/LumaRecordUiToken.java'))
-& $javac -J-Xmx128m -encoding UTF-8 -d $classes $production (Join-Path $PSScriptRoot 'composer-layout150/ComposerGeometry150Test.java') $probe $capsuleProbe $replyProbe $petProbe
+& $javac -J-Xmx128m -encoding UTF-8 -d $classes $production (Join-Path $PSScriptRoot 'composer-layout150/ComposerGeometry150Test.java') $probe $capsuleProbe $replyProbe
 Check ($LASTEXITCODE -eq 0) 'Production geometry/ownership probe compilation failed.'
 & $java -Xmx128m -cp $classes org.telegram.ui.Components.ComposerGeometry150Test
 Check ($LASTEXITCODE -eq 0) 'Composer geometry failed.'
@@ -88,8 +77,6 @@ Check ($LASTEXITCODE -eq 0) 'Extracted animation-owner probe failed.'
 Check ($LASTEXITCODE -eq 0) 'Extracted camera native-touch capsule probe failed.'
 & $java -Xmx128m -cp $classes ReplyPreview150Probe
 Check ($LASTEXITCODE -eq 0) 'Extracted composer preview content/close layout probe failed.'
-& $java -Xmx128m -cp $classes PetMount150Probe
-Check ($LASTEXITCODE -eq 0) 'Extracted actual pet rail/host floor placement probe failed.'
 # Confirm the executable probe catches the original static-origin defect and missing close
 # reservation; these mutations affect only generated fixtures, never the production files.
 $replyMutations = @(
@@ -110,22 +97,6 @@ foreach ($mutation in $replyMutations) {
     & $java -Xmx128m -cp ($negative + [IO.Path]::PathSeparator + $classes) ReplyPreview150Probe --expect-failure
     Check ($LASTEXITCODE -eq 0) ('Negative fixture was not detected: ' + $mutation[0])
 }
-$petMutations = @(
-    @('wrong-floor', 'overlayHeight + dp(pet.getFloorOffsetDp())', 'overlayHeight'),
-    @('rounded-corner', 'railLeft = visibleLeft + radius, railRight = visibleRight - radius', 'railLeft = visibleLeft, railRight = visibleRight'),
-    @('pet-reserves-space', 'lunagramPetOnRail = visible;', 'lunagramPetOnRail = visible; checkUi_chatListViewPaddings();')
-)
-foreach ($mutation in $petMutations) {
-    Check ($petFixture.Contains($mutation[1])) ('Negative pet mutation target missing: ' + $mutation[0])
-    $negative = Join-Path $run ('negative-pet-' + $mutation[0])
-    New-Item -ItemType Directory -Path $negative | Out-Null
-    $negativeProbe = Join-Path $negative 'PetMount150Probe.java'
-    [IO.File]::WriteAllText($negativeProbe, $petFixture.Replace($mutation[1], $mutation[2]), [Text.UTF8Encoding]::new($false))
-    & $javac -J-Xmx128m -encoding UTF-8 -d $negative $negativeProbe
-    Check ($LASTEXITCODE -eq 0) ('Negative pet fixture compilation failed: ' + $mutation[0])
-    & $java -Xmx128m -cp $negative PetMount150Probe --expect-failure
-    Check ($LASTEXITCODE -eq 0) ('Negative pet fixture was not detected: ' + $mutation[0])
-}
 $record = Method $composer 'protected void updateRecordInterface(int recordState, boolean animated)'
 Check ($record.Contains('recordUiToken.begin()') -and $record.Contains('cancelRunningRecordUiAnimation();')) 'Restart must invalidate old animation before cancel.'
 Check ($record -match '(?s)boolean shouldShowFastTransition = false;\s*if \(runningAnimationAudio != null\) \{(?:(?!cancelRunningRecordUiAnimation).)*?\}\s*cancelRunningRecordUiAnimation\(\);') 'Stop/preview must cancel delayed lock even after main entry animator already ended.'
@@ -138,6 +109,7 @@ Check ($composer.Contains('circleSlideDelta = compactRecord ? 0 : slideDelta') -
 Check ($composer.Contains('audioVideoButtonContainer.getLocationInWindow(compactControlLocation)') -and $composer.Contains('getLocationInWindow(compactOverlayLocation)')) 'Recording circle follows actual measured composer location.'
 Check ($composer.Contains('getMeasuredWidth() * audioVideoButtonContainer.getScaleX()') -and $composer.Contains('getMeasuredHeight() * audioVideoButtonContainer.getScaleY()') -and $record.Contains('audioVideoButtonContainer.setScaleX(1f);')) 'Transformed origins need scaled half-size; restarted hidden action must normalize scale.'
 Check ($composer.Contains('sendRect.set(cx - dp(24), cy - dp(24), cx + dp(24), cy + dp(24))')) 'Compact glyph retains48dp touch/a11y bounds.'
+Check ($composer.Contains('final TLRPC.User composerUser = parentFragment == null ? null : parentFragment.getCurrentUser();') -and $composer.Contains('editingMessageObject == null && composerUser != null && composerUser.bot') -and $composer.Contains('final int composerMaxLines = botComposer ? 3 : 6;') -and $composer.Contains('messageEditText.setMaxLines(composerMaxLines);')) 'Only direct bot chats cap the unsent composer at three lines; other chats and media edits keep six.'
 # Scope these checks to the separate overlay owners: an implementation only in RecordCircle
 # would leave ControlsView offset by its different250dp height and silently pass a whole-file grep.
 $controls = Method $composer 'public class ControlsView extends FrameLayout'
@@ -173,10 +145,7 @@ Check (!$replyRow.Contains('leftMargin = dp(45)') -and $replyRow.Contains('reply
 Check ($chat.Contains('replyLayout.current().getTextInsetPx(false)') -and $chat.Contains('replyLayout.current().getTextInsetPx(true)') -and $reply.Contains('setLeftMargin(image, getTextInsetPx(false))')) 'Reply thumbnail/runtime/recycled layouts must share actual pixel content origin.'
 Check ([regex]::Matches($reply, 'setClipChildren\(true\)').Count -eq 2 -and [regex]::Matches($reply, 'setMaxLines\(1\)').Count -eq 3 -and [regex]::Matches($reply, 'setScrollNonFitText\(false\)').Count -eq 3) 'Preview rows clip to their measured bounds and all text slots use one-line ellipsis, never scrolling under close.'
 Check ((Method $reply 'private void setLeftMargin(View view, int leftMargin)').Contains('if (params.leftMargin != leftMargin)') -and (Method $reply 'private void setRightMargin(View view, int rightMargin)').Contains('if (params.rightMargin != rightMargin)')) 'Preview margin updates must not churn layout on each preDraw.'
-Check ($chat.Contains('LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 80, Gravity.TOP | Gravity.LEFT)') -and $chat.Contains('lunagramPetView.setClickable(false)') -and $chat.Contains('lunagramPetView.setFocusable(false)')) 'Pet must mount full-width80 as a noninteractive overlay, never reserving conversation space.'
-Check ((Method $chat 'public void onResume()').Contains('lunagramPetView.setPaused(false)') -and (Method $chat 'public void onPause()').Contains('lunagramPetView.setPaused(true)') -and !(Method $chat 'public void onPause()').Contains('lunagramPetView.setVisibility(View.GONE)')) 'Pet lifecycle pauses motion without a GONE/visible feedback trap.'
-Check (!$chat.Contains('isLunagramPetVisible() ? dp(50) : 0') -and !$petMethods.ACTUAL_PET_ON_RAIL.Contains('checkUi_chatListViewPaddings();')) 'Pet visibility and placement must not reserve message-list space.'
-Check (!$petMethods.ACTUAL_PET_RAIL.Contains('tmpRect') -and !$petMethods.ACTUAL_PET_RAIL.Contains('new RectF') -and !$petMethods.ACTUAL_PET_RAIL.Contains('setBounds(')) 'Pet geometry getter is allocation-free and does not expose or mutate drawable scratch state.'
+Check (!$chat.Contains('LunagramPetView') -and !$chat.Contains('lunagramPetView') -and !$composer.Contains('LunagramPetView') -and !$composer.Contains('lunagramPetView') -and !$inputContainer.Contains('getPetRailBounds')) 'LunaPet overlay, composer lifecycle hooks and rail geometry stay removed.'
 if ($AndroidJar) {
     Check (Test-Path -LiteralPath $AndroidJar) 'Android36 jar missing.'
     # Compile actual animation cleanup against framework types; UI behavior remains modeled above.
@@ -194,14 +163,7 @@ if ($AndroidJar) {
     & $javac -J-Xmx128m -encoding UTF-8 -cp ($AndroidJar + [IO.Path]::PathSeparator + $classes) -d $classes $replyApiProbe
     Check ($LASTEXITCODE -eq 0) 'Actual preview margin/visibility methods Android API compilation failed.'
     Write-Output 'PASS: actual preview margin/visibility methods compiled against Android36 framework.'
-    $petApi = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'composer-layout150/PetMountApi150.java.template'))
-    foreach ($entry in $petMethods.GetEnumerator()) { $petApi = $petApi.Replace("/* $($entry.Key) */", $entry.Value) }
-    $petApiProbe = Join-Path $run 'PetMountApi150.java'
-    [IO.File]::WriteAllText($petApiProbe, $petApi, [Text.UTF8Encoding]::new($false))
-    & $javac -J-Xmx128m -encoding UTF-8 -cp $AndroidJar -d $classes $petApiProbe
-    Check ($LASTEXITCODE -eq 0) 'Actual pet placement/window/RectF getter Android API compilation failed.'
-    Write-Output 'PASS: actual pet placement/window/RectF getter compiled against Android36 framework.'
 } else { Write-Output 'Android36 compilation skipped: supply -AndroidJar.' }
 Write-Output 'PASS: recording visibility/cancel ordering/measured compact stack/native-touch camera/timer/send-as/reply source integration guards.'
-Write-Output 'Scope: production pure geometry + extracted actual ownership/camera/preview/pet methods with negative controls; modeled animator/view ownership and window bounds, no APK/device visual claim.'
+Write-Output 'Scope: production pure geometry + extracted actual ownership/camera/preview methods with negative controls; modeled animator/view ownership and window bounds, source contract for bot composer and removed LunaPet hooks, no APK/device visual claim.'
 Write-Output "Test artifacts: $run"

@@ -25,6 +25,7 @@ import org.telegram.ui.Cells.TextCheckCell;
 import org.telegram.ui.Cells.TextDetailCell;
 import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.Paint.ColorPickerBottomSheet;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalRecyclerView;
@@ -55,7 +56,6 @@ public final class LunagramExperienceSettingsActivity extends BaseFragment imple
     private Feature featureFor(int id) {
         switch (id) {
             case 1: case 11: return Feature.SWIPE_ACTIONS;
-            case 2: return Feature.LUNA_PET;
             case 3: return Feature.INTERFACE_SOUNDS;
             case 4: case 12: return Feature.SEND_ANIMATIONS;
             case 5: case 6: return Feature.CHAT_ATMOSPHERE;
@@ -91,12 +91,12 @@ public final class LunagramExperienceSettingsActivity extends BaseFragment imple
     private void fill(ArrayList<UItem> items, UniversalAdapter adapter) {
         if (!swipeOnly) {
             items.add(UItem.asHeader(text(R.string.BHGAppearanceHeader)));
-            items.add(TextDetailCell.Factory.of(2, text(R.string.LunagramPetTitle), petNames()[LunagramExperienceSettings.pet(currentAccount)]));
             items.add(TextDetailCell.Factory.of(3, text(R.string.LunagramSoundsTitle), soundNames()[LunagramExperienceSettings.soundPack(currentAccount)]));
             items.add(TextDetailCell.Factory.of(4, text(R.string.LunagramSendEffectTitle), sendNames()[LunagramExperienceSettings.sendEffect(currentAccount)]));
             items.add(TextDetailCell.Factory.of(12, text(R.string.LunagramIncomingEffectTitle), incomingNames()[LunagramExperienceSettings.incomingEffect(currentAccount)]));
             items.add(UItem.asCheck(13, text(R.string.LunagramShowPlanInDialogsHeader)).setChecked(LunagramExperienceSettings.showPlanInDialogsHeader(currentAccount)));
             items.add(TextDetailCell.Factory.of(15, text(R.string.LunagramPlanHeaderLabel), LunagramExperienceSettings.planLabel(currentAccount)));
+            items.add(TextDetailCell.Factory.of(16, text(R.string.LunagramPlanHeaderColor), String.format(java.util.Locale.ROOT, "#%06X", LunagramExperienceSettings.planLabelColor(currentAccount) & 0x00ffffff)));
             items.add(TextDetailCell.Factory.of(17, text(R.string.LunagramSearchCircleSide), text(LunagramExperienceSettings.searchButtonOnRight(currentAccount) ? R.string.LunagramSearchCircleRight : R.string.LunagramSearchCircleLeft)));
             items.add(UItem.asCheck(14, text(R.string.LunagramShowDialogQuickActions)).setChecked(LunagramExperienceSettings.showDialogQuickActions(currentAccount)));
             items.add(UItem.asCheck(10, text(R.string.LunagramFeedShowTab)).setChecked(LunagramExperienceSettings.feedVisible(currentAccount)));
@@ -140,6 +140,17 @@ public final class LunagramExperienceSettingsActivity extends BaseFragment imple
         if (feature != null && !LunagramFeatureGate.require(this, feature)) return;
         if (item.id == 15) {
             editPlanHeaderLabel();
+        } else if (item.id == 16) {
+            final android.app.Activity activity = getParentActivity();
+            if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
+            final ColorPickerBottomSheet picker = new ColorPickerBottomSheet(activity, getResourceProvider())
+                    .setColor(LunagramExperienceSettings.planLabelColor(currentAccount))
+                    .setColorListener(color -> {
+                        if (!currentOwner()) return;
+                        LunagramExperienceSettings.setPlanLabelColor(currentAccount, color);
+                        if (list != null) list.adapter.update(false);
+                    });
+            picker.show();
         } else if (item.id == 17) {
             String[] sides = { text(R.string.LunagramSearchCircleLeft), text(R.string.LunagramSearchCircleRight) };
             int selected = LunagramExperienceSettings.searchButtonOnRight(currentAccount) ? 1 : 0;
@@ -151,13 +162,12 @@ public final class LunagramExperienceSettingsActivity extends BaseFragment imple
         } else if (item.id == 1) {
             boolean enabled = !LunagramExperienceSettings.swipeEnabled(currentAccount); LunagramExperienceSettings.setSwipeEnabled(currentAccount, enabled);
             if (view instanceof TextCheckCell) ((TextCheckCell) view).setChecked(enabled);
-        } else if ((item.id >= 2 && item.id <= 6) || item.id == 12) {
-            String[] names = item.id == 2 ? petNames() : item.id == 3 ? soundNames() : item.id == 4 ? sendNames() : item.id == 5 ? atmosphereNames() : item.id == 12 ? incomingNames() : intensityNames();
-            int selected = item.id == 2 ? LunagramExperienceSettings.pet(currentAccount) : item.id == 3 ? LunagramExperienceSettings.soundPack(currentAccount) : item.id == 4 ? LunagramExperienceSettings.sendEffect(currentAccount) : item.id == 5 ? LunagramExperienceSettings.atmosphere(currentAccount, dialogId) : item.id == 12 ? LunagramExperienceSettings.incomingEffect(currentAccount) : LunagramExperienceSettings.atmosphereIntensity(currentAccount, dialogId);
+        } else if ((item.id >= 3 && item.id <= 6) || item.id == 12) {
+            String[] names = item.id == 3 ? soundNames() : item.id == 4 ? sendNames() : item.id == 5 ? atmosphereNames() : item.id == 12 ? incomingNames() : intensityNames();
+            int selected = item.id == 3 ? LunagramExperienceSettings.soundPack(currentAccount) : item.id == 4 ? LunagramExperienceSettings.sendEffect(currentAccount) : item.id == 5 ? LunagramExperienceSettings.atmosphere(currentAccount, dialogId) : item.id == 12 ? LunagramExperienceSettings.incomingEffect(currentAccount) : LunagramExperienceSettings.atmosphereIntensity(currentAccount, dialogId);
             showDialog(AlertsCreator.createSingleChoiceDialog(getParentActivity(), names, item.text.toString(), selected, (dialog, index) -> {
                 if (!currentOwner() || index < 0 || index >= names.length || !LunagramFeatureGate.require(this, feature)) return;
-                if (item.id == 2) LunagramExperienceSettings.setPet(currentAccount, index);
-                else if (item.id == 3) { LunagramExperienceSettings.setSoundPack(currentAccount, index); org.telegram.messenger.LunagramInterfaceSounds.play(currentAccount, org.telegram.messenger.LunagramInterfaceSounds.SWITCH); }
+                if (item.id == 3) { LunagramExperienceSettings.setSoundPack(currentAccount, index); org.telegram.messenger.LunagramInterfaceSounds.play(currentAccount, org.telegram.messenger.LunagramInterfaceSounds.SWITCH); }
                 else if (item.id == 4) LunagramExperienceSettings.setSendEffect(currentAccount, index);
                 else if (item.id == 5) LunagramExperienceSettings.setAtmosphere(currentAccount, dialogId, index);
                 else if (item.id == 12) LunagramExperienceSettings.setIncomingEffect(currentAccount, index);
@@ -222,7 +232,6 @@ public final class LunagramExperienceSettingsActivity extends BaseFragment imple
         input.requestFocus();
     }
     private String text(int id) { return LocaleController.getString(id); }
-    private String[] petNames() { return names(R.string.LunagramEffectsOff, R.string.LunagramPetCat); }
     private String[] soundNames() { return names(R.string.LunagramEffectsOff, R.string.LunagramSoundSpace, R.string.LunagramSoundTypewriter, R.string.LunagramSoundRetro, R.string.LunagramSoundDrops); }
     private String[] sendNames() { return names(R.string.Default, R.string.LunagramSendLetters, R.string.LunagramSendDrop, R.string.LunagramSendPlane); }
     private String[] incomingNames() { return names(R.string.Default, R.string.LunagramSendLetters, R.string.LunagramSendDrop, R.string.LunagramSendPlane); }

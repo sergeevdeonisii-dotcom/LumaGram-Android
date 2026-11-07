@@ -375,7 +375,6 @@
     <string name="LunagramSubscriptionInfoVoiceFilters">Робот, рация, глубокий бас, мультяшный голос и старый телефон. Результат можно послушать до отправки.</string>
     <string name="LunagramSubscriptionInfoSwipeActions">Быстрый свайп — ответ. Задержи палец, затем выбери вверх или вниз: ответ, копировать, перевести, сохранить. Порядок меняется в настройках.</string>
     <string name="LunagramSubscriptionInfoFeed">Посты выбранных каналов одним потоком, с реакциями и переходом к оригиналу.</string>
-    <string name="LunagramSubscriptionInfoPet">Котик над полем ввода: играет, реагирует на набор и отправку, прячется во время записи.</string>
     <string name="LunagramSubscriptionInfoSounds">Тихие звуки интерфейса: «Космос», «Печатная машинка», «Ретро-консоль» и «Капли».</string>
     <string name="LunagramSubscriptionInfoAtmosphere">Звёзды, дождь, светлячки или аквариум в отдельных чатах. Интенсивность можно настроить.</string>
     <string name="LunagramSubscriptionInfoSendAnimations">Отдельные эффекты для исходящих и новых сообщений в открытом чате.</string>
@@ -495,7 +494,6 @@
     <string name="LunagramSubscriptionFeatureSwipeActions">Меню свайпа</string>
     <string name="LunagramSubscriptionFeatureFeed">Общая лента каналов</string>
     <string name="LunagramFeedUltraRequired">Лента доступна с Ultra</string>
-    <string name="LunagramSubscriptionFeaturePet">LunaPet</string>
     <string name="LunagramSubscriptionFeatureSounds">Звуковые паки интерфейса</string>
     <string name="LunagramSubscriptionFeatureAtmosphere">Атмосфера чата</string>
     <string name="LunagramSubscriptionFeatureSendAnimations">Анимации сообщений</string>
@@ -798,6 +796,7 @@
     <string name="LunagramShowPlanInDialogsHeader">Показывать название тарифа рядом с Lunagram в списке чатов</string>
     <string name="LunagramPlanHeaderLabel">Подпись тарифа</string>
     <string name="LunagramPlanHeaderLabelHint">Например: Ultra, PRO, PRO+ (до 8 символов)</string>
+    <string name="LunagramPlanHeaderColor">Цвет текста подписи</string>
     <string name="LunagramSearchCircleSide">Сторона кнопки поиска</string>
     <string name="LunagramSearchCircleLeft">Слева</string>
     <string name="LunagramSearchCircleRight">Справа</string>
@@ -812,10 +811,6 @@
     <string name="LunagramSwipeOrder">Порядок действий</string>
     <string name="LunagramSwipeOrderInfo">Перетаскивай действия, чтобы менять порядок.</string>
     <string name="LunagramSaveToSelf">Сохранить в Избранное</string>
-    <string name="LunagramPetTitle">LunaPet</string>
-    <string name="LunagramPetCat">Кот</string>
-    <string name="LunagramPetFox">Лисёнок</string>
-    <string name="LunagramPetGhost">Привидение</string>
     <string name="LunagramSoundsTitle">Звуки интерфейса</string>
     <string name="LunagramSoundSpace">Космос</string>
     <string name="LunagramSoundTypewriter">Печатная машинка</string>
@@ -890,7 +885,7 @@
     <string name="LunagramWelcome20Swipe">Меню свайпом: ответить, скопировать, перевести или сохранить. Порядок действий настраивается.</string>
     <string name="LunagramWelcome20Audio">Голосовые фильтры с предпрослушиванием и стереозапись на поддерживаемых микрофонах.</string>
     <string name="LunagramWelcome20Video">VHS, зерно, чёрно-белые кружки и цифровая камера. Размытие фона на поддерживаемых камерах.</string>
-    <string name="LunagramWelcome20Atmosphere">LunaPet, звуковые паки, атмосфера чата и новые анимации отправки.</string>
+    <string name="LunagramWelcome20Atmosphere">Звуковые паки, атмосфера чата и новые анимации отправки.</string>
     <string name="LunagramWelcome20Tools">Напоминания о сообщениях, режим стримера для оформления и мемы из кадров видео.</string>
     <string name="LunagramWelcome20Fixes">Ровные элементы записи, ускоренное переключение поддерживаемых камер и общий список подарков с анимацией и перелистыванием.</string>
 </resources>

@@ -92,7 +92,7 @@ public class ColorPickerBottomSheet extends BottomSheet {
         pipetteView.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
         pipetteView.setBackground(Theme.createSelectorDrawable(Theme.ACTION_BAR_WHITE_SELECTOR_COLOR));
         pipetteView.setOnClickListener(v -> {
-            if (pipetteDelegate.isPipetteVisible()) {
+            if (pipetteDelegate == null || !pipetteDelegate.isPipetteAvailable() || pipetteDelegate.isPipetteVisible()) {
                 return;
             }
 
@@ -168,7 +168,7 @@ public class ColorPickerBottomSheet extends BottomSheet {
 
     @Override
     public void show() {
-        if (!pipetteDelegate.isPipetteAvailable()) {
+        if (pipetteDelegate == null || !pipetteDelegate.isPipetteAvailable()) {
             pipetteView.setVisibility(View.GONE);
         }
         super.show();

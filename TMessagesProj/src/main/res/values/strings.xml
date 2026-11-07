@@ -11382,7 +11382,6 @@
     <string name="LunagramSubscriptionInfoVoiceFilters">Robot, radio, deep bass, cartoon and old-phone effects. Listen to the result before sending.</string>
     <string name="LunagramSubscriptionInfoSwipeActions">Quick swipe to reply. Hold briefly, then move up or down to choose reply, copy, translate or save. Reorder actions in settings.</string>
     <string name="LunagramSubscriptionInfoFeed">Posts from selected channels in one feed, with reactions and a link to the original post.</string>
-    <string name="LunagramSubscriptionInfoPet">An animated cat above the input field. It plays, reacts to typing and sending, and hides during recording.</string>
     <string name="LunagramSubscriptionInfoSounds">Quiet interface sound packs: Space, Typewriter, Retro Console and Drops.</string>
     <string name="LunagramSubscriptionInfoAtmosphere">Stars, rain, fireflies or an aquarium in individual chats, with adjustable intensity.</string>
     <string name="LunagramSubscriptionInfoSendAnimations">Separate effects for outgoing messages and new messages in the open chat.</string>
@@ -11502,7 +11501,6 @@
     <string name="LunagramSubscriptionFeatureSwipeActions">Swipe action menu</string>
     <string name="LunagramSubscriptionFeatureFeed">Channel feed</string>
     <string name="LunagramFeedUltraRequired">Channel feed requires Ultra</string>
-    <string name="LunagramSubscriptionFeaturePet">LunaPet</string>
     <string name="LunagramSubscriptionFeatureSounds">Interface sound packs</string>
     <string name="LunagramSubscriptionFeatureAtmosphere">Chat atmosphere</string>
     <string name="LunagramSubscriptionFeatureSendAnimations">Message animations</string>
@@ -11826,6 +11824,7 @@
     <string name="LunagramShowPlanInDialogsHeader">Show plan name beside Lunagram in the chat list</string>
     <string name="LunagramPlanHeaderLabel">Plan label text</string>
     <string name="LunagramPlanHeaderLabelHint">Ultra, PRO, PRO+ (up to 8 characters)</string>
+    <string name="LunagramPlanHeaderColor">Plan label text color</string>
     <string name="LunagramSearchCircleSide">Search button side</string>
     <string name="LunagramSearchCircleLeft">Left</string>
     <string name="LunagramSearchCircleRight">Right</string>
@@ -11840,10 +11839,6 @@
     <string name="LunagramSwipeOrder">Action order</string>
     <string name="LunagramSwipeOrderInfo">Drag actions to change their order.</string>
     <string name="LunagramSaveToSelf">Save to Saved Messages</string>
-    <string name="LunagramPetTitle">LunaPet</string>
-    <string name="LunagramPetCat">Cat</string>
-    <string name="LunagramPetFox">Fox</string>
-    <string name="LunagramPetGhost">Ghost</string>
     <string name="LunagramSoundsTitle">Interface sounds</string>
     <string name="LunagramSoundSpace">Space</string>
     <string name="LunagramSoundTypewriter">Typewriter</string>
@@ -11918,7 +11913,7 @@
     <string name="LunagramWelcome20Swipe">Swipe menu: reply, copy, translate or save. Choose your own action order.</string>
     <string name="LunagramWelcome20Audio">Voice filters with preview, and stereo recording when supported by your microphones.</string>
     <string name="LunagramWelcome20Video">VHS, grain, monochrome and digital-camera round videos. Background blur on supported cameras.</string>
-    <string name="LunagramWelcome20Atmosphere">LunaPet, interface sound packs, chat atmospheres and new message-send animations.</string>
+    <string name="LunagramWelcome20Atmosphere">Interface sound packs, chat atmospheres and new message-send animations.</string>
     <string name="LunagramWelcome20Tools">Message reminders, a presentation-only streamer mode, and memes from paused video frames.</string>
     <string name="LunagramWelcome20Fixes">Aligned recording controls, quicker supported camera switching, and a unified gift list with animated details and swiping.</string>
 

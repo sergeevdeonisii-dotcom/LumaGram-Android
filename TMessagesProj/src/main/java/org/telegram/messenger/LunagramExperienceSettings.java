@@ -13,10 +13,39 @@ public final class LunagramExperienceSettings {
         LumaAccountData.preferences(account).edit().putString("experience.planLabel", normalizePlanLabel(value)).apply();
         NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_NAME);
     }
+    public static int planLabelColor(int account) {
+        return readableOnWhite(LumaAccountData.preferences(account).getInt("experience.planLabelColor", 0xff000000));
+    }
+    public static void setPlanLabelColor(int account, int value) {
+        LumaAccountData.preferences(account).edit().putInt("experience.planLabelColor", readableOnWhite(value)).apply();
+        NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_NAME);
+    }
     public static boolean searchButtonOnRight(int account) { return LumaAccountData.preferences(account).getBoolean("experience.searchButtonOnRight", false); }
     public static void setSearchButtonOnRight(int account, boolean value) {
         LumaAccountData.preferences(account).edit().putBoolean("experience.searchButtonOnRight", value).apply();
         NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_ALL);
+    }
+    /** Legacy LunaPet renderer is retained as dormant source, but can no longer be enabled. */
+    @Deprecated
+    public static int pet(int account) { return 0; }
+    private static int readableOnWhite(int color) {
+        int red = (color >>> 16) & 0xff;
+        int green = (color >>> 8) & 0xff;
+        int blue = color & 0xff;
+        for (int i = 0; i < 32 && contrastOnWhite(red, green, blue) < 4.5; i++) {
+            red = (int) (red * 0.9f);
+            green = (int) (green * 0.9f);
+            blue = (int) (blue * 0.9f);
+        }
+        return 0xff000000 | red << 16 | green << 8 | blue;
+    }
+    private static double contrastOnWhite(int red, int green, int blue) {
+        double luminance = 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue);
+        return 1.05 / (luminance + 0.05);
+    }
+    private static double linear(int channel) {
+        double value = channel / 255.0;
+        return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
     }
     private static String normalizePlanLabel(String value) {
         if (value == null || value.isEmpty()) return "Ultra";
@@ -55,8 +84,6 @@ public final class LunagramExperienceSettings {
         for (int action : order) { if (value.length() > 0) value.append(','); value.append(action); }
         LumaAccountData.preferences(account).edit().putString("experience.swipeOrder", value.toString()).apply();
     }
-    public static int pet(int account) { return allowed(account, LunagramFeatureCatalog.Feature.LUNA_PET) ? clamp(LumaAccountData.preferences(account).getInt("experience.pet", 0), 0, 1) : 0; }
-    public static void setPet(int account, int value) { if (value != 0 && !allowed(account, LunagramFeatureCatalog.Feature.LUNA_PET)) return; LumaAccountData.preferences(account).edit().putInt("experience.pet", clamp(value, 0, 1)).apply(); }
     public static boolean feedVisible(int account) { return allowed(account, LunagramFeatureCatalog.Feature.CHANNEL_FEED) && LumaAccountData.preferences(account).getBoolean("experience.feedVisible", true); }
     public static void setFeedVisible(int account, boolean value) {
         if (value && !allowed(account, LunagramFeatureCatalog.Feature.CHANNEL_FEED)) return;

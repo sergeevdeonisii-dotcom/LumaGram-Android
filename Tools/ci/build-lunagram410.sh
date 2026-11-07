@@ -86,7 +86,7 @@ printf 'Building public test Lunagram 4.1.0 from %s.\n' "$source_commit"
     ':TMessagesProj_AppStandalone:assembleAfatStandalone' \
     --no-daemon --no-parallel --max-workers=2 --no-watch-fs --console=plain \
     "-Dorg.gradle.jvmargs=$jvm_args" '-Pkotlin.compiler.execution.strategy=in-process' \
-    '-PAPP_VERSION_NAME=4.1.0' '-PAPP_VERSION_CODE=7206' \
+    '-PAPP_VERSION_NAME=4.1.0' '-PAPP_VERSION_CODE=7207' \
     '-PlumaFriendsEdition=false' '-PlumaPublicEdition=true'
 git diff --quiet && git diff --cached --quiet || fail 'Tracked source changed during the build.'
 node Tools/ci/collect-lunagram-apk.mjs --release 410 --repo-root "$repo_root" \

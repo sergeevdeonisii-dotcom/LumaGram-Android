@@ -21,10 +21,6 @@ LunagramSwipeInfo
 LunagramSwipeOrder
 LunagramSwipeOrderInfo
 LunagramSaveToSelf
-LunagramPetTitle
-LunagramPetCat
-LunagramPetFox
-LunagramPetGhost
 LunagramSoundsTitle
 LunagramSoundSpace
 LunagramSoundTypewriter
@@ -134,3 +130,4 @@ LunagramSubscriptionInfoJournal
 LunagramSubscriptionInfoExport
 LunagramSubscriptionInfoPdf
 LunagramSubscriptionInfoLocal
+LunagramPlanHeaderColor
