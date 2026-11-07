@@ -72,7 +72,7 @@ $featureInfo=@{}
 foreach($entry in [regex]::Matches((Extract-Class 'private int featureInfoResource(Feature feature)'), 'case (\w+): return R\.string\.(\w+);')) {
     $featureInfo[$entry.Groups[1].Value]=$entry.Groups[2].Value
 }
-if($featureTitles.Count -ne 39 -or $featureInfo.Count -ne 39){throw 'Native copy probe requires all thirty-nine paid groups.'}
+if($featureTitles.Count -ne 38 -or $featureInfo.Count -ne 38){throw 'Native copy probe requires all thirty-eight paid groups.'}
 # New feature groups use concise rows; detailed capability lists remain in tap dialogs.
 $featureSummaries=@{} + $featureInfo
 foreach($entry in [regex]::Matches((Extract-Class 'private int featureSummaryResource(Feature feature)'), 'case (\w+): return R\.string\.(\w+);')) {

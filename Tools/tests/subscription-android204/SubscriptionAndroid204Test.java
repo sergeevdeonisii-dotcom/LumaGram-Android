@@ -123,7 +123,7 @@ public final class SubscriptionAndroid204Test {
 
     @Test public void actualUltraFeatureCopyWraps() {
         for (int language = 0; language < FeatureLabels.VALUES.length; language++) {
-            check("all thirty-nine actual resource pairs", FeatureLabels.VALUES[language].length == 39);
+            check("all thirty-eight actual resource pairs", FeatureLabels.VALUES[language].length == 38);
             for (float fontScale : new float[]{1f, 2f}) for (boolean rtl : new boolean[]{false, true}) {
                 Context context = context(fontScale, rtl);
                 for (int width : new int[]{240, 360}) for (String[] copy : FeatureLabels.VALUES[language]) {
@@ -133,7 +133,7 @@ public final class SubscriptionAndroid204Test {
             }
         }
         System.out.println("PASS: " + rows + " actual EN/RU Ultra feature rows, " + assertions
-                + " native-text assertions; 39 groups, 240/360dp, fontScale 1/2, LTR/RTL.");
+                + " native-text assertions; 38 groups, 240/360dp, fontScale 1/2, LTR/RTL.");
     }
 
     private void saveGeometryPreview() {

@@ -477,7 +477,7 @@ public final class SubscriptionScreen150Probe {
                 }
             }
             check(planSelectors==0&&periodSelectors==1,"one Ultra offer: no plan picker, exactly one duration selector");
-            check(featureRows==39,"all thirty-nine Ultra groups appear exactly once, with no free baseline rows");
+            check(featureRows==38,"all thirty-eight Ultra groups appear exactly once, with no free baseline rows");
             check(screen.featureSummaryResource(Feature.TEXT_TOOLS)==R.string.LulPlanTextShort
                     &&screen.featureSummaryResource(Feature.READING_TOOLS)==R.string.LulPlanReadingShort
                     &&screen.featureSummaryResource(Feature.LINK_TOOLS)==R.string.LulPlanLinksShort
