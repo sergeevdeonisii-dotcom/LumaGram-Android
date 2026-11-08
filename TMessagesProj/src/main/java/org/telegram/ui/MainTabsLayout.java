@@ -6,6 +6,7 @@ import static org.telegram.messenger.AndroidUtilities.lerp;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.view.MotionEvent;
@@ -373,12 +374,26 @@ public class MainTabsLayout extends AnimatedLinearLayout {
 
     private final Runnable restoreDrawSelector = () -> setSkipDrawSelector(false);
 
+    private boolean isDarkTheme() {
+        return resourcesProvider != null ? resourcesProvider.isDark() : Theme.isCurrentThemeDark();
+    }
+
+    private int getActiveTabSelectorColor() {
+        return hasActiveTabPagePosition && isDarkTheme()
+                ? Color.WHITE
+                : Theme.getColor(Theme.key_glass_tabSelected, resourcesProvider);
+    }
+
+    private float getActiveTabSelectorAlpha(boolean customSelector) {
+        if (hasActiveTabPagePosition && isDarkTheme()) {
+            return 0.12f;
+        }
+        return customSelector ? 0.09f : 0.13f;
+    }
+
     private boolean drawCustomSelector;
     private void setSkipDrawSelector(boolean skipDrawSelector) {
         drawCustomSelector = skipDrawSelector;
-        if (drawCustomSelector) {
-            selectorPaint.setColor(Theme.multAlpha(Theme.getColor(Theme.key_glass_tabSelected, resourcesProvider), 0.09f));
-        }
         for (int a = 0, N = getChildCount(); a < N; a++) {
             final View child = getChildAt(a);
             if (child.getVisibility() != View.VISIBLE) {
@@ -406,7 +421,7 @@ public class MainTabsLayout extends AnimatedLinearLayout {
             final float height = bottom - top;
             if (height > 0f) {
                 activeTabSelectorPaint.setColor(Theme.multAlpha(
-                        Theme.getColor(Theme.key_glass_tabSelected, resourcesProvider), 0.13f));
+                        getActiveTabSelectorColor(), getActiveTabSelectorAlpha(false)));
                 activeTabSelectorBounds.set(activeTabCenterX - activeTabWidth / 2f, top,
                         activeTabCenterX + activeTabWidth / 2f, bottom);
                 final float radius = height / 2f;
@@ -415,6 +430,8 @@ public class MainTabsLayout extends AnimatedLinearLayout {
         }
 
         if (drawCustomSelector) {
+            selectorPaint.setColor(Theme.multAlpha(
+                    getActiveTabSelectorColor(), getActiveTabSelectorAlpha(true)));
             final float x = animatedLongSelectedViewCenterX + animatedLongSelectedViewOffsetX;
             final float sWidth = getInterpolatedWidthByX(x, this);
             final float sHeight = getHeight() - getPaddingTop() - getPaddingBottom();

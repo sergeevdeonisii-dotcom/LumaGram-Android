@@ -994,7 +994,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     private void updateTabSelectorPosition() {
         if (tabsView != null && viewPager != null) {
-            tabsView.setActiveTabPagePosition(viewPager.getPositionAnimated());
+            tabsView.setActiveTabPagePosition(viewPager.getCurrentPosition());
         }
     }
 
