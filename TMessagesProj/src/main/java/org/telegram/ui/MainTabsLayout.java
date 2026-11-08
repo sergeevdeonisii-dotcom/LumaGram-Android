@@ -407,6 +407,14 @@ public class MainTabsLayout extends AnimatedLinearLayout {
         invalidate();
     }
 
+    public void showPagerDrivenSelectorIfNeeded() {
+        if (isInLongPress || !drawCustomSelector) {
+            return;
+        }
+        AndroidUtilities.cancelRunOnUIThread(restoreDrawSelector);
+        setSkipDrawSelector(false);
+    }
+
 
 
 
