@@ -876,8 +876,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
         if (tabsView != null) {
             final float position = viewPager.getPositionAnimated();
-            if ((viewPager.isManualScrolling() || viewPager.isTouch())
-                    && Math.abs(position - viewPager.getCurrentPosition()) > 0.001f) {
+            if (Math.abs(position - viewPager.getCurrentPosition()) > 0.001f) {
                 tabsView.showPagerDrivenSelectorIfNeeded();
             }
             tabsView.setActiveTabPagePosition(position);
