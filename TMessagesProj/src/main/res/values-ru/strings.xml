@@ -654,7 +654,8 @@
     <string name="LumaRoundVideoMeasuredEmpty">Запишите и отправьте кружок длиннее двух секунд. Здесь появятся фактические FPS, разрешение и битрейт видео. Доступно с Android 9; короткий или недоступный файл измерить нельзя.</string>
     <string name="LumaRoundVideoMeasuredInfo">%1$d × %2$d · %3$.1f FPS · %4$.1f Мбит/с\nВыбрано: %5$d FPS</string>
     <string name="LumaRoundVideoMeasuredNote">Измерено по сохранённому MP4, а не по ползунку или экрану. Частота может снижаться из-за камеры, освещения или пропуска кадров. Эти локальные измерения не доказывают, что каждый закодированный кадр содержит уникальный снимок камеры.</string>
-    <string name="LumaRoundVideoFpsInfo">60 FPS зависят от камеры и света; без поддержки — 30. Для обычной камеры включи высокое качество. После изменения заново открой чат.</string>
+    <string name="LumaRoundVideoFpsInfo">При выборе 60 FPS включается Camera2. Реальная частота зависит от камеры и освещения. После изменения заново открой чат.</string>
+    <string name="LumaRoundVideoAccessInfo">Для смены частоты кадров и режима двух камер нужен подтверждённый доступ к Lunagram Ultra. Проверь доступ в разделе «Подписка».</string>
     <string name="LumaRoundVideoPrepareFailed">Не удалось подготовить кружок в лимит Telegram. Исходное видео сохранено — попробуйте отправить ещё раз.</string>
     <string name="LunagramTelegramBaseVersion">База Telegram: %1$s</string>
     <string name="RoundVideoGeneralInfo">Camera2: до 640 × 640, большие файлы сжимаются без обрезки. Битрейт указан для 30 FPS; при 60 удваивается. FPS и стабилизация общие для обоих режимов.</string>
@@ -662,7 +663,7 @@
     <string name="LumaRoundVideoControlsInfo">Качество записи, частота кадров и стабилизация камеры.</string>
     <string name="LumaRoundVideoFastSwitchTitle">Быстрое переключение камер</string>
     <string name="LumaRoundVideoFastSwitchEnable">Держать обе камеры готовыми</string>
-    <string name="LumaRoundVideoFastSwitchInfo">Две камеры при 30 FPS в Camera2, если поддерживается. При 60 FPS и выше — обычное переключение без снижения FPS. Расход энергии выше; записывается выбранная камера.</string>
+    <string name="LumaRoundVideoFastSwitchInfo">Работает при 30 FPS на Android 11 и новее, если телефон поддерживает одновременную работу камер. При 60 FPS камеры переключаются обычным способом.</string>
     <string name="RoundVideoGeneral">Запись</string>
     <string name="RoundVideoUseNewRecorder">Новый режим записи Camera2</string>
     <string name="RoundVideoOutputResolution">Разрешение кружка</string>

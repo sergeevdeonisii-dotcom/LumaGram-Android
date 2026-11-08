@@ -1,6 +1,7 @@
 package org.telegram.ui;
 
 import android.content.Context;
+import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -16,6 +17,9 @@ import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.LumaRoundVideoCamera;
 import org.telegram.messenger.LumaRoundVideoStabilization;
 import org.telegram.messenger.LumaBuildPolicy;
+import org.telegram.messenger.LunagramFeatureCatalog;
+import org.telegram.messenger.LunagramSubscriptionAccess;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.utils.settings.SharedSettings;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -33,7 +37,7 @@ import org.telegram.ui.Components.SlideChooseView;
 import org.telegram.utils.recorder.round.RoundVideoSession;
 
 /** All round-video controls: common preferences plus the optional Camera2 recorder. */
-public class RoundVideoSettingsActivity extends BaseFragment {
+public class RoundVideoSettingsActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
     private static final int TYPE_HEADER = 0;
     private static final int TYPE_CHECK = 1;
     private static final int TYPE_VALUE = 2;
@@ -60,7 +64,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
     private static final int ROW_STABILIZATION_SEPARATOR = 16;
     private static final int ROW_CONCURRENT_HEADER = 17;
     private static final int ROW_CONCURRENT_ENABLED = 18;
-    private static final int ROW_CONCURRENT_SEPARATOR = 19;
+    private static final int ROW_CONCURRENT_INFO = 19;
     private static final int ROW_COMPOSITION_HEADER = 20;
     private static final int ROW_COMPOSITION = 21;
     private static final int ROW_COMPOSITION_INFO = 22;
@@ -84,6 +88,34 @@ public class RoundVideoSettingsActivity extends BaseFragment {
 
     private RecyclerListView listView;
     private ListAdapter adapter;
+
+    @Override
+    public boolean onFragmentCreate() {
+        if (!super.onFragmentCreate()) return false;
+        getNotificationCenter().addObserver(this, NotificationCenter.lunagramSubscriptionChanged);
+        return true;
+    }
+
+    @Override
+    public void onFragmentDestroy() {
+        getNotificationCenter().removeObserver(this, NotificationCenter.lunagramSubscriptionChanged);
+        super.onFragmentDestroy();
+    }
+
+    @Override
+    public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.lunagramSubscriptionChanged && account == currentAccount && adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
+    }
+
+    private boolean hasRoundVideoControls() {
+        return LunagramSubscriptionAccess.canUse(currentAccount, LunagramFeatureCatalog.Feature.ROUND_VIDEO_CONTROLS);
+    }
+
+    private boolean canToggleFastSwitch() {
+        return Build.VERSION.SDK_INT >= 30 && hasRoundVideoControls();
+    }
 
     @Override
     public View createView(Context context) {
@@ -131,16 +163,18 @@ public class RoundVideoSettingsActivity extends BaseFragment {
             return;
         }
         if (position == ROW_ENABLED) {
-            InstantCameraViewBase.setUseCamera2Implementation(!InstantCameraViewBase.isUsingCamera2Implementation());
+            InstantCameraViewBase.setUseCamera2Implementation(!SharedSettings.roundVideoCamera2Enabled.get());
             adapter.notifyDataSetChanged();
             return;
         }
-        if (!InstantCameraViewBase.isUsingCamera2Implementation()) {
+        if (position == ROW_CONCURRENT_ENABLED) {
+            if (canToggleFastSwitch()) {
+                LumaRoundVideoCamera.setFastSwitchEnabled(!LumaRoundVideoCamera.isFastSwitchEnabled());
+                adapter.notifyDataSetChanged();
+            }
             return;
         }
-        if (position == ROW_CONCURRENT_ENABLED) {
-            LumaRoundVideoCamera.setFastSwitchEnabled(!LumaRoundVideoCamera.isFastSwitchEnabled());
-            adapter.notifyItemChanged(position);
+        if (!InstantCameraViewBase.isUsingCamera2Implementation()) {
             return;
         }
         if (position == ROW_OUTPUT_RESOLUTION) {
@@ -239,13 +273,15 @@ public class RoundVideoSettingsActivity extends BaseFragment {
             if (position == ROW_ENABLED || position == ROW_REAR_CAMERA) {
                 return true;
             }
+            if (position == ROW_CONCURRENT_ENABLED) {
+                return canToggleFastSwitch();
+            }
             if (!InstantCameraViewBase.isUsingCamera2Implementation()) {
                 return false;
             }
             return position == ROW_OUTPUT_RESOLUTION
                     || position == ROW_CAMERA_RESOLUTION
                     || position == ROW_BITRATE
-                    || position == ROW_CONCURRENT_ENABLED
                     || position == ROW_COMPOSITION;
         }
 
@@ -292,8 +328,22 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 SlideChooseView cell = (SlideChooseView) holder.itemView;
                 cell.setCallback(null);
                 if (position == ROW_FRAME_RATE) {
-                    cell.setOptions(InstantCameraViewBase.getRequestedRecordingFrameRate() / 30 - 1, "30", "60");
-                    cell.setCallback(LumaRoundVideoQuality::setFrameRateLevel);
+                    if (hasRoundVideoControls()) {
+                        int requestedFps = InstantCameraViewBase.getRequestedRecordingFrameRate();
+                        cell.setOptions(requestedFps / LumaRoundVideoQuality.FRAME_RATE - 1, "30", "60");
+                        cell.setCallback(index -> {
+                            if (!hasRoundVideoControls()) return;
+                            boolean wasCamera2 = InstantCameraViewBase.isUsingCamera2Implementation();
+                            LumaRoundVideoQuality.setFrameRateLevel(index);
+                            if (wasCamera2 != InstantCameraViewBase.isUsingCamera2Implementation()) {
+                                adapter.notifyItemRangeChanged(ROW_OUTPUT_RESOLUTION, ROW_BITRATE - ROW_OUTPUT_RESOLUTION + 1);
+                                adapter.notifyItemChanged(ROW_QUALITY);
+                                if (BuildConfig.DEBUG_PRIVATE_VERSION) adapter.notifyItemChanged(ROW_COMPOSITION);
+                            }
+                        });
+                    } else {
+                        cell.setOptions(0, "30");
+                    }
                 } else {
                     cell.setOptions(LumaRoundVideoStabilization.getMode(), stabilizationOptions());
                     cell.setCallback(LumaRoundVideoStabilization::setMode);
@@ -304,7 +354,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                 if (position == ROW_ENABLED) {
                     cell.setTextAndCheck(
                             LocaleController.getString(R.string.RoundVideoUseNewRecorder),
-                            enabled,
+                            SharedSettings.roundVideoCamera2Enabled.get(),
                             false
                     );
                 } else if (position == ROW_QUALITY) {
@@ -314,8 +364,10 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                     cell.setTextAndCheck(LocaleController.getString(R.string.LumaRoundVideoStartRearCamera),
                             LumaRoundVideoCamera.isStartWithRearCameraEnabled(), false);
                 } else if (position == ROW_CONCURRENT_ENABLED) {
+                    boolean canToggle = canToggleFastSwitch();
+                    cell.setEnabled(canToggle);
                     cell.setTextAndCheck(LocaleController.getString(R.string.LumaRoundVideoFastSwitchEnable),
-                            LumaRoundVideoCamera.isFastSwitchEnabled(), false);
+                            canToggle && LumaRoundVideoCamera.isFastSwitchEnabled(), false);
                 } else {
                     cell.setTextAndCheck(
                             LocaleController.getString(R.string.RoundVideoCompositionEnabled),
@@ -353,14 +405,16 @@ public class RoundVideoSettingsActivity extends BaseFragment {
                         : position == ROW_QUALITY_INFO ? LocaleController.getString(R.string.LumaRoundVideoLegacyQualityInfo)
                                 + "\n\n" + LocaleController.getString(R.string.LumaRoundVideoQualityInfo)
                         : position == ROW_REAR_CAMERA_INFO ? LocaleController.getString(R.string.LumaRoundVideoStartRearCameraInfo)
-                        : position == ROW_FRAME_RATE_INFO ? LocaleController.getString(R.string.LumaRoundVideoFpsInfo)
+                        : position == ROW_FRAME_RATE_INFO ? LocaleController.getString(hasRoundVideoControls()
+                                ? R.string.LumaRoundVideoFpsInfo : R.string.LumaRoundVideoAccessInfo)
+                        : position == ROW_CONCURRENT_INFO ? LocaleController.getString(R.string.LumaRoundVideoFastSwitchInfo)
                         : LocaleController.getString(R.string.RoundVideoCompositionInfo));
             }
         }
 
         @Override
         public int getItemViewType(int position) {
-            if (position == ROW_STABILIZATION_SEPARATOR || position == ROW_CONCURRENT_SEPARATOR) return TYPE_SEPARATOR;
+            if (position == ROW_STABILIZATION_SEPARATOR) return TYPE_SEPARATOR;
             if (position == ROW_GENERAL_HEADER || position == ROW_COMPOSITION_HEADER
                     || position == ROW_QUALITY_HEADER
                     || position == ROW_CONCURRENT_HEADER
@@ -375,7 +429,7 @@ public class RoundVideoSettingsActivity extends BaseFragment {
             }
             if (position == ROW_GENERAL_INFO || position == ROW_COMPOSITION_INFO
                     || position == ROW_QUALITY_INFO || position == ROW_REAR_CAMERA_INFO
-                    || position == ROW_FRAME_RATE_INFO) {
+                    || position == ROW_FRAME_RATE_INFO || position == ROW_CONCURRENT_INFO) {
                 return TYPE_INFO;
             }
             return TYPE_VALUE;

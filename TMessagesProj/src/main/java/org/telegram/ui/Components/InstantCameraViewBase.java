@@ -70,6 +70,7 @@ public abstract class InstantCameraViewBase extends FrameLayout {
     /** Returns whether subsequently created views use the Camera2 implementation. */
     public static boolean isUsingCamera2Implementation() {
         return SharedSettings.roundVideoCamera2Enabled.get()
+                || LumaRoundVideoQuality.prefersHighFrameRateCapture()
                 || Build.VERSION.SDK_INT >= 30 && LumaRoundVideoCamera.isFastSwitchEnabled();
     }
 

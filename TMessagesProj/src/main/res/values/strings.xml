@@ -11661,7 +11661,8 @@
     <string name="LumaRoundVideoMeasuredEmpty">Record and send a video message longer than two seconds. Its actual encoded frame rate, resolution and video bitrate will appear here. Available on Android 9 and later; a short or unreadable file cannot be measured.</string>
     <string name="LumaRoundVideoMeasuredInfo">%1$d × %2$d · %3$.1f FPS · %4$.1f Mbps\nRequested: %5$d FPS</string>
     <string name="LumaRoundVideoMeasuredNote">Measured from the saved MP4, not the slider or screen refresh rate. Lower FPS can indicate camera limits, low light or dropped frames. These local measurements do not prove that every encoded frame contains a unique camera image.</string>
-    <string name="LumaRoundVideoFpsInfo">60 FPS depends on camera and light; unsupported cameras use 30. Enable high quality for the classic camera. Reopen the chat after changes.</string>
+    <string name="LumaRoundVideoFpsInfo">Selecting 60 FPS uses Camera2. The actual frame rate depends on the camera and lighting. Reopen the chat after changes.</string>
+    <string name="LumaRoundVideoAccessInfo">Changing the frame rate and keeping both cameras ready requires confirmed Lunagram Ultra access. Check your access under Subscription.</string>
     <string name="LumaRoundVideoPrepareFailed">Could not prepare the video message within Telegram’s limit. The original video is preserved — try sending again.</string>
     <string name="LunagramTelegramBaseVersion">Telegram base: %1$s</string>
     <string name="LumaRoundVideoStabilization">Video message stabilization</string>
@@ -11740,7 +11741,7 @@
     <string name="LumaRoundVideoControlsInfo">Recording quality, frame rate and camera stabilization.</string>
     <string name="LumaRoundVideoFastSwitchTitle">Fast camera switching</string>
     <string name="LumaRoundVideoFastSwitchEnable">Keep both cameras ready</string>
-    <string name="LumaRoundVideoFastSwitchInfo">Keeps both cameras ready at 30 FPS in Camera2, if supported. At 60 FPS and above, uses standard switching without lowering FPS. Uses more power; only the chosen camera is recorded.</string>
+    <string name="LumaRoundVideoFastSwitchInfo">Works at 30 FPS on Android 11 or later when the device supports both cameras at once. At 60 FPS, cameras switch normally.</string>
     <string name="RoundVideoGeneral">Recorder</string>
     <string name="RoundVideoUseNewRecorder">Use Camera2 recorder</string>
     <string name="RoundVideoOutputResolution">Output resolution</string>

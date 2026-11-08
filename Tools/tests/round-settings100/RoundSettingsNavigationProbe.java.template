@@ -6,6 +6,8 @@ import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.LumaRoundVideoCamera;
 import org.telegram.messenger.LumaRoundVideoQuality;
 import org.telegram.messenger.LumaRoundVideoStabilization;
+import org.telegram.messenger.LunagramSubscriptionAccess;
+import org.telegram.messenger.LunagramFeatureCatalog;
 import org.telegram.utils.recorder.round.RoundVideoSession;
 import org.telegram.utils.settings.SharedSettings;
 import org.telegram.messenger.MessagesController;
@@ -24,7 +26,8 @@ public final class RoundSettingsNavigationProbe {
     static class TextInfoPrivacyCell extends View { String label; void setText(String value) { label=value; } }
     static class SlideChooseView extends View {
         String[] options; int index;
-        void setCallback(java.util.function.IntConsumer callback) {}
+        java.util.function.IntConsumer callback;
+        void setCallback(java.util.function.IntConsumer callback) { this.callback=callback; }
         void setOptions(int index, String... choices) { this.index=index;options=choices; }
     }
     static class RecyclerView {
@@ -42,7 +45,13 @@ public final class RoundSettingsNavigationProbe {
         int lastChanged = -1;
         void notifyItemChanged(int row) { lastChanged=row; }
         void notifyDataSetChanged() {}
+        void notifyItemRangeChanged(int first, int count) {}
     }
+    static class Build { static class VERSION { static int SDK_INT = 36; } }
+    static class InstantCameraViewBase {
+        // CAMERA_METHODS
+    }
+    private final int currentAccount = 0;
     private final Adapter adapter = new Adapter();
     private interface ChoiceHandler { void onChoice(int index); }
     private void showChoice(int title, CharSequence[] choices, ChoiceHandler handler) {}
@@ -66,11 +75,12 @@ public final class RoundSettingsNavigationProbe {
     public static int run() {
         checks=0;
         RoundSettingsNavigationProbe screen=new RoundSettingsNavigationProbe();
+        LumaRoundVideoCamera.setFastSwitchEnabled(false);
         for(boolean camera2:new boolean[]{false,true}) for(boolean quality:new boolean[]{false,true}) for(boolean rear:new boolean[]{false,true}) {
             SharedSettings.roundVideoCamera2Enabled.set(camera2);
             LumaRoundVideoQuality.setEnabled(quality);
             LumaRoundVideoCamera.setStartWithRearCameraEnabled(rear);
-            LumaRoundVideoQuality.setFrameRateLevel(1);
+            LumaRoundVideoQuality.setFrameRateLevel(0);
             for(int row=0;row<screen.getItemCount();row++) {
                 RecyclerView.ViewHolder holder=screen.bind(row);
                 if(holder.itemView instanceof TextCheckCell) check(((TextCheckCell)holder.itemView).label!=null,"every toggle has a label");
@@ -93,19 +103,44 @@ public final class RoundSettingsNavigationProbe {
             check(MessagesController.values.get("luma_round_video_start_rear_camera").equals(!rear),"click writes original rear-camera preference");
             check(screen.adapter.lastChanged==ROW_REAR_CAMERA,"rear click updates its own row");
             check(SharedSettings.roundVideoCamera2Enabled.get()==camera2,"common clicks do not switch recording engines");
-            check(LumaRoundVideoQuality.getPreferredFrameRate()==60,"common clicks do not change chosen FPS");
+            check(LumaRoundVideoQuality.getPreferredFrameRate()==30,"common clicks do not change chosen FPS");
         }
         check(ROW_QUALITY<screen.getItemCount()&&ROW_REAR_CAMERA<screen.getItemCount(),"moved settings included in release row count");
         check(ROW_COMPOSITION>=screen.getItemCount(),"private-debug composition gate is retained");
         check(screen.getItemCount()==20,"Release settings remove the measurement section without blank leftover rows");
         check(screen.getItemViewType(ROW_STABILIZATION_SEPARATOR)==TYPE_SEPARATOR
-                && screen.getItemViewType(ROW_CONCURRENT_SEPARATOR)==TYPE_SEPARATOR,"Removed explanations use compact native separators");
+                && screen.getItemViewType(ROW_CONCURRENT_INFO)==TYPE_INFO,"Concurrent control explains when the mode takes effect");
         check(!screen.isEnabled(screen.bind(ROW_STABILIZATION_SEPARATOR))
-                && !screen.isEnabled(screen.bind(ROW_CONCURRENT_SEPARATOR)),"Separators cannot open settings or change preferences");
+                && !screen.isEnabled(screen.bind(ROW_CONCURRENT_INFO)),"Informational rows cannot change preferences");
         check(ROW_CONCURRENT_HEADER==ROW_STABILIZATION_SEPARATOR+1
                 && ROW_CONCURRENT_ENABLED==ROW_CONCURRENT_HEADER+1,"Fast-camera toggle follows stabilization without statistics");
         check(screen.getItemViewType(ROW_FRAME_RATE)==TYPE_SLIDER
                 && screen.getItemViewType(ROW_STABILIZATION)==TYPE_SLIDER,"FPS and stabilization controls remain present");
+
+        InstantCameraViewBase.setUseCamera2Implementation(false);
+        check(!InstantCameraViewBase.isUsingCamera2Implementation(),"fixture starts in classic 30 FPS mode");
+        check(screen.isEnabled(screen.bind(ROW_CONCURRENT_ENABLED)),"fast switch is clickable before Camera2 starts");
+        screen.onRowClicked(ROW_CONCURRENT_ENABLED);
+        check(InstantCameraViewBase.isUsingCamera2Implementation()
+                && ((TextCheckCell)screen.bind(ROW_CONCURRENT_ENABLED).itemView).checked,
+                "fast switch persists and starts Camera2 from classic mode");
+        screen.onRowClicked(ROW_CONCURRENT_ENABLED);
+        SlideChooseView fps=(SlideChooseView)screen.bind(ROW_FRAME_RATE).itemView;
+        check(fps.index==0 && fps.options.length==2 && fps.callback!=null,"subscribed users can select 60");
+        fps.callback.accept(1);
+        check(((SlideChooseView)new RoundSettingsNavigationProbe().bind(ROW_FRAME_RATE).itemView).index==1
+                && InstantCameraViewBase.getRequestedRecordingFrameRate()==60 && InstantCameraViewBase.isUsingCamera2Implementation(),
+                "60 survives reentry and is passed to Camera2 with fast switch off");
+        LunagramSubscriptionAccess.allowed[0]=false;
+        SlideChooseView locked=(SlideChooseView)screen.bind(ROW_FRAME_RATE).itemView;
+        check(locked.index==0 && locked.options.length==1 && locked.callback==null,"unconfirmed access cannot show a fake 60 selection");
+        fps.callback.accept(0);
+        screen.onRowClicked(ROW_CONCURRENT_ENABLED);
+        check(!screen.isEnabled(screen.bind(ROW_CONCURRENT_ENABLED))
+                && InstantCameraViewBase.getRequestedRecordingFrameRate()==30,"unconfirmed access keeps both overrides inactive");
+        LunagramSubscriptionAccess.allowed[0]=true;
+        check(InstantCameraViewBase.getRequestedRecordingFrameRate()==60 && !LumaRoundVideoCamera.isFastSwitchEnabled(),
+                "restored access uses saved FPS and denied taps never write preferences");
         return checks;
     }
 }

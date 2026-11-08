@@ -27,12 +27,14 @@ public final class CameraRoutingPolicyTest {
                 SharedSettings.roundVideoCamera2Enabled.enabled = explicit;
                 for (boolean fast : new boolean[]{false, true}) {
                     LumaRoundVideoCamera.fast = fast;
-                    check(isUsingCamera2Implementation() == (explicit || sdk >= 30 && fast), "release/legacy/API routing");
                     LumaRoundVideoQuality.selected = 0;
+                    check(isUsingCamera2Implementation() == (explicit || sdk >= 30 && fast), "release/legacy/API routing");
                     check(getRequestedRecordingFrameRate() == (explicit ? 30 : 60), "auto-routing preserves recorder default");
                     for (int selected : new int[]{30, 60}) {
                         LumaRoundVideoQuality.selected = selected;
                         check(getRequestedRecordingFrameRate() == selected, "selected FPS survives every route");
+                        check(isUsingCamera2Implementation() == (explicit || selected == 60 || sdk >= 30 && fast),
+                                "explicit 60 FPS uses Camera2 independently of fast switch");
                     }
                 }
             }
@@ -58,4 +60,5 @@ final class LumaRoundVideoQuality {
     static final int HIGH_FRAME_RATE = 60;
     static int selected;
     static int getPreferredFrameRate(int fallback) { return selected > 0 ? selected : fallback; }
+    static boolean prefersHighFrameRateCapture() { return selected > 30; }
 }

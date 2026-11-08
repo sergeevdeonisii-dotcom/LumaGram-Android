@@ -37,17 +37,19 @@ $generatedSession=Join-Path $run 'RoundVideoSession.java'
 $uiTemplate=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'round-settings100/RoundSettingsUiProbe.java.template'))
 $resolutions=(Block $ui 'private static final RoundVideoSession.OutputResolution[] OUTPUT_RESOLUTIONS')+';'
 $helpers=@('static String[] stabilizationOptions()')|ForEach-Object{Block $ui $_}
-$fps=[regex]::Match($ui,'int fallback = enabled \?[^;]+;\s*cell\.setOptions\([^;]+;').Value
 $stabilization=[regex]::Match($ui,'cell\.setOptions\(LumaRoundVideoStabilization\.getMode\(\), stabilizationOptions\(\)\);').Value
-Check ($fps.Length -gt 0 -and $stabilization.Length -gt 0) 'Missing real native-slider option binding.'
+Check ($stabilization.Length -gt 0) 'Missing real stabilization option binding.'
 $generatedUi=Join-Path $run 'RoundSettingsUiProbe.java'
-$uiTemplate=$uiTemplate.Replace('// PRODUCTION_RESOLUTIONS',$resolutions).Replace('// PRODUCTION_HELPERS',($helpers-join "`n")).Replace('// PRODUCTION_FPS_OPTIONS',$fps).Replace('// PRODUCTION_STABILIZATION_OPTIONS',$stabilization)
+$uiTemplate=$uiTemplate.Replace('// PRODUCTION_RESOLUTIONS',$resolutions).Replace('// PRODUCTION_HELPERS',($helpers-join "`n")).Replace('// PRODUCTION_STABILIZATION_OPTIONS',$stabilization)
 [IO.File]::WriteAllText($generatedUi,$uiTemplate,[Text.UTF8Encoding]::new($false))
 $navigationTemplate=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'round-settings100/RoundSettingsNavigationProbe.java.template'))
 $rowConstants=([regex]::Matches($ui,'private static final int (?:ROW_|TYPE_)\w+ = [^;]+;') | ForEach-Object Value) -join "`n"
 $resourceNames=@([regex]::Matches($ui,'R\.string\.(\w+)') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
 $resourceKeys=for($i=0;$i -lt $resourceNames.Count;$i++){ 'static final int '+$resourceNames[$i]+'='+($i+1)+';' }
-$navigationMethods=@('private void onRowClicked(', 'public boolean isEnabled(', 'public void onBindViewHolder(', 'public int getItemViewType(', 'public int getItemCount(', 'private static String formatBitrate(', 'private static String cameraResolutionLabel(') | ForEach-Object { Block $ui $_ }
+$navigationMethods=@('private void onRowClicked(', 'public boolean isEnabled(', 'public void onBindViewHolder(', 'public int getItemViewType(', 'public int getItemCount(', 'private static String formatBitrate(', 'private static String cameraResolutionLabel(', 'private boolean hasRoundVideoControls(', 'private boolean canToggleFastSwitch(') | ForEach-Object { Block $ui $_ }
+$cameraBase=[IO.File]::ReadAllText((Join-Path $root 'ui/Components/InstantCameraViewBase.java'))
+$cameraMethods=@('public static boolean isUsingCamera2Implementation(', 'public static int getRequestedRecordingFrameRate(', 'public static void setUseCamera2Implementation(') | ForEach-Object { Block $cameraBase $_ }
+$navigationTemplate=$navigationTemplate.Replace('// CAMERA_METHODS',($cameraMethods-join "`n"))
 $navigationTemplate=$navigationTemplate.Replace('// RESOURCE_KEYS',($resourceKeys-join "`n")).Replace('// ROW_CONSTANTS',$rowConstants).Replace('// ARRAYS',((Block $ui 'private static final int[] BITRATES')+';'+$resolutions)).Replace('// PRODUCTION_METHODS',($navigationMethods-join "`n"))
 $generatedNavigation=Join-Path $run 'RoundSettingsNavigationProbe.java'
 [IO.File]::WriteAllText($generatedNavigation,$navigationTemplate,[Text.UTF8Encoding]::new($false))
@@ -75,10 +77,10 @@ foreach($edition in @('personal','public','friends')) {
 }
 $view=[IO.File]::ReadAllText((Join-Path $root 'ui/Components/InstantCameraView2.java'))
 Check ($view.Contains('activeOutputResolution = SharedSettings.getRoundVideoOutputResolution();') -and $view.Contains('.setOutputResolution(activeOutputResolution)')) 'Real recording must use migrated output resolution.'
-Check ($view.Contains('LumaRoundVideoQuality.getPreferredFrameRate(SharedSettings.getRoundVideoFrameRate().getValue())') -and $view.Contains('.setFrameRate(RoundVideoSession.FrameRate.fromValue(requestedRecordingFps))')) 'Real recording must use migrated and capped FPS.'
+Check ($view.Contains('InstantCameraViewBase.getRequestedRecordingFrameRate()') -and $view.Contains('.setFrameRate(RoundVideoSession.FrameRate.fromValue(requestedRecordingFps))')) 'Real recording must use migrated and capped FPS.'
 Check ($ui.Contains('SharedSettings.getRoundVideoOutputResolution().getSize()') -and !$ui.Contains('SharedSettings.roundVideoOutputResolution.get().getSize()')) 'UI resolution label must use the same migrated preference as recording.'
 Check ($ui.Contains('new CharSequence[]{"360 × 360", "480 × 480", "640 × 640"}')) 'Resolution choice labels must agree with actual encoded sizes.'
-Check ($ui -notmatch 'LumaRoundVideoStats|LumaRoundVideoMeasured|LumaRoundVideoFastSwitchInfo|stabilizationInfoResource|ROW_LAST_RECORDING|ROW_STABILIZATION_INFO|ROW_CONCURRENT_INFO') 'Removed measurement block and stabilization/concurrent explanations must not be rebound to settings rows.'
+Check ($ui -notmatch 'LumaRoundVideoStats|LumaRoundVideoMeasured|stabilizationInfoResource|ROW_LAST_RECORDING|ROW_STABILIZATION_INFO') 'Removed measurement and stabilization details must not be rebound to settings rows.'
 Check ($ui.Contains('new ShadowSectionCell(context)') -and $ui.Contains('if (holder.getItemViewType() == TYPE_SEPARATOR) return;')) 'Compact native section spacers must not bind explanatory text or masquerade as clickable values.'
 $advanced=[IO.File]::ReadAllText((Join-Path $root 'ui/ExperimentalFeaturesActivity.java'))
 $search=[IO.File]::ReadAllText((Join-Path $root 'ui/BlackHoleSearchActivity.java'))

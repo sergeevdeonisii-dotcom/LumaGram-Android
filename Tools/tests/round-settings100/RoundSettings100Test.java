@@ -72,10 +72,6 @@ public final class RoundSettings100Test {
             check(LumaRoundVideoQuality.getFrameRateLevel()==expected/30-1,"Slider index valid after restore");
             LumaRoundVideoQuality.Profile base=LumaRoundVideoQuality.baseline(384,1000,64);
             check(LumaRoundVideoQuality.forCamera(base,true,120).frameRate==expected,"Legacy encoder bounded even if camera advertises120");
-            for(boolean enabled:new boolean[]{false,true}) {
-                RoundSettingsUiProbe.SlideChooseView ui=RoundSettingsUiProbe.fps(enabled);
-                check(Arrays.equals(ui.choices,new String[]{"30","60"})&&ui.index==expected/30-1,"Only30/60 shown in both recorder modes");
-            }
         }
         for(Object invalid:new Object[]{"120",true,120L}) for(int fallback:new int[]{30,60}) {
             clear();MessagesController.values.put(LumaRoundVideoQuality.FRAME_RATE_PREFERENCE_KEY,invalid);
